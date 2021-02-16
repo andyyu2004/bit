@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "src/bit",
+    "src/libbit",
+]

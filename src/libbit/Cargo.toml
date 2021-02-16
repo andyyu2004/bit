@@ -1,0 +1,12 @@
+[package]
+name = "libbit"
+version = "0.1.0"
+authors = ["Andy Yu <andyyu2004@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rust-ini = "0.16"
+thiserror = "1.0"
+
+[dev-dependencies]
+tempfile = "3"
