@@ -24,13 +24,27 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 }
 
 impl BitRepo {
-    pub fn load(path: impl AsRef<Path>) -> BitResult<Self> {
+    /// recursively searches parents starting from the current directory for a git repo
+    pub fn find(path: impl AsRef<Path>) -> BitResult<Self> {
+        Self::find_inner(path.as_ref())
+    }
+
+    fn find_inner(path: &Path) -> BitResult<Self> {
+        if path.join(".git").exists() {
+            return Self::load(path);
+        }
+
+        match path.parent() {
+            Some(parent) => Self::find_inner(parent),
+            None => Err(BitError::BitDirectoryNotFound),
+        }
+    }
+
+    fn load(path: impl AsRef<Path>) -> BitResult<Self> {
         let path = path.as_ref();
         let worktree = path.canonicalize()?;
         let bitdir = path.join(".git");
-        if !bitdir.exists() {
-            todo!("`{}` is not a bit repository", bitdir.display());
-        }
+        assert!(bitdir.exists());
         let config = Ini::load_from_file(bitdir.join("config"))?;
         let version = &config["core"]["repositoryformatversion"];
         if version.parse::<i32>().unwrap() != 0 {
@@ -88,8 +102,12 @@ impl BitRepo {
         ini
     }
 
-    fn relative_path(&self, path: impl AsRef<Path>) -> PathBuf {
+    pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> PathBuf {
         repo_relative_path(self, path)
+    }
+
+    pub(crate) fn relative_paths(&self, paths: &[impl AsRef<Path>]) -> PathBuf {
+        paths.iter().fold(self.bitdir.to_path_buf(), |base, path| base.join(path))
     }
 
     fn mk_bitdir(&self, path: impl AsRef<Path>) -> io::Result<()> {
@@ -104,6 +122,15 @@ impl BitRepo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repo_relative_paths() -> BitResult<()> {
+        let basedir = tempfile::tempdir()?;
+        let repo = BitRepo::init(&basedir)?;
+        let joined = repo.relative_paths(&["path", "to", "dir"]);
+        assert_eq!(joined, PathBuf::from(format!("{}/.git/path/to/dir", basedir.path().display())));
+        Ok(())
+    }
 
     #[test]
     fn init_on_file() -> io::Result<()> {
