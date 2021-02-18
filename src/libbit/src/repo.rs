@@ -1,5 +1,9 @@
 use crate::error::BitResult;
+use crate::obj::{self, BitObj, BitObjKind};
 use crate::BitError;
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
 use ini::Ini;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
@@ -24,6 +28,10 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 }
 
 impl BitRepo {
+    pub fn new() -> BitResult<Self> {
+        Self::find(std::env::current_dir()?)
+    }
+
     /// recursively searches parents starting from the current directory for a git repo
     pub fn find(path: impl AsRef<Path>) -> BitResult<Self> {
         Self::find_inner(path.as_ref())
@@ -100,6 +108,29 @@ impl BitRepo {
             .set("filemode", "false")
             .set("bare", "false");
         ini
+    }
+
+    /// todo only works with full hash
+    pub fn find_obj(&self, name: &str) -> BitResult<String> {
+        Ok(name.to_owned())
+    }
+
+    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<()> {
+        let bytes = obj::serialize_obj_with_headers(obj)?;
+        let hash = obj::hash_bytes(&bytes);
+        let directory = &hash[0..2];
+        let file_path = &hash[2..];
+        let path = self.relative_paths(&["objects", directory, file_path]);
+
+        let file = File::create(path)?;
+        let mut encoder = ZlibEncoder::new(file, Compression::default());
+        Ok(encoder.write_all(&bytes)?)
+    }
+
+    pub fn read_obj_from_hash(&self, hash: &str) -> BitResult<BitObjKind> {
+        let obj_path = self.relative_paths(&["objects", &hash[0..2], &hash[2..]]);
+        let z = ZlibDecoder::new(File::open(obj_path)?);
+        obj::read_obj(z)
     }
 
     pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> PathBuf {

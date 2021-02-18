@@ -1,5 +1,7 @@
 #![feature(never_type)]
+#![feature(decl_macro)]
 
+pub mod cli;
 pub mod cmd;
 mod error;
 mod obj;
