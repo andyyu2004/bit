@@ -1,4 +1,4 @@
-use crate::obj::BitObjTag;
+use crate::obj::BitObjType;
 use crate::{cmd, BitResult};
 use clap::Clap;
 use std::path::PathBuf;
@@ -7,8 +7,18 @@ pub fn main() -> BitResult<()> {
     let opts: BitOpts = BitOpts::parse();
     match opts.subcmd {
         BitSubCmds::Init(opts) => cmd::bit_init(opts),
-        BitSubCmds::HashObject(opts) => cmd::bit_hash_object(opts),
-        BitSubCmds::CatFile(opts) => cmd::bit_cat_file(opts),
+        BitSubCmds::HashObject(opts) => {
+            let hash = cmd::bit_hash_object(&opts)?;
+            if !opts.write {
+                println!("{}", hash)
+            }
+            Ok(())
+        }
+        BitSubCmds::CatFile(opts) => {
+            let obj = cmd::bit_cat_file(&opts)?;
+            println!("{}", obj);
+            Ok(())
+        }
     }
 }
 
@@ -38,12 +48,12 @@ pub struct BitHashObject {
     #[clap(short = 'w')]
     pub write: bool,
     #[clap(default_value = "blob", short = 't', long = "type")]
-    pub objtype: BitObjTag,
+    pub objtype: BitObjType,
     pub path: PathBuf,
 }
 
 #[derive(Clap)]
 pub struct BitCatFile {
-    pub objtype: BitObjTag,
+    pub objtype: BitObjType,
     pub name: String,
 }

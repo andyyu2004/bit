@@ -15,8 +15,8 @@
           "kind": "bin"
         }
       },
-      "args": ["init", "examples/test"],
-      "cwd": "${workspaceFolder}"
+      "args": ["hash-object", "-w", "test.txt"],
+      "cwd": "${workspaceFolder}/examples/test"
     },
     {
       "type": "lldb",

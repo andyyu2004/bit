@@ -1,17 +1,39 @@
-use crate::{BitRepo, BitResult};
-use flate2::read::ZlibDecoder;
+use crate::BitResult;
 use sha2::{Digest, Sha256};
 use std::fmt::{self, Display, Formatter};
-use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
 
 #[derive(PartialEq, Debug)]
 pub struct Commit {}
 
+impl Display for BitObjKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            BitObjKind::Blob(blob) => write!(f, "{}", blob),
+            BitObjKind::Commit(_) => todo!(),
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Blob {
     pub bytes: Vec<u8>,
+}
+
+impl Display for Blob {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match std::str::from_utf8(&self.bytes) {
+            Ok(utf8) => write!(f, "{}", utf8),
+            Err(..) => write!(f, "<binary>"),
+        }
+    }
+}
+
+impl Blob {
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self { bytes }
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -20,17 +42,26 @@ pub enum BitObjKind {
     Commit(Commit),
 }
 
+impl BitObjKind {
+    pub fn as_blob(self) -> Blob {
+        match self {
+            BitObjKind::Blob(blob) => blob,
+            _ => panic!("expected blob"),
+        }
+    }
+}
+
 impl BitObj for Blob {
     fn serialize(&self) -> &[u8] {
         &self.bytes
     }
 
-    fn obj_ty(&self) -> BitObjTag {
-        BitObjTag::Blob
+    fn obj_ty(&self) -> BitObjType {
+        BitObjType::Blob
     }
 
-    fn new(_tag: BitObjTag, bytes: &[u8]) -> Self {
-        Self { bytes: bytes.to_vec() }
+    fn deserialize(bytes: &[u8]) -> Self {
+        todo!()
     }
 }
 
@@ -42,57 +73,52 @@ impl BitObj for BitObjKind {
         }
     }
 
-    fn obj_ty(&self) -> BitObjTag {
-        match self {
-            BitObjKind::Blob(blob) => blob.obj_ty(),
-            BitObjKind::Commit(..) => BitObjTag::Commit,
-        }
+    fn deserialize(bytes: &[u8]) -> Self {
+        todo!()
     }
 
-    fn new(tag: BitObjTag, bytes: &[u8]) -> Self {
-        match tag {
-            BitObjTag::Commit => todo!(),
-            BitObjTag::Tree => todo!(),
-            BitObjTag::Tag => todo!(),
-            BitObjTag::Blob => Self::Blob(Blob::new(tag, bytes)),
+    fn obj_ty(&self) -> BitObjType {
+        match self {
+            BitObjKind::Blob(blob) => blob.obj_ty(),
+            BitObjKind::Commit(..) => BitObjType::Commit,
         }
     }
 }
 
 pub trait BitObj {
-    fn new(tag: BitObjTag, bytes: &[u8]) -> Self;
     fn serialize(&self) -> &[u8];
-    fn obj_ty(&self) -> BitObjTag;
+    fn deserialize(bytes: &[u8]) -> Self;
+    fn obj_ty(&self) -> BitObjType;
 }
 
-pub enum BitObjTag {
+pub enum BitObjType {
     Commit,
     Tree,
     Tag,
     Blob,
 }
 
-impl Display for BitObjTag {
+impl Display for BitObjType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let s = match self {
-            BitObjTag::Commit => "commit",
-            BitObjTag::Tree => "tree",
-            BitObjTag::Tag => "tag",
-            BitObjTag::Blob => "blob",
+            BitObjType::Commit => "commit",
+            BitObjType::Tree => "tree",
+            BitObjType::Tag => "tag",
+            BitObjType::Blob => "blob",
         };
         write!(f, "{}", s)
     }
 }
 
-impl FromStr for BitObjTag {
+impl FromStr for BitObjType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "commit" => Ok(BitObjTag::Commit),
-            "tree" => Ok(BitObjTag::Tree),
-            "tag" => Ok(BitObjTag::Tag),
-            "blob" => Ok(BitObjTag::Blob),
+            "commit" => Ok(BitObjType::Commit),
+            "tree" => Ok(BitObjType::Tree),
+            "tag" => Ok(BitObjType::Tag),
+            "blob" => Ok(BitObjType::Blob),
             _ => Err(format!("unknown bit object type `{}`", s)),
         }
     }
@@ -127,7 +153,7 @@ pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     let mut buf = vec![];
 
     let i = reader.read_until(0x20, &mut buf)?;
-    let obj_ty = BitObjTag::from_str(std::str::from_utf8(&buf[..i - 1]).unwrap()).unwrap();
+    let obj_ty = BitObjType::from_str(std::str::from_utf8(&buf[..i - 1]).unwrap()).unwrap();
 
     let j = reader.read_until(0x00, &mut buf)?;
     let size = std::str::from_utf8(&buf[i..i + j - 1]).unwrap().parse::<usize>().unwrap();
@@ -137,16 +163,17 @@ pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     assert_eq!(contents.len(), size);
 
     Ok(match obj_ty {
-        BitObjTag::Commit => todo!(),
-        BitObjTag::Tree => todo!(),
-        BitObjTag::Tag => todo!(),
-        BitObjTag::Blob => BitObjKind::Blob(Blob { bytes: contents.to_vec() }),
+        BitObjType::Commit => todo!(),
+        BitObjType::Tree => todo!(),
+        BitObjType::Tag => todo!(),
+        BitObjType::Blob => BitObjKind::Blob(Blob { bytes: contents.to_vec() }),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck_macros::quickcheck;
 
     #[test]
     fn valid_obj_read() {
@@ -181,10 +208,18 @@ mod tests {
 
     #[test]
     fn write_read_blob_obj() -> BitResult<()> {
-        let mut buf = vec![];
         let bit_obj = BitObjKind::Blob(Blob { bytes: b"hello".to_vec() });
-        write_obj(&bit_obj, &mut buf)?;
-        let parsed_bit_obj = read_obj(buf.as_slice()).unwrap();
+        let bytes = serialize_obj_with_headers(&bit_obj)?;
+        let parsed_bit_obj = read_obj(bytes.as_slice()).unwrap();
+        assert_eq!(bit_obj, parsed_bit_obj);
+        Ok(())
+    }
+
+    #[quickcheck]
+    fn read_write_blob_obj_preserves_bytes(bytes: Vec<u8>) -> BitResult<()> {
+        let bit_obj = BitObjKind::Blob(Blob { bytes });
+        let serialized = serialize_obj_with_headers(&bit_obj)?;
+        let parsed_bit_obj = read_obj(serialized.as_slice()).unwrap();
         assert_eq!(bit_obj, parsed_bit_obj);
         Ok(())
     }

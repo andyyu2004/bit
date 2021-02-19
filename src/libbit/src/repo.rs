@@ -49,9 +49,8 @@ impl BitRepo {
     }
 
     fn load(path: impl AsRef<Path>) -> BitResult<Self> {
-        let path = path.as_ref();
-        let worktree = path.canonicalize()?;
-        let bitdir = path.join(".git");
+        let worktree = path.as_ref().canonicalize()?;
+        let bitdir = worktree.join(".git");
         assert!(bitdir.exists());
         let config = Ini::load_from_file(bitdir.join("config"))?;
         let version = &config["core"]["repositoryformatversion"];
@@ -74,17 +73,19 @@ impl BitRepo {
             return Err(BitError::NotDirectory(worktree))?;
         }
 
-        if !worktree.read_dir()?.next().is_none() {
-            return Err(BitError::NonEmptyDirectory(worktree))?;
+        // `.git` directory not `.bit` as this should be compatible with git
+        let bitdir = worktree.join(".git");
+
+        if bitdir.exists() {
+            // reinitializing doesn't really do anything currently
+            println!("reinitializing existing bit directory in `{}`", bitdir.display());
+            return Self::load(worktree);
         }
 
-        // `.git` directory not `.bit` as this should be fully compatible with git
-        let bitdir = worktree.join(".git");
-        debug_assert!(!bitdir.exists());
         std::fs::create_dir(&bitdir)?;
 
         let config = Self::default_config();
-        Self::default_config().write_to_file(bitdir.join("config"))?;
+        config.write_to_file(bitdir.join("config"))?;
 
         let this = Self { worktree, bitdir, config };
         this.mk_bitdir("objects")?;
@@ -115,16 +116,16 @@ impl BitRepo {
         Ok(name.to_owned())
     }
 
-    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<()> {
+    /// writes `obj` into the object store returning its full hash
+    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<String> {
         let bytes = obj::serialize_obj_with_headers(obj)?;
         let hash = obj::hash_bytes(&bytes);
         let directory = &hash[0..2];
         let file_path = &hash[2..];
-        let path = self.relative_paths(&["objects", directory, file_path]);
-
-        let file = File::create(path)?;
+        let file = self.mk_nested_bitfile(&["objects", directory, file_path])?;
         let mut encoder = ZlibEncoder::new(file, Compression::default());
-        Ok(encoder.write_all(&bytes)?)
+        encoder.write_all(&bytes)?;
+        Ok(hash)
     }
 
     pub fn read_obj_from_hash(&self, hash: &str) -> BitResult<BitObjKind> {
@@ -141,11 +142,17 @@ impl BitRepo {
         paths.iter().fold(self.bitdir.to_path_buf(), |base, path| base.join(path))
     }
 
-    fn mk_bitdir(&self, path: impl AsRef<Path>) -> io::Result<()> {
+    pub(crate) fn mk_bitdir(&self, path: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(self.relative_path(path))
     }
 
-    fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
+    pub(crate) fn mk_nested_bitfile(&self, paths: &[impl AsRef<Path>]) -> io::Result<File> {
+        let path = self.relative_paths(paths);
+        path.parent().map(|parent| fs::create_dir_all(parent));
+        File::create(path)
+    }
+
+    pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.relative_path(path))
     }
 }
@@ -153,6 +160,9 @@ impl BitRepo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::{BitCatFile, BitHashObject};
+    use crate::cmd;
+    use crate::obj::BitObjType;
 
     #[test]
     fn repo_relative_paths() -> BitResult<()> {
@@ -175,15 +185,36 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn init_on_non_empty_dir() -> io::Result<()> {
-        let dir = tempfile::tempdir()?;
-        let dirpath = dir.path().join(".git");
-        File::create(&dirpath)?;
-        match BitRepo::init(dir).unwrap_err() {
-            BitError::NonEmptyDirectory(..) => {}
-            _ => panic!(),
-        }
+    fn prop_bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<()> {
+        let basedir = tempfile::tempdir()?;
+        let repo = BitRepo::init(basedir.path())?;
+
+        let file_path = basedir.path().join("test.txt");
+        let mut file = File::create(&file_path)?;
+        file.write_all(&bytes)?;
+        let hash = cmd::bit_hash_object(&BitHashObject {
+            path: file_path,
+            write: true,
+            objtype: obj::BitObjType::Blob,
+        })?;
+
+        let awerer = repo.relative_paths(&["objects", &hash[0..2], &hash[2..]]);
+        assert!(repo.relative_paths(&["objects", &hash[0..2], &hash[2..]]).exists());
+
+        let blob =
+            cmd::bit_cat_file(&BitCatFile { name: hash, objtype: BitObjType::Blob })?.as_blob();
+
+        assert_eq!(blob.bytes, bytes);
         Ok(())
+    }
+
+    #[test]
+    fn test_bit_hash_object_cat_file_are_inverses_blob() -> BitResult<()> {
+        prop_bit_hash_object_cat_file_are_inverses_blob(b"hello".to_vec())
+    }
+
+    #[quickcheck]
+    fn bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<()> {
+        prop_bit_hash_object_cat_file_are_inverses_blob(bytes)
     }
 }

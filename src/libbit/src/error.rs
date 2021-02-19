@@ -11,8 +11,6 @@ pub enum BitError {
     Ini(#[from] ini::Error),
     #[error("`{0}` is not a directory")]
     NotDirectory(PathBuf),
-    #[error("`{0}` is not empty")]
-    NonEmptyDirectory(PathBuf),
     #[error("not a bit repository (or any of the parent directories)")]
     BitDirectoryNotFound,
     #[error("{0}")]
