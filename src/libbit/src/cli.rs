@@ -1,24 +1,32 @@
 use crate::obj::BitObjType;
-use crate::{cmd, BitResult};
+use crate::{BitRepo, BitResult};
 use clap::Clap;
 use std::path::PathBuf;
 
 pub fn main() -> BitResult<()> {
     let opts: BitOpts = BitOpts::parse();
+    let root_path = &opts.root_path;
+    if let BitSubCmds::Init(opts) = &opts.subcmd {
+        BitRepo::init(root_path.join(&opts.path))?;
+        return Ok(());
+    }
+
+    let repo = BitRepo::init(root_path)?;
     match opts.subcmd {
-        BitSubCmds::Init(opts) => cmd::bit_init(opts),
         BitSubCmds::HashObject(opts) => {
-            let hash = cmd::bit_hash_object(&opts)?;
+            let hash = repo.bit_hash_object(&opts)?;
             if !opts.write {
                 println!("{}", hash)
             }
             Ok(())
         }
         BitSubCmds::CatFile(opts) => {
-            let obj = cmd::bit_cat_file(&opts)?;
+            let repo = BitRepo::init(root_path)?;
+            let obj = repo.bit_cat_file(&opts)?;
             println!("{}", obj);
             Ok(())
         }
+        BitSubCmds::Init(..) => unreachable!(),
     }
 }
 
@@ -27,6 +35,8 @@ pub fn main() -> BitResult<()> {
 pub struct BitOpts {
     #[clap(subcommand)]
     pub subcmd: BitSubCmds,
+    #[clap(short = 'C')]
+    pub root_path: PathBuf,
 }
 
 #[derive(Clap)]

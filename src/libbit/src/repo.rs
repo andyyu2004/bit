@@ -28,7 +28,7 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 }
 
 impl BitRepo {
-    pub fn new() -> BitResult<Self> {
+    pub fn find_in_current_dir() -> BitResult<Self> {
         Self::find(std::env::current_dir()?)
     }
 
@@ -192,17 +192,16 @@ mod tests {
         let file_path = basedir.path().join("test.txt");
         let mut file = File::create(&file_path)?;
         file.write_all(&bytes)?;
-        let hash = cmd::bit_hash_object(&BitHashObject {
+        let hash = repo.bit_hash_object(&BitHashObject {
             path: file_path,
             write: true,
             objtype: obj::BitObjType::Blob,
         })?;
 
-        let awerer = repo.relative_paths(&["objects", &hash[0..2], &hash[2..]]);
         assert!(repo.relative_paths(&["objects", &hash[0..2], &hash[2..]]).exists());
 
         let blob =
-            cmd::bit_cat_file(&BitCatFile { name: hash, objtype: BitObjType::Blob })?.as_blob();
+            repo.bit_cat_file(&BitCatFile { name: hash, objtype: BitObjType::Blob })?.as_blob();
 
         assert_eq!(blob.bytes, bytes);
         Ok(())
