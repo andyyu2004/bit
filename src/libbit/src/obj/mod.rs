@@ -11,6 +11,8 @@ use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
 
+pub type BitHash = String;
+
 impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -140,12 +142,10 @@ impl FromStr for BitObjType {
 
 pub fn serialize_obj_with_headers(obj: &impl BitObj) -> BitResult<Vec<u8>> {
     let mut buf = vec![];
-    buf.write(obj.obj_ty().to_string().as_bytes())?;
-    buf.write(&[0x20])?;
+    write!(buf, "{} ", obj.obj_ty())?;
     let bytes = obj.serialize();
-    buf.write(bytes.len().to_string().as_bytes())?;
-    buf.write(&[0x00])?;
-    buf.write(bytes)?;
+    write!(buf, "{}\0", bytes.len().to_string())?;
+    buf.write_all(bytes)?;
     Ok(buf)
 }
 

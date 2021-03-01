@@ -33,6 +33,7 @@ pub fn run() -> BitResult<()> {
             println!("{}", obj);
             Ok(())
         }
+        BitSubCmds::Log(..) => todo!(),
         BitSubCmds::Init(..) => unreachable!(),
     }
 }
@@ -51,12 +52,19 @@ pub enum BitSubCmds {
     Init(BitInitOpts),
     HashObject(BitHashObjectOpts),
     CatFile(BitCatFileOpts),
+    Log(BitLogOpts),
 }
 
 #[derive(Clap)]
 pub struct BitInitOpts {
     #[clap(default_value = ".")]
     pub path: PathBuf,
+}
+
+#[derive(Clap)]
+pub struct BitLogOpts {
+    #[clap(default_value = ".")]
+    pub commit: PathBuf,
 }
 
 /// bit hash-object [-w] [-t TYPE] PATH

@@ -5,8 +5,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Commit {
-    tree: String,
-    parent: Option<String>,
+    tree: BitHash,
+    parent: Option<BitHash>,
     author: String,
     committer: String,
     gpgsig: Option<String>,
