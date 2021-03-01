@@ -161,7 +161,6 @@ impl BitRepo {
 mod tests {
     use super::*;
     use crate::cli::{BitCatFile, BitHashObject};
-    use crate::cmd;
     use crate::obj::BitObjType;
 
     #[test]

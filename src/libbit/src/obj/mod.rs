@@ -1,11 +1,12 @@
+mod commit;
+
+pub use commit::Commit;
+
 use crate::BitResult;
 use sha2::{Digest, Sha256};
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
-
-#[derive(PartialEq, Debug)]
-pub struct Commit {}
 
 impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
