@@ -1,17 +1,38 @@
 use crate::BitResult;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Write};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Commit {
     tree: String,
     author: String,
     committer: String,
-    message: String,
     gpgsig: Option<String>,
+    message: String,
 }
 
 impl Commit {
+    pub fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+        // adds the required spaces for multiline strings
+        macro_rules! w {
+            ($s:expr) => {
+                writeln!(writer, "{}", $s.replace("\n", "\n "))
+            };
+        }
+
+        w!(format!("tree {}", self.tree))?;
+        w!(format!("author {}", self.author))?;
+        w!(format!("committer {}", self.committer))?;
+        if let Some(gpgsig) = &self.gpgsig {
+            w!(format!("gpgsig {}", gpgsig))?;
+        }
+
+        writeln!(writer)?;
+        write!(writer, "{}", self.message)?;
+        writeln!(writer)?;
+        Ok(())
+    }
+
     pub fn parse<R: Read>(r: R) -> BitResult<Self> {
         let r = BufReader::new(r);
         let mut lines = r.lines();
@@ -34,12 +55,13 @@ impl Commit {
                 }
             }
 
-            // everything after is part of the message
+            // everything after the current (blank) line is part of the message
             if line.is_empty() {
                 break;
             }
 
-            let (k, v) = line.split_once(' ').unwrap();
+            let (k, v) =
+                line.split_once(' ').unwrap_or_else(|| panic!("Failed to parse line `{}`", line));
             key = Some(k.to_owned());
             value = Some(v.to_owned());
         }
@@ -57,6 +79,33 @@ impl Commit {
 #[cfg(test)]
 mod test {
     use super::*;
+    use quickcheck::{Arbitrary, Gen};
+    use rand::Rng;
+
+    impl Arbitrary for Commit {
+        fn arbitrary(g: &mut Gen) -> Self {
+            // String::arbitrary is not so good here as it doesn't generate printable strings
+            fn gen_string() -> String {
+                rand::thread_rng()
+                    .sample_iter(&rand::distributions::Alphanumeric)
+                    .take(15)
+                    .map(char::from)
+                    .collect()
+            }
+
+            fn mk_kv(_g: &mut Gen) -> String {
+                format!("{} {}", gen_string(), gen_string())
+            }
+
+            Self {
+                tree: mk_kv(g),
+                author: mk_kv(g),
+                committer: mk_kv(g),
+                gpgsig: Some(mk_kv(g)),
+                message: gen_string(),
+            }
+        }
+    }
 
     #[test]
     fn parse_commit() -> BitResult<()> {
@@ -89,6 +138,40 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
 =lgTX
 -----END PGP SIGNATURE-----"#;
         assert_eq!(commit.gpgsig.as_deref(), Some(gpgsig));
+        Ok(())
+    }
+
+    #[quickcheck_macros::quickcheck]
+    fn serialize_then_parse_commit(commit: Commit) -> BitResult<()> {
+        let mut buf = vec![];
+        commit.serialize(&mut buf)?;
+
+        dbg!(std::str::from_utf8(&buf).unwrap());
+
+        let parsed = Commit::parse(buf.as_slice())?;
+        assert_eq!(commit, parsed);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_commit_then_serialize_multiline() -> BitResult<()> {
+        let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
+        let commit = Commit::parse(bytes.as_slice())?;
+
+        let mut buf = vec![];
+        commit.serialize(&mut buf)?;
+        assert_eq!(bytes.as_slice(), &buf);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_commit_then_serialize_single_line() -> BitResult<()> {
+        let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit");
+        let commit = Commit::parse(bytes.as_slice())?;
+
+        let mut buf = vec![];
+        commit.serialize(&mut buf)?;
+        assert_eq!(bytes.as_slice(), &buf);
         Ok(())
     }
 }

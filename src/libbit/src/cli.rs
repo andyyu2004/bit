@@ -41,20 +41,20 @@ pub struct BitOpts {
 
 #[derive(Clap)]
 pub enum BitSubCmds {
-    Init(BitInit),
-    HashObject(BitHashObject),
-    CatFile(BitCatFile),
+    Init(BitInitOpts),
+    HashObject(BitHashObjectOpts),
+    CatFile(BitCatFileOpts),
 }
 
 #[derive(Clap)]
-pub struct BitInit {
+pub struct BitInitOpts {
     #[clap(default_value = ".")]
     pub path: PathBuf,
 }
 
 /// bit hash-object [-w] [-t TYPE] PATH
 #[derive(Clap)]
-pub struct BitHashObject {
+pub struct BitHashObjectOpts {
     #[clap(short = 'w')]
     pub write: bool,
     #[clap(default_value = "blob", short = 't', long = "type")]
@@ -63,7 +63,7 @@ pub struct BitHashObject {
 }
 
 #[derive(Clap)]
-pub struct BitCatFile {
+pub struct BitCatFileOpts {
     pub objtype: BitObjType,
     pub name: String,
 }

@@ -160,7 +160,7 @@ impl BitRepo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{BitCatFile, BitHashObject};
+    use crate::cli::{BitCatFileOpts, BitHashObjectOpts};
     use crate::obj::BitObjType;
 
     #[test]
@@ -191,7 +191,7 @@ mod tests {
         let file_path = basedir.path().join("test.txt");
         let mut file = File::create(&file_path)?;
         file.write_all(&bytes)?;
-        let hash = repo.bit_hash_object(&BitHashObject {
+        let hash = repo.bit_hash_object(&BitHashObjectOpts {
             path: file_path,
             write: true,
             objtype: obj::BitObjType::Blob,
@@ -200,7 +200,7 @@ mod tests {
         assert!(repo.relative_paths(&["objects", &hash[0..2], &hash[2..]]).exists());
 
         let blob =
-            repo.bit_cat_file(&BitCatFile { name: hash, objtype: BitObjType::Blob })?.as_blob();
+            repo.bit_cat_file(&BitCatFileOpts { name: hash, objtype: BitObjType::Blob })?.as_blob();
 
         assert_eq!(blob.bytes, bytes);
         Ok(())

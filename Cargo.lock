@@ -247,7 +247,9 @@ dependencies = [
  "clap",
  "flate2",
  "quickcheck",
+ "quickcheck_derive",
  "quickcheck_macros",
+ "rand 0.8.3",
  "rust-ini",
  "rusty-fork",
  "sha2",
@@ -368,6 +370,17 @@ dependencies = [
  "env_logger",
  "log",
  "rand 0.8.3",
+]
+
+[[package]]
+name = "quickcheck_derive"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "695566b1208e5a3e5a613d3326fcdb78203e1493c81514bfb4f4460ce0694deb"
+dependencies = [
+ "proc-macro2",
+ "syn",
+ "synstructure",
 ]
 
 [[package]]
@@ -556,6 +569,18 @@ checksum = "c700597eca8a5a762beb35753ef6b94df201c81cca676604f547495a0d7f0081"
 dependencies = [
  "proc-macro2",
  "quote",
+ "unicode-xid",
+]
+
+[[package]]
+name = "synstructure"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b834f2d66f734cb897113e34aaff2f1ab4719ca946f9a7358dba8f8064148701"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
  "unicode-xid",
 ]
 
