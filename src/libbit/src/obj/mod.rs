@@ -12,7 +12,7 @@ impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             BitObjKind::Blob(blob) => write!(f, "{}", blob),
-            BitObjKind::Commit(_) => todo!(),
+            BitObjKind::Commit(commit) => write!(f, "{}", commit),
         }
     }
 }
@@ -32,6 +32,12 @@ impl Display for Blob {
 }
 
 impl Blob {
+    pub fn from_reader<R: Read>(mut reader: R) -> BitResult<Self> {
+        let mut bytes = vec![];
+        reader.read_to_end(&mut bytes)?;
+        Ok(Self::new(bytes))
+    }
+
     pub fn new(bytes: Vec<u8>) -> Self {
         Self { bytes }
     }
@@ -164,7 +170,7 @@ pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     assert_eq!(contents.len(), size);
 
     Ok(match obj_ty {
-        BitObjType::Commit => todo!(),
+        BitObjType::Commit => BitObjKind::Commit(Commit::parse(contents)?),
         BitObjType::Tree => todo!(),
         BitObjType::Tag => todo!(),
         BitObjType::Blob => BitObjKind::Blob(Blob { bytes: contents.to_vec() }),

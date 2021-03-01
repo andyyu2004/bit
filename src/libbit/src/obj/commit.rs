@@ -1,14 +1,24 @@
 use crate::BitResult;
 use std::collections::HashMap;
+use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Commit {
     tree: String,
+    parent: Option<String>,
     author: String,
     committer: String,
     gpgsig: Option<String>,
     message: String,
+}
+
+impl Display for Commit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut buf = vec![];
+        self.serialize(&mut buf).unwrap();
+        write!(f, "{}", std::str::from_utf8(&buf).unwrap())
+    }
 }
 
 impl Commit {
@@ -21,6 +31,9 @@ impl Commit {
         }
 
         w!(format!("tree {}", self.tree))?;
+        if let Some(parent) = &self.parent {
+            w!(format!("parent {}", parent))?;
+        }
         w!(format!("author {}", self.author))?;
         w!(format!("committer {}", self.committer))?;
         if let Some(gpgsig) = &self.gpgsig {
@@ -29,7 +42,6 @@ impl Commit {
 
         writeln!(writer)?;
         write!(writer, "{}", self.message)?;
-        writeln!(writer)?;
         Ok(())
     }
 
@@ -69,15 +81,18 @@ impl Commit {
         let message = lines.collect::<Result<Vec<_>, _>>()?.join("\n");
 
         let tree = attrs["tree"].to_owned();
+        let parent = attrs.get("parent").map(|parent| parent.to_owned());
         let author = attrs["author"].to_owned();
         let committer = attrs["committer"].to_owned();
         let gpgsig = attrs.get("gpgsig").map(|sig| sig.to_owned());
-        Ok(Self { tree, author, committer, message, gpgsig })
+        Ok(Self { tree, parent, author, committer, message, gpgsig })
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::fs::File;
+
     use super::*;
     use quickcheck::{Arbitrary, Gen};
     use rand::Rng;
@@ -99,6 +114,7 @@ mod test {
 
             Self {
                 tree: mk_kv(g),
+                parent: (Some(mk_kv(g))),
                 author: mk_kv(g),
                 committer: mk_kv(g),
                 gpgsig: Some(mk_kv(g)),
@@ -109,8 +125,8 @@ mod test {
 
     #[test]
     fn parse_commit() -> BitResult<()> {
-        let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit");
-        let commit = Commit::parse(bytes.as_slice())?;
+        let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit") as &[u8];
+        let commit = Commit::parse(bytes)?;
         assert_eq!(&commit.tree, "d8329fc1cc938780ffdd9f94e0d364e0ea74f579");
         assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
         assert_eq!(&commit.committer, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
@@ -156,6 +172,7 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
     #[test]
     fn parse_commit_then_serialize_multiline() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
+        let file = File::open("../../tests/files/testcommitmultiline.commit");
         let commit = Commit::parse(bytes.as_slice())?;
 
         let mut buf = vec![];

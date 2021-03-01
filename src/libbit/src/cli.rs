@@ -11,7 +11,7 @@ pub fn main() -> BitResult<()> {
         return Ok(());
     }
 
-    let repo = BitRepo::init(root_path)?;
+    let repo = BitRepo::find(root_path)?;
     match opts.subcmd {
         BitSubCmds::HashObject(opts) => {
             let hash = repo.bit_hash_object(&opts)?;
@@ -21,7 +21,6 @@ pub fn main() -> BitResult<()> {
             Ok(())
         }
         BitSubCmds::CatFile(opts) => {
-            let repo = BitRepo::init(root_path)?;
             let obj = repo.bit_cat_file(&opts)?;
             println!("{}", obj);
             Ok(())
@@ -35,7 +34,7 @@ pub fn main() -> BitResult<()> {
 pub struct BitOpts {
     #[clap(subcommand)]
     pub subcmd: BitSubCmds,
-    #[clap(short = 'C')]
+    #[clap(short = 'C', default_value = ".")]
     pub root_path: PathBuf,
 }
 

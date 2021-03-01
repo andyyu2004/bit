@@ -1,9 +1,8 @@
 use crate::cli::*;
 use crate::error::BitResult;
-use crate::obj::{self, BitObjKind, Blob};
+use crate::obj::{self, BitObjKind, Blob, Commit};
 use crate::repo::BitRepo;
 use std::fs::File;
-use std::io::Read;
 
 pub fn bit_init(opts: BitInitOpts) -> BitResult<()> {
     let _repo = BitRepo::init(&opts.path)?;
@@ -12,14 +11,13 @@ pub fn bit_init(opts: BitInitOpts) -> BitResult<()> {
 
 impl BitRepo {
     pub fn bit_hash_object(&self, opts: &BitHashObjectOpts) -> BitResult<String> {
-        let mut buf = vec![];
         let path = opts.path.canonicalize()?;
-        File::open(&path)?.read_to_end(&mut buf)?;
+        let reader = File::open(&path)?;
         let object = match opts.objtype {
-            obj::BitObjType::Commit => todo!(),
             obj::BitObjType::Tree => todo!(),
             obj::BitObjType::Tag => todo!(),
-            obj::BitObjType::Blob => BitObjKind::Blob(Blob::new(buf)),
+            obj::BitObjType::Commit => BitObjKind::Commit(Commit::parse(reader)?),
+            obj::BitObjType::Blob => BitObjKind::Blob(Blob::from_reader(reader)?),
         };
 
         if opts.write { self.write_obj(&object) } else { obj::hash_obj(&object) }
