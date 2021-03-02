@@ -1,5 +1,6 @@
 use crate::error::BitResult;
 use crate::hash::BitHash;
+use crate::obj::{BitObj, BitObjType};
 use std::ffi::OsString;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -42,15 +43,15 @@ pub struct Tree {
     entries: Vec<TreeEntry>,
 }
 
-impl Tree {
-    pub fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+impl BitObj for Tree {
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
         for entry in &self.entries {
             entry.serialize(writer)?;
         }
         Ok(())
     }
 
-    pub fn parse<R: Read>(r: R) -> BitResult<Self> {
+    fn deserialize<R: Read>(r: R) -> BitResult<Self> {
         let mut r = BufReader::new(r);
         let mut tree = Self::default();
 
@@ -59,6 +60,10 @@ impl Tree {
             tree.entries.push(TreeEntry::parse(&mut r)?);
         }
         Ok(tree)
+    }
+
+    fn obj_ty(&self) -> BitObjType {
+        BitObjType::Tree
     }
 }
 
@@ -130,7 +135,7 @@ mod tests {
     fn serialize_then_parse_tree(tree: Tree) -> BitResult<()> {
         let mut bytes = vec![];
         tree.serialize(&mut bytes)?;
-        let parsed = Tree::parse(bytes.as_slice())?;
+        let parsed = Tree::deserialize(bytes.as_slice())?;
         assert_eq!(tree, parsed);
         Ok(())
     }
@@ -138,7 +143,7 @@ mod tests {
     #[test]
     fn parse_then_serialize_tree() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testtree.tree") as &[u8];
-        let tree = Tree::parse(bytes)?;
+        let tree = Tree::deserialize(bytes)?;
         let mut serialized = vec![];
         tree.serialize(&mut serialized)?;
         assert_eq!(bytes, serialized);

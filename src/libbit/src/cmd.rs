@@ -1,7 +1,7 @@
 use crate::cli::*;
 use crate::error::BitResult;
 use crate::hash::{self, BitHash};
-use crate::obj::{self, BitObjKind, Blob, Commit};
+use crate::obj::{self, BitObj, BitObjKind, Blob, Commit};
 use crate::repo::BitRepo;
 use std::fs::File;
 
@@ -17,7 +17,7 @@ impl BitRepo {
         let object = match opts.objtype {
             obj::BitObjType::Tree => todo!(),
             obj::BitObjType::Tag => todo!(),
-            obj::BitObjType::Commit => BitObjKind::Commit(Commit::parse(reader)?),
+            obj::BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(reader)?),
             obj::BitObjType::Blob => BitObjKind::Blob(Blob::from_reader(reader)?),
         };
 

@@ -64,29 +64,33 @@ impl BitObjKind {
 }
 
 impl BitObj for Blob {
-    fn serialize(&self) -> &[u8] {
-        &self.bytes
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+        writer.write_all(&self.bytes)?;
+        Ok(())
+    }
+
+    fn deserialize<R: Read>(mut reader: R) -> BitResult<Self> {
+        let mut bytes = vec![];
+        reader.read_to_end(&mut bytes)?;
+        Ok(Self { bytes })
     }
 
     fn obj_ty(&self) -> BitObjType {
         BitObjType::Blob
     }
-
-    fn deserialize(_bytes: &[u8]) -> Self {
-        todo!()
-    }
 }
 
+// very boring impl which just delegates to the inner type
 impl BitObj for BitObjKind {
-    fn serialize(&self) -> &[u8] {
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
         match self {
-            BitObjKind::Blob(blob) => blob.serialize(),
-            BitObjKind::Commit(_) => todo!(),
-            BitObjKind::Tree(_) => todo!(),
+            BitObjKind::Blob(blob) => blob.serialize(writer),
+            BitObjKind::Commit(commit) => commit.serialize(writer),
+            BitObjKind::Tree(tree) => tree.serialize(writer),
         }
     }
 
-    fn deserialize(_bytes: &[u8]) -> Self {
+    fn deserialize<R: Read>(_reader: R) -> BitResult<Self> {
         todo!()
     }
 
@@ -99,9 +103,9 @@ impl BitObj for BitObjKind {
     }
 }
 
-pub trait BitObj {
-    fn serialize(&self) -> &[u8];
-    fn deserialize(bytes: &[u8]) -> Self;
+pub trait BitObj: Sized {
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()>;
+    fn deserialize<R: Read>(reader: R) -> BitResult<Self>;
     fn obj_ty(&self) -> BitObjType;
 }
 
@@ -141,9 +145,10 @@ impl FromStr for BitObjType {
 pub fn serialize_obj_with_headers(obj: &impl BitObj) -> BitResult<Vec<u8>> {
     let mut buf = vec![];
     write!(buf, "{} ", obj.obj_ty())?;
-    let bytes = obj.serialize();
+    let mut bytes = vec![];
+    obj.serialize(&mut bytes)?;
     write!(buf, "{}\0", bytes.len().to_string())?;
-    buf.write_all(bytes)?;
+    buf.write_all(&bytes)?;
     Ok(buf)
 }
 
@@ -163,8 +168,8 @@ pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     assert_eq!(contents.len(), size);
 
     Ok(match obj_ty {
-        BitObjType::Commit => BitObjKind::Commit(Commit::parse(contents)?),
-        BitObjType::Tree => BitObjKind::Tree(Tree::parse(contents)?),
+        BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(contents)?),
+        BitObjType::Tree => BitObjKind::Tree(Tree::deserialize(contents)?),
         BitObjType::Blob => BitObjKind::Blob(Blob { bytes: contents.to_vec() }),
         BitObjType::Tag => todo!(),
     })

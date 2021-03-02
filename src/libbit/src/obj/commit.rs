@@ -1,5 +1,6 @@
 use crate::error::BitResult;
 use crate::hash::BitHash;
+use crate::obj::{BitObj, BitObjType};
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -22,8 +23,8 @@ impl Display for Commit {
     }
 }
 
-impl Commit {
-    pub fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+impl BitObj for Commit {
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
         // adds the required spaces for multiline strings
         macro_rules! w {
             ($s:expr) => {
@@ -46,7 +47,7 @@ impl Commit {
         Ok(())
     }
 
-    pub fn parse<R: Read>(r: R) -> BitResult<Self> {
+    fn deserialize<R: Read>(r: R) -> BitResult<Self> {
         let r = BufReader::new(r);
         let mut lines = r.lines();
         let mut attrs = HashMap::new();
@@ -88,6 +89,10 @@ impl Commit {
         let gpgsig = attrs.get("gpgsig").map(|sig| sig.to_owned());
         Ok(Self { tree, parent, author, committer, message, gpgsig })
     }
+
+    fn obj_ty(&self) -> BitObjType {
+        BitObjType::Commit
+    }
 }
 
 #[cfg(test)]
@@ -116,7 +121,7 @@ mod test {
     #[test]
     fn parse_commit() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit") as &[u8];
-        let commit = Commit::parse(bytes)?;
+        let commit = Commit::deserialize(bytes)?;
         assert_eq!(hex::encode(commit.tree), "d8329fc1cc938780ffdd9f94e0d364e0ea74f579");
         assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
         assert_eq!(&commit.committer, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
@@ -128,7 +133,7 @@ mod test {
     #[test]
     fn parse_commit_with_multi_line_attr() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
-        let commit = Commit::parse(bytes.as_slice())?;
+        let commit = Commit::deserialize(bytes.as_slice())?;
         let gpgsig = r#"-----BEGIN PGP SIGNATURE-----
 iQIzBAABCAAdFiEExwXquOM8bWb4Q2zVGxM2FxoLkGQFAlsEjZQACgkQGxM2FxoL
 kGQdcBAAqPP+ln4nGDd2gETXjvOpOxLzIMEw4A9gU6CzWzm+oB8mEIKyaH0UFIPh
@@ -153,7 +158,7 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
         let mut buf = vec![];
         commit.serialize(&mut buf)?;
 
-        let parsed = Commit::parse(buf.as_slice())?;
+        let parsed = Commit::deserialize(buf.as_slice())?;
         assert_eq!(commit, parsed);
         Ok(())
     }
@@ -161,7 +166,7 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
     #[test]
     fn parse_commit_then_serialize_multiline() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
-        let commit = Commit::parse(bytes.as_slice())?;
+        let commit = Commit::deserialize(bytes.as_slice())?;
 
         let mut buf = vec![];
         commit.serialize(&mut buf)?;
@@ -172,7 +177,7 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
     #[test]
     fn parse_commit_then_serialize_single_line() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit");
-        let commit = Commit::parse(bytes.as_slice())?;
+        let commit = Commit::deserialize(bytes.as_slice())?;
 
         let mut buf = vec![];
         commit.serialize(&mut buf)?;
