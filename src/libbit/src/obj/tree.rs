@@ -134,4 +134,14 @@ mod tests {
         assert_eq!(tree, parsed);
         Ok(())
     }
+
+    #[test]
+    fn parse_then_serialize_tree() -> BitResult<()> {
+        let bytes = include_bytes!("../../tests/files/testtree.tree") as &[u8];
+        let tree = Tree::parse(bytes)?;
+        let mut serialized = vec![];
+        tree.serialize(&mut serialized)?;
+        assert_eq!(bytes, serialized);
+        Ok(())
+    }
 }
