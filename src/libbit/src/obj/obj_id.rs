@@ -1,4 +1,5 @@
-use crate::{hash::SHA1Hash, BitError};
+use crate::error::BitError;
+use crate::hash::SHA1Hash;
 use std::str::FromStr;
 
 /// ways an object can be identified

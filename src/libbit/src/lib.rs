@@ -17,6 +17,3 @@ mod error;
 mod hash;
 mod obj;
 mod repo;
-
-pub use error::{BitError, BitResult};
-pub use repo::BitRepo;

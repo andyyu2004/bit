@@ -1,3 +1,3 @@
-fn main() -> libbit::BitResult<()> {
+fn main() {
     libbit::cli::main()
 }

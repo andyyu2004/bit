@@ -1,10 +1,11 @@
 mod commit;
 mod obj_id;
+mod tree;
 
 pub use commit::Commit;
 pub use obj_id::BitObjId;
 
-use crate::BitResult;
+use crate::error::BitResult;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;

@@ -1,9 +1,16 @@
+use crate::error::BitResult;
 use crate::obj::{BitObjId, BitObjType};
-use crate::{BitRepo, BitResult};
+use crate::repo::BitRepo;
 use clap::Clap;
 use std::path::PathBuf;
 
-pub fn main() -> BitResult<()> {
+pub fn main() {
+    if let Err(err) = run() {
+        eprintln!("{:?}", err)
+    }
+}
+
+pub fn run() -> BitResult<()> {
     let opts: BitOpts = BitOpts::parse();
     let root_path = &opts.root_path;
     if let BitSubCmds::Init(opts) = &opts.subcmd {

@@ -1,4 +1,4 @@
-use crate::BitResult;
+use crate::error::BitResult;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};

@@ -1,5 +1,5 @@
+use crate::error::BitResult;
 use crate::obj::{self, BitObj};
-use crate::BitResult;
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
 use std::fmt::{self, Display, Formatter};
@@ -51,7 +51,7 @@ impl Display for SHA1Hash {
     }
 }
 
-pub fn hash_bytes(bytes: &[u8]) -> SHA1Hash {
+pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> SHA1Hash {
     // use sha1 to be more compatible with current git
     let mut hasher = Sha1::new();
     hasher.update(bytes);
@@ -60,5 +60,5 @@ pub fn hash_bytes(bytes: &[u8]) -> SHA1Hash {
 
 pub fn hash_obj(obj: &impl BitObj) -> BitResult<SHA1Hash> {
     let bytes = obj::serialize_obj_with_headers(obj)?;
-    Ok(hash_bytes(&bytes))
+    Ok(hash_bytes(bytes.as_slice()))
 }

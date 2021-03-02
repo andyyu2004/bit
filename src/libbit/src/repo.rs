@@ -1,7 +1,6 @@
-use crate::obj::{self, BitObj, BitObjKind};
-use crate::BitError;
-use crate::{error::BitResult, hash::SHA1Hash};
-use crate::{hash, obj::BitObjId};
+use crate::error::{BitError, BitResult};
+use crate::hash::{self, SHA1Hash};
+use crate::obj::{self, BitObj, BitObjId, BitObjKind};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -123,7 +122,7 @@ impl BitRepo {
     /// writes `obj` into the object store returning its full hash
     pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<SHA1Hash> {
         let bytes = obj::serialize_obj_with_headers(obj)?;
-        let hash = hash::hash_bytes(&bytes);
+        let hash = hash::hash_bytes(bytes.as_slice());
         let (directory, file_path) = hash.split();
         let file = self.mk_nested_bitfile(&["objects", &directory, &file_path])?;
         let mut encoder = ZlibEncoder::new(file, Compression::default());
