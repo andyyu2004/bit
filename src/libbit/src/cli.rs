@@ -1,4 +1,4 @@
-use crate::obj::BitObjType;
+use crate::obj::{BitObjId, BitObjType};
 use crate::{BitRepo, BitResult};
 use clap::Clap;
 use std::path::PathBuf;
@@ -14,14 +14,15 @@ pub fn main() -> BitResult<()> {
     let repo = BitRepo::find(root_path)?;
     match opts.subcmd {
         BitSubCmds::HashObject(opts) => {
-            let hash = repo.bit_hash_object(&opts)?;
-            if !opts.write {
+            let should_write = opts.write;
+            let hash = repo.bit_hash_object(opts)?;
+            if !should_write {
                 println!("{}", hash)
             }
             Ok(())
         }
         BitSubCmds::CatFile(opts) => {
-            let obj = repo.bit_cat_file(&opts)?;
+            let obj = repo.bit_cat_file(opts)?;
             println!("{}", obj);
             Ok(())
         }
@@ -63,6 +64,6 @@ pub struct BitHashObjectOpts {
 
 #[derive(Clap)]
 pub struct BitCatFileOpts {
+    pub id: BitObjId,
     pub objtype: BitObjType,
-    pub name: String,
 }

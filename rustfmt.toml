@@ -1,0 +1,11 @@
+version = "Two"
+empty_item_single_line = false
+reorder_impl_items = true
+# fn_single_line = true
+imports_layout = "Horizontal"
+merge_imports = false
+max_width = 100
+enum_discrim_align_threshold = 10
+use_small_heuristics = "Max"
+merge_derives = false
+match_arm_blocks = false

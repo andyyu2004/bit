@@ -2,7 +2,6 @@
 #![feature(decl_macro)]
 #![feature(destructuring_assignment)]
 #![feature(array_methods)]
-#![feature(str_split_once)]
 
 #[cfg(test)]
 extern crate quickcheck;
@@ -15,6 +14,7 @@ pub mod cli;
 pub mod cmd;
 
 mod error;
+mod hash;
 mod obj;
 mod repo;
 

@@ -1,6 +1,7 @@
-use crate::error::BitResult;
 use crate::obj::{self, BitObj, BitObjKind};
 use crate::BitError;
+use crate::{error::BitResult, hash::SHA1Hash};
+use crate::{hash, obj::BitObjId};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -112,24 +113,27 @@ impl BitRepo {
     }
 
     /// todo only works with full hash
-    pub fn find_obj(&self, name: &str) -> BitResult<String> {
-        Ok(name.to_owned())
+    pub fn find_obj(&self, id: BitObjId) -> BitResult<SHA1Hash> {
+        match id {
+            BitObjId::FullHash(hash) => Ok(hash),
+            BitObjId::PartialHash(_partial) => todo!(),
+        }
     }
 
     /// writes `obj` into the object store returning its full hash
-    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<String> {
+    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<SHA1Hash> {
         let bytes = obj::serialize_obj_with_headers(obj)?;
-        let hash = obj::hash_bytes(&bytes);
-        let directory = &hash[0..2];
-        let file_path = &hash[2..];
-        let file = self.mk_nested_bitfile(&["objects", directory, file_path])?;
+        let hash = hash::hash_bytes(&bytes);
+        let (directory, file_path) = hash.split();
+        let file = self.mk_nested_bitfile(&["objects", &directory, &file_path])?;
         let mut encoder = ZlibEncoder::new(file, Compression::default());
         encoder.write_all(&bytes)?;
         Ok(hash)
     }
 
-    pub fn read_obj_from_hash(&self, hash: &str) -> BitResult<BitObjKind> {
-        let obj_path = self.relative_paths(&["objects", &hash[0..2], &hash[2..]]);
+    pub fn read_obj_from_hash(&self, hash: &SHA1Hash) -> BitResult<BitObjKind> {
+        let (dir, file) = hash.split();
+        let obj_path = self.relative_paths(&["objects", &dir, &file]);
         let z = ZlibDecoder::new(File::open(obj_path)?);
         obj::read_obj(z)
     }
@@ -159,6 +163,8 @@ impl BitRepo {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use crate::cli::{BitCatFileOpts, BitHashObjectOpts};
     use crate::obj::BitObjType;
@@ -191,16 +197,23 @@ mod tests {
         let file_path = basedir.path().join("test.txt");
         let mut file = File::create(&file_path)?;
         file.write_all(&bytes)?;
-        let hash = repo.bit_hash_object(&BitHashObjectOpts {
+        let hash = repo.bit_hash_object(BitHashObjectOpts {
             path: file_path,
             write: true,
             objtype: obj::BitObjType::Blob,
         })?;
 
-        assert!(repo.relative_paths(&["objects", &hash[0..2], &hash[2..]]).exists());
+        assert!(
+            repo.relative_paths(&["objects", &hex::encode(&hash[0..1]), &hex::encode(&hash[1..])])
+                .exists()
+        );
 
-        let blob =
-            repo.bit_cat_file(&BitCatFileOpts { name: hash, objtype: BitObjType::Blob })?.as_blob();
+        let blob = repo
+            .bit_cat_file(BitCatFileOpts {
+                id: BitObjId::from_str(&hex::encode(hash)).unwrap(),
+                objtype: BitObjType::Blob,
+            })?
+            .as_blob();
 
         assert_eq!(blob.bytes, bytes);
         Ok(())

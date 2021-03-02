@@ -1,9 +1,11 @@
 mod commit;
+mod obj_id;
 
 pub use commit::Commit;
+pub use obj_id::BitObjId;
 
-use crate::BitResult;
-use sha2::{Digest, Sha256};
+use crate::{hash::SHA1Hash, BitResult};
+use sha1::{Digest, Sha1};
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
@@ -129,18 +131,6 @@ impl FromStr for BitObjType {
             _ => Err(format!("unknown bit object type `{}`", s)),
         }
     }
-}
-
-pub fn hash_bytes(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    let hash = hasher.finalize();
-    format!("{:x}", hash)
-}
-
-pub fn hash_obj(obj: &impl BitObj) -> BitResult<String> {
-    let bytes = serialize_obj_with_headers(obj)?;
-    Ok(hash_bytes(&bytes))
 }
 
 pub fn serialize_obj_with_headers(obj: &impl BitObj) -> BitResult<Vec<u8>> {
