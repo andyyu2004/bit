@@ -9,7 +9,7 @@ use std::path::PathBuf;
 // 100644 normal (roughly)
 // 100755 executable (roughly)
 // 40000 means directory?
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FileMode(String);
 
 impl Display for FileMode {
@@ -36,7 +36,7 @@ impl Display for TreeEntry {
     }
 }
 
-#[derive(PartialEq, Debug, Default)]
+#[derive(PartialEq, Debug, Default, Clone)]
 pub struct Tree {
     // maybe could be a map of hash to tree entry?
     entries: Vec<TreeEntry>,
@@ -62,7 +62,7 @@ impl Tree {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct TreeEntry {
     mode: FileMode,
     path: PathBuf,
@@ -93,6 +93,45 @@ impl TreeEntry {
         write!(writer, "{}", self.path.display())?;
         writer.write_all(b"\0")?;
         writer.write_all(self.hash.as_ref())?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::*;
+    use quickcheck::{Arbitrary, Gen};
+    use quickcheck_macros::quickcheck;
+
+    impl Arbitrary for FileMode {
+        fn arbitrary(g: &mut Gen) -> Self {
+            Self("10644".to_owned())
+        }
+    }
+
+    impl Arbitrary for TreeEntry {
+        fn arbitrary(g: &mut Gen) -> Self {
+            Self {
+                path: PathBuf::from(generate_sane_string(1..300)),
+                mode: Arbitrary::arbitrary(g),
+                hash: Arbitrary::arbitrary(g),
+            }
+        }
+    }
+
+    impl Arbitrary for Tree {
+        fn arbitrary(g: &mut Gen) -> Self {
+            Self { entries: Arbitrary::arbitrary(g) }
+        }
+    }
+
+    #[quickcheck]
+    fn serialize_then_parse_tree(tree: Tree) -> BitResult<()> {
+        let mut bytes = vec![];
+        tree.serialize(&mut bytes)?;
+        let parsed = Tree::parse(bytes.as_slice())?;
+        assert_eq!(tree, parsed);
         Ok(())
     }
 }

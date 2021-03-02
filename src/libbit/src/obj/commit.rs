@@ -93,31 +93,22 @@ impl Commit {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test_utils::*;
     use quickcheck::{Arbitrary, Gen};
-    use rand::Rng;
 
     impl Arbitrary for Commit {
         fn arbitrary(g: &mut Gen) -> Self {
-            // String::arbitrary is not so good here as it doesn't generate printable strings
-            fn gen_string() -> String {
-                rand::thread_rng()
-                    .sample_iter(&rand::distributions::Alphanumeric)
-                    .take(15)
-                    .map(char::from)
-                    .collect()
-            }
-
             fn mk_kv(_g: &mut Gen) -> String {
-                format!("{} {}", gen_string(), gen_string())
+                format!("{} {}", generate_sane_string(1..30), generate_sane_string(1..100))
             }
 
             Self {
                 tree: Arbitrary::arbitrary(g),
                 parent: Arbitrary::arbitrary(g),
-                author: mk_kv(g),
-                committer: mk_kv(g),
-                gpgsig: Some(mk_kv(g)),
-                message: gen_string(),
+                author: generate_sane_string(0..100),
+                committer: generate_sane_string(0..100),
+                gpgsig: Some(generate_sane_string(100..300)),
+                message: generate_sane_string(1..300),
             }
         }
     }
@@ -129,6 +120,7 @@ mod test {
         assert_eq!(hex::encode(commit.tree), "d8329fc1cc938780ffdd9f94e0d364e0ea74f579");
         assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
         assert_eq!(&commit.committer, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
+        assert!(commit.gpgsig.is_none());
         assert_eq!(&commit.message, "First commit");
         Ok(())
     }

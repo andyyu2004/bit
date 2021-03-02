@@ -10,6 +10,9 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+#[cfg(test)]
+mod test_utils;
+
 pub mod cli;
 pub mod cmd;
 
