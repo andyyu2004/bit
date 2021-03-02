@@ -4,6 +4,7 @@ mod tree;
 
 pub use commit::Commit;
 pub use obj_id::BitObjId;
+pub use tree::{Tree, TreeEntry};
 
 use crate::error::BitResult;
 use std::fmt::{self, Display, Formatter};
@@ -15,6 +16,7 @@ impl Display for BitObjKind {
         match self {
             BitObjKind::Blob(blob) => write!(f, "{}", blob),
             BitObjKind::Commit(commit) => write!(f, "{}", commit),
+            BitObjKind::Tree(tree) => write!(f, "{}", tree),
         }
     }
 }
@@ -49,6 +51,7 @@ impl Blob {
 pub enum BitObjKind {
     Blob(Blob),
     Commit(Commit),
+    Tree(Tree),
 }
 
 impl BitObjKind {
@@ -79,6 +82,7 @@ impl BitObj for BitObjKind {
         match self {
             BitObjKind::Blob(blob) => blob.serialize(),
             BitObjKind::Commit(_) => todo!(),
+            BitObjKind::Tree(_) => todo!(),
         }
     }
 
@@ -90,6 +94,7 @@ impl BitObj for BitObjKind {
         match self {
             BitObjKind::Blob(blob) => blob.obj_ty(),
             BitObjKind::Commit(..) => BitObjType::Commit,
+            BitObjKind::Tree(_) => todo!(),
         }
     }
 }
@@ -161,9 +166,9 @@ pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
 
     Ok(match obj_ty {
         BitObjType::Commit => BitObjKind::Commit(Commit::parse(contents)?),
-        BitObjType::Tree => todo!(),
-        BitObjType::Tag => todo!(),
+        BitObjType::Tree => BitObjKind::Tree(Tree::parse(contents)?),
         BitObjType::Blob => BitObjKind::Blob(Blob { bytes: contents.to_vec() }),
+        BitObjType::Tag => todo!(),
     })
 }
 

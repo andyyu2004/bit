@@ -11,6 +11,10 @@ use std::str::FromStr;
 pub struct SHA1Hash([u8; 20]);
 
 impl SHA1Hash {
+    pub fn new(bytes: [u8; 20]) -> Self {
+        Self(bytes)
+    }
+
     /// split hash into the first two hex digits and the rest
     /// for use in finding <directory>/<file>
     pub fn split(&self) -> (String, String) {
