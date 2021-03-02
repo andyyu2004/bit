@@ -147,7 +147,7 @@ pub fn serialize_obj_with_headers(obj: &impl BitObj) -> BitResult<Vec<u8>> {
     Ok(buf)
 }
 
-/// format: <type> 0x20 <size> 0x00 <content>
+/// format: <type>0x20<size>0x00<content>
 pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     let mut reader = BufReader::new(read);
     let mut buf = vec![];

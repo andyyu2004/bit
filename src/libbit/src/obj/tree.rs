@@ -1,26 +1,20 @@
 use crate::error::BitResult;
 use crate::hash::BitHash;
-use std::convert::TryInto;
 use std::ffi::OsString;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 
+// using a string to represent this for now as its a bit confusing
+// 100644 normal (roughly)
+// 100755 executable (roughly)
+// 40000 means directory?
 #[derive(Debug, PartialEq)]
-pub struct FileMode([u8; 6]);
+pub struct FileMode(String);
 
 impl Display for FileMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        for &byte in self.as_ref() {
-            write!(f, "{}", byte.to_ascii_lowercase())?;
-        }
-        Ok(())
-    }
-}
-
-impl AsRef<[u8]> for FileMode {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
+        write!(f, "{}", self.0)
     }
 }
 
@@ -35,7 +29,10 @@ impl Display for Tree {
 
 impl Display for TreeEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} <tree-entry>", self.mode)
+        write!(f, "{} {}{}", self.mode, self.path.display(), unsafe {
+            // SAFETY we're just printing this out and not using it anywhere
+            std::str::from_utf8_unchecked(self.hash.as_ref())
+        })
     }
 }
 
@@ -76,12 +73,11 @@ impl TreeEntry {
     pub fn parse<R: BufRead>(r: &mut R) -> BitResult<Self> {
         let mut buf = vec![];
         let i = r.read_until(0x20, &mut buf)?;
-        assert_eq!(i, 6, "filemode was not 6 bytes long");
-        let mode = FileMode(buf[0..i].try_into().unwrap());
+        let mode = FileMode(std::str::from_utf8(&buf[..i - 1]).unwrap().to_owned());
 
         let j = r.read_until(0x00, &mut buf)?;
         // fairly disgusting way of deserializing a path..
-        let path = PathBuf::from(OsString::from(std::str::from_utf8(&buf[i + 1..j]).unwrap()));
+        let path = PathBuf::from(OsString::from(std::str::from_utf8(&buf[i..i + j - 1]).unwrap()));
 
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;

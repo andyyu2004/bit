@@ -161,8 +161,6 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
         let mut buf = vec![];
         commit.serialize(&mut buf)?;
 
-        dbg!(std::str::from_utf8(&buf).unwrap());
-
         let parsed = Commit::parse(buf.as_slice())?;
         assert_eq!(commit, parsed);
         Ok(())
