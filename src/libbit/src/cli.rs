@@ -64,6 +64,6 @@ pub struct BitHashObjectOpts {
 
 #[derive(Clap)]
 pub struct BitCatFileOpts {
-    pub id: BitObjId,
     pub objtype: BitObjType,
+    pub id: BitObjId,
 }
