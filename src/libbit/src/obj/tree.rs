@@ -29,7 +29,7 @@ impl Display for Tree {
 
 impl Display for TreeEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}{}", self.mode, self.path.display(), unsafe {
+        write!(f, "{} {}\0{}", self.mode, self.path.display(), unsafe {
             // SAFETY we're just printing this out and not using it anywhere
             std::str::from_utf8_unchecked(self.hash.as_ref())
         })
@@ -56,7 +56,7 @@ impl Tree {
 
         // slightly weird way of checking if the reader is at EOF
         while r.fill_buf()? != &[] {
-            tree.entries.push(TreeEntry::parse(&mut r)?)
+            tree.entries.push(TreeEntry::parse(&mut r)?);
         }
         Ok(tree)
     }
@@ -82,6 +82,7 @@ impl TreeEntry {
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;
         let hash = BitHash::new(hash_bytes);
+        // assert_eq!(r.read_until(0x00, &mut buf)?, 1);
         Ok(Self { mode, path, hash })
     }
 
@@ -90,6 +91,7 @@ impl TreeEntry {
         write!(writer, "{}", self.mode)?;
         writer.write_all(b" ")?;
         write!(writer, "{}", self.path.display())?;
+        writer.write_all(b"\0")?;
         writer.write_all(self.hash.as_ref())?;
         Ok(())
     }

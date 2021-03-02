@@ -30,7 +30,7 @@ pub fn run() -> BitResult<()> {
         }
         BitSubCmds::CatFile(opts) => {
             let obj = repo.bit_cat_file(opts)?;
-            println!("{}", obj);
+            print!("{}", obj);
             Ok(())
         }
         BitSubCmds::Log(..) => todo!(),
