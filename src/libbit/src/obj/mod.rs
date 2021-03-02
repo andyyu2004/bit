@@ -4,8 +4,7 @@ mod obj_id;
 pub use commit::Commit;
 pub use obj_id::BitObjId;
 
-use crate::{hash::SHA1Hash, BitResult};
-use sha1::{Digest, Sha1};
+use crate::BitResult;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
@@ -69,7 +68,7 @@ impl BitObj for Blob {
         BitObjType::Blob
     }
 
-    fn deserialize(bytes: &[u8]) -> Self {
+    fn deserialize(_bytes: &[u8]) -> Self {
         todo!()
     }
 }
@@ -82,7 +81,7 @@ impl BitObj for BitObjKind {
         }
     }
 
-    fn deserialize(bytes: &[u8]) -> Self {
+    fn deserialize(_bytes: &[u8]) -> Self {
         todo!()
     }
 

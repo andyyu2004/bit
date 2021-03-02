@@ -91,8 +91,6 @@ impl Commit {
 
 #[cfg(test)]
 mod test {
-    use std::fs::File;
-
     use super::*;
     use quickcheck::{Arbitrary, Gen};
     use rand::Rng;
@@ -172,7 +170,6 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
     #[test]
     fn parse_commit_then_serialize_multiline() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
-        let file = File::open("../../tests/files/testcommitmultiline.commit");
         let commit = Commit::parse(bytes.as_slice())?;
 
         let mut buf = vec![];
