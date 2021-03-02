@@ -1,4 +1,5 @@
 use crate::error::BitResult;
+use crate::hash::BitHash;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -80,8 +81,8 @@ impl Commit {
 
         let message = lines.collect::<Result<Vec<_>, _>>()?.join("\n");
 
-        let tree = attrs["tree"].to_owned();
-        let parent = attrs.get("parent").map(|parent| parent.to_owned());
+        let tree = attrs["tree"].parse().unwrap();
+        let parent = attrs.get("parent").map(|parent| parent.parse().unwrap());
         let author = attrs["author"].to_owned();
         let committer = attrs["committer"].to_owned();
         let gpgsig = attrs.get("gpgsig").map(|sig| sig.to_owned());
@@ -111,8 +112,8 @@ mod test {
             }
 
             Self {
-                tree: mk_kv(g),
-                parent: (Some(mk_kv(g))),
+                tree: Arbitrary::arbitrary(g),
+                parent: Arbitrary::arbitrary(g),
                 author: mk_kv(g),
                 committer: mk_kv(g),
                 gpgsig: Some(mk_kv(g)),
@@ -125,7 +126,7 @@ mod test {
     fn parse_commit() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit") as &[u8];
         let commit = Commit::parse(bytes)?;
-        assert_eq!(&commit.tree, "d8329fc1cc938780ffdd9f94e0d364e0ea74f579");
+        assert_eq!(hex::encode(commit.tree), "d8329fc1cc938780ffdd9f94e0d364e0ea74f579");
         assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
         assert_eq!(&commit.committer, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
         assert_eq!(&commit.message, "First commit");

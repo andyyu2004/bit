@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::hash::SHA1Hash;
+use crate::hash::BitHash;
 use std::convert::TryInto;
 use std::ffi::OsString;
 use std::fmt::{self, Display, Formatter};
@@ -69,7 +69,7 @@ impl Tree {
 pub struct TreeEntry {
     mode: FileMode,
     path: PathBuf,
-    hash: SHA1Hash,
+    hash: BitHash,
 }
 
 impl TreeEntry {
@@ -85,7 +85,7 @@ impl TreeEntry {
 
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;
-        let hash = SHA1Hash::new(hash_bytes);
+        let hash = BitHash::new(hash_bytes);
         Ok(Self { mode, path, hash })
     }
 

@@ -1,6 +1,6 @@
 use crate::cli::*;
 use crate::error::BitResult;
-use crate::hash::{self, SHA1Hash};
+use crate::hash::{self, BitHash};
 use crate::obj::{self, BitObjKind, Blob, Commit};
 use crate::repo::BitRepo;
 use std::fs::File;
@@ -11,7 +11,7 @@ pub fn bit_init(opts: BitInitOpts) -> BitResult<()> {
 }
 
 impl BitRepo {
-    pub fn bit_hash_object(&self, opts: BitHashObjectOpts) -> BitResult<SHA1Hash> {
+    pub fn bit_hash_object(&self, opts: BitHashObjectOpts) -> BitResult<BitHash> {
         let path = opts.path.canonicalize()?;
         let reader = File::open(&path)?;
         let object = match opts.objtype {

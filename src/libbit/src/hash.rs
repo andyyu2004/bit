@@ -7,10 +7,12 @@ use std::ops::Index;
 use std::slice::SliceIndex;
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+pub type BitHash = SHA1Hash;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct SHA1Hash([u8; 20]);
 
-impl SHA1Hash {
+impl BitHash {
     pub fn new(bytes: [u8; 20]) -> Self {
         Self(bytes)
     }
@@ -22,7 +24,14 @@ impl SHA1Hash {
     }
 }
 
-impl FromStr for SHA1Hash {
+#[cfg(test)]
+impl quickcheck::Arbitrary for BitHash {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        Self((0..20).map(|_| u8::arbitrary(g)).collect::<Vec<_>>().try_into().unwrap())
+    }
+}
+
+impl FromStr for BitHash {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -32,13 +41,13 @@ impl FromStr for SHA1Hash {
     }
 }
 
-impl AsRef<[u8]> for SHA1Hash {
+impl AsRef<[u8]> for BitHash {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl<I> Index<I> for SHA1Hash
+impl<I> Index<I> for BitHash
 where
     I: SliceIndex<[u8]>,
 {
@@ -49,20 +58,20 @@ where
     }
 }
 
-impl Display for SHA1Hash {
+impl Display for BitHash {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(self))
     }
 }
 
-pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> SHA1Hash {
+pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> BitHash {
     // use sha1 to be more compatible with current git
     let mut hasher = Sha1::new();
     hasher.update(bytes);
-    SHA1Hash(hasher.finalize().into())
+    BitHash::new(hasher.finalize().into())
 }
 
-pub fn hash_obj(obj: &impl BitObj) -> BitResult<SHA1Hash> {
+pub fn hash_obj(obj: &impl BitObj) -> BitResult<BitHash> {
     let bytes = obj::serialize_obj_with_headers(obj)?;
     Ok(hash_bytes(bytes.as_slice()))
 }

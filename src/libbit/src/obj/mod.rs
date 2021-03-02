@@ -11,8 +11,6 @@ use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
 
-pub type BitHash = String;
-
 impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -155,7 +153,7 @@ pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     let mut buf = vec![];
 
     let i = reader.read_until(0x20, &mut buf)?;
-    let obj_ty = BitObjType::from_str(std::str::from_utf8(&buf[..i - 1]).unwrap()).unwrap();
+    let obj_ty = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
 
     let j = reader.read_until(0x00, &mut buf)?;
     let size = std::str::from_utf8(&buf[i..i + j - 1]).unwrap().parse::<usize>().unwrap();

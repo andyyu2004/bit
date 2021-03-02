@@ -1,5 +1,5 @@
 use crate::error::{BitError, BitResult};
-use crate::hash::{self, SHA1Hash};
+use crate::hash::{self, BitHash};
 use crate::obj::{self, BitObj, BitObjId, BitObjKind};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
@@ -112,7 +112,7 @@ impl BitRepo {
     }
 
     /// todo only works with full hash
-    pub fn find_obj(&self, id: BitObjId) -> BitResult<SHA1Hash> {
+    pub fn find_obj(&self, id: BitObjId) -> BitResult<BitHash> {
         match id {
             BitObjId::FullHash(hash) => Ok(hash),
             BitObjId::PartialHash(_partial) => todo!(),
@@ -120,7 +120,7 @@ impl BitRepo {
     }
 
     /// writes `obj` into the object store returning its full hash
-    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<SHA1Hash> {
+    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<BitHash> {
         let bytes = obj::serialize_obj_with_headers(obj)?;
         let hash = hash::hash_bytes(bytes.as_slice());
         let (directory, file_path) = hash.split();
@@ -130,7 +130,7 @@ impl BitRepo {
         Ok(hash)
     }
 
-    pub fn read_obj_from_hash(&self, hash: &SHA1Hash) -> BitResult<BitObjKind> {
+    pub fn read_obj_from_hash(&self, hash: &BitHash) -> BitResult<BitObjKind> {
         let (dir, file) = hash.split();
         let obj_path = self.relative_paths(&["objects", &dir, &file]);
         let z = ZlibDecoder::new(File::open(obj_path)?);

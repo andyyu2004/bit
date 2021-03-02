@@ -1,11 +1,11 @@
 use crate::error::BitError;
-use crate::hash::SHA1Hash;
+use crate::hash::BitHash;
 use std::str::FromStr;
 
 /// ways an object can be identified
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub enum BitObjId {
-    FullHash(SHA1Hash),
+    FullHash(BitHash),
     PartialHash(String),
 }
 
@@ -14,7 +14,7 @@ impl FromStr for BitObjId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() == 40 {
-            Ok(Self::FullHash(SHA1Hash::from_str(s).unwrap()))
+            Ok(Self::FullHash(BitHash::from_str(s).unwrap()))
         } else if s.len() == 7 {
             Ok(Self::PartialHash(s.to_owned()))
         } else {
