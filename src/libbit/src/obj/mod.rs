@@ -1,5 +1,6 @@
 mod commit;
 mod obj_id;
+mod refs;
 mod tree;
 
 pub use commit::Commit;
@@ -90,15 +91,17 @@ impl BitObj for BitObjKind {
         }
     }
 
-    fn deserialize<R: Read>(_reader: R) -> BitResult<Self> {
-        todo!()
+    fn deserialize<R: Read>(reader: R) -> BitResult<Self> {
+        self::read_obj(reader)
     }
 
+    // TODO this is kinda dumb
+    // try make this method unnecssary
     fn obj_ty(&self) -> BitObjType {
         match self {
             BitObjKind::Blob(blob) => blob.obj_ty(),
-            BitObjKind::Commit(..) => BitObjType::Commit,
-            BitObjKind::Tree(_) => todo!(),
+            BitObjKind::Commit(commit) => commit.obj_ty(),
+            BitObjKind::Tree(tree) => tree.obj_ty(),
         }
     }
 }
@@ -109,6 +112,7 @@ pub trait BitObj: Sized {
     fn obj_ty(&self) -> BitObjType;
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum BitObjType {
     Commit,
     Tree,
@@ -170,7 +174,7 @@ pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     Ok(match obj_ty {
         BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(contents)?),
         BitObjType::Tree => BitObjKind::Tree(Tree::deserialize(contents)?),
-        BitObjType::Blob => BitObjKind::Blob(Blob { bytes: contents.to_vec() }),
+        BitObjType::Blob => BitObjKind::Blob(Blob::deserialize(contents)?),
         BitObjType::Tag => todo!(),
     })
 }

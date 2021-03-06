@@ -25,6 +25,7 @@ impl BitRepo {
     }
 
     pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<BitObjKind> {
+        dbg!(&opts);
         let hash = self.find_obj(opts.id)?;
         self.read_obj_from_hash(&hash)
     }

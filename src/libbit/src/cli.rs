@@ -1,7 +1,7 @@
 use crate::error::BitResult;
 use crate::obj::{BitObjId, BitObjType};
 use crate::repo::BitRepo;
-use clap::Clap;
+use clap::{AppSettings, Clap};
 use std::path::PathBuf;
 
 pub fn main() {
@@ -69,17 +69,30 @@ pub struct BitLogOpts {
 }
 
 /// bit hash-object [-w] [-t TYPE] PATH
-#[derive(Clap)]
+#[derive(Clap, Debug)]
 pub struct BitHashObjectOpts {
     #[clap(short = 'w')]
     pub write: bool,
-    #[clap(default_value = "blob", short = 't', long = "type")]
+    #[clap(default_value = "blob", short = 't', long = "type", requires_if("out", "hello"))]
     pub objtype: BitObjType,
     pub path: PathBuf,
 }
 
-#[derive(Clap)]
+#[derive(Clap, Debug)]
+#[clap(setting = AppSettings::AllowMissingPositional)]
 pub struct BitCatFileOpts {
-    pub objtype: BitObjType,
+    /// pretty print object
+    #[clap(short = 'p', conflicts_with_all(&["size", "ty", "objtype"]))]
+    pub pp: bool,
+    /// show object type
+    #[clap(short = 't', conflicts_with_all(&["size", "objtype"]))]
+    pub ty: bool,
+    /// show object size
+    #[clap(short = 's', conflicts_with("objtype"))]
+    pub size: bool,
+    #[clap(required_unless_present_any(&["pp", "ty", "size"]))]
+    pub objtype: Option<BitObjType>,
+    #[clap(required = true)]
     pub id: BitObjId,
 }
+
