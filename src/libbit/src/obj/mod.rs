@@ -156,19 +156,31 @@ pub fn serialize_obj_with_headers(obj: &impl BitObj) -> BitResult<Vec<u8>> {
     Ok(buf)
 }
 
-/// format: <type>0x20<size>0x00<content>
+pub fn read_obj_type_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjType> {
+    let mut buf = vec![];
+    let i = reader.read_until(0x20, &mut buf)?;
+    Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
+}
+
+pub fn read_obj_type<R: Read>(reader: R) -> BitResult<BitObjKind> {
+    read_obj_buffered(&mut BufReader::new(reader))
+}
+
 pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
-    let mut reader = BufReader::new(read);
+    read_obj_buffered(&mut BufReader::new(read))
+}
+
+/// format: <type>0x20<size>0x00<content>
+pub fn read_obj_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjKind> {
     let mut buf = vec![];
 
-    let i = reader.read_until(0x20, &mut buf)?;
-    let obj_ty = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
+    let obj_ty = read_obj_type_buffered(reader)?;
 
     let j = reader.read_until(0x00, &mut buf)?;
-    let size = std::str::from_utf8(&buf[i..i + j - 1]).unwrap().parse::<usize>().unwrap();
+    let size = std::str::from_utf8(&buf[..j - 1]).unwrap().parse::<usize>().unwrap();
     let len = reader.read_to_end(&mut buf)?;
     debug_assert_eq!(len, size);
-    let contents = &buf[i + j..];
+    let contents = &buf[j..];
     assert_eq!(contents.len(), size);
 
     Ok(match obj_ty {

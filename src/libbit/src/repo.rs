@@ -112,7 +112,7 @@ impl BitRepo {
     }
 
     /// todo only works with full hash
-    pub fn find_obj(&self, id: BitObjId) -> BitResult<BitHash> {
+    pub fn get_full_object_hash(&self, id: BitObjId) -> BitResult<BitHash> {
         match id {
             BitObjId::FullHash(hash) => Ok(hash),
             BitObjId::PartialHash(_partial) => todo!(),
@@ -165,7 +165,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::cli::{BitCatFileOpts, BitHashObjectOpts};
+    use crate::cmd::{BitCatFileOperation, BitCatFileOpts, BitHashObjectOpts};
     use crate::obj::BitObjType;
 
     #[test]
@@ -198,7 +198,7 @@ mod tests {
         file.write_all(&bytes)?;
         let hash = repo.bit_hash_object(BitHashObjectOpts {
             path: file_path,
-            write: true,
+            do_write: true,
             objtype: obj::BitObjType::Blob,
         })?;
 
@@ -207,12 +207,9 @@ mod tests {
                 .exists()
         );
 
-        let blob = repo
-            .bit_cat_file(BitCatFileOpts {
-                id: BitObjId::from_str(&hex::encode(hash)).unwrap(),
-                objtype: BitObjType::Blob,
-            })?
-            .as_blob();
+        // this doesn't call `bit_cat_file` directly but this function is
+        // basically all that it does internally
+        let blob = repo.read_obj_from_hash(&hash)?.as_blob();
 
         assert_eq!(blob.bytes, bytes);
         Ok(())

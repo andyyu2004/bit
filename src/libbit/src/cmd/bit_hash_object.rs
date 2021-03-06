@@ -1,13 +1,15 @@
-use crate::cli::*;
 use crate::error::BitResult;
 use crate::hash::{self, BitHash};
-use crate::obj::{self, BitObj, BitObjKind, Blob, Commit};
+use crate::obj::{self, BitObj, BitObjKind, BitObjType, Blob, Commit};
 use crate::repo::BitRepo;
 use std::fs::File;
+use std::path::PathBuf;
 
-pub fn bit_init(opts: BitInitOpts) -> BitResult<()> {
-    let _repo = BitRepo::init(&opts.path)?;
-    Ok(())
+#[derive(Debug)]
+pub struct BitHashObjectOpts {
+    pub objtype: BitObjType,
+    pub do_write: bool,
+    pub path: PathBuf,
 }
 
 impl BitRepo {
@@ -21,12 +23,7 @@ impl BitRepo {
             obj::BitObjType::Blob => BitObjKind::Blob(Blob::from_reader(reader)?),
         };
 
-        if opts.write { self.write_obj(&object) } else { hash::hash_obj(&object) }
-    }
-
-    pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<BitObjKind> {
-        dbg!(&opts);
-        let hash = self.find_obj(opts.id)?;
-        self.read_obj_from_hash(&hash)
+        if opts.do_write { self.write_obj(&object) } else { hash::hash_obj(&object) }
     }
 }
+

@@ -13,10 +13,9 @@ extern crate quickcheck_macros;
 #[cfg(test)]
 mod test_utils;
 
-pub mod cli;
 pub mod cmd;
 
-mod error;
+pub mod error;
 mod hash;
-mod obj;
-mod repo;
+pub mod obj;
+pub mod repo;
