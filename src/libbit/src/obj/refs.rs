@@ -2,9 +2,17 @@ use super::{BitObj, BitObjKind, BitObjType};
 use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::repo::BitRepo;
+use std::fmt::{self, Display, Formatter};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
+impl Display for Ref {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
 pub enum Ref {
     /// refers directly to an object
     Direct(BitHash),

@@ -8,7 +8,7 @@ pub use obj_id::BitObjId;
 pub use tree::{Tree, TreeEntry};
 
 use crate::error::BitResult;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
 
@@ -106,7 +106,12 @@ impl BitObj for BitObjKind {
     }
 }
 
-pub trait BitObj: Sized {
+// the `Display` format!("{}") impl should pretty print
+// the alternate `Display` format!("{:#}") should
+// print user facing content that may not be pretty
+// example is `bit cat-object tree <hash>` which just tries to print raw bytes
+// often they will just be the same
+pub trait BitObj: Sized + Debug + Display {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()>;
     fn deserialize<R: Read>(reader: R) -> BitResult<Self>;
     fn obj_ty(&self) -> BitObjType;
@@ -162,12 +167,29 @@ pub fn read_obj_type_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjTyp
     Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
 }
 
-pub fn read_obj_type<R: Read>(reader: R) -> BitResult<BitObjKind> {
-    read_obj_buffered(&mut BufReader::new(reader))
+pub fn read_obj_type<R: Read>(reader: R) -> BitResult<BitObjType> {
+    read_obj_type_buffered(&mut BufReader::new(reader))
 }
 
 pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     read_obj_buffered(&mut BufReader::new(read))
+}
+
+pub fn read_obj_size_from_start<R: Read>(reader: R) -> BitResult<usize> {
+    let mut buf = vec![];
+    let mut reader = BufReader::new(reader);
+    let _obj_ty = read_obj_type_buffered(&mut reader);
+    let i = reader.read_until(0x00, &mut buf)?;
+    let size = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
+    Ok(size)
+}
+
+/// assumes <type> has been read already
+pub fn read_obj_size_buffered<R: BufRead>(reader: &mut R) -> BitResult<usize> {
+    let mut buf = vec![];
+    let i = reader.read_until(0x00, &mut buf)?;
+    let size = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
+    Ok(size)
 }
 
 /// format: <type>0x20<size>0x00<content>
@@ -175,13 +197,12 @@ pub fn read_obj_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjKind> {
     let mut buf = vec![];
 
     let obj_ty = read_obj_type_buffered(reader)?;
+    let obj_size = read_obj_size_buffered(reader)?;
 
-    let j = reader.read_until(0x00, &mut buf)?;
-    let size = std::str::from_utf8(&buf[..j - 1]).unwrap().parse::<usize>().unwrap();
     let len = reader.read_to_end(&mut buf)?;
-    debug_assert_eq!(len, size);
-    let contents = &buf[j..];
-    assert_eq!(contents.len(), size);
+    debug_assert_eq!(len, obj_size);
+    let contents = &buf[..];
+    assert_eq!(contents.len(), obj_size);
 
     Ok(match obj_ty {
         BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(contents)?),

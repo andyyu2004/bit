@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
     tree: BitHash,
     parent: Option<BitHash>,
@@ -32,7 +32,7 @@ impl BitObj for Commit {
             };
         }
 
-        w!(format!("tree {}", self.tree))?;
+        w!(format!("tree {:}", self.tree))?;
         if let Some(parent) = &self.parent {
             w!(format!("parent {}", parent))?;
         }

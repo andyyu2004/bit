@@ -25,11 +25,7 @@ pub fn run() -> BitResult<()> {
             println!("{}", hash);
             Ok(())
         }
-        BitSubCmds::CatFile(opts) => {
-            let obj = repo.bit_cat_file(opts.into())?;
-            print!("{}", obj);
-            Ok(())
-        }
+        BitSubCmds::CatFile(opts) => repo.bit_cat_file(opts.into()),
         BitSubCmds::Log(..) => todo!(),
         BitSubCmds::Init(..) => unreachable!(),
     }
@@ -97,7 +93,7 @@ pub struct BitCatFileCliOpts {
     pub pp: bool,
     // exit with zero status if <object> exists and is valid. If <object> is of an invalid format
     // then exit with non-zero status and emit an error on stderr
-    #[clap(short = 'p', conflicts_with_all(&["size", "ty", "objtype"]))]
+    #[clap(short = 'e', conflicts_with_all(&["size", "ty", "objtype"]))]
     pub exit: bool,
     /// show object type
     #[clap(short = 't', conflicts_with_all(&["size", "objtype"]))]

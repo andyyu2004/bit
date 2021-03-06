@@ -18,7 +18,7 @@ impl FromStr for BitObjId {
         } else if s.len() == 7 {
             Ok(Self::PartialHash(s.to_owned()))
         } else {
-            panic!("invalid id: `{}`", s)
+            panic!("invalid bit object id: `{}`", s)
         }
     }
 }

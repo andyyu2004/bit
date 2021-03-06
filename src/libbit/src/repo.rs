@@ -7,7 +7,7 @@ use flate2::Compression;
 use ini::Ini;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 pub struct BitRepo {
@@ -130,11 +130,20 @@ impl BitRepo {
         Ok(hash)
     }
 
-    pub fn read_obj_from_hash(&self, hash: &BitHash) -> BitResult<BitObjKind> {
+    pub fn obj_filepath_from_hash(&self, hash: &BitHash) -> PathBuf {
         let (dir, file) = hash.split();
-        let obj_path = self.relative_paths(&["objects", &dir, &file]);
-        let z = ZlibDecoder::new(File::open(obj_path)?);
-        obj::read_obj(z)
+        self.relative_paths(&["objects", &dir, &file])
+    }
+
+    pub fn obj_stream_from_hash(&self, hash: &BitHash) -> BitResult<impl Read> {
+        let obj_path = self.obj_filepath_from_hash(hash);
+        let file = File::open(obj_path)?;
+        Ok(ZlibDecoder::new(file))
+    }
+
+    pub fn read_obj_from_hash(&self, hash: &BitHash) -> BitResult<BitObjKind> {
+        let stream = self.obj_stream_from_hash(hash)?;
+        obj::read_obj(stream)
     }
 
     pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> PathBuf {
@@ -162,7 +171,6 @@ impl BitRepo {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
 
     use super::*;
     use crate::cmd::{BitCatFileOperation, BitCatFileOpts, BitHashObjectOpts};

@@ -21,8 +21,12 @@ impl Display for FileMode {
 
 impl Display for Tree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        for entry in &self.entries {
-            write!(f, "{}", entry)?;
+        if f.alternate() {
+            for entry in &self.entries {
+                write!(f, "{:#}", entry)?;
+            }
+        } else {
+            todo!()
         }
         Ok(())
     }
@@ -30,10 +34,14 @@ impl Display for Tree {
 
 impl Display for TreeEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}\0{}", self.mode, self.path.display(), unsafe {
-            // SAFETY we're just printing this out and not using it anywhere
-            std::str::from_utf8_unchecked(self.hash.as_ref())
-        })
+        if f.alternate() {
+            write!(f, "{} {}\0{}", self.mode, self.path.display(), unsafe {
+                // SAFETY we're just printing this out and not using it anywhere
+                std::str::from_utf8_unchecked(self.hash.as_ref())
+            })
+        } else {
+            todo!()
+        }
     }
 }
 
