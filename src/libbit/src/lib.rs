@@ -10,12 +10,16 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+#[macro_use]
+extern crate scoped_tls;
+
 #[cfg(test)]
 mod test_utils;
 
 pub mod cmd;
-
 pub mod error;
-mod hash;
 pub mod obj;
 pub mod repo;
+
+mod hash;
+mod tls;

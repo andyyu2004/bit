@@ -1,6 +1,7 @@
 use crate::error::{BitError, BitResult};
 use crate::hash::{self, BitHash};
-use crate::obj::{self, BitObj, BitObjId, BitObjKind};
+use crate::obj::{self, BitObj, BitObjId, BitObjKind, BitObjType};
+use crate::tls;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -28,13 +29,10 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 }
 
 impl BitRepo {
-    pub fn find_in_current_dir() -> BitResult<Self> {
-        Self::find(std::env::current_dir()?)
-    }
-
     /// recursively searches parents starting from the current directory for a git repo
-    pub fn find(path: impl AsRef<Path>) -> BitResult<Self> {
-        Self::find_inner(path.as_ref())
+    pub fn find<R>(path: impl AsRef<Path>, f: impl FnOnce(&BitRepo) -> R) -> BitResult<R> {
+        let repo = Self::find_inner(path.as_ref())?;
+        Ok(tls::with(&repo, f))
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {
@@ -141,8 +139,31 @@ impl BitRepo {
         Ok(ZlibDecoder::new(file))
     }
 
+    pub fn obj_stream_from_id(&self, id: BitObjId) -> BitResult<impl Read> {
+        let hash = self.get_full_object_hash(id)?;
+        let obj_path = self.obj_filepath_from_hash(&hash);
+        let file = File::open(obj_path)?;
+        Ok(ZlibDecoder::new(file))
+    }
+
+    pub fn read_obj_from_id(&self, id: BitObjId) -> BitResult<BitObjKind> {
+        let hash = self.get_full_object_hash(id)?;
+        let stream = self.obj_stream_from_hash(&hash)?;
+        obj::read_obj(stream)
+    }
+
+    pub fn read_obj_type_from_id(&self, id: BitObjId) -> BitResult<BitObjType> {
+        let stream = self.obj_stream_from_id(id)?;
+        obj::read_obj_type(stream)
+    }
+
+    pub fn read_obj_size_from_id(&self, id: BitObjId) -> BitResult<usize> {
+        let stream = self.obj_stream_from_id(id)?;
+        obj::read_obj_size_from_start(stream)
+    }
+
     pub fn read_obj_from_hash(&self, hash: &BitHash) -> BitResult<BitObjKind> {
-        let stream = self.obj_stream_from_hash(hash)?;
+        let stream = self.obj_stream_from_hash(&hash)?;
         obj::read_obj(stream)
     }
 

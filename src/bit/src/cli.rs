@@ -10,15 +10,14 @@ use libbit::repo::BitRepo;
 use std::path::PathBuf;
 
 pub fn run() -> BitResult<()> {
-    let opts: BitCliOpts = BitCliOpts::parse();
-    let root_path = &opts.root_path;
-    if let BitSubCmds::Init(opts) = &opts.subcmd {
-        BitRepo::init(root_path.join(&opts.path))?;
+    let opts = BitCliOpts::parse();
+    let BitCliOpts { subcmd, root_path } = opts;
+    if let BitSubCmds::Init(subcmd) = &subcmd {
+        BitRepo::init(root_path.join(&subcmd.path))?;
         return Ok(());
     }
 
-    let repo = BitRepo::find(root_path)?;
-    match opts.subcmd {
+    BitRepo::find(root_path, |repo| match subcmd {
         BitSubCmds::HashObject(opts) => {
             let hash = repo.bit_hash_object(opts.into())?;
             println!("{}", hash);
@@ -27,7 +26,7 @@ pub fn run() -> BitResult<()> {
         BitSubCmds::CatFile(opts) => repo.bit_cat_file(opts.into()),
         BitSubCmds::Log(..) => todo!(),
         BitSubCmds::Init(..) => unreachable!(),
-    }
+    })?
 }
 
 #[derive(Clap)]

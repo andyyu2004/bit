@@ -44,6 +44,7 @@ impl Display for TreeEntry {
             })
         } else {
             todo!()
+            // write!(f, "{} {}\t{}", self.mode, self.ty, self.hash, self.path.display())
         }
     }
 }

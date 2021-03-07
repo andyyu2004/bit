@@ -12,6 +12,7 @@ flate2 = "1.0.20"
 sha2 = "0.9.3"
 sha-1 = "0.9.4"
 hex = "0.4.2"
+scoped-tls = "1"
 
 [dev-dependencies]
 rand = "0.8.3"
