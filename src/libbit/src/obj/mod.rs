@@ -14,10 +14,12 @@ use std::str::FromStr;
 
 impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // we can't write the following as `write!(f, "{}", x)
+        // as we would lose the flags on the formatter
         match self {
-            BitObjKind::Blob(blob) => write!(f, "{}", blob),
-            BitObjKind::Commit(commit) => write!(f, "{}", commit),
-            BitObjKind::Tree(tree) => write!(f, "{}", tree),
+            BitObjKind::Blob(blob) => Display::fmt(&blob, f),
+            BitObjKind::Commit(commit) => Display::fmt(&commit, f),
+            BitObjKind::Tree(tree) => Display::fmt(&tree, f),
         }
     }
 }

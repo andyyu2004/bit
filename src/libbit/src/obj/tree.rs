@@ -21,12 +21,15 @@ impl Display for FileMode {
 
 impl Display for Tree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        dbg!(f.alternate());
         if f.alternate() {
             for entry in &self.entries {
                 write!(f, "{:#}", entry)?;
             }
         } else {
-            todo!()
+            for entry in &self.entries {
+                writeln!(f, "{}", entry)?;
+            }
         }
         Ok(())
     }

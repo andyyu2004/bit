@@ -15,7 +15,7 @@
           "kind": "bin"
         }
       },
-      "args": ["hash-object", "-w", "test.txt"],
+      "args": ["cat-file", "tree", "36e8a9a7fca13e378b1ebf5ee870a0f8206ec8ec"],
       "cwd": "${workspaceFolder}/examples/test"
     },
     {

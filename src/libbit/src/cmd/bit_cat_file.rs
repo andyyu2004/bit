@@ -21,17 +21,19 @@ pub enum BitCatFileOperation {
 impl BitRepo {
     pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<()> {
         let hash = self.get_full_object_hash(opts.object)?;
-        let file = self.obj_stream_from_hash(&hash)?;
+        let stream = self.obj_stream_from_hash(&hash)?;
         match opts.op {
-            BitCatFileOperation::PrintAsType(_) => todo!(),
-            BitCatFileOperation::ShowType => println!("{}", obj::read_obj_type(file)?),
-            BitCatFileOperation::ShowSize => println!("{}", obj::read_obj_size_from_start(file)?),
+            // TODO not really a correct implementation currently
+            // just prints it in an alternate format
+            BitCatFileOperation::PrintAsType(_ty) => print!("{:#}", obj::read_obj(stream)?),
+            BitCatFileOperation::ShowType => println!("{}", obj::read_obj_type(stream)?),
+            BitCatFileOperation::ShowSize => println!("{}", obj::read_obj_size_from_start(stream)?),
             BitCatFileOperation::PrettyPrint => {
-                let obj = obj::read_obj(file)?;
+                println!("{}", obj::read_obj(stream)?);
             }
+            // just try to read the file and if it sulceeds then its fine
             BitCatFileOperation::Exit => {
-                // just try to read the file and if it succeeds then its fine
-                obj::read_obj(file)?;
+                obj::read_obj(stream)?;
             }
         }
         Ok(())

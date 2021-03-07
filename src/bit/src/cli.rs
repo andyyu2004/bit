@@ -14,7 +14,6 @@ pub fn run() -> BitResult<()> {
     let root_path = &opts.root_path;
     if let BitSubCmds::Init(opts) = &opts.subcmd {
         BitRepo::init(root_path.join(&opts.path))?;
-
         return Ok(());
     }
 

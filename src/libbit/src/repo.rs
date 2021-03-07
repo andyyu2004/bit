@@ -173,8 +173,7 @@ impl BitRepo {
 mod tests {
 
     use super::*;
-    use crate::cmd::{BitCatFileOperation, BitCatFileOpts, BitHashObjectOpts};
-    use crate::obj::BitObjType;
+    use crate::cmd::BitHashObjectOpts;
 
     #[test]
     fn repo_relative_paths() -> BitResult<()> {
