@@ -25,10 +25,10 @@ impl BitRepo {
             // TODO not really a correct implementation currently
             // just prints it in an alternate format
             BitCatFileOperation::PrintAsType(_ty) => print!("{:#}", self.read_obj_from_id(id)?),
-            BitCatFileOperation::ShowType => println!("{}", self.read_obj_type_from_id(id)?),
-            BitCatFileOperation::ShowSize => println!("{}", self.read_obj_size_from_id(id)?),
+            BitCatFileOperation::ShowType => print!("{}", self.read_obj_type_from_id(id)?),
+            BitCatFileOperation::ShowSize => print!("{}", self.read_obj_size_from_id(id)?),
             BitCatFileOperation::PrettyPrint => {
-                println!("{}", self.read_obj_from_id(id)?);
+                print!("{}", self.read_obj_from_id(id)?);
             }
             // just try to read the file and if it sulceeds then its fine
             BitCatFileOperation::Exit => {

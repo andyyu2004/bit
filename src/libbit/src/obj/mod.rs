@@ -177,6 +177,7 @@ pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
     read_obj_buffered(&mut BufReader::new(read))
 }
 
+/// reads the size, skips over the type section of the header
 pub fn read_obj_size_from_start<R: Read>(reader: R) -> BitResult<usize> {
     let mut buf = vec![];
     let mut reader = BufReader::new(reader);

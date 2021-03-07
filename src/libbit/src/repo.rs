@@ -152,6 +152,11 @@ impl BitRepo {
         obj::read_obj(stream)
     }
 
+    pub fn read_obj_type_from_hash(&self, hash: &BitHash) -> BitResult<BitObjType> {
+        let stream = self.obj_stream_from_hash(hash)?;
+        obj::read_obj_type(stream)
+    }
+
     pub fn read_obj_type_from_id(&self, id: BitObjId) -> BitResult<BitObjType> {
         let stream = self.obj_stream_from_id(id)?;
         obj::read_obj_type(stream)
