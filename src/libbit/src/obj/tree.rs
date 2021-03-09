@@ -4,7 +4,7 @@ use crate::obj::{BitObj, BitObjType};
 use crate::tls;
 use std::ffi::OsString;
 use std::fmt::{self, Display, Formatter};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::prelude::*;
 use std::path::PathBuf;
 
 // using a string to represent this for now as its a bit confusing
@@ -63,13 +63,12 @@ impl BitObj for Tree {
         Ok(())
     }
 
-    fn deserialize<R: Read>(r: R) -> BitResult<Self> {
-        let mut r = BufReader::new(r);
+    fn deserialize_buffered<R: BufRead>(r: &mut R) -> BitResult<Self> {
         let mut tree = Self::default();
 
         // slightly weird way of checking if the reader is at EOF
         while r.fill_buf()? != &[] {
-            tree.entries.push(TreeEntry::parse(&mut r)?);
+            tree.entries.push(TreeEntry::parse(r)?);
         }
         Ok(tree)
     }

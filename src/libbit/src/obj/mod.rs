@@ -1,8 +1,10 @@
+mod blob;
 mod commit;
 mod obj_id;
 mod refs;
 mod tree;
 
+pub use blob::Blob;
 pub use commit::Commit;
 pub use obj_id::BitObjId;
 pub use tree::{Tree, TreeEntry};
@@ -25,32 +27,6 @@ impl Display for BitObjKind {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Blob {
-    pub bytes: Vec<u8>,
-}
-
-impl Display for Blob {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match std::str::from_utf8(&self.bytes) {
-            Ok(utf8) => write!(f, "{}", utf8),
-            Err(..) => write!(f, "<binary>"),
-        }
-    }
-}
-
-impl Blob {
-    pub fn from_reader<R: Read>(mut reader: R) -> BitResult<Self> {
-        let mut bytes = vec![];
-        reader.read_to_end(&mut bytes)?;
-        Ok(Self::new(bytes))
-    }
-
-    pub fn new(bytes: Vec<u8>) -> Self {
-        Self { bytes }
-    }
-}
-
-#[derive(PartialEq, Debug)]
 pub enum BitObjKind {
     Blob(Blob),
     Commit(Commit),
@@ -66,23 +42,6 @@ impl BitObjKind {
     }
 }
 
-impl BitObj for Blob {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
-        writer.write_all(&self.bytes)?;
-        Ok(())
-    }
-
-    fn deserialize<R: Read>(mut reader: R) -> BitResult<Self> {
-        let mut bytes = vec![];
-        reader.read_to_end(&mut bytes)?;
-        Ok(Self { bytes })
-    }
-
-    fn obj_ty(&self) -> BitObjType {
-        BitObjType::Blob
-    }
-}
-
 // very boring impl which just delegates to the inner type
 impl BitObj for BitObjKind {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
@@ -95,6 +54,10 @@ impl BitObj for BitObjKind {
 
     fn deserialize<R: Read>(reader: R) -> BitResult<Self> {
         self::read_obj(reader)
+    }
+
+    fn deserialize_buffered<R: BufRead>(reader: &mut R) -> BitResult<Self> {
+        self::read_obj_buffered(reader)
     }
 
     // TODO this is kinda dumb
@@ -115,7 +78,10 @@ impl BitObj for BitObjKind {
 // often they will just be the same
 pub trait BitObj: Sized + Debug + Display {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()>;
-    fn deserialize<R: Read>(reader: R) -> BitResult<Self>;
+    fn deserialize_buffered<R: BufRead>(reader: &mut R) -> BitResult<Self>;
+    fn deserialize<R: Read>(reader: R) -> BitResult<Self> {
+        Self::deserialize_buffered(&mut BufReader::new(reader))
+    }
     fn obj_ty(&self) -> BitObjType;
 }
 

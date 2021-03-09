@@ -3,7 +3,7 @@ use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::prelude::*;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
@@ -47,8 +47,7 @@ impl BitObj for Commit {
         Ok(())
     }
 
-    fn deserialize<R: Read>(r: R) -> BitResult<Self> {
-        let r = BufReader::new(r);
+    fn deserialize_buffered<R: BufRead>(r: &mut R) -> BitResult<Self> {
         let mut lines = r.lines();
         let mut attrs = HashMap::new();
 

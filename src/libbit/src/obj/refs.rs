@@ -3,7 +3,7 @@ use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::repo::BitRepo;
 use std::fmt::{self, Display, Formatter};
-use std::io::{Read, Write};
+use std::io::prelude::*;
 use std::path::PathBuf;
 
 impl Display for Ref {
@@ -27,7 +27,7 @@ impl BitObj for Ref {
         todo!()
     }
 
-    fn deserialize<R: Read>(reader: R) -> BitResult<Self> {
+    fn deserialize_buffered<R: BufRead>(reader: &mut R) -> BitResult<Self> {
         todo!()
     }
 

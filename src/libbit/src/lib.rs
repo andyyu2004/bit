@@ -22,4 +22,5 @@ pub mod obj;
 pub mod repo;
 
 mod hash;
+mod index;
 mod tls;
