@@ -2,7 +2,7 @@ use crate::error::BitResult;
 use crate::obj::{self, BitObj};
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::Index;
 use std::slice::SliceIndex;
 use std::str::FromStr;

@@ -2,21 +2,16 @@ use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
 use crate::tls;
-use std::ffi::OsString;
+use crate::util;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::path::PathBuf;
 
-// using a string to represent this for now as its a bit confusing
-// 100644 normal (roughly)
-// 100755 executable (roughly)
-// 40000 means directory?
-#[derive(Debug, PartialEq, Clone)]
-pub struct FileMode(u32);
+use super::FileMode;
 
 impl Display for FileMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:06o}", self.0)
+        if f.alternate() { write!(f, "{:o}", self.0) } else { write!(f, "{:06o}", self.0) }
     }
 }
 
@@ -94,7 +89,7 @@ impl TreeEntry {
 
         let j = r.read_until(0x00, &mut buf)?;
         // fairly disgusting way of deserializing a path..
-        let path = PathBuf::from(OsString::from(std::str::from_utf8(&buf[i..i + j - 1]).unwrap()));
+        let path = util::path_from_bytes(&buf[i..i + j - 1]);
 
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;
@@ -104,8 +99,8 @@ impl TreeEntry {
     }
 
     pub fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
-        // not using display impl as that may pad an extra zero
-        write!(writer, "{:o}", self.mode.0)?;
+        // use alternate display impl to not pad an extra 0
+        write!(writer, "{:#}", self.mode)?;
         writer.write_all(b" ")?;
         write!(writer, "{}", self.path.display())?;
         writer.write_all(b"\0")?;

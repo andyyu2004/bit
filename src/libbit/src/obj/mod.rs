@@ -26,6 +26,18 @@ impl Display for BitObjKind {
     }
 }
 
+// 100644 normal
+// 100755 executable
+// 40000 directory
+#[derive(Debug, PartialEq, Clone)]
+pub struct FileMode(u32);
+
+impl FileMode {
+    pub fn new(u: u32) -> Self {
+        Self(u)
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum BitObjKind {
     Blob(Blob),

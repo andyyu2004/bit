@@ -1,6 +1,7 @@
 #![feature(never_type)]
 #![feature(decl_macro)]
 #![feature(destructuring_assignment)]
+#![feature(cstring_from_vec_with_nul)]
 #![feature(array_methods)]
 
 #[cfg(test)]
@@ -22,5 +23,7 @@ pub mod obj;
 pub mod repo;
 
 mod hash;
+mod util;
 mod index;
+mod read_ext;
 mod tls;
