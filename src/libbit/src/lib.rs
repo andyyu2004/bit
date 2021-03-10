@@ -1,5 +1,6 @@
 #![feature(never_type)]
 #![feature(decl_macro)]
+#![feature(once_cell)]
 #![feature(destructuring_assignment)]
 #![feature(cstring_from_vec_with_nul)]
 #![feature(array_methods)]

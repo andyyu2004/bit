@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 pub type BitHash = SHA1Hash;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct SHA1Hash([u8; 20]);
 
 impl BitHash {
@@ -55,6 +55,12 @@ where
 
     fn index(&self, index: I) -> &Self::Output {
         &self.0[index]
+    }
+}
+
+impl Debug for BitHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
