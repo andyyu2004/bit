@@ -168,7 +168,7 @@ mod tests {
                 filesize: 6,
                 flags: 12,
                 filepath: PathBuf::from("dir/test.txt"),
-                mode: FileMode::READ_WRITE,
+                mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
             BitIndexEntry {
@@ -183,7 +183,7 @@ mod tests {
                 filesize: 6,
                 flags: 8,
                 filepath: PathBuf::from("test.txt"),
-                mode: FileMode::READ_WRITE,
+                mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
         ];
