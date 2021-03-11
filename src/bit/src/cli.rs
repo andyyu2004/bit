@@ -1,31 +1,37 @@
+mod update_index;
+
 // the bitopts and bitcliopts are distinct types for a few reasons
 // - the parsed format is often not very convenient for actual usage
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
-
 use clap::{AppSettings, Clap};
 use libbit::cmd::*;
 use libbit::error::BitResult;
 use libbit::obj::{BitObjId, BitObjType};
 use libbit::repo::BitRepo;
 use std::path::PathBuf;
+use update_index::BitUpdateIndexCliOpts;
 
 pub fn run() -> BitResult<()> {
     let opts = BitCliOpts::parse();
     let BitCliOpts { subcmd, root_path } = opts;
-    if let BitSubCmds::Init(subcmd) = &subcmd {
+    if let BitSubCmd::Init(subcmd) = &subcmd {
         BitRepo::init(root_path.join(&subcmd.path))?;
         return Ok(());
     }
 
     BitRepo::find(root_path, |repo| match subcmd {
-        BitSubCmds::HashObject(opts) => {
+        BitSubCmd::HashObject(opts) => {
             let hash = repo.bit_hash_object(opts.into())?;
             println!("{}", hash);
             Ok(())
         }
-        BitSubCmds::CatFile(opts) => repo.bit_cat_file(opts.into()),
-        BitSubCmds::Log(..) => todo!(),
-        BitSubCmds::Init(..) => unreachable!(),
+        BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
+        BitSubCmd::Log(..) => todo!(),
+        BitSubCmd::Init(..) => unreachable!(),
+        BitSubCmd::UpdateIndex(opts) => {
+            dbg!(opts);
+            Ok(())
+        }
     })?
 }
 
@@ -33,17 +39,18 @@ pub fn run() -> BitResult<()> {
 #[clap(author = "Andy Yu <andyyu2004@gmail.com>")]
 pub struct BitCliOpts {
     #[clap(subcommand)]
-    pub subcmd: BitSubCmds,
+    pub subcmd: BitSubCmd,
     #[clap(short = 'C', default_value = ".")]
     pub root_path: PathBuf,
 }
 
 #[derive(Clap)]
-pub enum BitSubCmds {
+pub enum BitSubCmd {
     Init(BitInitCliOpts),
     HashObject(BitHashObjectCliOpts),
     CatFile(BitCatFileCliOpts),
     Log(BitLogCliOpts),
+    UpdateIndex(BitUpdateIndexCliOpts),
 }
 
 #[derive(Clap)]

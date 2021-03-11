@@ -1,4 +1,4 @@
-use crate::error::BitResult;
+use crate::error::{BitError, BitResult};
 use crate::obj::{self, BitObj};
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 pub type BitHash = SHA1Hash;
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
 pub struct SHA1Hash([u8; 20]);
 
 impl BitHash {
@@ -32,7 +32,7 @@ impl quickcheck::Arbitrary for BitHash {
 }
 
 impl FromStr for BitHash {
-    type Err = ();
+    type Err = BitError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // only call this when preconditions are met

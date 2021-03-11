@@ -3,19 +3,21 @@ use crate::hash::BitHash;
 use crate::obj::FileMode;
 use crate::read_ext::ReadExt;
 use crate::util;
+use num_enum::TryFromPrimitive;
 use sha1::Digest;
-use smallvec::{smallvec, SmallVec};
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 
-// refer, version: (), entryc: ()  version: (), entryc: () version: (), entryc: ()to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
+// refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
 #[derive(Debug, PartialEq)]
 struct BitIndex {
     header: BitIndexHeader,
-    /// sorted by ascending by hash (interpreted as unsigned bytes)
-    /// ties broken by stage (part of flags)
+    /// sorted by ascending by filepath (interpreted as unsigned bytes)
+    /// ties broken by stage (a part of flags)
+    // the link says name which usually means hash
+    // but it is sorted by filepath
     entries: Vec<BitIndexEntry>,
 }
 
@@ -26,7 +28,7 @@ struct BitIndexHeader {
     entryc: u32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 struct BitIndexEntry {
     ctime_sec: u32,
     ctime_nano: u32,
@@ -40,9 +42,43 @@ struct BitIndexEntry {
     gid: u32,
     filesize: u32,
     hash: BitHash,
-    // TODO probably deserves its own struct
-    flags: u16,
+    flags: BitIndexEntryFlags,
     filepath: PathBuf,
+}
+
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+struct BitIndexEntryFlags(u16);
+
+// could probably do with better variant names once I know whats going on
+#[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, TryFromPrimitive)]
+#[repr(u8)]
+enum MergeStage {
+    /// not merging
+    None,
+    Stage1,
+    Stage2,
+    Stage3,
+}
+
+impl BitIndexEntryFlags {
+    pub fn stage(self) -> MergeStage {
+        let stage = 0x3000 & self.0;
+        MergeStage::try_from(stage as u8).unwrap()
+    }
+}
+
+impl PartialOrd for BitIndexEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BitIndexEntry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.filepath
+            .cmp(&other.filepath)
+            .then_with(|| self.flags.stage().cmp(&other.flags.stage()))
+    }
 }
 
 impl BitIndex {
@@ -68,7 +104,7 @@ impl BitIndex {
         let gid = r.read_u32()?;
         let filesize = r.read_u32()?;
         let hash = r.read_bit_hash()?;
-        let flags = r.read_u16()?;
+        let flags = BitIndexEntryFlags(r.read_u16()?);
 
         const BYTES_SO_FAR: usize = std::mem::size_of::<u64>() // ctime
             + std::mem::size_of::<u64>() // mtime
@@ -123,6 +159,8 @@ impl BitIndex {
             .map(|_| Self::parse_index_entry(&mut r))
             .collect::<Result<Vec<BitIndexEntry>, _>>()?;
 
+        debug_assert!(entries.is_sorted());
+
         let (bytes, hash) = buf.split_at(buf.len() - 20);
         let mut hasher = sha1::Sha1::new();
         hasher.update(bytes);
@@ -166,7 +204,7 @@ mod tests {
                 uid: 1000,
                 gid: 1000,
                 filesize: 6,
-                flags: 12,
+                flags: BitIndexEntryFlags(12),
                 filepath: PathBuf::from("dir/test.txt"),
                 mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
@@ -181,7 +219,7 @@ mod tests {
                 uid: 1000,
                 gid: 1000,
                 filesize: 6,
-                flags: 8,
+                flags: BitIndexEntryFlags(8),
                 filepath: PathBuf::from("test.txt"),
                 mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),

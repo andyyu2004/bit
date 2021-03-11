@@ -1,3 +1,4 @@
+use std::num::ParseIntError;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -15,6 +16,8 @@ pub enum BitError {
     BitDirectoryNotFound,
     #[error("{0}")]
     Msg(String),
+    #[error("{0}")]
+    ParseIntError(#[from] ParseIntError),
 }
 
 impl<'s> From<&'s str> for BitError {

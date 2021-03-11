@@ -2,6 +2,7 @@
 #![feature(decl_macro)]
 #![feature(once_cell)]
 #![feature(destructuring_assignment)]
+#![feature(is_sorted)]
 #![feature(cstring_from_vec_with_nul)]
 #![feature(array_methods)]
 

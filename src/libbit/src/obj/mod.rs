@@ -9,7 +9,7 @@ pub use commit::Commit;
 pub use obj_id::BitObjId;
 pub use tree::{Tree, TreeEntry};
 
-use crate::error::BitResult;
+use crate::error::{BitError, BitResult};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
@@ -29,8 +29,22 @@ impl Display for BitObjKind {
 // 100644 normal
 // 100755 executable
 // 40000 directory
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FileMode(u32);
+
+impl FromStr for FileMode {
+    type Err = BitError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mode = Self(u32::from_str_radix(s, 8)?);
+        assert!(
+            mode == Self::DIRECTORY || mode == Self::EXECUTABLE || mode == Self::NON_EXECUTABLE,
+            "invalid bit file mode `{}`",
+            mode
+        );
+        Ok(mode)
+    }
+}
 
 impl FileMode {
     pub const DIRECTORY: Self = Self(0o04000);
