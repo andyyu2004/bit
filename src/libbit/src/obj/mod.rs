@@ -33,7 +33,11 @@ impl Display for BitObjKind {
 pub struct FileMode(u32);
 
 impl FileMode {
-    pub fn new(u: u32) -> Self {
+    pub const DIRECTORY: Self = Self(0o04000);
+    pub const EXECUTABLE: Self = Self(0o100755);
+    pub const READ_WRITE: Self = Self(0o100644);
+
+    pub const fn new(u: u32) -> Self {
         Self(u)
     }
 }

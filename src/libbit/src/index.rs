@@ -45,56 +45,6 @@ struct BitIndexEntry {
     filepath: PathBuf,
 }
 
-struct HashReader<'a, D, R> {
-    r: &'a mut R,
-    hasher: D,
-    bytes: Vec<u8>,
-}
-
-// bound by BufRead as this struct won't work properly without BufRead
-impl<'a, R: BufRead, D: Digest> HashReader<'a, D, R> {
-    pub fn new(r: &'a mut R) -> Self {
-        Self { r, hasher: D::new(), bytes: vec![] }
-    }
-}
-
-const EXPECTED_BYTES: [u8; 184] = [
-    0x44, 0x49, 0x52, 0x43, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x60, 0x44, 0x46, 0x62,
-    0x20, 0x44, 0xdd, 0xb1, 0x60, 0x44, 0x46, 0x62, 0x20, 0x44, 0xdd, 0xb1, 0x00, 0x01, 0x03, 0x06,
-    0x00, 0x0e, 0xfb, 0xed, 0x00, 0x00, 0x81, 0xa4, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x03, 0xe8,
-    0x00, 0x00, 0x00, 0x06, 0xce, 0x01, 0x36, 0x25, 0x03, 0x0b, 0xa8, 0xdb, 0xa9, 0x06, 0xf7, 0x56,
-    0x96, 0x7f, 0x9e, 0x9c, 0xa3, 0x94, 0x46, 0x4a, 0x00, 0x0c, 0x64, 0x69, 0x72, 0x2f, 0x74, 0x65,
-    0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x2e, 0x3d, 0xec,
-    0x28, 0x16, 0x81, 0x51, 0x60, 0x2e, 0x3d, 0xec, 0x28, 0x16, 0x81, 0x51, 0x00, 0x01, 0x03, 0x06,
-    0x00, 0x0e, 0xc1, 0x1a, 0x00, 0x00, 0x81, 0xa4, 0x00, 0x00, 0x03, 0xe8, 0x00, 0x00, 0x03, 0xe8,
-    0x00, 0x00, 0x00, 0x06, 0xce, 0x01, 0x36, 0x25, 0x03, 0x0b, 0xa8, 0xdb, 0xa9, 0x06, 0xf7, 0x56,
-    0x96, 0x7f, 0x9e, 0x9c, 0xa3, 0x94, 0x46, 0x4a, 0x00, 0x08, 0x74, 0x65, 0x73, 0x74, 0x2e, 0x74,
-    0x78, 0x74, 0x00, 0x00, 0x72, 0xcb, 0xf1, 0x53, 0x0d, 0x29, 0x40, 0xc3, 0xf6, 0xba, 0xd9, 0x7d,
-    0xeb, 0x22, 0xd0, 0x71, 0x9d, 0x30, 0xa9, 0x39,
-];
-
-impl<'a, R: BufRead, D: Digest> Read for HashReader<'a, D, R> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let n = self.r.read(buf)?;
-        // dbg!(&buf[..n]);
-        let x = &buf[..n];
-        dbg!(self.bytes.len());
-        // assert_eq!(self.bytes, EXPECTED_BYTES[..self.bytes.len()]);
-        self.bytes.extend_from_slice(&buf[..n]);
-        Ok(n)
-    }
-}
-
-impl<'a, D: Digest, R: BufRead> BufRead for HashReader<'a, D, R> {
-    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        self.r.fill_buf()
-    }
-
-    fn consume(&mut self, amt: usize) {
-        self.r.consume(amt)
-    }
-}
-
 impl BitIndex {
     fn parse_header<R: BufRead>(r: &mut R) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];
@@ -134,16 +84,15 @@ impl BitIndex {
         // read filepath until null terminator (inclusive)
         let mut filepath_bytes = vec![];
         r.read_until(0x00, &mut filepath_bytes)?;
+        let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
 
         // read padding (to make entrysize multiple of 8)
         let entry_size = BYTES_SO_FAR + filepath_bytes.len();
         let next_multiple_of_8 = ((entry_size + 7) / 8) * 8;
         let padding_size = next_multiple_of_8 - entry_size;
-        assert!(padding_size < 8, "index entry padding was {}", padding_size);
-        // let mut void: SmallVec<[u8; 7]> = smallvec![0u8; padding_size];
-        let mut void: Vec<u8> = vec![0u8; padding_size];
-        r.read_exact(&mut void)?;
-        let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
+        let mut padding = [0u8; 8];
+        r.read_exact(&mut padding[..padding_size])?;
+        assert_eq!(u64::from_be_bytes(padding), 0);
 
         Ok(BitIndexEntry {
             ctime_sec,
@@ -162,28 +111,24 @@ impl BitIndex {
         })
     }
 
-    fn deserialize<R: Read>(r: R) -> BitResult<BitIndex> {
-        Self::deserialize_buffered(&mut BufReader::new(r))
-    }
+    // this impl currently is not ideal as it basically has to read it twice
+    // although the second time is reading from memory so maybe its not that bad?
+    fn deserialize<R: Read>(mut r: R) -> BitResult<BitIndex> {
+        let mut buf = vec![];
+        r.read_to_end(&mut buf)?;
 
-    fn deserialize_buffered<R: BufRead>(r: &mut R) -> BitResult<BitIndex> {
-        let mut r = HashReader::<sha1::Sha1, _>::new(r);
-
+        let mut r = BufReader::new(&buf[..]);
         let header = Self::parse_header(&mut r)?;
         let entries = (0..header.entryc)
             .map(|_| Self::parse_index_entry(&mut r))
             .collect::<Result<Vec<BitIndexEntry>, _>>()?;
-        // TODO extensions?
 
-        let hash = r.read_bit_hash()?;
-        println!("{} bytes left in reader", r.read_to_end(&mut vec![])?);
-        assert_eq!(r.read_to_end(&mut vec![])?, 0);
-        let actual_hash = BitHash::new(r.hasher.finalize().try_into().unwrap());
-        dbg!(hash);
-        dbg!(actual_hash);
-
-        // assert_eq!(r.bytes.len(), EXPECTED_BYTES.len());
-        // assert_eq!(r.bytes, &EXPECTED_BYTES);
+        let (bytes, hash) = buf.split_at(buf.len() - 20);
+        let mut hasher = sha1::Sha1::new();
+        hasher.update(bytes);
+        let actual_hash = BitHash::new(hasher.finalize().try_into().unwrap());
+        let expected_hash = BitHash::new(hash.try_into().unwrap());
+        assert_eq!(actual_hash, expected_hash);
 
         // TODO verify checksum
         Ok(Self { header, entries })
@@ -194,12 +139,13 @@ impl BitIndex {
 mod tests {
     use super::*;
     use std::io::BufReader;
+    use std::str::FromStr;
 
     #[test]
     fn parse_large_index() -> BitResult<()> {
         let bytes = include_bytes!("../tests/files/index") as &[u8];
-        let index = BitIndex::deserialize(bytes)?;
-        dbg!(&index);
+        // this just checks it passes all the internal assertions
+        let _index = BitIndex::deserialize(bytes)?;
         Ok(())
     }
 
@@ -207,7 +153,47 @@ mod tests {
     fn parse_small_index() -> BitResult<()> {
         let bytes = include_bytes!("../tests/files/smallindex") as &[u8];
         let index = BitIndex::deserialize(bytes)?;
-        dbg!(&index);
+        // data from `git ls-files --stage --debug`
+        // the flags show up as  `0` under git, not sure how they're parsed exactly
+        let entries = vec![
+            BitIndexEntry {
+                ctime_sec: 1615087202,
+                ctime_nano: 541384113,
+                mtime_sec: 1615087202,
+                mtime_nano: 541384113,
+                device: 66310,
+                inode: 981997,
+                uid: 1000,
+                gid: 1000,
+                filesize: 6,
+                flags: 12,
+                filepath: PathBuf::from("dir/test.txt"),
+                mode: FileMode::READ_WRITE,
+                hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
+            },
+            BitIndexEntry {
+                ctime_sec: 1613643244,
+                ctime_nano: 672563537,
+                mtime_sec: 1613643244,
+                mtime_nano: 672563537,
+                device: 66310,
+                inode: 966938,
+                uid: 1000,
+                gid: 1000,
+                filesize: 6,
+                flags: 8,
+                filepath: PathBuf::from("test.txt"),
+                mode: FileMode::READ_WRITE,
+                hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
+            },
+        ];
+
+        let expected_index = BitIndex {
+            header: BitIndexHeader { signature: [b'D', b'I', b'R', b'C'], version: 2, entryc: 2 },
+            entries,
+        };
+
+        assert_eq!(expected_index, index);
         Ok(())
     }
 
