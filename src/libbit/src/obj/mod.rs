@@ -10,6 +10,7 @@ pub use obj_id::BitObjId;
 pub use tree::{Tree, TreeEntry};
 
 use crate::error::{BitError, BitResult};
+use crate::serialize::Serialize;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
@@ -72,8 +73,7 @@ impl BitObjKind {
     }
 }
 
-// very boring impl which just delegates to the inner type
-impl BitObj for BitObjKind {
+impl Serialize for BitObjKind {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
         match self {
             BitObjKind::Blob(blob) => blob.serialize(writer),
@@ -81,7 +81,10 @@ impl BitObj for BitObjKind {
             BitObjKind::Tree(tree) => tree.serialize(writer),
         }
     }
+}
 
+// very boring impl which just delegates to the inner type
+impl BitObj for BitObjKind {
     fn deserialize<R: Read>(reader: R) -> BitResult<Self> {
         self::read_obj(reader)
     }
@@ -106,8 +109,7 @@ impl BitObj for BitObjKind {
 // print user facing content that may not be pretty
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
-pub trait BitObj: Sized + Debug + Display {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()>;
+pub trait BitObj: Serialize + Sized + Debug + Display {
     fn deserialize_buffered<R: BufRead>(reader: &mut R) -> BitResult<Self>;
     fn deserialize<R: Read>(reader: R) -> BitResult<Self> {
         Self::deserialize_buffered(&mut BufReader::new(reader))

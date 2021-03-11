@@ -18,6 +18,7 @@ struct BitIndex {
     /// ties broken by stage (a part of flags)
     // the link says name which usually means hash
     // but it is sorted by filepath
+    // TODO maybe use a BTreeMap or something?
     entries: Vec<BitIndexEntry>,
 }
 
@@ -170,6 +171,9 @@ impl BitIndex {
 
         // TODO verify checksum
         Ok(Self { header, entries })
+    }
+
+    fn serialize<W: Write>(&self, writer: &mut W) {
     }
 }
 

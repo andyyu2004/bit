@@ -1,5 +1,6 @@
 use super::{BitObj, BitObjType};
 use crate::error::BitResult;
+use crate::serialize::Serialize;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 
@@ -35,12 +36,14 @@ impl Blob {
     }
 }
 
-impl BitObj for Blob {
+impl Serialize for Blob {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
         writer.write_all(&self.bytes)?;
         Ok(())
     }
+}
 
+impl BitObj for Blob {
     fn deserialize<R: Read>(mut reader: R) -> BitResult<Self> {
         Self::deserialize_shared(&mut reader)
     }

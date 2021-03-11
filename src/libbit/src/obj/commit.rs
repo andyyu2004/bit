@@ -1,6 +1,7 @@
 use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
+use crate::serialize::Serialize;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
@@ -23,7 +24,7 @@ impl Display for Commit {
     }
 }
 
-impl BitObj for Commit {
+impl Serialize for Commit {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
         // adds the required spaces for multiline strings
         macro_rules! w {
@@ -46,7 +47,9 @@ impl BitObj for Commit {
         write!(writer, "{}", self.message)?;
         Ok(())
     }
+}
 
+impl BitObj for Commit {
     fn deserialize_buffered<R: BufRead>(r: &mut R) -> BitResult<Self> {
         let mut lines = r.lines();
         let mut attrs = HashMap::new();

@@ -1,13 +1,13 @@
+use super::FileMode;
 use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
+use crate::serialize::Serialize;
 use crate::tls;
 use crate::util;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::path::PathBuf;
-
-use super::FileMode;
 
 impl Display for FileMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -50,14 +50,16 @@ pub struct Tree {
     entries: Vec<TreeEntry>,
 }
 
-impl BitObj for Tree {
+impl Serialize for Tree {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
         for entry in &self.entries {
             entry.serialize(writer)?;
         }
         Ok(())
     }
+}
 
+impl BitObj for Tree {
     fn deserialize_buffered<R: BufRead>(r: &mut R) -> BitResult<Self> {
         let mut tree = Self::default();
 

@@ -25,7 +25,8 @@ pub mod obj;
 pub mod repo;
 
 mod hash;
-mod util;
 mod index;
 mod read_ext;
+mod serialize;
 mod tls;
+mod util;
