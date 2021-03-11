@@ -1,5 +1,6 @@
 use crate::error::{BitError, BitResult};
 use crate::obj::{self, BitObj};
+use sha1::digest::Output;
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -12,6 +13,12 @@ pub type BitHash = SHA1Hash;
 #[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
 #[repr(transparent)]
 pub struct SHA1Hash([u8; 20]);
+
+impl From<Output<Sha1>> for SHA1Hash {
+    fn from(bytes: Output<Sha1>) -> Self {
+        Self::new(bytes.try_into().unwrap())
+    }
+}
 
 impl BitHash {
     pub fn new(bytes: [u8; 20]) -> Self {

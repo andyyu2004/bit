@@ -1,8 +1,7 @@
 use crate::error::BitResult;
 use crate::hash::BitHash;
-use crate::io_ext::{ReadExt, WriteExt};
+use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::obj::FileMode;
-use crate::path::BitPath;
 use crate::serialize::Serialize;
 use crate::util;
 use num_enum::TryFromPrimitive;
@@ -48,6 +47,19 @@ struct BitIndexEntry {
     filepath: String,
 }
 
+impl BitIndexEntry {
+    fn get_required_padding(&self) -> usize {
+        Self::required_padding(self.filepath.len())
+    }
+
+    fn required_padding(filepath_len: usize) -> usize {
+        let entry_size = ENTRY_SIZE_WITHOUT_FILEPATH + filepath_len;
+        let next_multiple_of_8 = ((entry_size + 7) / 8) * 8;
+        let padding_size = next_multiple_of_8 - entry_size;
+        padding_size
+    }
+}
+
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 struct BitIndexEntryFlags(u16);
 
@@ -83,6 +95,17 @@ impl Ord for BitIndexEntry {
     }
 }
 
+const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
+            + std::mem::size_of::<u64>() // mtime
+            + std::mem::size_of::<u32>() // device
+            + std::mem::size_of::<u32>() // inode
+            + std::mem::size_of::<u32>() // mode
+            + std::mem::size_of::<u32>() // uid
+            + std::mem::size_of::<u32>() // gid
+            + std::mem::size_of::<u32>() // filsize
+            + std::mem::size_of::<BitHash>() // hash
+            + std::mem::size_of::<u16>(); // flags
+
 impl BitIndex {
     fn parse_header<R: BufRead>(r: &mut R) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];
@@ -108,26 +131,13 @@ impl BitIndex {
         let hash = r.read_bit_hash()?;
         let flags = BitIndexEntryFlags(r.read_u16()?);
 
-        const BYTES_SO_FAR: usize = std::mem::size_of::<u64>() // ctime
-            + std::mem::size_of::<u64>() // mtime
-            + std::mem::size_of::<u32>() // device
-            + std::mem::size_of::<u32>() // inode
-            + std::mem::size_of::<u32>() // mode
-            + std::mem::size_of::<u32>() // uid
-            + std::mem::size_of::<u32>() // gid
-            + std::mem::size_of::<u32>() // filsize
-            + std::mem::size_of::<[u8; 20]>() // hash
-            + std::mem::size_of::<u16>(); // flags
-
         // read filepath until null terminator (inclusive)
         let mut filepath_bytes = vec![];
         r.read_until(0x00, &mut filepath_bytes)?;
         let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
 
         // read padding (to make entrysize multiple of 8)
-        let entry_size = BYTES_SO_FAR + filepath_bytes.len();
-        let next_multiple_of_8 = ((entry_size + 7) / 8) * 8;
-        let padding_size = next_multiple_of_8 - entry_size;
+        let padding_size = BitIndexEntry::required_padding(filepath_bytes.len());
         let mut padding = [0u8; 8];
         r.read_exact(&mut padding[..padding_size])?;
         assert_eq!(u64::from_be_bytes(padding), 0);
@@ -160,18 +170,17 @@ impl BitIndex {
         let entries = (0..header.entryc)
             .map(|_| Self::parse_index_entry(&mut r))
             .collect::<Result<Vec<BitIndexEntry>, _>>()?;
-
         debug_assert!(entries.is_sorted());
+        let bit_index = Self { header, entries };
 
         let (bytes, hash) = buf.split_at(buf.len() - 20);
         let mut hasher = sha1::Sha1::new();
         hasher.update(bytes);
-        let actual_hash = BitHash::new(hasher.finalize().try_into().unwrap());
+        let actual_hash = BitHash::from(hasher.finalize());
         let expected_hash = BitHash::new(hash.try_into().unwrap());
         assert_eq!(actual_hash, expected_hash);
 
-        // TODO verify checksum
-        Ok(Self { header, entries })
+        Ok(bit_index)
     }
 }
 
@@ -200,17 +209,22 @@ impl Serialize for BitIndexEntry {
         writer.write_bit_hash(&self.hash)?;
         writer.write_u16(self.flags.0)?;
         writer.write_all(self.filepath.as_bytes())?;
+        let padding = self.get_required_padding();
+        writer.write_all(&[0u8; 8][..padding])?;
         Ok(())
     }
 }
 
 impl Serialize for BitIndex {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
-        self.header.serialize(writer)?;
+        let mut writer = HashWriter::new_sha1(writer);
+        self.header.serialize(&mut writer)?;
         debug_assert!(self.entries.is_sorted());
         for entry in &self.entries {
-            entry.serialize(writer)?;
+            entry.serialize(&mut writer)?;
         }
+        let hash = BitHash::from(writer.finalize_hash());
+        writer.write_bit_hash(&hash)?;
         Ok(())
     }
 }
@@ -218,6 +232,7 @@ impl Serialize for BitIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::path::BitPath;
     use std::io::BufReader;
     use std::str::FromStr;
 

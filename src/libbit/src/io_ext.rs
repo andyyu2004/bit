@@ -1,4 +1,5 @@
 use crate::hash::BitHash;
+use sha1::{digest::Output, Digest};
 use std::io::prelude::*;
 
 // all big-endian
@@ -50,4 +51,38 @@ pub(crate) trait WriteExt: Write {
 }
 
 impl<T: Write> WriteExt for T {
+}
+
+/// hashes all the bytes written into the writer
+pub(crate) struct HashWriter<'a, D, W> {
+    writer: &'a mut W,
+    hasher: D,
+}
+
+impl<'a, D: Digest, W: Write> Write for HashWriter<'a, D, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.writer.write(buf)?;
+        self.hasher.update(&buf[..n]);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
+    }
+}
+
+impl<'a, D: Digest, W: Write> HashWriter<'a, D, W> {
+    pub fn finalize_hash(&mut self) -> Output<D> {
+        self.hasher.finalize_reset()
+    }
+
+    pub fn new(writer: &'a mut W) -> Self {
+        Self { writer, hasher: D::new() }
+    }
+}
+
+impl<'a, W: Write> HashWriter<'a, sha1::Sha1, W> {
+    pub fn new_sha1(writer: &'a mut W) -> Self {
+        Self::new(writer)
+    }
 }
