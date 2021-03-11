@@ -26,4 +26,3 @@ impl BitRepo {
         if opts.do_write { self.write_obj(&object) } else { hash::hash_obj(&object) }
     }
 }
-

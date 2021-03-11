@@ -11,4 +11,3 @@ pub fn bit_init(opts: BitInitOpts) -> BitResult<()> {
     let _repo = BitRepo::init(&opts.path)?;
     Ok(())
 }
-

@@ -10,11 +10,16 @@ use std::str::FromStr;
 pub type BitHash = SHA1Hash;
 
 #[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
+#[repr(transparent)]
 pub struct SHA1Hash([u8; 20]);
 
 impl BitHash {
     pub fn new(bytes: [u8; 20]) -> Self {
         Self(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
 
     /// split hash into the first two hex digits and the rest

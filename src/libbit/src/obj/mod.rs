@@ -30,8 +30,14 @@ impl Display for BitObjKind {
 // 100644 normal
 // 100755 executable
 // 40000 directory
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Copy, PartialEq, Eq, Clone)]
 pub struct FileMode(u32);
+
+impl FileMode {
+    pub fn as_u32(self) -> u32 {
+        self.0
+    }
+}
 
 impl FromStr for FileMode {
     type Err = BitError;

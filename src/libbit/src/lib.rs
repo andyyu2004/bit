@@ -26,7 +26,8 @@ pub mod repo;
 
 mod hash;
 mod index;
-mod read_ext;
+mod io_ext;
+mod path;
 mod serialize;
 mod tls;
 mod util;

@@ -1,6 +1,5 @@
-use std::io::Read;
-
 use crate::hash::BitHash;
+use std::io::prelude::*;
 
 // all big-endian
 pub(crate) trait ReadExt: Read {
@@ -30,4 +29,25 @@ pub(crate) trait ReadExt: Read {
 }
 
 impl<T: Read> ReadExt for T {
+}
+
+pub(crate) trait WriteExt: Write {
+    fn write_u16(&mut self, u: u16) -> std::io::Result<()> {
+        self.write_all(&u.to_be_bytes())
+    }
+
+    fn write_u32(&mut self, u: u32) -> std::io::Result<()> {
+        self.write_all(&u.to_be_bytes())
+    }
+
+    fn write_u64(&mut self, u: u64) -> std::io::Result<()> {
+        self.write_all(&u.to_be_bytes())
+    }
+
+    fn write_bit_hash(&mut self, hash: &BitHash) -> std::io::Result<()> {
+        self.write_all(hash.as_bytes())
+    }
+}
+
+impl<T: Write> WriteExt for T {
 }

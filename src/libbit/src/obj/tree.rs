@@ -2,12 +2,12 @@ use super::FileMode;
 use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
+use crate::path::BitPath;
 use crate::serialize::Serialize;
 use crate::tls;
 use crate::util;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
-use std::path::PathBuf;
 
 impl Display for FileMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -33,13 +33,13 @@ impl Display for Tree {
 impl Display for TreeEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if f.alternate() {
-            write!(f, "{} {}\0{}", self.mode, self.path.display(), unsafe {
+            write!(f, "{} {}\0{}", self.mode, self.path, unsafe {
                 // SAFETY we're just printing this out and not using it anywhere
                 std::str::from_utf8_unchecked(self.hash.as_ref())
             })
         } else {
             let ty = tls::REPO.with(|repo| repo.read_obj_type_from_hash(&self.hash)).unwrap();
-            write!(f, "{} {} {}\t{}", self.mode, ty, self.hash, self.path.display())
+            write!(f, "{} {} {}\t{}", self.mode, ty, self.hash, self.path)
         }
     }
 }
@@ -78,7 +78,7 @@ impl BitObj for Tree {
 #[derive(PartialEq, Debug, Clone)]
 pub struct TreeEntry {
     mode: FileMode,
-    path: PathBuf,
+    path: BitPath,
     hash: BitHash,
 }
 
@@ -104,7 +104,7 @@ impl TreeEntry {
         // use alternate display impl to not pad an extra 0
         write!(writer, "{:#}", self.mode)?;
         writer.write_all(b" ")?;
-        write!(writer, "{}", self.path.display())?;
+        write!(writer, "{}", self.path)?;
         writer.write_all(b"\0")?;
         writer.write_all(self.hash.as_ref())?;
         Ok(())
@@ -127,7 +127,7 @@ mod tests {
     impl Arbitrary for TreeEntry {
         fn arbitrary(g: &mut Gen) -> Self {
             Self {
-                path: PathBuf::from(generate_sane_string(1..300)),
+                path: BitPath::from(generate_sane_string(1..300)),
                 mode: Arbitrary::arbitrary(g),
                 hash: Arbitrary::arbitrary(g),
             }
@@ -160,4 +160,3 @@ mod tests {
         Ok(())
     }
 }
-

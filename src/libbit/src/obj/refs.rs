@@ -1,11 +1,11 @@
 use super::{BitObj, BitObjKind, BitObjType};
 use crate::error::BitResult;
 use crate::hash::BitHash;
+use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::Serialize;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
-use std::path::PathBuf;
 
 impl Display for Ref {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -19,8 +19,8 @@ pub enum Ref {
     Direct(BitHash),
     /// contains the path of another reference
     /// if the ref is `ref: refs/remote/origin/master`
-    /// then the `PathBuf` contains `refs/remote/origin/master`
-    Indirect(PathBuf),
+    /// then the `BitPath` contains `refs/remote/origin/master`
+    Indirect(BitPath),
 }
 
 impl Serialize for Ref {

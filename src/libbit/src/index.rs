@@ -1,13 +1,14 @@
 use crate::error::BitResult;
 use crate::hash::BitHash;
+use crate::io_ext::{ReadExt, WriteExt};
 use crate::obj::FileMode;
-use crate::read_ext::ReadExt;
+use crate::path::BitPath;
+use crate::serialize::Serialize;
 use crate::util;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
 use std::convert::{TryFrom, TryInto};
 use std::io::{prelude::*, BufReader};
-use std::path::PathBuf;
 
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
@@ -44,7 +45,7 @@ struct BitIndexEntry {
     filesize: u32,
     hash: BitHash,
     flags: BitIndexEntryFlags,
-    filepath: PathBuf,
+    filepath: String,
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -172,8 +173,45 @@ impl BitIndex {
         // TODO verify checksum
         Ok(Self { header, entries })
     }
+}
 
-    fn serialize<W: Write>(&self, writer: &mut W) {
+impl Serialize for BitIndexHeader {
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+        let Self { signature, version, entryc } = self;
+        writer.write(signature)?;
+        writer.write(&version.to_be_bytes())?;
+        writer.write(&entryc.to_be_bytes())?;
+        Ok(())
+    }
+}
+
+impl Serialize for BitIndexEntry {
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+        writer.write_u32(self.ctime_sec)?;
+        writer.write_u32(self.ctime_nano)?;
+        writer.write_u32(self.mtime_sec)?;
+        writer.write_u32(self.mtime_nano)?;
+        writer.write_u32(self.device)?;
+        writer.write_u32(self.inode)?;
+        writer.write_u32(self.mode.as_u32())?;
+        writer.write_u32(self.uid)?;
+        writer.write_u32(self.gid)?;
+        writer.write_u32(self.filesize)?;
+        writer.write_bit_hash(&self.hash)?;
+        writer.write_u16(self.flags.0)?;
+        writer.write_all(self.filepath.as_bytes())?;
+        Ok(())
+    }
+}
+
+impl Serialize for BitIndex {
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+        self.header.serialize(writer)?;
+        debug_assert!(self.entries.is_sorted());
+        for entry in &self.entries {
+            entry.serialize(writer)?;
+        }
+        Ok(())
     }
 }
 
@@ -209,7 +247,7 @@ mod tests {
                 gid: 1000,
                 filesize: 6,
                 flags: BitIndexEntryFlags(12),
-                filepath: PathBuf::from("dir/test.txt"),
+                filepath: BitPath::from("dir/test.txt"),
                 mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
@@ -224,7 +262,7 @@ mod tests {
                 gid: 1000,
                 filesize: 6,
                 flags: BitIndexEntryFlags(8),
-                filepath: PathBuf::from("test.txt"),
+                filepath: BitPath::from("test.txt"),
                 mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
