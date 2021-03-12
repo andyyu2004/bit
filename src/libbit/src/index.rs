@@ -14,7 +14,7 @@ use std::{
 
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct BitIndex {
     header: BitIndexHeader,
     /// sorted by ascending by filepath (interpreted as unsigned bytes)
@@ -25,7 +25,7 @@ struct BitIndex {
     extensions: Vec<BitIndexExtension>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct BitIndexEntries(BTreeMap<BitPath, BitIndexEntry>);
 
 impl Deref for BitIndexEntries {
@@ -60,14 +60,14 @@ impl BitIndex {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct BitIndexHeader {
     signature: [u8; 4],
     version: u32,
     entryc: u32,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 struct BitIndexEntry {
     ctime_sec: u32,
     ctime_nano: u32,
@@ -139,7 +139,7 @@ struct BitIndexEntryFlags(u16);
 // this should be an enum of the concrete extensions
 // but I don't really care about the extensions currently
 // and they are optional anyway
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct BitIndexExtension {
     signature: [u8; 4],
     size: u32,
@@ -340,6 +340,8 @@ impl Serialize for BitIndex {
 
 #[cfg(test)]
 mod tests {
+    use quickcheck::Arbitrary;
+
     use super::*;
     use crate::path::BitPath;
     use std::io::BufReader;

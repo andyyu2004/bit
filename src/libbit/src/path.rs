@@ -1,6 +1,7 @@
 use crate::interner::with_interner;
 use std::fmt::{self, Display, Formatter};
 
+/// interned path (where path is just a string)
 // interning paths is likely not worth it, but its nice to have it as a copy type
 // since its used so much, this will also lend itself to faster comparisons as
 // its now just an integer compare
