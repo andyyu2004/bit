@@ -127,7 +127,7 @@ mod tests {
     impl Arbitrary for TreeEntry {
         fn arbitrary(g: &mut Gen) -> Self {
             Self {
-                path: BitPath::from(generate_sane_string(1..300)),
+                path: BitPath::intern(&generate_sane_string(1..300)),
                 mode: Arbitrary::arbitrary(g),
                 hash: Arbitrary::arbitrary(g),
             }

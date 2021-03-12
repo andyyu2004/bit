@@ -1,25 +1,25 @@
 [package]
-name = "libbit"
-version = "0.1.0"
 authors = ["Andy Yu <andyyu2004@gmail.com>"]
 edition = "2018"
-
+name = "libbit"
+version = "0.1.0"
 [dependencies]
+flate2 = "1.0.20"
+hex = "0.4.2"
+libc = "0.2.88"
+num_enum = "0.5.1"
 quickcheck_derive = "0.3.0"
 rust-ini = "0.16"
-thiserror = "1.0"
-flate2 = "1.0.20"
-num_enum = "0.5.1"
-sha2 = "0.9.3"
-sha-1 = "0.9.4"
-hex = "0.4.2"
 scoped-tls = "1"
-libc = "0.2.88"
+sha-1 = "0.9.4"
+sha2 = "0.9.3"
 smallvec = "1.6.1"
+thiserror = "1.0"
+typed-arena = "2"
+index_vec = "0.1.2"
 
 [dev-dependencies]
-rand = "0.8.3"
 quickcheck = "1"
 quickcheck_macros = "1"
+rand = "0.8.3"
 tempfile = "3"
-

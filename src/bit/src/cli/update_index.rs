@@ -26,7 +26,7 @@ impl TryInto<BitUpdateIndexOpts> for BitUpdateIndexCliOpts {
         let cacheinfo = CacheInfo {
             mode: cacheinfo[0].parse()?,
             hash: cacheinfo[1].parse()?,
-            path: BitPath::from(std::mem::take(&mut cacheinfo[2])),
+            path: std::mem::take(&mut cacheinfo[2]),
         };
 
         Ok(BitUpdateIndexOpts { add, cacheinfo })

@@ -25,6 +25,7 @@ pub mod obj;
 pub mod path;
 pub mod repo;
 
+mod interner;
 mod hash;
 mod index;
 mod io_ext;

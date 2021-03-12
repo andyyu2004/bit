@@ -1,35 +1,43 @@
+use crate::interner::with_interner;
 use std::fmt::{self, Display, Formatter};
-// using string for now as paths are so painful
-// maybe will run into os related issues
-// but should be fine for now
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct BitPath(String);
+
+// interning paths is likely not worth it, but its nice to have it as a copy type
+// since its used so much, this will also lend itself to faster comparisons as
+// its now just an integer compare
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub struct BitPath(u32);
+
+impl BitPath {
+    pub fn new(u: u32) -> Self {
+        Self(u)
+    }
+
+    pub fn index(self) -> u32 {
+        self.0
+    }
+
+    pub fn intern(s: &str) -> Self {
+        with_interner(|interner| interner.intern(s))
+    }
+
+    pub fn path(self) -> &'static str {
+        with_interner(|interner| interner.get_str(self))
+    }
+}
 
 impl Display for BitPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<String> for BitPath {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl<'a> From<&'a str> for BitPath {
-    fn from(s: &'a str) -> Self {
-        Self::from(s.to_owned())
+        write!(f, "{}", self.path())
     }
 }
 
 impl BitPath {
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.path().len()
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_bytes()
+        self.path().as_bytes()
     }
 }
 
@@ -41,6 +49,6 @@ impl PartialOrd for BitPath {
 
 impl Ord for BitPath {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.as_bytes().cmp(other.0.as_bytes())
+        self.as_bytes().cmp(other.as_bytes())
     }
 }

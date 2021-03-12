@@ -19,7 +19,7 @@ struct BitIndex {
     header: BitIndexHeader,
     /// sorted by ascending by filepath (interpreted as unsigned bytes)
     /// ties broken by stage (a part of flags)
-    // the link says name which usually means hash
+    // the link says `name` which usually refers to the hash
     // but it is sorted by filepath
     entries: BitIndexEntries,
     extensions: Vec<BitIndexExtension>,
@@ -56,6 +56,7 @@ impl BitIndex {
 
     /// if entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, entry: BitIndexEntry) {
+        self.entries.insert(entry.filepath.clone(), entry);
     }
 }
 
@@ -390,7 +391,7 @@ mod tests {
                 gid: 1000,
                 filesize: 6,
                 flags: BitIndexEntryFlags(12),
-                filepath: BitPath::from("dir/test.txt"),
+                filepath: BitPath::intern("dir/test.txt"),
                 mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
@@ -405,7 +406,7 @@ mod tests {
                 gid: 1000,
                 filesize: 6,
                 flags: BitIndexEntryFlags(8),
-                filepath: BitPath::from("test.txt"),
+                filepath: BitPath::intern("test.txt"),
                 mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
