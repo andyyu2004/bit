@@ -1,13 +1,16 @@
-use crate::error::BitResult;
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::obj::FileMode;
 use crate::serialize::Serialize;
 use crate::util;
+use crate::{error::BitResult, path::BitPath};
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
-use std::convert::{TryFrom, TryInto};
 use std::io::{prelude::*, BufReader};
+use std::{collections::BTreeMap, ops::Deref};
+use std::{
+    convert::{TryFrom, TryInto}, ops::DerefMut
+};
 
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
@@ -18,9 +21,42 @@ struct BitIndex {
     /// ties broken by stage (a part of flags)
     // the link says name which usually means hash
     // but it is sorted by filepath
-    // TODO maybe use a BTreeMap or something?
-    entries: Vec<BitIndexEntry>,
+    entries: BitIndexEntries,
     extensions: Vec<BitIndexExtension>,
+}
+
+#[derive(Debug, PartialEq)]
+struct BitIndexEntries(BTreeMap<BitPath, BitIndexEntry>);
+
+impl Deref for BitIndexEntries {
+    type Target = BTreeMap<BitPath, BitIndexEntry>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for BitIndexEntries {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<Vec<BitIndexEntry>> for BitIndexEntries {
+    fn from(entries: Vec<BitIndexEntry>) -> Self {
+        Self(entries.into_iter().map(|entry| (entry.filepath.clone(), entry)).collect())
+    }
+}
+
+impl BitIndex {
+    /// find entry by path
+    pub fn find_entry(&self, path: &BitPath) -> Option<&BitIndexEntry> {
+        self.entries.get(path)
+    }
+
+    /// if entry with the same path already exists, it will be replaced
+    pub fn add_entry(&mut self, entry: BitIndexEntry) {
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -45,7 +81,7 @@ struct BitIndexEntry {
     filesize: u32,
     hash: BitHash,
     flags: BitIndexEntryFlags,
-    filepath: String,
+    filepath: BitPath,
 }
 
 const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
@@ -222,8 +258,8 @@ impl BitIndex {
         let header = Self::parse_header(&mut r)?;
         let entries = (0..header.entryc)
             .map(|_| Self::parse_index_entry(&mut r))
-            .collect::<Result<Vec<BitIndexEntry>, _>>()?;
-        debug_assert!(entries.is_sorted());
+            .collect::<Result<Vec<BitIndexEntry>, _>>()?
+            .into();
 
         let mut remainder = vec![];
         assert!(r.read_to_end(&mut remainder)? >= BIT_HASH_SIZE);
@@ -284,11 +320,10 @@ impl Serialize for BitIndexExtension {
 
 impl Serialize for BitIndex {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
-        debug_assert!(self.entries.is_sorted());
         let mut writer = HashWriter::new_sha1(writer);
         self.header.serialize(&mut writer)?;
 
-        for entry in &self.entries {
+        for entry in self.entries.values() {
             entry.serialize(&mut writer)?;
         }
 
@@ -374,7 +409,8 @@ mod tests {
                 mode: FileMode::NON_EXECUTABLE,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
-        ];
+        ]
+        .into();
 
         let expected_index = BitIndex {
             header: BitIndexHeader { signature: [b'D', b'I', b'R', b'C'], version: 2, entryc: 2 },

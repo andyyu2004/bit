@@ -1,6 +1,7 @@
 use clap::Clap;
 use libbit::cmd::{BitUpdateIndexOpts, CacheInfo};
 use libbit::error::BitError;
+use libbit::path::BitPath;
 use std::convert::TryInto;
 
 #[derive(Clap, Debug)]
@@ -25,7 +26,7 @@ impl TryInto<BitUpdateIndexOpts> for BitUpdateIndexCliOpts {
         let cacheinfo = CacheInfo {
             mode: cacheinfo[0].parse()?,
             hash: cacheinfo[1].parse()?,
-            path: String::from(std::mem::take(&mut cacheinfo[2])),
+            path: BitPath::from(std::mem::take(&mut cacheinfo[2])),
         };
 
         Ok(BitUpdateIndexOpts { add, cacheinfo })
