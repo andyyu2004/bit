@@ -1,7 +1,6 @@
 use clap::Clap;
 use libbit::cmd::{BitUpdateIndexOpts, CacheInfo};
 use libbit::error::BitError;
-use libbit::path::BitPath;
 use std::convert::TryInto;
 
 #[derive(Clap, Debug)]

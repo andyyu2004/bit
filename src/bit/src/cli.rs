@@ -1,15 +1,17 @@
+mod ls_files;
 mod update_index;
 
 // the bitopts and bitcliopts are distinct types for a few reasons
 // - the parsed format is often not very convenient for actual usage
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
+use self::ls_files::BitLsFilesCliOpts;
+use self::update_index::BitUpdateIndexCliOpts;
 use clap::{AppSettings, Clap};
 use libbit::cmd::*;
 use libbit::error::BitResult;
 use libbit::obj::{BitObjId, BitObjType};
 use libbit::repo::BitRepo;
 use std::path::PathBuf;
-use update_index::BitUpdateIndexCliOpts;
 
 pub fn run() -> BitResult<()> {
     let opts = BitCliOpts::parse();
@@ -26,6 +28,7 @@ pub fn run() -> BitResult<()> {
             Ok(())
         }
         BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
+        BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
         BitSubCmd::Log(..) => todo!(),
         BitSubCmd::Init(..) => unreachable!(),
         BitSubCmd::UpdateIndex(opts) => {
@@ -51,6 +54,7 @@ pub enum BitSubCmd {
     CatFile(BitCatFileCliOpts),
     Log(BitLogCliOpts),
     UpdateIndex(BitUpdateIndexCliOpts),
+    LsFiles(BitLsFilesCliOpts),
 }
 
 #[derive(Clap)]

@@ -1,5 +1,6 @@
 use crate::error::{BitError, BitResult};
 use crate::hash::{self, BitHash};
+use crate::index::BitIndex;
 use crate::obj::{self, BitObj, BitObjId, BitObjKind, BitObjType};
 use crate::tls;
 use flate2::read::ZlibDecoder;
@@ -9,12 +10,18 @@ use ini::Ini;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
+use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
+
+pub const BIT_INDEX_FILE_PATH: &str = "index";
 
 pub struct BitRepo {
     worktree: PathBuf,
     bitdir: PathBuf,
+    // TODO probably parse it into a struct or something
     config: Ini,
+    index: OnceCell<RwLock<BitIndex>>,
 }
 
 impl Debug for BitRepo {
@@ -29,6 +36,11 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 }
 
 impl BitRepo {
+    fn new(worktree: PathBuf, bitdir: PathBuf, config: Ini) -> Self {
+        let index_path = bitdir.join(BIT_INDEX_FILE_PATH);
+        Self { worktree, bitdir, config, index: OnceCell::new() }
+    }
+
     /// recursively searches parents starting from the current directory for a git repo
     pub fn find<R>(path: impl AsRef<Path>, f: impl FnOnce(&BitRepo) -> R) -> BitResult<R> {
         let repo = Self::find_inner(path.as_ref())?;
@@ -46,6 +58,28 @@ impl BitRepo {
         }
     }
 
+    fn index_path(&self) -> PathBuf {
+        self.bitdir.join(BIT_INDEX_FILE_PATH)
+    }
+
+    fn index_file(&self) -> File {
+        // TODO have to create "fresh" index file if one doesn't exist
+        File::open(self.index_path()).unwrap()
+    }
+
+    pub fn get_index(&self) -> &RwLock<BitIndex> {
+        let mk_index = || RwLock::new(BitIndex::deserialize(self.index_file()).unwrap());
+        self.index.get_or_init(mk_index)
+    }
+
+    pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex) -> R) -> R {
+        f(&self.get_index().read().unwrap())
+    }
+
+    pub fn with_index_mut<R>(&self, f: impl FnOnce(&mut BitIndex) -> R) -> R {
+        f(&mut self.get_index().write().unwrap())
+    }
+
     fn load(path: impl AsRef<Path>) -> BitResult<Self> {
         let worktree = path.as_ref().canonicalize()?;
         let bitdir = worktree.join(".git");
@@ -55,7 +89,7 @@ impl BitRepo {
         if version.parse::<i32>().unwrap() != 0 {
             panic!("Unsupported repositoryformatversion {}", version)
         }
-        Ok(Self { worktree, bitdir, config })
+        Ok(Self::new(worktree, bitdir, config))
     }
 
     pub fn init(path: impl AsRef<Path>) -> BitResult<Self> {
@@ -85,7 +119,7 @@ impl BitRepo {
         let config = Self::default_config();
         config.write_to_file(bitdir.join("config"))?;
 
-        let this = Self { worktree, bitdir, config };
+        let this = Self::new(worktree, bitdir, config);
         this.mk_bitdir("objects")?;
         this.mk_bitdir("branches")?;
         this.mk_bitdir("refs/tags")?;
@@ -192,6 +226,12 @@ impl BitRepo {
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.relative_path(path))
+    }
+}
+
+impl Drop for BitRepo {
+    fn drop(&mut self) {
+        if let Some(index) = self.index.get() {}
     }
 }
 

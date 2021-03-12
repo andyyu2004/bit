@@ -6,30 +6,31 @@ use crate::util;
 use crate::{error::BitResult, path::BitPath};
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
+use std::collections::BTreeMap;
+use std::convert::{TryFrom, TryInto};
+use std::fmt::{self, Display, Formatter};
 use std::io::{prelude::*, BufReader};
-use std::{collections::BTreeMap, ops::Deref};
-use std::{
-    convert::{TryFrom, TryInto}, ops::DerefMut
-};
+use std::ops::{Deref, DerefMut};
 
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
 #[derive(Debug, PartialEq, Clone)]
-struct BitIndex {
-    header: BitIndexHeader,
+pub struct BitIndex {
+    pub header: BitIndexHeader,
     /// sorted by ascending by filepath (interpreted as unsigned bytes)
     /// ties broken by stage (a part of flags)
     // the link says `name` which usually refers to the hash
     // but it is sorted by filepath
-    entries: BitIndexEntries,
-    extensions: Vec<BitIndexExtension>,
+    pub entries: BitIndexEntries,
+    pub extensions: Vec<BitIndexExtension>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct BitIndexEntries(BTreeMap<BitPath, BitIndexEntry>);
+pub struct BitIndexEntries(BitIndexEntriesMap);
+type BitIndexEntriesMap = BTreeMap<(BitPath, MergeStage), BitIndexEntry>;
 
 impl Deref for BitIndexEntries {
-    type Target = BTreeMap<BitPath, BitIndexEntry>;
+    type Target = BitIndexEntriesMap;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -44,45 +45,50 @@ impl DerefMut for BitIndexEntries {
 
 impl From<Vec<BitIndexEntry>> for BitIndexEntries {
     fn from(entries: Vec<BitIndexEntry>) -> Self {
-        Self(entries.into_iter().map(|entry| (entry.filepath.clone(), entry)).collect())
+        Self(
+            entries
+                .into_iter()
+                .map(|entry| ((entry.filepath, entry.flags.stage()), entry))
+                .collect(),
+        )
     }
 }
 
 impl BitIndex {
     /// find entry by path
-    pub fn find_entry(&self, path: &BitPath) -> Option<&BitIndexEntry> {
-        self.entries.get(path)
+    pub fn find_entry(&self, path: BitPath, stage: MergeStage) -> Option<&BitIndexEntry> {
+        self.entries.get(&(path, stage))
     }
 
     /// if entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, entry: BitIndexEntry) {
-        self.entries.insert(entry.filepath.clone(), entry);
+        self.entries.insert((entry.filepath, entry.flags.stage()), entry);
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct BitIndexHeader {
+pub struct BitIndexHeader {
     signature: [u8; 4],
     version: u32,
     entryc: u32,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct BitIndexEntry {
-    ctime_sec: u32,
-    ctime_nano: u32,
-    mtime_sec: u32,
-    mtime_nano: u32,
-    device: u32,
-    inode: u32,
-    mode: FileMode,
-    uid: u32,
+pub struct BitIndexEntry {
+    pub ctime_sec: u32,
+    pub ctime_nano: u32,
+    pub mtime_sec: u32,
+    pub mtime_nano: u32,
+    pub device: u32,
+    pub inode: u32,
+    pub mode: FileMode,
+    pub uid: u32,
     /// group identifier of the current user
-    gid: u32,
-    filesize: u32,
-    hash: BitHash,
-    flags: BitIndexEntryFlags,
-    filepath: BitPath,
+    pub gid: u32,
+    pub filesize: u32,
+    pub hash: BitHash,
+    pub flags: BitIndexEntryFlags,
+    pub filepath: BitPath,
 }
 
 const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
@@ -97,6 +103,10 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + std::mem::size_of::<u16>(); // flags
 
 impl BitIndexEntry {
+    pub fn stage(&self) -> MergeStage {
+        self.flags.stage()
+    }
+
     fn padding_len(&self) -> usize {
         Self::padding_len_for_filepath(self.filepath.len())
     }
@@ -134,27 +144,33 @@ mod padding_tests {
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-struct BitIndexEntryFlags(u16);
+pub struct BitIndexEntryFlags(u16);
 
 // this should be an enum of the concrete extensions
 // but I don't really care about the extensions currently
 // and they are optional anyway
 #[derive(Debug, PartialEq, Clone)]
-struct BitIndexExtension {
-    signature: [u8; 4],
-    size: u32,
-    data: Vec<u8>,
+pub struct BitIndexExtension {
+    pub signature: [u8; 4],
+    pub size: u32,
+    pub data: Vec<u8>,
 }
 
 // could probably do with better variant names once I know whats going on
-#[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, TryFromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, TryFromPrimitive, Copy, Clone)]
 #[repr(u8)]
-enum MergeStage {
+pub enum MergeStage {
     /// not merging
-    None,
-    Stage1,
-    Stage2,
-    Stage3,
+    None   = 0,
+    Stage1 = 1,
+    Stage2 = 2,
+    Stage3 = 3,
+}
+
+impl Display for MergeStage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
 }
 
 impl BitIndexEntryFlags {
@@ -172,9 +188,7 @@ impl PartialOrd for BitIndexEntry {
 
 impl Ord for BitIndexEntry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.filepath
-            .cmp(&other.filepath)
-            .then_with(|| self.flags.stage().cmp(&other.flags.stage()))
+        self.filepath.cmp(&other.filepath).then_with(|| self.stage().cmp(&other.stage()))
     }
 }
 
@@ -240,7 +254,6 @@ impl BitIndex {
         let mut extensions = vec![];
         while buf.len() > BIT_HASH_SIZE {
             let signature: [u8; 4] = buf[0..4].try_into().unwrap();
-            dbg!(std::str::from_utf8(signature.as_slice()).unwrap());
             let size = u32::from_be_bytes(buf[4..8].try_into().unwrap());
             let data = buf[8..8 + size as usize].to_vec();
             extensions.push(BitIndexExtension { signature, size, data });
@@ -251,7 +264,7 @@ impl BitIndex {
 
     // this impl currently is not ideal as it basically has to read it twice
     // although the second time is reading from memory so maybe its not that bad?
-    fn deserialize<R: Read>(mut r: R) -> BitResult<BitIndex> {
+    pub fn deserialize<R: Read>(mut r: R) -> BitResult<BitIndex> {
         let mut buf = vec![];
         r.read_to_end(&mut buf)?;
 
@@ -340,8 +353,6 @@ impl Serialize for BitIndex {
 
 #[cfg(test)]
 mod tests {
-    use quickcheck::Arbitrary;
-
     use super::*;
     use crate::path::BitPath;
     use std::io::BufReader;
