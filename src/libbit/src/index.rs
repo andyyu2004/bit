@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::hash::BitHash;
+use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::obj::FileMode;
 use crate::serialize::Serialize;
@@ -20,6 +20,7 @@ struct BitIndex {
     // but it is sorted by filepath
     // TODO maybe use a BTreeMap or something?
     entries: Vec<BitIndexEntry>,
+    extensions: Vec<BitIndexExtension>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -47,21 +48,66 @@ struct BitIndexEntry {
     filepath: String,
 }
 
+const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
+            + std::mem::size_of::<u64>() // mtime
+            + std::mem::size_of::<u32>() // device
+            + std::mem::size_of::<u32>() // inode
+            + std::mem::size_of::<u32>() // mode
+            + std::mem::size_of::<u32>() // uid
+            + std::mem::size_of::<u32>() // gid
+            + std::mem::size_of::<u32>() // filesize
+            + BIT_HASH_SIZE // hash
+            + std::mem::size_of::<u16>(); // flags
+
 impl BitIndexEntry {
-    fn get_required_padding(&self) -> usize {
-        Self::required_padding(self.filepath.len())
+    fn padding_len(&self) -> usize {
+        Self::padding_len_for_filepath(self.filepath.len())
     }
 
-    fn required_padding(filepath_len: usize) -> usize {
+    fn padding_len_for_filepath(filepath_len: usize) -> usize {
         let entry_size = ENTRY_SIZE_WITHOUT_FILEPATH + filepath_len;
-        let next_multiple_of_8 = ((entry_size + 7) / 8) * 8;
+        // +8 instead of +7 as we should always have at least one byte
+        // of padding as we consider the nullbyte of the filepath as padding
+        let next_multiple_of_8 = ((entry_size + 8) / 8) * 8;
         let padding_size = next_multiple_of_8 - entry_size;
+        assert!(padding_size > 0 && padding_size <= 8);
         padding_size
+    }
+}
+
+#[cfg(test)]
+mod padding_tests {
+    use super::*;
+
+    #[test]
+    fn index_entry_padding_test() {
+        // dbg!(ENTRY_SIZE_WITHOUT_FILEPATH) = 62 atm;
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(8), 2);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(9), 1);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(10), 8);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(11), 7);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(12), 6);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(13), 5);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(14), 4);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(15), 3);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(16), 2);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(17), 1);
+        assert_eq!(BitIndexEntry::padding_len_for_filepath(18), 8);
     }
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 struct BitIndexEntryFlags(u16);
+
+// this should be an enum of the concrete extensions
+// but I don't really care about the extensions currently
+// and they are optional anyway
+#[derive(Debug, PartialEq)]
+struct BitIndexExtension {
+    signature: [u8; 4],
+    size: u32,
+    data: Vec<u8>,
+}
 
 // could probably do with better variant names once I know whats going on
 #[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, TryFromPrimitive)]
@@ -95,21 +141,11 @@ impl Ord for BitIndexEntry {
     }
 }
 
-const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
-            + std::mem::size_of::<u64>() // mtime
-            + std::mem::size_of::<u32>() // device
-            + std::mem::size_of::<u32>() // inode
-            + std::mem::size_of::<u32>() // mode
-            + std::mem::size_of::<u32>() // uid
-            + std::mem::size_of::<u32>() // gid
-            + std::mem::size_of::<u32>() // filsize
-            + std::mem::size_of::<BitHash>() // hash
-            + std::mem::size_of::<u16>(); // flags
-
 impl BitIndex {
     fn parse_header<R: BufRead>(r: &mut R) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];
         r.read_exact(&mut signature)?;
+        assert_eq!(&signature, b"DIRC");
         let version = r.read_u32()?;
         assert_eq!(version, 2, "Only index format v2 is supported");
         let entryc = r.read_u32()?;
@@ -134,15 +170,9 @@ impl BitIndex {
         // read filepath until null terminator (inclusive)
         let mut filepath_bytes = vec![];
         r.read_until(0x00, &mut filepath_bytes)?;
+        assert_eq!(*filepath_bytes.last().unwrap(), 0x00);
         let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
-
-        // read padding (to make entrysize multiple of 8)
-        let padding_size = BitIndexEntry::required_padding(filepath_bytes.len());
-        let mut padding = [0u8; 8];
-        r.read_exact(&mut padding[..padding_size])?;
-        assert_eq!(u64::from_be_bytes(padding), 0);
-
-        Ok(BitIndexEntry {
+        let entry = BitIndexEntry {
             ctime_sec,
             ctime_nano,
             mtime_sec,
@@ -156,7 +186,30 @@ impl BitIndex {
             hash,
             flags,
             filepath,
-        })
+        };
+
+        // read padding (to make entrysize multiple of 8)
+        let mut padding = [0u8; 8];
+        // we -1 from padding here as we have already read the
+        // null byte belonging to the end of the filepath
+        // this is safe as `0 < padding <= 8`
+        r.read_exact(&mut padding[..entry.padding_len() - 1])?;
+        assert_eq!(u64::from_be_bytes(padding), 0);
+
+        Ok(entry)
+    }
+
+    fn parse_extensions(mut buf: &[u8]) -> BitResult<Vec<BitIndexExtension>> {
+        let mut extensions = vec![];
+        while buf.len() > BIT_HASH_SIZE {
+            let signature: [u8; 4] = buf[0..4].try_into().unwrap();
+            dbg!(std::str::from_utf8(signature.as_slice()).unwrap());
+            let size = u32::from_be_bytes(buf[4..8].try_into().unwrap());
+            let data = buf[8..8 + size as usize].to_vec();
+            extensions.push(BitIndexExtension { signature, size, data });
+            buf = &buf[8 + size as usize..];
+        }
+        Ok(extensions)
     }
 
     // this impl currently is not ideal as it basically has to read it twice
@@ -171,9 +224,14 @@ impl BitIndex {
             .map(|_| Self::parse_index_entry(&mut r))
             .collect::<Result<Vec<BitIndexEntry>, _>>()?;
         debug_assert!(entries.is_sorted());
-        let bit_index = Self { header, entries };
 
-        let (bytes, hash) = buf.split_at(buf.len() - 20);
+        let mut remainder = vec![];
+        assert!(r.read_to_end(&mut remainder)? >= BIT_HASH_SIZE);
+        let extensions = Self::parse_extensions(&remainder)?;
+
+        let bit_index = Self { header, entries, extensions };
+
+        let (bytes, hash) = buf.split_at(buf.len() - BIT_HASH_SIZE);
         let mut hasher = sha1::Sha1::new();
         hasher.update(bytes);
         let actual_hash = BitHash::from(hasher.finalize());
@@ -209,20 +267,35 @@ impl Serialize for BitIndexEntry {
         writer.write_bit_hash(&self.hash)?;
         writer.write_u16(self.flags.0)?;
         writer.write_all(self.filepath.as_bytes())?;
-        let padding = self.get_required_padding();
-        writer.write_all(&[0u8; 8][..padding])?;
+        // TODO something wrong regarding the null byte of the filepath maybe?
+        writer.write_all(&[0u8; 8][..self.padding_len()])?;
+        Ok(())
+    }
+}
+
+impl Serialize for BitIndexExtension {
+    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+        writer.write_all(&self.signature)?;
+        writer.write_u32(self.size)?;
+        writer.write_all(&self.data)?;
         Ok(())
     }
 }
 
 impl Serialize for BitIndex {
     fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+        debug_assert!(self.entries.is_sorted());
         let mut writer = HashWriter::new_sha1(writer);
         self.header.serialize(&mut writer)?;
-        debug_assert!(self.entries.is_sorted());
+
         for entry in &self.entries {
             entry.serialize(&mut writer)?;
         }
+
+        for extension in &self.extensions {
+            extension.serialize(&mut writer)?;
+        }
+
         let hash = BitHash::from(writer.finalize_hash());
         writer.write_bit_hash(&hash)?;
         Ok(())
@@ -239,8 +312,28 @@ mod tests {
     #[test]
     fn parse_large_index() -> BitResult<()> {
         let bytes = include_bytes!("../tests/files/index") as &[u8];
-        // this just checks it passes all the internal assertions
-        let _index = BitIndex::deserialize(bytes)?;
+        let index = BitIndex::deserialize(bytes)?;
+        assert_eq!(index.entries.len(), 31);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_and_serialize_small_index() -> BitResult<()> {
+        let bytes = include_bytes!("../tests/files/smallindex") as &[u8];
+        let index = BitIndex::deserialize(bytes)?;
+        let mut buf = vec![];
+        index.serialize(&mut buf)?;
+        assert_eq!(bytes, buf);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_and_serialize_large_index() -> BitResult<()> {
+        let bytes = include_bytes!("../tests/files/index") as &[u8];
+        let index = BitIndex::deserialize(bytes)?;
+        let mut buf = vec![];
+        index.serialize(&mut buf)?;
+        assert_eq!(bytes, buf);
         Ok(())
     }
 
@@ -249,7 +342,7 @@ mod tests {
         let bytes = include_bytes!("../tests/files/smallindex") as &[u8];
         let index = BitIndex::deserialize(bytes)?;
         // data from `git ls-files --stage --debug`
-        // the flags show up as  `0` under git, not sure how they're parsed exactly
+        // the flags show up as  `1` under git, not sure how they're parsed exactly
         let entries = vec![
             BitIndexEntry {
                 ctime_sec: 1615087202,
@@ -286,6 +379,7 @@ mod tests {
         let expected_index = BitIndex {
             header: BitIndexHeader { signature: [b'D', b'I', b'R', b'C'], version: 2, entryc: 2 },
             entries,
+            extensions: vec![],
         };
 
         assert_eq!(expected_index, index);
