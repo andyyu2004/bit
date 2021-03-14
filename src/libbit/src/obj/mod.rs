@@ -34,6 +34,31 @@ impl Display for BitObjKind {
 pub struct FileMode(u32);
 
 impl FileMode {
+    /* Directory.  */
+    pub const DIR: u32 = 0040000;
+    /* These bits determine file type.  */
+    const FMT: u32 = 0170000;
+    /* Symbolic link.  */
+    pub const LNK: u32 = 0120000;
+    /* Regular file.  */
+    pub const REG: u32 = 0100000;
+
+    pub fn is_type(self, mask: u32) -> bool {
+        self.0 & Self::FMT == mask
+    }
+
+    pub fn is_dir(self) -> bool {
+        self.is_type(Self::DIR)
+    }
+
+    pub fn is_link(self) -> bool {
+        self.is_type(Self::LNK)
+    }
+
+    pub fn is_reg(self) -> bool {
+        self.is_type(Self::REG)
+    }
+
     pub fn as_u32(self) -> u32 {
         self.0
     }

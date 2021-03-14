@@ -18,6 +18,8 @@ pub enum BitError {
     Msg(String),
     #[error("{0}")]
     ParseIntError(#[from] ParseIntError),
+    #[error("index is not fully merged")]
+    Unmerged(),
 }
 
 impl<'s> From<&'s str> for BitError {

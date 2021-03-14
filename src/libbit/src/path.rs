@@ -49,6 +49,7 @@ impl PartialOrd for BitPath {
 }
 
 impl Ord for BitPath {
+    // ordered as raw bytes
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.as_bytes().cmp(other.as_bytes())
     }

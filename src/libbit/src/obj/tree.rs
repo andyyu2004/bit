@@ -46,7 +46,8 @@ impl Display for TreeEntry {
 
 #[derive(PartialEq, Debug, Default, Clone)]
 pub struct Tree {
-    // maybe could be a map of hash to tree entry?
+    // maybe this data structure could be better
+    // the exact ordering of tree entries is unclear atm
     entries: Vec<TreeEntry>,
 }
 

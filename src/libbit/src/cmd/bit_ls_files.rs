@@ -1,5 +1,6 @@
 use crate::error::BitResult;
 use crate::repo::BitRepo;
+
 pub struct BitLsFilesOpts {
     pub stage: bool,
 }

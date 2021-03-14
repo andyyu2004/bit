@@ -1,9 +1,12 @@
+use crate::error::{BitError, BitResult};
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::obj::FileMode;
+use crate::obj::Tree;
+use crate::path::BitPath;
+use crate::repo::BitRepo;
 use crate::serialize::Serialize;
 use crate::util;
-use crate::{error::BitResult, path::BitPath};
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
 use std::collections::BTreeMap;
@@ -14,7 +17,7 @@ use std::ops::{Deref, DerefMut};
 
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct BitIndex {
     pub header: BitIndexHeader,
     /// sorted by ascending by filepath (interpreted as unsigned bytes)
@@ -25,7 +28,7 @@ pub struct BitIndex {
     pub extensions: Vec<BitIndexExtension>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct BitIndexEntries(BitIndexEntriesMap);
 type BitIndexEntriesMap = BTreeMap<(BitPath, MergeStage), BitIndexEntry>;
 
@@ -64,6 +67,17 @@ impl BitIndex {
     pub fn add_entry(&mut self, entry: BitIndexEntry) {
         self.entries.insert((entry.filepath, entry.flags.stage()), entry);
     }
+
+    pub fn has_conflicts(&self) -> bool {
+        self.entries.keys().any(|(_, stage)| stage.is_merging())
+    }
+
+    pub fn write_tree(&self, repo: &BitRepo) -> BitResult<Tree> {
+        if self.has_conflicts() {
+            return Err(BitError::Unmerged());
+        }
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -71,6 +85,12 @@ pub struct BitIndexHeader {
     signature: [u8; 4],
     version: u32,
     entryc: u32,
+}
+
+impl Default for BitIndexHeader {
+    fn default() -> Self {
+        Self { signature: [b'D', b'I', b'R', b'C'], version: 2, entryc: 0 }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -165,6 +185,12 @@ pub enum MergeStage {
     Stage1 = 1,
     Stage2 = 2,
     Stage3 = 3,
+}
+
+impl MergeStage {
+    pub fn is_merging(self) -> bool {
+        self as u8 > 0
+    }
 }
 
 impl Display for MergeStage {

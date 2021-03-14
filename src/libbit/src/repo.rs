@@ -7,12 +7,12 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use ini::Ini;
+use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
 
@@ -21,7 +21,7 @@ pub struct BitRepo {
     bitdir: PathBuf,
     // TODO probably parse it into a struct or something
     config: Ini,
-    index: OnceCell<RwLock<BitIndex>>,
+    index: OnceCell<RefCell<BitIndex>>,
 }
 
 impl Debug for BitRepo {
@@ -62,22 +62,30 @@ impl BitRepo {
         self.bitdir.join(BIT_INDEX_FILE_PATH)
     }
 
-    fn index_file(&self) -> File {
-        // TODO have to create "fresh" index file if one doesn't exist
-        File::open(self.index_path()).unwrap()
+    fn index_file(&self) -> BitResult<File> {
+        let file = File::open(self.index_path());
+        // assume an error means the file doesn't exist
+        // not ideal but probably true is almost every case
+        if file.is_err() {
+            assert!(!self.index_path().exists());
+        }
+        Ok(file?)
     }
 
-    pub fn get_index(&self) -> &RwLock<BitIndex> {
-        let mk_index = || RwLock::new(BitIndex::deserialize(self.index_file()).unwrap());
+    fn get_index(&self) -> &RefCell<BitIndex> {
+        let mk_index = || {
+            let index = self.index_file().and_then(BitIndex::deserialize).unwrap_or_default();
+            RefCell::new(index)
+        };
         self.index.get_or_init(mk_index)
     }
 
     pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex) -> R) -> R {
-        f(&self.get_index().read().unwrap())
+        f(&self.get_index().borrow())
     }
 
     pub fn with_index_mut<R>(&self, f: impl FnOnce(&mut BitIndex) -> R) -> R {
-        f(&mut self.get_index().write().unwrap())
+        f(&mut self.get_index().borrow_mut())
     }
 
     fn load(path: impl AsRef<Path>) -> BitResult<Self> {
