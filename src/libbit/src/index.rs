@@ -1,19 +1,20 @@
 use crate::error::{BitError, BitResult};
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
-use crate::obj::FileMode;
-use crate::obj::Tree;
+use crate::obj::{FileMode, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::Serialize;
 use crate::util;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::io::{prelude::*, BufReader};
+use std::iter::Peekable;
 use std::ops::{Deref, DerefMut};
+use std::path::Path;
 
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
@@ -31,6 +32,13 @@ pub struct BitIndex {
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct BitIndexEntries(BitIndexEntriesMap);
 type BitIndexEntriesMap = BTreeMap<(BitPath, MergeStage), BitIndexEntry>;
+
+impl BitIndex {
+    fn create_tree(&self, repo: &BitRepo) -> Tree {
+        let mut entries = BTreeSet::new();
+        Tree { entries }
+    }
+}
 
 impl Deref for BitIndexEntries {
     type Target = BitIndexEntriesMap;
@@ -76,7 +84,58 @@ impl BitIndex {
         if self.has_conflicts() {
             return Err(BitError::Unmerged());
         }
-        todo!()
+        TreeBuilder::new(self, repo, self.entries.values()).build()
+        // self.write_tree_inner(repo, &mut self.entries.values(), "".as_ref())
+    }
+}
+
+struct TreeBuilder<'a, I: Iterator<Item = &'a BitIndexEntry>> {
+    index: &'a BitIndex,
+    repo: &'a BitRepo,
+    index_entries: Peekable<I>,
+    // count the number of blobs created (not subtrees)
+    // should match the number of index entries
+}
+
+impl<'a, I: Iterator<Item = &'a BitIndexEntry>> TreeBuilder<'a, I> {
+    pub fn new(index: &'a BitIndex, repo: &'a BitRepo, entries: I) -> Self {
+        Self { index, repo, index_entries: entries.peekable() }
+    }
+
+    fn build_tree(&mut self, current_index_dir: impl AsRef<Path>, depth: usize) -> BitResult<Tree> {
+        let mut entries = BTreeSet::new();
+        let current_index_dir = current_index_dir.as_ref();
+        while let Some(next_entry) = self.index_entries.peek() {
+            let &&BitIndexEntry { mode, filepath, hash, .. } = next_entry;
+            // if the depth is greater than the number of components in the filepath
+            // then we need to `break` and go out one level
+            let (curr_dir, nxt) = match filepath.try_split_path_at(depth) {
+                Some(x) => x,
+                None => break,
+            };
+            let nxt_path = curr_dir.as_path().join(nxt);
+            if curr_dir.as_path() == current_index_dir {
+                if nxt_path == filepath.as_path() {
+                    assert!(entries.insert(TreeEntry { mode, path: filepath, hash }));
+                    self.index_entries.next();
+                } else {
+                    let subtree = self.build_tree(&nxt_path, 1 + depth)?;
+                    let hash = self.repo.write_obj(&subtree)?;
+                    assert!(entries.insert(TreeEntry {
+                        mode,
+                        path: BitPath::intern(nxt_path.to_str().unwrap()),
+                        hash,
+                    }));
+                }
+            } else {
+                break;
+            };
+        }
+        Ok(Tree { entries })
+    }
+
+    pub fn build(mut self) -> BitResult<Tree> {
+        self.build_tree(Path::new(""), 0)
     }
 }
 
@@ -249,6 +308,7 @@ impl BitIndex {
         r.read_until(0x00, &mut filepath_bytes)?;
         assert_eq!(*filepath_bytes.last().unwrap(), 0x00);
         let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
+
         let entry = BitIndexEntry {
             ctime_sec,
             ctime_nano,
@@ -386,7 +446,7 @@ mod tests {
 
     #[test]
     fn parse_large_index() -> BitResult<()> {
-        let bytes = include_bytes!("../tests/files/index") as &[u8];
+        let bytes = include_bytes!("../tests/files/largeindex") as &[u8];
         let index = BitIndex::deserialize(bytes)?;
         assert_eq!(index.entries.len(), 31);
         Ok(())
@@ -404,7 +464,7 @@ mod tests {
 
     #[test]
     fn parse_and_serialize_large_index() -> BitResult<()> {
-        let bytes = include_bytes!("../tests/files/index") as &[u8];
+        let bytes = include_bytes!("../tests/files/largeindex") as &[u8];
         let index = BitIndex::deserialize(bytes)?;
         let mut buf = vec![];
         index.serialize(&mut buf)?;
@@ -464,7 +524,7 @@ mod tests {
 
     #[test]
     fn parse_index_header() -> BitResult<()> {
-        let bytes = include_bytes!("../tests/files/index") as &[u8];
+        let bytes = include_bytes!("../tests/files/largeindex") as &[u8];
         let header = BitIndex::parse_header(&mut BufReader::new(bytes))?;
         assert_eq!(
             header,

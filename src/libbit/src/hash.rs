@@ -11,7 +11,7 @@ use std::str::FromStr;
 pub type BitHash = SHA1Hash;
 pub const BIT_HASH_SIZE: usize = std::mem::size_of::<BitHash>();
 
-#[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
+#[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd, Copy)]
 #[repr(transparent)]
 pub struct SHA1Hash([u8; 20]);
 

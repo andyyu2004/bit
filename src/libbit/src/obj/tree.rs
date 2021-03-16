@@ -6,6 +6,8 @@ use crate::path::BitPath;
 use crate::serialize::Serialize;
 use crate::tls;
 use crate::util;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 
@@ -46,9 +48,7 @@ impl Display for TreeEntry {
 
 #[derive(PartialEq, Debug, Default, Clone)]
 pub struct Tree {
-    // maybe this data structure could be better
-    // the exact ordering of tree entries is unclear atm
-    entries: Vec<TreeEntry>,
+    pub entries: BTreeSet<TreeEntry>,
 }
 
 impl Serialize for Tree {
@@ -64,10 +64,21 @@ impl BitObj for Tree {
     fn deserialize_buffered<R: BufRead>(r: &mut R) -> BitResult<Self> {
         let mut tree = Self::default();
 
+        #[cfg(debug_assertions)]
+        let mut v = vec![];
+
         // slightly weird way of checking if the reader is at EOF
         while r.fill_buf()? != &[] {
-            tree.entries.push(TreeEntry::parse(r)?);
+            let entry = TreeEntry::parse(r)?;
+            #[cfg(debug_assertions)]
+            v.push(entry.clone());
+            tree.entries.insert(entry);
         }
+
+        // these debug assertions are checking that the btreeset ordering
+        // is consistent with the order of the tree entries on disk
+        #[cfg(debug_assertions)]
+        assert_eq!(tree.entries.iter().cloned().collect::<Vec<_>>(), v);
         Ok(tree)
     }
 
@@ -76,11 +87,28 @@ impl BitObj for Tree {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Eq)]
 pub struct TreeEntry {
-    mode: FileMode,
-    path: BitPath,
-    hash: BitHash,
+    pub mode: FileMode,
+    pub path: BitPath,
+    pub hash: BitHash,
+}
+
+impl PartialOrd for TreeEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TreeEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.path.cmp(&other.path).then_with(|| {
+            // this slightly odd code is emulating what is done in libgit2 (sort of)
+            let c1 = if self.mode.is_dir() { '/' } else { '\0' };
+            let c2 = if other.mode.is_dir() { '/' } else { '\0' };
+            c1.cmp(&c2)
+        })
+    }
 }
 
 impl TreeEntry {

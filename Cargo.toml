@@ -3,3 +3,7 @@ members = [
     "src/bit",
     "src/libbit",
 ]
+
+[profile.dev]
+opt-level = 0
+debug = true

@@ -3,6 +3,7 @@ authors = ["Andy Yu <andyyu2004@gmail.com>"]
 edition = "2018"
 name = "libbit"
 version = "0.1.0"
+
 [dependencies]
 flate2 = "1.0.20"
 hex = "0.4.2"
@@ -17,6 +18,8 @@ smallvec = "1.6.1"
 thiserror = "1.0"
 typed-arena = "2"
 index_vec = "0.1.2"
+itertools = "0.10"
+bumpalo = "3.6.1"
 
 [dev-dependencies]
 quickcheck = "1"

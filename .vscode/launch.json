@@ -15,36 +15,37 @@
           "kind": "bin"
         }
       },
-      "args": ["cat-file", "tree", "36e8a9a7fca13e378b1ebf5ee870a0f8206ec8ec"],
+      // "sourceLanguages": ["rust"],
+      "args": ["write-tree"],
       "cwd": "${workspaceFolder}/examples/test"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug unit tests in executable 'bit'",
-      "cargo": {
-        "args": ["test", "--no-run", "--bin=bit", "--package=bit"],
-        "filter": {
-          "name": "bit",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug unit tests in library 'libbit'",
-      "cargo": {
-        "args": ["test", "--no-run", "--lib", "--package=libbit"],
-        "filter": {
-          "name": "libbit",
-          "kind": "lib"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
     }
+    // {
+    //   "type": "lldb",
+    //   "request": "launch",
+    //   "name": "Debug unit tests in executable 'bit'",
+    //   "cargo": {
+    //     "args": ["test", "--no-run", "--bin=bit", "--package=bit"],
+    //     "filter": {
+    //       "name": "bit",
+    //       "kind": "bin"
+    //     }
+    //   },
+    //   "args": [],
+    //   "cwd": "${workspaceFolder}"
+    // },
+    // {
+    //   "type": "lldb",
+    //   "request": "launch",
+    //   "name": "Debug unit tests in library 'libbit'",
+    //   "cargo": {
+    //     "args": ["test", "--no-run", "--lib", "--package=libbit"],
+    //     "filter": {
+    //       "name": "libbit",
+    //       "kind": "lib"
+    //     }
+    //   },
+    //   "args": [],
+    //   "cwd": "${workspaceFolder}"
+    // }
   ]
 }

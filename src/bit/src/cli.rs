@@ -27,6 +27,7 @@ pub fn run() -> BitResult<()> {
             println!("{}", hash);
             Ok(())
         }
+        BitSubCmd::WriteTree => repo.bit_write_tree(),
         BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
         BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
         BitSubCmd::Log(..) => todo!(),
@@ -55,6 +56,7 @@ pub enum BitSubCmd {
     Log(BitLogCliOpts),
     UpdateIndex(BitUpdateIndexCliOpts),
     LsFiles(BitLsFilesCliOpts),
+    WriteTree,
 }
 
 #[derive(Clap)]
