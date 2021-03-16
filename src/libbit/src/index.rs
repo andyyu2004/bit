@@ -114,22 +114,21 @@ impl<'a, I: Iterator<Item = &'a BitIndexEntry>> TreeBuilder<'a, I> {
                 None => break,
             };
             let nxt_path = curr_dir.as_path().join(nxt);
-            if curr_dir.as_path() == current_index_dir {
-                if nxt_path == filepath.as_path() {
-                    assert!(entries.insert(TreeEntry { mode, path: filepath, hash }));
-                    self.index_entries.next();
-                } else {
-                    let subtree = self.build_tree(&nxt_path, 1 + depth)?;
-                    let hash = self.repo.write_obj(&subtree)?;
-                    assert!(entries.insert(TreeEntry {
-                        mode,
-                        path: BitPath::intern(nxt_path.to_str().unwrap()),
-                        hash,
-                    }));
-                }
-            } else {
+            if curr_dir.as_path() != current_index_dir {
                 break;
-            };
+            }
+            if nxt_path == filepath.as_path() {
+                assert!(entries.insert(TreeEntry { mode, path: filepath, hash }));
+                self.index_entries.next();
+            } else {
+                let subtree = self.build_tree(&nxt_path, 1 + depth)?;
+                let hash = self.repo.write_obj(&subtree)?;
+                assert!(entries.insert(TreeEntry {
+                    mode,
+                    path: BitPath::intern(nxt_path.to_str().unwrap()),
+                    hash,
+                }));
+            }
         }
         Ok(Tree { entries })
     }

@@ -30,8 +30,20 @@ impl Display for BitObjKind {
 // 100644 normal
 // 100755 executable
 // 40000 directory
-#[derive(Debug, Copy, PartialEq, Eq, Clone)]
+#[derive(Copy, PartialEq, Eq, Clone)]
 pub struct FileMode(u32);
+
+impl Display for FileMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if f.alternate() { write!(f, "{:o}", self.0) } else { write!(f, "{:06o}", self.0) }
+    }
+}
+
+impl Debug for FileMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
 
 impl FileMode {
     /* Directory.  */

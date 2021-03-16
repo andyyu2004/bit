@@ -11,12 +11,6 @@ use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 
-impl Display for FileMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if f.alternate() { write!(f, "{:o}", self.0) } else { write!(f, "{:06o}", self.0) }
-    }
-}
-
 impl Display for Tree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if f.alternate() {
