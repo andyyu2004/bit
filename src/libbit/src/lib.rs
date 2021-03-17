@@ -24,8 +24,10 @@ pub mod cmd;
 pub mod error;
 pub mod obj;
 pub mod path;
+pub mod pathspec;
 pub mod repo;
 
+mod diff;
 mod hash;
 mod index;
 mod interner;

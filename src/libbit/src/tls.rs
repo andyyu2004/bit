@@ -2,6 +2,6 @@ use crate::repo::BitRepo;
 
 scoped_thread_local!(pub static REPO: BitRepo);
 
-pub(crate) fn with<R>(repo: &BitRepo, f: impl FnOnce(&BitRepo) -> R) -> R {
+pub(crate) fn with_repo<R>(repo: &BitRepo, f: impl FnOnce(&BitRepo) -> R) -> R {
     REPO.set(&repo, || REPO.with(f))
 }

@@ -223,7 +223,13 @@ mod padding_tests {
     }
 }
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+/// 1  bit  assume-valid
+/// 1  bit  extended
+/// 2  bits stage
+/// 12 bits name length if length is less than 0xFFF; otherwise store 0xFFF
+// what is name really? probably path?
+// probably doesn't really matter and is fine to just default flags to 0
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, Default)]
 pub struct BitIndexEntryFlags(u16);
 
 // this should be an enum of the concrete extensions

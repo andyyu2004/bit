@@ -46,7 +46,7 @@ impl BitRepo {
         f: impl FnOnce(&BitRepo) -> BitResult<R>,
     ) -> BitResult<R> {
         let repo = Self::find_inner(path.as_ref())?;
-        tls::with(&repo, f)
+        tls::with_repo(&repo, f)
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {

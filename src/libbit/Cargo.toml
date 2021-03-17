@@ -20,6 +20,7 @@ typed-arena = "2"
 index_vec = "0.1.2"
 itertools = "0.10"
 bumpalo = "3.6.1"
+ignore = "0.4.17"
 
 [dev-dependencies]
 quickcheck = "1"
