@@ -2,6 +2,7 @@
 #![feature(decl_macro)]
 #![feature(once_cell)]
 #![feature(destructuring_assignment)]
+#![feature(map_first_last)]
 #![feature(is_sorted)]
 #![feature(cstring_from_vec_with_nul)]
 #![feature(array_methods)]
@@ -25,9 +26,9 @@ pub mod obj;
 pub mod path;
 pub mod repo;
 
-mod interner;
 mod hash;
 mod index;
+mod interner;
 mod io_ext;
 mod serialize;
 mod tls;

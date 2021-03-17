@@ -109,6 +109,8 @@ impl<'a, I: Iterator<Item = &'a BitIndexEntry>> TreeBuilder<'a, I> {
             let &&BitIndexEntry { mode, filepath, hash, .. } = next_entry;
             // if the depth is greater than the number of components in the filepath
             // then we need to `break` and go out one level
+            // TODO nxt is basically unused only to generate the next path
+            // so should probably change split path to do this
             let (curr_dir, nxt) = match filepath.try_split_path_at(depth) {
                 Some(x) => x,
                 None => break,
@@ -438,6 +440,8 @@ impl Serialize for BitIndex {
 
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
+
     use super::*;
     use crate::path::BitPath;
     use std::io::BufReader;
@@ -530,5 +534,44 @@ mod tests {
             BitIndexHeader { signature: [b'D', b'I', b'R', b'C'], version: 2, entryc: 0x1f }
         );
         Ok(())
+    }
+
+    /// ├── dir
+    /// │  └── test.txt
+    /// ├── dir2
+    /// │  ├── dir2.txt
+    /// │  └── nested
+    /// │     └── coolfile.txt
+    /// ├── test.txt
+    /// └── zs
+    ///    └── one.txt
+    // tests some correctness properties of the tree generated from the index
+    // TODO be nice to have some way to quickcheck some of this
+    #[test]
+    fn bit_index_write_tree() -> BitResult<()> {
+        BitRepo::find("tests/repos/indextest", |repo| {
+            let tree = repo.with_index(|index| index.write_tree(repo))?;
+            let entries = tree.entries.into_iter().collect_vec();
+            assert_eq!(entries[0].path, "dir");
+            assert_eq!(entries[1].path, "dir2");
+            assert_eq!(entries[2].path, "test.txt");
+            assert_eq!(entries[3].path, "zs");
+
+            let dir2_tree = repo.read_obj(entries[1].hash)?.as_tree();
+            let dir2_tree_entries = dir2_tree.entries.into_iter().collect_vec();
+            assert_eq!(dir2_tree_entries[0].path, "dir2/dir2.txt");
+            assert_eq!(dir2_tree_entries[1].path, "dir2/nested");
+
+            let mut nested_tree = repo.read_obj(dir2_tree_entries[1].hash)?.as_tree();
+            let coolfile_entry = nested_tree.entries.pop_first().unwrap();
+            assert!(nested_tree.entries.is_empty());
+            assert_eq!(coolfile_entry.path, "dir2/nested/coolfile.txt");
+            let coolfile_blob = repo.read_obj(coolfile_entry.hash)?.as_blob();
+            assert_eq!(coolfile_blob.bytes, b"coolfile contents!");
+
+            let test_txt_blob = repo.read_obj(entries[2].hash)?.as_blob();
+            assert_eq!(test_txt_blob.bytes, b"hello\n");
+            Ok(())
+        })
     }
 }

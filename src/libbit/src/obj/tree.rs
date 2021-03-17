@@ -98,6 +98,7 @@ impl Ord for TreeEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         self.path.cmp(&other.path).then_with(|| {
             // this slightly odd code is emulating what is done in libgit2 (sort of)
+            // this basically just has the effect of ordering files before directories
             let c1 = if self.mode.is_dir() { '/' } else { '\0' };
             let c2 = if other.mode.is_dir() { '/' } else { '\0' };
             c1.cmp(&c2)

@@ -9,6 +9,12 @@ pub enum BitObjId {
     PartialHash(String),
 }
 
+impl From<BitHash> for BitObjId {
+    fn from(hash: BitHash) -> Self {
+        Self::FullHash(hash)
+    }
+}
+
 impl FromStr for BitObjId {
     type Err = BitError;
 

@@ -37,19 +37,27 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 
 impl BitRepo {
     fn new(worktree: PathBuf, bitdir: PathBuf, config: Ini) -> Self {
-        let index_path = bitdir.join(BIT_INDEX_FILE_PATH);
         Self { worktree, bitdir, config, index: OnceCell::new() }
     }
 
     /// recursively searches parents starting from the current directory for a git repo
-    pub fn find<R>(path: impl AsRef<Path>, f: impl FnOnce(&BitRepo) -> R) -> BitResult<R> {
+    pub fn find<R>(
+        path: impl AsRef<Path>,
+        f: impl FnOnce(&BitRepo) -> BitResult<R>,
+    ) -> BitResult<R> {
         let repo = Self::find_inner(path.as_ref())?;
-        Ok(tls::with(&repo, f))
+        tls::with(&repo, f)
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {
         if path.join(".git").exists() {
             return Self::load(path);
+        }
+
+        // also recognize `.bit` folder as its convenient for having
+        // bit repos under tests/repos
+        if path.join(".bit").exists() {
+            return Self::load_with_bitdir(path, ".bit");
         }
 
         match path.parent() {
@@ -89,8 +97,12 @@ impl BitRepo {
     }
 
     fn load(path: impl AsRef<Path>) -> BitResult<Self> {
+        Self::load_with_bitdir(path, ".git")
+    }
+
+    fn load_with_bitdir(path: impl AsRef<Path>, bitdir: impl AsRef<Path>) -> BitResult<Self> {
         let worktree = path.as_ref().canonicalize()?;
-        let bitdir = worktree.join(".git");
+        let bitdir = worktree.join(bitdir);
         assert!(bitdir.exists());
         let config = Ini::load_from_file(bitdir.join("config"))?;
         let version = &config["core"]["repositoryformatversion"];
@@ -101,19 +113,14 @@ impl BitRepo {
     }
 
     pub fn init(path: impl AsRef<Path>) -> BitResult<Self> {
-        let path = path.as_ref();
-
-        if !path.exists() {
-            std::fs::create_dir(path)?
-        }
-
-        let worktree = path.canonicalize()?;
+        let worktree = path.as_ref().canonicalize()?;
 
         if worktree.is_file() {
             return Err(BitError::NotDirectory(worktree))?;
         }
 
-        // `.git` directory not `.bit` as this should be compatible with git
+        // `.git` directory not `.bit` as this should be fully compatible with git
+        // although, bit will recognize a `.bit` folder if explicitly renamed
         let bitdir = worktree.join(".git");
 
         if bitdir.exists() {
@@ -186,6 +193,10 @@ impl BitRepo {
         let obj_path = self.obj_filepath_from_hash(&hash);
         let file = File::open(obj_path)?;
         Ok(ZlibDecoder::new(file))
+    }
+
+    pub fn read_obj(&self, id: impl Into<BitObjId>) -> BitResult<BitObjKind> {
+        self.read_obj_from_id(id.into())
     }
 
     pub fn read_obj_from_id(&self, id: BitObjId) -> BitResult<BitObjKind> {

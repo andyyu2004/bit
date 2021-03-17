@@ -80,6 +80,15 @@ impl Debug for BitPath {
     }
 }
 
+impl<S> PartialEq<S> for BitPath
+where
+    S: AsRef<str>,
+{
+    fn eq(&self, other: &S) -> bool {
+        self.as_str() == other.as_ref()
+    }
+}
+
 impl Display for BitPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())

@@ -36,7 +36,7 @@ pub fn run() -> BitResult<()> {
             dbg!(opts);
             Ok(())
         }
-    })?
+    })
 }
 
 #[derive(Clap)]
