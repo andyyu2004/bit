@@ -1,5 +1,6 @@
 #![feature(never_type)]
 #![feature(decl_macro)]
+#![feature(type_alias_impl_trait)]
 #![feature(once_cell)]
 #![feature(destructuring_assignment)]
 #![feature(map_first_last)]

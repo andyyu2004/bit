@@ -21,6 +21,7 @@ index_vec = "0.1.2"
 itertools = "0.10"
 bumpalo = "3.6.1"
 ignore = "0.4.17"
+pathdiff = "0.2.0"
 
 [dev-dependencies]
 quickcheck = "1"

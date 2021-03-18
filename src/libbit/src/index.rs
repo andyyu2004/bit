@@ -38,6 +38,10 @@ impl BitIndex {
         let mut entries = BTreeSet::new();
         Tree { entries }
     }
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = BitIndexEntry> + 'a {
+        self.entries.values().copied()
+    }
 }
 
 impl Deref for BitIndexEntries {
@@ -153,7 +157,7 @@ impl Default for BitIndexHeader {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BitIndexEntry {
     pub ctime_sec: u32,
     pub ctime_nano: u32,

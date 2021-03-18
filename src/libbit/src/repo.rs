@@ -17,10 +17,10 @@ use std::path::{Path, PathBuf};
 pub const BIT_INDEX_FILE_PATH: &str = "index";
 
 pub struct BitRepo {
-    worktree: PathBuf,
-    bitdir: PathBuf,
+    pub worktree: PathBuf,
+    pub bitdir: PathBuf,
     // TODO probably parse it into a struct or something
-    config: Ini,
+    pub config: Ini,
     index: OnceCell<RefCell<BitIndex>>,
 }
 
