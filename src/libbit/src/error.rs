@@ -20,6 +20,8 @@ pub enum BitError {
     ParseIntError(#[from] ParseIntError),
     #[error("index is not fully merged")]
     Unmerged(),
+    #[error("aborting commit due to empty commit message")]
+    EmptyCommitMessage,
 }
 
 impl<'s> From<&'s str> for BitError {

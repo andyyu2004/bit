@@ -1,11 +1,16 @@
+mod commit_tree;
 mod ls_files;
 mod update_index;
 
 // the bitopts and bitcliopts are distinct types for a few reasons
 // - the parsed format is often not very convenient for actual usage
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
+// - probably will make it such that libbit doesn't even expose full commands
+//   and be something more like libgit2
+use self::commit_tree::BitCommitTreeCliOpts;
 use self::ls_files::BitLsFilesCliOpts;
 use self::update_index::BitUpdateIndexCliOpts;
+
 use clap::{AppSettings, Clap};
 use libbit::cmd::*;
 use libbit::error::BitResult;
@@ -36,6 +41,13 @@ pub fn run() -> BitResult<()> {
             dbg!(opts);
             Ok(())
         }
+        BitSubCmd::CommitTree(opts) => {
+            let message = match opts.message {
+                Some(message) => message,
+                None => repo.read_commit_msg()?,
+            };
+            repo.commit_tree(opts.parent, message, opts.tree)
+        }
     })
 }
 
@@ -56,6 +68,7 @@ pub enum BitSubCmd {
     Log(BitLogCliOpts),
     UpdateIndex(BitUpdateIndexCliOpts),
     LsFiles(BitLsFilesCliOpts),
+    CommitTree(BitCommitTreeCliOpts),
     WriteTree,
 }
 

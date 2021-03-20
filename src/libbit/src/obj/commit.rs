@@ -1,19 +1,155 @@
-use crate::error::BitResult;
+use crate::error::{BitError, BitResult};
 use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
+use crate::repo::BitRepo;
 use crate::serialize::Serialize;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
-use std::io::prelude::*;
+use std::fs::File;
+use std::io::{prelude::*, BufReader};
+use std::process::Command;
+use std::str::FromStr;
+
+#[derive(PartialEq, Clone, Debug, Hash, Ord, PartialOrd, Eq, Copy)]
+pub struct BitEpochTime(u64);
+#[derive(PartialEq, Clone, Debug, Hash, Ord, PartialOrd, Eq, Copy)]
+pub struct BitTimeZoneOffset(i32);
+
+#[derive(PartialEq, Clone, Debug, PartialOrd, Eq, Ord, Hash)]
+pub struct BitTime {
+    time: BitEpochTime,
+    /// timezone offset in minutes
+    offset: BitTimeZoneOffset,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct BitSignature {
+    name: String,
+    email: String,
+    time: BitTime,
+}
+
+impl FromStr for BitTimeZoneOffset {
+    type Err = BitError;
+
+    // format: (+|-)0200
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let sign = match &s[0..1] {
+            "+" => 1,
+            "-" => -1,
+            _ => panic!("invalid timezone format {}", s),
+        };
+        let hours: i32 = s[1..3].parse().unwrap();
+        let minutes: i32 = s[3..5].parse().unwrap();
+        let offset = sign * (minutes + hours * 60);
+        Ok(Self(offset))
+    }
+}
+
+impl FromStr for BitEpochTime {
+    type Err = BitError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.parse().unwrap()))
+    }
+}
+
+impl FromStr for BitTime {
+    type Err = BitError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut splits = s.split_ascii_whitespace();
+        let time = splits.next().unwrap().parse()?;
+        let offset = splits.next().unwrap().parse()?;
+        Ok(Self { time, offset })
+    }
+}
+
+impl FromStr for BitSignature {
+    type Err = BitError;
+
+    // Andy Yu <andyyu2004@gmail.com> 1616061862 +1300
+    fn from_str(s: &str) -> BitResult<Self> {
+        // assumes no < or > in name
+        let email_start_idx = s.find("<").unwrap();
+        let email_end_idx = s.find(">").unwrap();
+
+        let name = s[..email_start_idx - 1].to_owned();
+        let email = s[email_start_idx + 1..email_end_idx].to_owned();
+        let time = s[email_end_idx + 1..].parse()?;
+        Ok(Self { name, email, time })
+    }
+}
+
+impl Display for BitEpochTime {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Display for BitTimeZoneOffset {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let sign = if self.0 >= 0 { '+' } else { '-' };
+        let offset = self.0.abs();
+        let hours = offset / 60;
+        let minutes = offset % 60;
+        write!(f, "{}{:02}{:02}", sign, hours, minutes)?;
+        Ok(())
+    }
+}
+
+impl Display for BitTime {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.time, self.offset)
+    }
+}
+
+impl Display for BitSignature {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} <{}> {}", self.name, self.email, self.time)
+    }
+}
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
     tree: BitHash,
-    parent: Option<BitHash>,
-    author: String,
-    committer: String,
-    gpgsig: Option<String>,
+    author: BitSignature,
+    committer: BitSignature,
     message: String,
+    parent: Option<BitHash>,
+    gpgsig: Option<String>,
+}
+
+impl BitRepo {
+    pub fn mk_commit(&self, tree: BitHash, message: String, parent: Option<BitHash>) -> Commit {
+        let author = todo!();
+        let committer = todo!();
+        Commit { tree, parent, message, author, committer, gpgsig: None }
+    }
+
+    pub fn read_commit_msg(&self) -> BitResult<String> {
+        let editor = std::env::var("EDITOR").expect("$EDITOR variable is not set");
+        let template = r#"
+# Please; enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit."#;
+        let editmsg_filepath = self.bitdir.join("COMMIT_EDITMSG");
+        let mut editmsg_file = File::create(&editmsg_filepath)?;
+        write!(editmsg_file, "{}", template)?;
+        Command::new(editor).arg(&editmsg_filepath).status()?;
+        let mut msg = String::new();
+        for line in BufReader::new(File::open(&editmsg_filepath)?).lines() {
+            let line = line?;
+            if line.starts_with("#") {
+                continue;
+            }
+            msg.push_str(&line);
+        }
+        std::fs::remove_file(editmsg_filepath)?;
+        if msg.is_empty() {
+            return Err(BitError::EmptyCommitMessage);
+        }
+        Ok(msg)
+    }
 }
 
 impl Display for Commit {
@@ -86,8 +222,8 @@ impl BitObj for Commit {
 
         let tree = attrs["tree"].parse().unwrap();
         let parent = attrs.get("parent").map(|parent| parent.parse().unwrap());
-        let author = attrs["author"].to_owned();
-        let committer = attrs["committer"].to_owned();
+        let author = attrs["author"].parse().unwrap();
+        let committer = attrs["committer"].parse().unwrap();
         let gpgsig = attrs.get("gpgsig").map(|sig| sig.to_owned());
         Ok(Self { tree, parent, author, committer, message, gpgsig })
     }
@@ -98,22 +234,83 @@ impl BitObj for Commit {
 }
 
 #[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::{quickcheck, Arbitrary};
+    use rand::Rng;
+    #[test]
+    fn parse_timezone_offset() {
+        let offset = BitTimeZoneOffset::from_str("+0200").unwrap();
+        assert_eq!(offset.0, 120);
+        let offset = BitTimeZoneOffset::from_str("+1300").unwrap();
+        assert_eq!(offset.0, 780);
+        let offset = BitTimeZoneOffset::from_str("-0830").unwrap();
+        assert_eq!(offset.0, -510);
+    }
+
+    impl Arbitrary for BitTimeZoneOffset {
+        fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
+            // how to bound quickchecks genrange?
+            Self(rand::thread_rng().gen_range(-1000..1000))
+        }
+    }
+
+    #[quickcheck(sizee)]
+    fn serialize_then_parse_timezone(offset: BitTimeZoneOffset) {
+        let parsed: BitTimeZoneOffset = offset.to_string().parse().unwrap();
+        assert_eq!(offset, parsed)
+    }
+
+    #[test]
+    fn parse_bit_signature() {
+        let sig = "Andy Yu <andyyu2004@gmail.com> 1616061862 +1300";
+        let sig = sig.parse::<BitSignature>().unwrap();
+        assert_eq!(sig.name, "Andy Yu");
+        assert_eq!(sig.email, "andyyu2004@gmail.com");
+        assert_eq!(
+            sig.time,
+            BitTime { time: BitEpochTime(1616061862), offset: BitTimeZoneOffset(780) }
+        );
+    }
+
+    #[quickcheck]
+    fn serialize_then_parse_bit_signature(sig: BitSignature) {
+        assert_eq!(sig, sig.to_string().parse().unwrap())
+    }
+
+    #[test]
+    fn serialize_timezone_offset() {
+        let offset = BitTimeZoneOffset(780);
+        assert_eq!(format!("{}", offset), "+1300");
+        let offset = BitTimeZoneOffset(-200);
+        assert_eq!(format!("{}", offset), "-0320");
+    }
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
     use crate::test_utils::*;
     use quickcheck::{Arbitrary, Gen};
 
+    impl Arbitrary for BitSignature {
+        fn arbitrary(g: &mut Gen) -> Self {
+            Self {
+                name: generate_sane_string(5..100),
+                email: generate_sane_string(10..200),
+                // don't care too much about this being random
+                time: BitTime { time: BitEpochTime(12345678), offset: BitTimeZoneOffset(200) },
+            }
+        }
+    }
+
     impl Arbitrary for Commit {
         fn arbitrary(g: &mut Gen) -> Self {
-            fn mk_kv(_g: &mut Gen) -> String {
-                format!("{} {}", generate_sane_string(1..30), generate_sane_string(1..100))
-            }
-
             Self {
                 tree: Arbitrary::arbitrary(g),
                 parent: Arbitrary::arbitrary(g),
-                author: generate_sane_string(0..100),
-                committer: generate_sane_string(0..100),
+                author: Arbitrary::arbitrary(g),
+                committer: Arbitrary::arbitrary(g),
                 gpgsig: Some(generate_sane_string(100..300)),
                 message: generate_sane_string(1..300),
             }
@@ -125,8 +322,8 @@ mod test {
         let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit") as &[u8];
         let commit = Commit::deserialize(bytes)?;
         assert_eq!(hex::encode(commit.tree), "d8329fc1cc938780ffdd9f94e0d364e0ea74f579");
-        assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
-        assert_eq!(&commit.committer, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
+        // assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
+        // assert_eq!(&commit.committer, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
         assert!(commit.gpgsig.is_none());
         assert_eq!(&commit.message, "First commit");
         Ok(())
@@ -180,6 +377,8 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
     fn parse_commit_then_serialize_single_line() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit");
         let commit = Commit::deserialize(bytes.as_slice())?;
+
+        println!("{}", commit);
 
         let mut buf = vec![];
         commit.serialize(&mut buf)?;

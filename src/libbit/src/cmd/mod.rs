@@ -1,4 +1,5 @@
 mod bit_cat_file;
+mod bit_commit_tree;
 mod bit_hash_object;
 mod bit_init;
 mod bit_ls_files;

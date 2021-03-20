@@ -7,12 +7,14 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use ini::Ini;
+use itertools::Itertools;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
 
@@ -246,11 +248,14 @@ impl BitRepo {
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.relative_path(path))
     }
+
 }
 
 impl Drop for BitRepo {
     fn drop(&mut self) {
-        if let Some(index) = self.index.get() {}
+        if let Some(index) = self.index.get() {
+            // TODO write index?
+        }
     }
 }
 
