@@ -22,6 +22,7 @@ extern crate scoped_tls;
 mod test_utils;
 
 pub mod cmd;
+pub mod config;
 pub mod error;
 pub mod hash;
 pub mod obj;
@@ -34,5 +35,6 @@ mod index;
 mod interner;
 mod io_ext;
 mod serialize;
+mod signature;
 mod tls;
 mod util;

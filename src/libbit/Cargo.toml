@@ -10,8 +10,8 @@ hex = "0.4.2"
 libc = "0.2.88"
 num_enum = "0.5.1"
 quickcheck_derive = "0.3.0"
-rust-ini = "0.16"
 scoped-tls = "1"
+toml = "0.5.8"
 sha-1 = "0.9.4"
 sha2 = "0.9.3"
 smallvec = "1.6.1"
@@ -22,6 +22,8 @@ itertools = "0.10"
 bumpalo = "3.6.1"
 ignore = "0.4.17"
 pathdiff = "0.2.0"
+chrono = "0.4.19"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 quickcheck = "1"

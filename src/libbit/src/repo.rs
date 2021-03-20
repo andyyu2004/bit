@@ -1,20 +1,19 @@
+use crate::config::{BitConfig, BitCoreConfig};
 use crate::error::{BitError, BitResult};
 use crate::hash::{self, BitHash};
 use crate::index::BitIndex;
 use crate::obj::{self, BitObj, BitObjId, BitObjKind, BitObjType};
+use crate::signature::BitSignature;
 use crate::tls;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
-use ini::Ini;
-use itertools::Itertools;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
 
@@ -22,7 +21,7 @@ pub struct BitRepo {
     pub worktree: PathBuf,
     pub bitdir: PathBuf,
     // TODO probably parse it into a struct or something
-    pub config: Ini,
+    pub config: BitConfig,
     index: OnceCell<RefCell<BitIndex>>,
 }
 
@@ -38,8 +37,21 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 }
 
 impl BitRepo {
-    fn new(worktree: PathBuf, bitdir: PathBuf, config: Ini) -> Self {
+    fn new(worktree: PathBuf, bitdir: PathBuf, config: BitConfig) -> Self {
         Self { worktree, bitdir, config, index: OnceCell::new() }
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        self.config.user.name.as_deref()
+    }
+
+    pub fn email(&self) -> Option<&str> {
+        self.config.user.email.as_deref()
+    }
+
+    pub fn default_signature(&self) -> BitResult<BitSignature> {
+        todo!()
+        // BitSignature { name: self.config, email: , time: () }
     }
 
     /// recursively searches parents starting from the current directory for a git repo
@@ -106,9 +118,9 @@ impl BitRepo {
         let worktree = path.as_ref().canonicalize()?;
         let bitdir = worktree.join(bitdir);
         assert!(bitdir.exists());
-        let config = Ini::load_from_file(bitdir.join("config"))?;
-        let version = &config["core"]["repositoryformatversion"];
-        if version.parse::<i32>().unwrap() != 0 {
+        let config: BitConfig = toml::from_str(&fs::read_to_string(bitdir.join("config"))?)?;
+        let version = config.core.repositoryformatversion;
+        if version != 0 {
             panic!("Unsupported repositoryformatversion {}", version)
         }
         Ok(Self::new(worktree, bitdir, config))
@@ -133,8 +145,12 @@ impl BitRepo {
 
         std::fs::create_dir(&bitdir)?;
 
-        let config = Self::default_config();
-        config.write_to_file(bitdir.join("config"))?;
+        let config = BitConfig::default();
+        write!(
+            File::create(bitdir.join("config"))?,
+            "{}",
+            toml::to_string_pretty(&config).unwrap()
+        )?;
 
         let this = Self::new(worktree, bitdir, config);
         this.mk_bitdir("objects")?;
@@ -149,15 +165,6 @@ impl BitRepo {
         writeln!(head, "ref: refs/heads/master")?;
 
         return Ok(this);
-    }
-
-    fn default_config() -> Ini {
-        let mut ini = Ini::default();
-        ini.with_section(Some("core"))
-            .set("repositoryformatversion", "0")
-            .set("filemode", "false")
-            .set("bare", "false");
-        ini
     }
 
     /// todo only works with full hash
@@ -248,7 +255,6 @@ impl BitRepo {
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.relative_path(path))
     }
-
 }
 
 impl Drop for BitRepo {

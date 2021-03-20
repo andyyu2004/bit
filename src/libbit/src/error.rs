@@ -9,7 +9,7 @@ pub enum BitError {
     #[error("{0}")]
     IO(#[from] std::io::Error),
     #[error("{0}")]
-    Ini(#[from] ini::Error),
+    Toml(#[from] toml::de::Error),
     #[error("`{0}` is not a directory")]
     NotDirectory(PathBuf),
     #[error("not a bit repository (or any of the parent directories)")]
