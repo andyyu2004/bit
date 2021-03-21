@@ -1,4 +1,5 @@
 mod commit_tree;
+mod config;
 mod ls_files;
 mod update_index;
 
@@ -8,11 +9,13 @@ mod update_index;
 // - probably will make it such that libbit doesn't even expose full commands
 //   and be something more like libgit2
 use self::commit_tree::BitCommitTreeCliOpts;
+use self::config::BitConfigCliOpts;
 use self::ls_files::BitLsFilesCliOpts;
 use self::update_index::BitUpdateIndexCliOpts;
 
 use clap::{AppSettings, Clap};
 use libbit::cmd::*;
+use libbit::config::BitConfig;
 use libbit::error::BitResult;
 use libbit::obj::{BitObjId, BitObjType};
 use libbit::repo::BitRepo;
@@ -27,6 +30,8 @@ pub fn run() -> BitResult<()> {
     }
 
     BitRepo::find(root_path, |repo| match subcmd {
+        BitSubCmd::Log(..) => todo!(),
+        BitSubCmd::Init(..) => unreachable!(),
         BitSubCmd::HashObject(opts) => {
             let hash = repo.bit_hash_object(opts.into())?;
             println!("{}", hash);
@@ -35,8 +40,7 @@ pub fn run() -> BitResult<()> {
         BitSubCmd::WriteTree => repo.bit_write_tree(),
         BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
         BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
-        BitSubCmd::Log(..) => todo!(),
-        BitSubCmd::Init(..) => unreachable!(),
+        BitSubCmd::Config(opts) => opts.execute(repo),
         BitSubCmd::UpdateIndex(opts) => {
             dbg!(opts);
             Ok(())
@@ -69,6 +73,7 @@ pub enum BitSubCmd {
     UpdateIndex(BitUpdateIndexCliOpts),
     LsFiles(BitLsFilesCliOpts),
     CommitTree(BitCommitTreeCliOpts),
+    Config(BitConfigCliOpts),
     WriteTree,
 }
 

@@ -1,6 +1,36 @@
 use crate::error::{BitError, BitResult};
+use crate::repo::BitRepo;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
+
+const MISSING_IDENTITY_MSG: &str = r#"Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  bit config --global user.email "you@example.com"
+  bit config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository."#;
+
+impl BitRepo {
+    pub fn user_signature(&self) -> BitResult<BitSignature> {
+        let name = self.config.name();
+        let email = self.config.email();
+        if let (Some(name), Some(email)) = (name, email) {
+            Ok(BitSignature {
+                name: name.to_owned(),
+                email: email.to_owned(),
+                time: BitTime::now(),
+            })
+        } else {
+            // this is too dumb to tell if only one of the entries is missing but whatever
+            Err(BitError::StaticMsg(MISSING_IDENTITY_MSG))
+        }
+    }
+}
 
 #[derive(PartialEq, Clone, Debug, Hash, Ord, PartialOrd, Eq, Copy)]
 pub struct BitEpochTime(i64);
@@ -22,11 +52,6 @@ impl BitTime {
         let time = BitEpochTime(now.timestamp());
         Self { time, offset }
     }
-}
-
-#[test]
-fn werwer() {
-    dbg!(BitTime::now());
 }
 
 #[derive(PartialEq, Clone, Debug)]

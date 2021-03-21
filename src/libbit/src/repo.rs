@@ -1,4 +1,4 @@
-use crate::config::{BitConfig, BitCoreConfig};
+use crate::config::BitConfig;
 use crate::error::{BitError, BitResult};
 use crate::hash::{self, BitHash};
 use crate::index::BitIndex;
@@ -11,17 +11,19 @@ use flate2::Compression;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, Read, Write};
 use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
+pub const BIT_CONFIG_FILE_PATH: &str = "config";
 
 pub struct BitRepo {
     pub worktree: PathBuf,
     pub bitdir: PathBuf,
-    // TODO probably parse it into a struct or something
     pub config: BitConfig,
+    config_filepath: PathBuf,
+    index_filepath: PathBuf,
     index: OnceCell<RefCell<BitIndex>>,
 }
 
@@ -37,16 +39,20 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 }
 
 impl BitRepo {
-    fn new(worktree: PathBuf, bitdir: PathBuf, config: BitConfig) -> Self {
-        Self { worktree, bitdir, config, index: OnceCell::new() }
-    }
-
-    pub fn name(&self) -> Option<&str> {
-        self.config.user.name.as_deref()
-    }
-
-    pub fn email(&self) -> Option<&str> {
-        self.config.user.email.as_deref()
+    fn new(
+        worktree: PathBuf,
+        bitdir: PathBuf,
+        config: BitConfig,
+        config_filepath: PathBuf,
+    ) -> Self {
+        Self {
+            index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
+            index: OnceCell::new(),
+            config_filepath,
+            worktree,
+            bitdir,
+            config,
+        }
     }
 
     pub fn default_signature(&self) -> BitResult<BitSignature> {
@@ -80,8 +86,12 @@ impl BitRepo {
         }
     }
 
-    fn index_path(&self) -> PathBuf {
-        self.bitdir.join(BIT_INDEX_FILE_PATH)
+    pub fn config_path(&self) -> &Path {
+        &self.config_filepath
+    }
+
+    pub fn index_path(&self) -> &Path {
+        &self.index_filepath
     }
 
     fn index_file(&self) -> BitResult<File> {
@@ -118,12 +128,13 @@ impl BitRepo {
         let worktree = path.as_ref().canonicalize()?;
         let bitdir = worktree.join(bitdir);
         assert!(bitdir.exists());
-        let config: BitConfig = toml::from_str(&fs::read_to_string(bitdir.join("config"))?)?;
-        let version = config.core.repositoryformatversion;
+        let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
+        let config = BitConfig::parse(&config_filepath)?;
+        let version = config.repositoryformatversion().unwrap();
         if version != 0 {
             panic!("Unsupported repositoryformatversion {}", version)
         }
-        Ok(Self::new(worktree, bitdir, config))
+        Ok(Self::new(worktree, bitdir, config, config_filepath))
     }
 
     pub fn init(path: impl AsRef<Path>) -> BitResult<Self> {
@@ -146,13 +157,10 @@ impl BitRepo {
         std::fs::create_dir(&bitdir)?;
 
         let config = BitConfig::default();
-        write!(
-            File::create(bitdir.join("config"))?,
-            "{}",
-            toml::to_string_pretty(&config).unwrap()
-        )?;
+        let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
+        write!(File::create(&config_filepath)?, "{}", toml::to_string_pretty(&config).unwrap())?;
 
-        let this = Self::new(worktree, bitdir, config);
+        let this = Self::new(worktree, bitdir, config, config_filepath);
         this.mk_bitdir("objects")?;
         this.mk_bitdir("branches")?;
         this.mk_bitdir("refs/tags")?;

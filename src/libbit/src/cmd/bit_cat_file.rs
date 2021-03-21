@@ -38,4 +38,3 @@ impl BitRepo {
         Ok(())
     }
 }
-

@@ -9,8 +9,7 @@ impl BitRepo {
         message: String,
         tree: BitHash,
     ) -> BitResult<()> {
-        dbg!(&message);
-        self.mk_commit(tree, message, parent);
+        self.mk_commit(tree, message, parent)?;
         Ok(())
     }
 }

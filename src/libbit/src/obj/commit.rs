@@ -21,10 +21,15 @@ pub struct Commit {
 }
 
 impl BitRepo {
-    pub fn mk_commit(&self, tree: BitHash, message: String, parent: Option<BitHash>) -> Commit {
-        let author = todo!();
-        let committer = todo!();
-        Commit { tree, parent, message, author, committer, gpgsig: None }
+    pub fn mk_commit(
+        &self,
+        tree: BitHash,
+        message: String,
+        parent: Option<BitHash>,
+    ) -> BitResult<Commit> {
+        let author = self.user_signature()?;
+        let committer = author.clone();
+        Ok(Commit { tree, parent, message, author, committer, gpgsig: None })
     }
 
     pub fn read_commit_msg(&self) -> BitResult<String> {

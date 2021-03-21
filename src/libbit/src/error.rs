@@ -8,7 +8,7 @@ pub type BitResult<T> = Result<T, BitError>;
 pub enum BitError {
     #[error("{0}")]
     IO(#[from] std::io::Error),
-    #[error("{0}")]
+    #[error("failed to parse toml: {0}")]
     Toml(#[from] toml::de::Error),
     #[error("`{0}` is not a directory")]
     NotDirectory(PathBuf),
@@ -16,6 +16,8 @@ pub enum BitError {
     BitDirectoryNotFound,
     #[error("{0}")]
     Msg(String),
+    #[error("{0}")]
+    StaticMsg(&'static str),
     #[error("{0}")]
     ParseIntError(#[from] ParseIntError),
     #[error("index is not fully merged")]
