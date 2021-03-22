@@ -185,10 +185,11 @@ impl BitRepo {
         let bytes = obj::serialize_obj_with_headers(obj)?;
         let hash = hash::hash_bytes(bytes.as_slice());
         let (directory, file_path) = hash.split();
-        let file = self.mk_nested_bitfile(&["objects", &directory, &file_path])?;
-        let mut encoder = ZlibEncoder::new(file, Compression::default());
-        encoder.write_all(&bytes)?;
-        Ok(hash)
+        self.with_bitfile(&["objects", &directory, &file_path], |file| {
+            let mut encoder = ZlibEncoder::new(file, Compression::default());
+            encoder.write_all(&bytes)?;
+            Ok(hash)
+        })
     }
 
     pub fn obj_filepath_from_hash(&self, hash: &BitHash) -> PathBuf {
@@ -256,9 +257,11 @@ impl BitRepo {
         fs::create_dir_all(self.relative_path(path))
     }
 
-    pub(crate) fn mk_nested_bitfile(&self, paths: &[impl AsRef<Path>]) -> io::Result<File> {
-        // TODO object files probably should usually be readonly
-        // maybe make them readonly again after writing?
+    pub(crate) fn with_bitfile<R>(
+        &self,
+        paths: &[impl AsRef<Path>],
+        f: impl FnOnce(&mut File) -> BitResult<R>,
+    ) -> BitResult<R> {
         let path = self.relative_paths(paths);
         path.parent().map(|parent| fs::create_dir_all(parent));
         if path.exists() {
@@ -266,7 +269,15 @@ impl BitRepo {
             permissions.set_readonly(false);
             std::fs::set_permissions(&path, permissions)?;
         }
-        Ok(File::create(path)?)
+        // will overwrite any existing file
+        let mut file = File::create(&path)?;
+        // don't ? here as we always want to do the cleanup code after this
+        let ret = f(&mut file);
+
+        let mut permissions = file.metadata()?.permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&path, permissions)?;
+        Ok(ret?)
     }
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
