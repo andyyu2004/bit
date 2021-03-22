@@ -257,11 +257,16 @@ impl BitRepo {
     }
 
     pub(crate) fn mk_nested_bitfile(&self, paths: &[impl AsRef<Path>]) -> io::Result<File> {
+        // TODO object files probably should usually be readonly
+        // maybe make them readonly again after writing?
         let path = self.relative_paths(paths);
         path.parent().map(|parent| fs::create_dir_all(parent));
-        let file = File::create(path)?;
-        dbg!(&file);
-        Ok(file)
+        if path.exists() {
+            let mut permissions = std::fs::metadata(&path)?.permissions();
+            permissions.set_readonly(false);
+            std::fs::set_permissions(&path, permissions)?;
+        }
+        Ok(File::create(path)?)
     }
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
