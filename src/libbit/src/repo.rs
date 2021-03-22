@@ -209,6 +209,11 @@ impl BitRepo {
         Ok(ZlibDecoder::new(file))
     }
 
+    pub fn read_obj_as<T: BitObj>(&self, id: impl Into<BitObjId>) -> BitResult<T> {
+        todo!()
+        // self.read_obj_from_id(id.into())
+    }
+
     pub fn read_obj(&self, id: impl Into<BitObjId>) -> BitResult<BitObjKind> {
         self.read_obj_from_id(id.into())
     }
@@ -254,7 +259,9 @@ impl BitRepo {
     pub(crate) fn mk_nested_bitfile(&self, paths: &[impl AsRef<Path>]) -> io::Result<File> {
         let path = self.relative_paths(paths);
         path.parent().map(|parent| fs::create_dir_all(parent));
-        File::create(path)
+        let file = File::create(path)?;
+        dbg!(&file);
+        Ok(file)
     }
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {

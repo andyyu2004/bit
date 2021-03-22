@@ -85,9 +85,10 @@ impl BitIndex {
         self.entries.keys().any(|(_, stage)| stage.is_merging())
     }
 
-    pub fn write_tree(&self, repo: &BitRepo) -> BitResult<Tree> {
+    /// builds a tree object from the current index entries
+    pub fn build_tree(&self, repo: &BitRepo) -> BitResult<Tree> {
         if self.has_conflicts() {
-            return Err(anyhow!("cannot write-tree an index that is not fully merged"));
+            return Err(anyhow!("cannot write-tree an an index that is not fully merged"));
         }
         TreeBuilder::new(self, repo, self.entries.values()).build()
     }
@@ -113,27 +114,25 @@ impl<'a, I: Iterator<Item = &'a BitIndexEntry>> TreeBuilder<'a, I> {
             let &&BitIndexEntry { mode, filepath, hash, .. } = next_entry;
             // if the depth is greater than the number of components in the filepath
             // then we need to `break` and go out one level
-            // TODO nxt is basically unused only to generate the next path
-            // so should probably change split path to do this
-            let (curr_dir, nxt) = match filepath.try_split_path_at(depth) {
+            let (curr_dir, segment) = match filepath.try_split_path_at(depth) {
                 Some(x) => x,
                 None => break,
             };
-            let nxt_path = curr_dir.as_path().join(nxt);
+
             if curr_dir.as_path() != current_index_dir {
                 break;
             }
+
+            let nxt_path = curr_dir.as_path().join(segment);
             if nxt_path == filepath.as_path() {
-                assert!(entries.insert(TreeEntry { mode, path: filepath, hash }));
+                // only keep the final segment of the path inside the tree entry
+                assert!(entries.insert(TreeEntry { mode, path: segment, hash }));
                 self.index_entries.next();
             } else {
                 let subtree = self.build_tree(&nxt_path, 1 + depth)?;
                 let hash = self.repo.write_obj(&subtree)?;
-                assert!(entries.insert(TreeEntry {
-                    mode,
-                    path: BitPath::intern(nxt_path.to_str().unwrap()),
-                    hash,
-                }));
+
+                assert!(entries.insert(TreeEntry { path: segment, mode: FileMode::DIR, hash }));
             }
         }
         Ok(Tree { entries })
@@ -556,26 +555,32 @@ mod tests {
     /// └── zs
     ///    └── one.txt
     // tests some correctness properties of the tree generated from the index
+    // reminder that the path of the tree entries should be relative to its immediate parent
     // TODO be nice to have some way to quickcheck some of this
     #[test]
-    fn bit_index_write_tree() -> BitResult<()> {
+    fn bit_index_write_tree_test() -> BitResult<()> {
         BitRepo::find("tests/repos/indextest", |repo| {
-            let tree = repo.with_index(|index| index.write_tree(repo))?;
+            let tree = repo.with_index(|index| index.build_tree(repo))?;
             let entries = tree.entries.into_iter().collect_vec();
             assert_eq!(entries[0].path, "dir");
+            assert_eq!(entries[0].mode, FileMode::DIR);
             assert_eq!(entries[1].path, "dir2");
+            assert_eq!(entries[1].mode, FileMode::DIR);
             assert_eq!(entries[2].path, "test.txt");
+            assert_eq!(entries[2].mode, FileMode::REG);
             assert_eq!(entries[3].path, "zs");
+            assert_eq!(entries[3].mode, FileMode::DIR);
 
             let dir2_tree = repo.read_obj(entries[1].hash)?.as_tree();
             let dir2_tree_entries = dir2_tree.entries.into_iter().collect_vec();
-            assert_eq!(dir2_tree_entries[0].path, "dir2/dir2.txt");
-            assert_eq!(dir2_tree_entries[1].path, "dir2/nested");
+            assert_eq!(dir2_tree_entries[0].path, "dir2.txt");
+            assert_eq!(dir2_tree_entries[1].path, "nested");
 
             let mut nested_tree = repo.read_obj(dir2_tree_entries[1].hash)?.as_tree();
             let coolfile_entry = nested_tree.entries.pop_first().unwrap();
             assert!(nested_tree.entries.is_empty());
-            assert_eq!(coolfile_entry.path, "dir2/nested/coolfile.txt");
+            assert_eq!(coolfile_entry.path, "coolfile.txt");
+
             let coolfile_blob = repo.read_obj(coolfile_entry.hash)?.as_blob();
             assert_eq!(coolfile_blob.bytes, b"coolfile contents!");
 

@@ -1,17 +1,17 @@
-mod commit_tree;
-mod config;
-mod ls_files;
-mod update_index;
+mod cli_commit_tree;
+mod cli_config;
+mod cli_ls_files;
+mod cli_update_index;
 
 // the bitopts and bitcliopts are distinct types for a few reasons
 // - the parsed format is often not very convenient for actual usage
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
 // - probably will make it such that libbit doesn't even expose full commands
 //   and be something more like libgit2
-use self::commit_tree::BitCommitTreeCliOpts;
-use self::config::BitConfigCliOpts;
-use self::ls_files::BitLsFilesCliOpts;
-use self::update_index::BitUpdateIndexCliOpts;
+use self::cli_commit_tree::BitCommitTreeCliOpts;
+use self::cli_config::BitConfigCliOpts;
+use self::cli_ls_files::BitLsFilesCliOpts;
+use self::cli_update_index::BitUpdateIndexCliOpts;
 
 use clap::{AppSettings, Clap};
 use libbit::cmd::*;
@@ -50,7 +50,7 @@ pub fn run() -> BitResult<()> {
                 Some(message) => message,
                 None => repo.read_commit_msg()?,
             };
-            repo.commit_tree(opts.parent, message, opts.tree)
+            repo.bit_commit_tree(opts.parent, message, opts.tree)
         }
     })
 }

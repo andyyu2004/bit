@@ -46,29 +46,36 @@ impl Debug for FileMode {
 }
 
 impl FileMode {
+    pub const DIR: Self = Self(Self::IFDIR);
     /* Directory.  */
-    pub const DIR: u32 = 0040000;
+    pub const IFDIR: u32 = 0o40000;
     /* These bits determine file type.  */
-    const FMT: u32 = 0170000;
+    const IFFMT: u32 = 0o170000;
     /* Symbolic link.  */
-    pub const LNK: u32 = 0120000;
+    pub const IFLNK: u32 = 0o120000;
     /* Regular file.  */
-    pub const REG: u32 = 0100000;
+    pub const IFREG: u32 = 0o100644;
+    pub const REG: Self = Self(Self::IFREG);
+
+    #[cfg(debug_assertions)]
+    pub fn inner(self) -> u32 {
+        self.0
+    }
 
     pub fn is_type(self, mask: u32) -> bool {
-        self.0 & Self::FMT == mask
+        self.0 & Self::IFFMT == mask
     }
 
     pub fn is_dir(self) -> bool {
-        self.is_type(Self::DIR)
+        self.is_type(Self::IFDIR)
     }
 
     pub fn is_link(self) -> bool {
-        self.is_type(Self::LNK)
+        self.is_type(Self::IFLNK)
     }
 
     pub fn is_reg(self) -> bool {
-        self.is_type(Self::REG)
+        self.is_type(Self::IFREG)
     }
 
     pub fn as_u32(self) -> u32 {
