@@ -1,25 +1,23 @@
 //! this does deviate a bit from the actual git config format
 //! certain things will need to be rewritten to be valid toml
 
+// yes this file is pretty disgusting, but its only config right? :)
+
 use crate::error::BitResult;
+use crate::interner::Intern;
 use crate::repo::BitRepo;
-use serde::{Deserialize, Serialize};
+use git_config::file::GitConfig;
+use git_config::values::{Boolean, Integer};
+use lazy_static::lazy_static;
+use std::borrow::Cow;
+use std::convert::TryFrom;
+use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-lazy_static::lazy_static! {
-    static ref GLOBAL_CONFIG_PATH: PathBuf = dirs::config_dir().unwrap().join("bit/.bitconfig");
-    static ref GLOBAL_CONFIG: BitConfig = {
-        let path: &Path = &GLOBAL_CONFIG_PATH;
-        if !path.exists() {
-            // this won't write to disk or anything
-            BitConfig::default()
-        } else {
-            BitConfig::parse(&path)
-                .unwrap_or_else(|err| panic!("failed to parse global bitconfig in {}: {}", path.display() ,err))
-        }
-    };
+lazy_static! {
+    static ref GLOBAL_PATH: PathBuf = dirs::home_dir().unwrap().join(".gitconfig");
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -28,122 +26,147 @@ pub enum BitConfigScope {
     Local,
 }
 
-// tricky to manipulate the rust struct representation of config
-// given `section.key` as a string at runtime
-// just reread the file and modify it on disk and refresh the config of the repo
-impl BitRepo {
-    pub fn get_config_as_toml(&self, scope: BitConfigScope) -> BitResult<toml::Value> {
-        let config_file_path = self.get_config_path(scope);
-        Ok(toml::Value::from_str(&std::fs::read_to_string(config_file_path)?)?)
-    }
+pub struct BitConfig<'c> {
+    inner: GitConfig<'c>,
+    scope: BitConfigScope,
+    path: PathBuf,
+}
 
-    fn get_config_path(&self, scope: BitConfigScope) -> &Path {
+impl BitRepo {
+    pub fn with_config<R>(
+        &self,
+        scope: BitConfigScope,
+        f: impl FnOnce(&mut BitConfig) -> BitResult<R>,
+    ) -> BitResult<R> {
         match scope {
-            BitConfigScope::Global => &GLOBAL_CONFIG_PATH,
-            BitConfigScope::Local => self.config_path(),
+            BitConfigScope::Global => BitConfig::with_global_config(f),
+            BitConfigScope::Local => self.with_local_config(f),
         }
     }
 
-    pub fn get_config(
+    pub fn with_local_config<R>(
         &self,
-        scope: BitConfigScope,
-        section: &str,
-        key: &str,
-    ) -> BitResult<Option<String>> {
-        let config = self.get_config_as_toml(scope)?;
-        Ok(Self::read_config(&config, section, key))
+        f: impl for<'c> FnOnce(&mut BitConfig<'c>) -> BitResult<R>,
+    ) -> BitResult<R> {
+        BitConfig::with_local(self.config_path(), f)
+    }
+}
+
+fn with_config<R>(
+    scope: BitConfigScope,
+    path: impl AsRef<Path>,
+    f: impl for<'a> FnOnce(&mut BitConfig<'a>) -> BitResult<R>,
+) -> BitResult<R> {
+    let path = path.as_ref().to_path_buf();
+    if !path.exists() {
+        File::create(&path)?;
+    }
+    let s = std::fs::read_to_string(&path)?;
+    let inner = GitConfig::try_from(s.as_str())
+        .unwrap_or_else(|err| panic!("failed to parse bitconfig `{}`: {}", path.display(), err));
+
+    let mut config = BitConfig { inner, path, scope };
+    let ret = f(&mut config)?;
+    Ok(ret)
+}
+
+impl<'c> BitConfig<'c> {
+    /// write the configuration to disk
+    fn write(&self) -> BitResult<()> {
+        let inner = &self.inner;
+        let bytes: Vec<u8> = inner.into();
+        let mut file = File::with_options().write(true).open(&self.path)?;
+        file.write_all(&bytes)?;
+        Ok(())
     }
 
-    // a helper function to allow us to use ? to propogate options
-    // to avoid nested and_then's
-    fn read_config(config: &toml::Value, section: &str, key: &str) -> Option<String> {
-        let section = config.get(section)?;
-        let value_opt = section.get(key)?;
-        let value = value_opt
-            .as_str()
-            .unwrap_or_else(|| panic!("expected string value for `{}.{}`", section, key))
-            .to_owned();
-        Some(value)
+    pub fn with_local<R>(
+        path: impl AsRef<Path>,
+        f: impl FnOnce(&mut BitConfig) -> BitResult<R>,
+    ) -> BitResult<R> {
+        with_config(BitConfigScope::Local, path, f)
     }
 
-    pub fn set_config(
-        &self,
-        scope: BitConfigScope,
-        section: &str,
-        key: &str,
-        value: &str,
-    ) -> BitResult<()> {
-        let mut config = self.get_config_as_toml(scope)?;
-        let section = config
-            .as_table_mut()
-            .unwrap()
-            .entry(section)
-            .or_insert_with(|| toml::value::Table::default().into());
-        section.as_table_mut().unwrap().insert(key.to_owned(), value.into());
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(self.get_config_path(scope))?;
-        write!(file, "{}", toml::to_string_pretty(&config).unwrap())?;
-        // the loaded config in repo is NOT updated
-        // the assumption is that setting config is the last thing that will be done
-        // with this instance of the repo, and the next command will reload the repo and
-        // hence get the updated configuration
+    fn with_global_config<R>(f: impl FnOnce(&mut BitConfig) -> BitResult<R>) -> BitResult<R> {
+        with_config(BitConfigScope::Global, GLOBAL_PATH.as_path(), f)
+    }
+}
+
+pub trait BitConfigValue: Sized {
+    fn get(bytes: &str) -> BitResult<Self>;
+}
+
+impl BitConfigValue for String {
+    fn get(s: &str) -> BitResult<Self> {
+        Ok(s.to_owned())
+    }
+}
+
+impl BitConfigValue for i64 {
+    fn get(s: &str) -> BitResult<Self> {
+        let i = Integer::from_str(s).unwrap_or_else(|err| {
+            panic!("failed to parse config value as integer `{}`: {}", s, err)
+        });
+        Ok(i.value << i.suffix.map(|suffix| suffix.bitwise_offset()).unwrap_or(0))
+    }
+}
+
+impl BitConfigValue for bool {
+    fn get(s: &str) -> BitResult<Self> {
+        let b = Boolean::try_from(s.to_owned()).unwrap_or_else(|err| {
+            panic!("failed to parse config value as boolean `{}`: {}", s, err)
+        });
+        match b {
+            Boolean::True(_) => Ok(true),
+            Boolean::False(_) => Ok(false),
+        }
+    }
+}
+
+impl<'c> BitConfig<'c> {
+    fn get_raw(&self, section: &str, key: &str) -> Option<Cow<'_, [u8]>> {
+        self.inner.value(section, None, key).ok()
+    }
+
+    pub fn get<T: BitConfigValue>(&self, section: &str, key: &str) -> BitResult<Option<T>> {
+        self.get_raw(section, key)
+            .map(|bytes| T::get(std::str::from_utf8(&bytes).expect("invalid utf8 in bitconfig")))
+            .transpose()
+    }
+
+    pub fn set(&mut self, section_name: &str, key: &str, value: &str) -> BitResult<()> {
+        let mut section = match self.inner.section_mut(section_name, None) {
+            Ok(section) => section,
+            Err(_) => self.inner.new_section(section_name.intern(), None),
+        };
+        section.set(key.intern().into(), value.intern().as_bytes().into());
+        self.write()?;
         Ok(())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct BitConfig {
-    #[serde(default = "BitCoreConfig::default")]
-    core: BitCoreConfig,
-    #[serde(default = "BitUserConfig::default")]
-    user: BitUserConfig,
-}
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct BitCoreConfig {
-    repositoryformatversion: Option<i32>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct BitUserConfig {
-    name: Option<String>,
-    email: Option<String>,
-}
-
 //* be careful to not recursively call the generated method on the global config
+/// generates accessors for each property
+/// searches up into global scope if the property is not found locally
 macro_rules! get_opt {
     ($section:ident.$field:ident:$ty:ty) => {
-        impl BitConfig {
-            #[inline]
-            pub fn $field(&self) -> Option<$ty> {
-                self.$section.$field.or_else(|| GLOBAL_CONFIG.$section.$field)
+        impl<'c> BitConfig<'c> {
+            pub fn $field(&self) -> BitResult<Option<$ty>> {
+                let section = stringify!($section);
+                let field = stringify!($field);
+                match self.get(section, field)? {
+                    Some(value) => return Ok(Some(value)),
+                    None => match self.scope {
+                        BitConfigScope::Global => Ok(None),
+                        BitConfigScope::Local =>
+                            Self::with_global_config(|global| global.get(section, field)),
+                    },
+                }
             }
         }
     };
 }
 
-macro_rules! get_opt_ref {
-    ($section:ident.$field:ident:$ty:ty) => {
-        impl BitConfig {
-            #[inline]
-            pub fn $field(&self) -> Option<$ty> {
-                self.$section.$field.as_deref().or_else(|| GLOBAL_CONFIG.$section.$field.as_deref())
-            }
-        }
-    };
-}
-
-get_opt!(core.repositoryformatversion: i32);
-get_opt_ref!(user.name: &str);
-get_opt_ref!(user.email: &str);
-
-impl BitConfig {
-    pub fn parse(path: impl AsRef<Path>) -> BitResult<Self> {
-        if !path.as_ref().exists() {
-            return Ok(Self::default());
-        }
-        Ok(toml::from_str(&std::fs::read_to_string(path)?)?)
-    }
-}
+get_opt!(core.repositoryformatversion: i64);
+get_opt!(user.name: String);
+get_opt!(user.email: String);

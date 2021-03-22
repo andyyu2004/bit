@@ -22,7 +22,7 @@ impl BitPath {
     }
 
     pub fn intern(p: impl AsRef<Path>) -> Self {
-        with_path_interner(|interner| interner.intern(p.as_ref().to_str().unwrap()))
+        with_path_interner(|interner| interner.intern_path(p.as_ref().to_str().unwrap()))
     }
 
     pub fn as_str(self) -> &'static str {

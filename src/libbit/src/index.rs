@@ -6,6 +6,7 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::Serialize;
 use crate::util;
+use anyhow::anyhow;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
 use std::collections::{BTreeMap, BTreeSet};
@@ -86,10 +87,9 @@ impl BitIndex {
 
     pub fn write_tree(&self, repo: &BitRepo) -> BitResult<Tree> {
         if self.has_conflicts() {
-            return Err(BitError::Unmerged());
+            return Err(anyhow!("cannot write-tree an index that is not fully merged"));
         }
         TreeBuilder::new(self, repo, self.entries.values()).build()
-        // self.write_tree_inner(repo, &mut self.entries.values(), "".as_ref())
     }
 }
 
@@ -140,7 +140,7 @@ impl<'a, I: Iterator<Item = &'a BitIndexEntry>> TreeBuilder<'a, I> {
     }
 
     pub fn build(mut self) -> BitResult<Tree> {
-        self.build_tree(Path::new(""), 0)
+        self.build_tree("", 0)
     }
 }
 

@@ -29,14 +29,14 @@ impl BitConfigCliOpts {
         // if its not global we assume its local even if self.local is not explicitly set
         let scope = if self.global { BitConfigScope::Global } else { BitConfigScope::Local };
         let (section, key) = self.name.split_once(".").unwrap();
-        match &self.value {
-            Some(value) => repo.set_config(scope, section, key, value)?,
-            // git just prints nothing if `section.value` does not exist
-            None =>
-                if let Some(value) = repo.get_config(scope, section, key)? {
+        repo.with_config(scope, |config| {
+            match &self.value {
+                Some(value) => config.set(section, key, value),
+                // git just prints nothing if `section.value` does not exist
+                None => Ok(if let Some(value) = config.get::<String>(section, key)? {
                     println!("{}", value)
-                },
-        };
-        Ok(())
+                }),
+            }
+        })
     }
 }

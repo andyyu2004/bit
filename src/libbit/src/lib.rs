@@ -7,6 +7,7 @@
 #![feature(is_sorted)]
 #![feature(cstring_from_vec_with_nul)]
 #![feature(array_methods)]
+#![feature(with_options)]
 
 #[cfg(test)]
 extern crate quickcheck;
@@ -17,6 +18,9 @@ extern crate quickcheck_macros;
 
 #[macro_use]
 extern crate scoped_tls;
+
+#[macro_use]
+extern crate anyhow;
 
 #[cfg(test)]
 mod test_utils;

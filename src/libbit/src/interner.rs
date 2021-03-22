@@ -2,19 +2,43 @@ use crate::path::BitPath;
 use bumpalo::Bump as Arena;
 use itertools::Itertools;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 #[derive(Default)]
-pub(crate) struct PathInterner {
+pub(crate) struct Interner {
     arena: Arena,
     map: HashMap<&'static str, BitPath>,
+    set: HashSet<&'static str>,
     paths: Vec<&'static str>,
     components: HashMap<BitPath, &'static [&'static str]>,
 }
 
-impl PathInterner {
-    pub fn intern(&mut self, s: &str) -> BitPath {
+pub trait Intern {
+    fn intern(&self) -> &'static Self;
+}
+
+impl Intern for str {
+    fn intern(&self) -> &'static Self {
+        with_path_interner(|interner| interner.intern_str(self))
+    }
+}
+
+impl Interner {
+    // this only exists due to some lifetime difficulties with the GitConfig parser
+    pub fn intern_str(&mut self, s: &str) -> &'static str {
+        // could potentially reuse same allocation as some path, but its really insignificant
+        if let Some(&x) = self.set.get(s) {
+            return x;
+        }
+        let ptr: &str =
+            unsafe { std::str::from_utf8_unchecked(self.arena.alloc_slice_copy(s.as_bytes())) };
+        let static_str = unsafe { &*(ptr as *const str) };
+        self.set.insert(static_str);
+        return static_str;
+    }
+
+    pub fn intern_path(&mut self, s: &str) -> BitPath {
         if let Some(&x) = self.map.get(s) {
             return x;
         }
@@ -35,7 +59,7 @@ impl PathInterner {
             .as_ref()
             .iter()
             .map(|os_str| {
-                let bitpath = self.intern(os_str.to_str().unwrap());
+                let bitpath = self.intern_path(os_str.to_str().unwrap());
                 self.get_str(bitpath)
             })
             .collect_vec();
@@ -61,9 +85,9 @@ impl PathInterner {
 }
 
 thread_local! {
-    static INTERNER: RefCell<PathInterner> = Default::default();
+    static INTERNER: RefCell<Interner> = Default::default();
 }
 
-pub(crate) fn with_path_interner<R>(f: impl FnOnce(&mut PathInterner) -> R) -> R {
+pub(crate) fn with_path_interner<R>(f: impl FnOnce(&mut Interner) -> R) -> R {
     INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
 }

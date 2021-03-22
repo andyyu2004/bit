@@ -1,4 +1,4 @@
-use crate::error::{BitError, BitResult};
+use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
 use crate::repo::BitRepo;
@@ -51,7 +51,7 @@ impl BitRepo {
         }
         std::fs::remove_file(editmsg_filepath)?;
         if msg.is_empty() {
-            return Err(BitError::EmptyCommitMessage);
+            return Err(anyhow!("aborting commit due to empty commit message"));
         }
         Ok(msg)
     }

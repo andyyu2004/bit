@@ -17,9 +17,7 @@ impl TryInto<BitUpdateIndexOpts> for BitUpdateIndexCliOpts {
     fn try_into(self) -> Result<BitUpdateIndexOpts, Self::Error> {
         let Self { add, mut cacheinfo } = self;
         if cacheinfo.len() != 3 {
-            return Err(BitError::Msg(format!(
-                "option 'cacheinfo' expects arguments `<mode>,<sha1>,<path>`"
-            )));
+            return Err(anyhow!("option 'cacheinfo' expects arguments `<mode>,<sha1>,<path>`"));
         }
 
         let cacheinfo = CacheInfo {

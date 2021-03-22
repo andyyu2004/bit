@@ -21,7 +21,6 @@ pub const BIT_CONFIG_FILE_PATH: &str = "config";
 pub struct BitRepo {
     pub worktree: PathBuf,
     pub bitdir: PathBuf,
-    pub config: BitConfig,
     config_filepath: PathBuf,
     index_filepath: PathBuf,
     index: OnceCell<RefCell<BitIndex>>,
@@ -39,19 +38,13 @@ fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> PathBuf {
 }
 
 impl BitRepo {
-    fn new(
-        worktree: PathBuf,
-        bitdir: PathBuf,
-        config: BitConfig,
-        config_filepath: PathBuf,
-    ) -> Self {
+    fn new(worktree: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> Self {
         Self {
             index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
             index: OnceCell::new(),
             config_filepath,
             worktree,
             bitdir,
-            config,
         }
     }
 
@@ -65,7 +58,8 @@ impl BitRepo {
         path: impl AsRef<Path>,
         f: impl FnOnce(&BitRepo) -> BitResult<R>,
     ) -> BitResult<R> {
-        let repo = Self::find_inner(path.as_ref())?;
+        let canonical_path = path.as_ref().canonicalize()?;
+        let repo = Self::find_inner(canonical_path.as_ref())?;
         tls::with_repo(&repo, f)
     }
 
@@ -82,7 +76,7 @@ impl BitRepo {
 
         match path.parent() {
             Some(parent) => Self::find_inner(parent),
-            None => Err(BitError::BitDirectoryNotFound),
+            None => Err(anyhow!("not a bit repository (or any of the parent directories")),
         }
     }
 
@@ -129,19 +123,24 @@ impl BitRepo {
         let bitdir = worktree.join(bitdir);
         assert!(bitdir.exists());
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
-        let config = BitConfig::parse(&config_filepath)?;
-        let version = config.repositoryformatversion().unwrap();
-        if version != 0 {
-            panic!("Unsupported repositoryformatversion {}", version)
-        }
-        Ok(Self::new(worktree, bitdir, config, config_filepath))
+        let this = Self::new(worktree, bitdir, config_filepath);
+
+        this.with_local_config(|config| {
+            let version = config.repositoryformatversion()?.unwrap();
+            if version != 0 {
+                panic!("Unsupported repositoryformatversion {}", version)
+            }
+            Ok(())
+        })?;
+
+        Ok(this)
     }
 
     pub fn init(path: impl AsRef<Path>) -> BitResult<Self> {
         let worktree = path.as_ref().canonicalize()?;
 
         if worktree.is_file() {
-            return Err(BitError::NotDirectory(worktree))?;
+            return Err(anyhow!("`{}` is not a directory", worktree.display()))?;
         }
 
         // `.git` directory not `.bit` as this should be fully compatible with git
@@ -156,11 +155,9 @@ impl BitRepo {
 
         std::fs::create_dir(&bitdir)?;
 
-        let config = BitConfig::default();
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
-        write!(File::create(&config_filepath)?, "{}", toml::to_string_pretty(&config).unwrap())?;
 
-        let this = Self::new(worktree, bitdir, config, config_filepath);
+        let this = Self::new(worktree, bitdir, config_filepath);
         this.mk_bitdir("objects")?;
         this.mk_bitdir("branches")?;
         this.mk_bitdir("refs/tags")?;
@@ -293,10 +290,8 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let filepath = dir.path().join("test");
         File::create(&filepath)?;
-        match BitRepo::init(filepath).unwrap_err() {
-            BitError::NotDirectory(..) => {}
-            _ => panic!(),
-        }
+        let err = BitRepo::init(filepath).unwrap_err();
+        assert!(err.to_string().contains("not a directory"));
         Ok(())
     }
 

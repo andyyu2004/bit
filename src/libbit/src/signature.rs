@@ -17,18 +17,20 @@ Omit --global to set the identity only in this repository."#;
 
 impl BitRepo {
     pub fn user_signature(&self) -> BitResult<BitSignature> {
-        let name = self.config.name();
-        let email = self.config.email();
-        if let (Some(name), Some(email)) = (name, email) {
-            Ok(BitSignature {
-                name: name.to_owned(),
-                email: email.to_owned(),
-                time: BitTime::now(),
-            })
-        } else {
-            // this is too dumb to tell if only one of the entries is missing but whatever
-            Err(BitError::StaticMsg(MISSING_IDENTITY_MSG))
-        }
+        self.with_local_config(|config| {
+            let name = config.name()?;
+            let email = config.email()?;
+            if let (Some(name), Some(email)) = (name, email) {
+                Ok(BitSignature {
+                    name: name.to_owned(),
+                    email: email.to_owned(),
+                    time: BitTime::now(),
+                })
+            } else {
+                // this is too dumb to tell if only one of the entries is missing but whatever
+                Err(anyhow!("{}", MISSING_IDENTITY_MSG))
+            }
+        })
     }
 }
 
