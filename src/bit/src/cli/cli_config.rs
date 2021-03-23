@@ -1,4 +1,4 @@
-use clap::lazy_static::{lazy, lazy_static};
+use clap::lazy_static::{lazy_static};
 use clap::Clap;
 use libbit::config::BitConfigScope;
 use libbit::error::BitResult;

@@ -152,7 +152,7 @@ mod tests {
     use rand::Rng;
 
     impl Arbitrary for BitSignature {
-        fn arbitrary(g: &mut Gen) -> Self {
+        fn arbitrary(_g: &mut Gen) -> Self {
             Self {
                 name: generate_sane_string(5..100),
                 email: generate_sane_string(10..200),

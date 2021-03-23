@@ -1,5 +1,5 @@
-use crate::config::BitConfig;
-use crate::error::{BitError, BitResult};
+
+use crate::error::{BitResult};
 use crate::hash::{self, BitHash};
 use crate::index::BitIndex;
 use crate::obj::{self, BitObj, BitObjId, BitObjKind, BitObjType};
@@ -210,7 +210,7 @@ impl BitRepo {
         Ok(ZlibDecoder::new(file))
     }
 
-    pub fn read_obj_as<T: BitObj>(&self, id: impl Into<BitObjId>) -> BitResult<T> {
+    pub fn read_obj_as<T: BitObj>(&self, _id: impl Into<BitObjId>) -> BitResult<T> {
         todo!()
         // self.read_obj_from_id(id.into())
     }
@@ -287,7 +287,7 @@ impl BitRepo {
 
 impl Drop for BitRepo {
     fn drop(&mut self) {
-        if let Some(index) = self.index.get() {
+        if let Some(_index) = self.index.get() {
             // TODO write index?
         }
     }

@@ -1,4 +1,4 @@
-use crate::error::{BitError, BitResult};
+use crate::error::{BitResult};
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::obj::{FileMode, Tree, TreeEntry};
@@ -35,8 +35,8 @@ pub struct BitIndexEntries(BitIndexEntriesMap);
 type BitIndexEntriesMap = BTreeMap<(BitPath, MergeStage), BitIndexEntry>;
 
 impl BitIndex {
-    fn create_tree(&self, repo: &BitRepo) -> Tree {
-        let mut entries = BTreeSet::new();
+    fn create_tree(&self, _repo: &BitRepo) -> Tree {
+        let entries = BTreeSet::new();
         Tree { entries }
     }
 

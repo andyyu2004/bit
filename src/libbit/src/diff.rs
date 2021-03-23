@@ -1,18 +1,16 @@
 use crate::cmd::BitHashObjectOpts;
 use crate::error::BitResult;
-use crate::hash::SHA1Hash;
-use crate::index::{BitIndex, BitIndexEntry, BitIndexEntryFlags};
+
+use crate::index::{BitIndexEntry, BitIndexEntryFlags};
 use crate::obj::{BitObjType, FileMode};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
 use ignore::{Walk, WalkBuilder};
-use itertools::Itertools;
-use std::fs::DirEntry;
-use std::io;
+
 use std::iter::{Fuse, Peekable};
 use std::os::linux::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct BitDiff {}
@@ -156,11 +154,11 @@ mod test {
 
     #[test]
     fn simple_diff() -> BitResult<()> {
-        return Ok(());
-        BitRepo::find("tests/repos/difftest", |repo| {
-            let diff = repo.diff_workdir_index()?;
-            dbg!(diff);
-            Ok(())
-        })
+        Ok(())
+        // BitRepo::find("tests/repos/difftest", |repo| {
+        //     let diff = repo.diff_workdir_index()?;
+        //     dbg!(diff);
+        //     Ok(())
+        // })
     }
 }

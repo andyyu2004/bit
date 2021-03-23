@@ -8,7 +8,7 @@ use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 
 impl Display for Ref {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
@@ -24,13 +24,13 @@ pub enum Ref {
 }
 
 impl Serialize for Ref {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    fn serialize<W: Write>(&self, _writer: &mut W) -> BitResult<()> {
         todo!()
     }
 }
 
 impl BitObj for Ref {
-    fn deserialize_buffered<R: BufRead>(reader: &mut R) -> BitResult<Self> {
+    fn deserialize_buffered<R: BufRead>(_reader: &mut R) -> BitResult<Self> {
         todo!()
     }
 
@@ -43,8 +43,8 @@ impl BitRepo {
     pub fn resolve_ref(&self, r: &Ref) -> BitResult<BitObjKind> {
         match r {
             Ref::Direct(hash) => self.read_obj_from_hash(hash),
-            Ref::Indirect(path) => {
-                let r = todo!();
+            Ref::Indirect(_path) => {
+                let _r = todo!();
                 // self.resolve_ref(r)
             }
         }
