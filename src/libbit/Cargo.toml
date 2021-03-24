@@ -28,10 +28,10 @@ chrono = "0.4.19"
 dirs = "3"
 regex = "1"
 lazy_static = "1.4.0"
+tempfile = "3"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 quickcheck = "1"
 quickcheck_macros = "1"
 rand = "0.8.3"
-tempfile = "3"

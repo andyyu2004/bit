@@ -1,5 +1,4 @@
-
-use crate::error::{BitResult};
+use crate::error::BitResult;
 use crate::hash::{self, BitHash};
 use crate::index::BitIndex;
 use crate::obj::{self, BitObj, BitObjId, BitObjKind, BitObjType};
@@ -14,6 +13,7 @@ use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
+use tempfile::NamedTempFile;
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
 pub const BIT_CONFIG_FILE_PATH: &str = "config";
@@ -263,21 +263,27 @@ impl BitRepo {
         f: impl FnOnce(&mut File) -> BitResult<R>,
     ) -> BitResult<R> {
         let path = self.relative_paths(paths);
-        path.parent().map(|parent| fs::create_dir_all(parent));
+        // the parent path must exist as this file is definitely not in the root directory
+        let parent = path.parent().unwrap();
+        fs::create_dir_all(parent)?;
+        // create a temporary file and perform all mutations there to avoid any
+        // filesystem related race conditions
+        // the rename/mv operation is atomic
+        let mut tmp_file = NamedTempFile::new_in(parent)?;
+        let ret = f(tmp_file.as_file_mut())?;
+        let mut permissions = tmp_file.as_file().metadata()?.permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(tmp_file.path(), permissions)?;
+
         if path.exists() {
             let mut permissions = std::fs::metadata(&path)?.permissions();
             permissions.set_readonly(false);
             std::fs::set_permissions(&path, permissions)?;
         }
-        // will overwrite any existing file
-        let mut file = File::create(&path)?;
-        // don't ? here as we always want to do the cleanup code after this
-        let ret = f(&mut file);
 
-        let mut permissions = file.metadata()?.permissions();
-        permissions.set_readonly(true);
-        std::fs::set_permissions(&path, permissions)?;
-        Ok(ret?)
+        std::fs::rename(tmp_file.path(), path)?;
+
+        Ok(ret)
     }
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {

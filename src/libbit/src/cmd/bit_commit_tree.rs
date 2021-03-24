@@ -22,7 +22,6 @@ impl BitRepo {
     ) -> BitResult<BitHash> {
         // TODO validate hashes of parent and tree
         let commit = self.mk_commit(tree, message, parent)?;
-        dbg!(&commit);
         let hash = self.write_obj(&commit)?;
         Ok(hash)
     }
