@@ -19,6 +19,8 @@ pub const BIT_INDEX_FILE_PATH: &str = "index";
 pub const BIT_CONFIG_FILE_PATH: &str = "config";
 
 pub struct BitRepo {
+    // ok to make this public as there is only ever
+    // shared (immutable) access to this struct
     pub worktree: PathBuf,
     pub bitdir: PathBuf,
     config_filepath: PathBuf,
@@ -237,7 +239,8 @@ impl BitRepo {
 
     pub fn read_obj_size_from_id(&self, id: BitObjId) -> BitResult<usize> {
         let stream = self.obj_stream_from_id(id)?;
-        obj::read_obj_size_from_start(stream)
+        let header = obj::read_obj_header(stream)?;
+        Ok(header.size)
     }
 
     pub fn read_obj_from_hash(&self, hash: &BitHash) -> BitResult<BitObjKind> {

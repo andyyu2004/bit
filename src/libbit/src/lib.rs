@@ -34,6 +34,7 @@ pub mod path;
 pub mod pathspec;
 pub mod repo;
 
+mod db;
 mod diff;
 mod index;
 mod interner;
