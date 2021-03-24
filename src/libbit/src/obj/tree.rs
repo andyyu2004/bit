@@ -34,8 +34,12 @@ impl Display for TreeEntry {
                 std::str::from_utf8_unchecked(self.hash.as_ref())
             })
         } else {
-            let ty = tls::REPO.with(|repo| repo.read_obj_type_from_hash(&self.hash)).unwrap();
-            write!(f, "{} {} {}\t{}", self.mode, ty, self.hash, self.path)
+            let obj_type = self.mode.infer_obj_type();
+            debug_assert_eq!(
+                obj_type,
+                tls::REPO.with(|repo| repo.read_obj_type_from_hash(&self.hash)).unwrap()
+            );
+            write!(f, "{} {} {}\t{}", self.mode, obj_type, self.hash, self.path)
         }
     }
 }

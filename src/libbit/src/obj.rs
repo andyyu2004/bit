@@ -47,8 +47,12 @@ impl Debug for FileMode {
 
 impl FileMode {
     pub const DIR: Self = Self(Self::IFDIR);
+    pub const EXEC: Self = Self(Self::IFEXEC);
     /* Directory.  */
     pub const IFDIR: u32 = 0o40000;
+    /* Executable file.  */
+    // this one is not defined in sysstat.h
+    pub const IFEXEC: u32 = 0o100755;
     /* These bits determine file type.  */
     const IFFMT: u32 = 0o170000;
     /* Symbolic link.  */
@@ -60,6 +64,14 @@ impl FileMode {
     #[cfg(debug_assertions)]
     pub fn inner(self) -> u32 {
         self.0
+    }
+
+    pub fn infer_obj_type(self) -> BitObjType {
+        match self {
+            Self::DIR => BitObjType::Tree,
+            Self::EXEC | Self::REG => BitObjType::Blob,
+            _ => unreachable!("invalid filemode {}", self),
+        }
     }
 
     pub fn is_type(self, mask: u32) -> bool {
@@ -89,7 +101,7 @@ impl FromStr for FileMode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mode = Self(u32::from_str_radix(s, 8)?);
         assert!(
-            mode == Self::DIRECTORY || mode == Self::EXECUTABLE || mode == Self::NON_EXECUTABLE,
+            mode == Self::DIR || mode == Self::EXEC || mode == Self::REG,
             "invalid bit file mode `{}`",
             mode
         );
@@ -98,10 +110,6 @@ impl FromStr for FileMode {
 }
 
 impl FileMode {
-    pub const DIRECTORY: Self = Self(0o04000);
-    pub const EXECUTABLE: Self = Self(0o100755);
-    pub const NON_EXECUTABLE: Self = Self(0o100644);
-
     pub const fn new(u: u32) -> Self {
         Self(u)
     }

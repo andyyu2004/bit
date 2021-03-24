@@ -1,4 +1,4 @@
-use crate::error::{BitResult};
+use crate::error::BitResult;
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::obj::{FileMode, Tree, TreeEntry};
@@ -503,7 +503,7 @@ mod tests {
                 filesize: 6,
                 flags: BitIndexEntryFlags(12),
                 filepath: BitPath::intern("dir/test.txt"),
-                mode: FileMode::NON_EXECUTABLE,
+                mode: FileMode::REG,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
             BitIndexEntry {
@@ -518,7 +518,7 @@ mod tests {
                 filesize: 6,
                 flags: BitIndexEntryFlags(8),
                 filepath: BitPath::intern("test.txt"),
-                mode: FileMode::NON_EXECUTABLE,
+                mode: FileMode::REG,
                 hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
             },
         ]
