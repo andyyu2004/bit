@@ -10,6 +10,7 @@ pub use obj_id::BitObjId;
 pub use tree::{Tree, TreeEntry};
 
 use crate::error::{BitError, BitResult};
+use crate::io_ext::ReadExt;
 use crate::serialize::Serialize;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -186,6 +187,17 @@ pub trait BitObj: Serialize + Sized + Debug + Display {
         Self::deserialize_buffered(&mut BufReader::new(reader))
     }
     fn obj_ty(&self) -> BitObjType;
+
+    /// serialize objects append on the header of `type len`
+    fn serialize_with_headers(&self) -> BitResult<Vec<u8>> {
+        let mut buf = vec![];
+        write!(buf, "{} ", self.obj_ty())?;
+        let mut bytes = vec![];
+        self.serialize(&mut bytes)?;
+        write!(buf, "{}\0", bytes.len())?;
+        buf.write_all(&bytes)?;
+        Ok(buf)
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -223,13 +235,7 @@ impl FromStr for BitObjType {
 }
 
 pub fn serialize_obj_with_headers(obj: &impl BitObj) -> BitResult<Vec<u8>> {
-    let mut buf = vec![];
-    write!(buf, "{} ", obj.obj_ty())?;
-    let mut bytes = vec![];
-    obj.serialize(&mut bytes)?;
-    write!(buf, "{}\0", bytes.len().to_string())?;
-    buf.write_all(&bytes)?;
-    Ok(buf)
+    obj.serialize_with_headers()
 }
 
 pub fn read_obj_header_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjHeader> {
@@ -266,17 +272,13 @@ pub fn read_obj_size_buffered<R: BufRead>(reader: &mut R) -> BitResult<usize> {
 
 /// format: <type>0x20<size>0x00<content>
 pub fn read_obj_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjKind> {
-    let mut buf = vec![];
+    let header = read_obj_header_buffered(reader)?;
+    let buf = reader.read_to_vec()?;
+    let contents = buf.as_slice();
+    debug_assert_eq!(contents.len(), header.size);
+    assert_eq!(contents.len(), header.size);
 
-    let obj_ty = read_obj_type_buffered(reader)?;
-    let obj_size = read_obj_size_buffered(reader)?;
-
-    let len = reader.read_to_end(&mut buf)?;
-    debug_assert_eq!(len, obj_size);
-    let contents = &buf[..];
-    assert_eq!(contents.len(), obj_size);
-
-    Ok(match obj_ty {
+    Ok(match header.obj_type {
         BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(contents)?),
         BitObjType::Tree => BitObjKind::Tree(Tree::deserialize(contents)?),
         BitObjType::Blob => BitObjKind::Blob(Blob::deserialize(contents)?),

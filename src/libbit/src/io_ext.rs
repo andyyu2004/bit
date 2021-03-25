@@ -27,6 +27,12 @@ pub(crate) trait ReadExt: Read {
         self.read_exact(&mut buf)?;
         Ok(BitHash::new(buf))
     }
+
+    fn read_to_vec(&mut self) -> std::io::Result<Vec<u8>> {
+        let mut buf = vec![];
+        self.read_to_end(&mut buf)?;
+        Ok(buf)
+    }
 }
 
 impl<T: Read> ReadExt for T {

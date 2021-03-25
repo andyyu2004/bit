@@ -1,5 +1,6 @@
 use crate::error::{BitError, BitResult};
 use crate::obj::{self, BitObj};
+use crate::path::BitPath;
 use sha1::digest::Output;
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
@@ -30,10 +31,10 @@ impl BitHash {
         &self.0
     }
 
-    /// split hash into the first two hex digits and the rest
-    /// for use in finding <directory>/<file>
-    pub fn split(&self) -> (String, String) {
-        (hex::encode(&self[0..1]), hex::encode(&self[1..]))
+    /// split hash into the first two hex digits (hence first byte)
+    /// and the rest for use in finding <directory>/<file>
+    pub fn split(&self) -> (BitPath, BitPath) {
+        (BitPath::intern(hex::encode(&self[0..1])), BitPath::intern(hex::encode(&self[1..])))
     }
 }
 

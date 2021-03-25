@@ -37,6 +37,7 @@ pub mod repo;
 mod db;
 mod diff;
 mod index;
+mod lockfile;
 mod interner;
 mod io_ext;
 mod serialize;

@@ -60,6 +60,12 @@ impl BitPath {
     }
 }
 
+impl AsRef<str> for BitPath {
+    fn as_ref(&self) -> &'static str {
+        self.as_str()
+    }
+}
+
 impl AsRef<Path> for BitPath {
     fn as_ref(&self) -> &Path {
         self.as_path()
@@ -80,12 +86,15 @@ impl Debug for BitPath {
     }
 }
 
-impl<S> PartialEq<S> for BitPath
-where
-    S: AsRef<str>,
-{
-    fn eq(&self, other: &S) -> bool {
-        self.as_str() == other.as_ref()
+impl PartialEq<str> for BitPath {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for BitPath {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
     }
 }
 
