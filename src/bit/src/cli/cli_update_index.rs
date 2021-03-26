@@ -1,6 +1,6 @@
 use clap::Clap;
 use libbit::cmd::{BitUpdateIndexOpts, CacheInfo};
-use libbit::error::BitError;
+use libbit::error::BitGenericError;
 use std::convert::TryInto;
 
 #[derive(Clap, Debug)]
@@ -12,12 +12,12 @@ pub struct BitUpdateIndexCliOpts {
 }
 
 impl TryInto<BitUpdateIndexOpts> for BitUpdateIndexCliOpts {
-    type Error = BitError;
+    type Error = BitGenericError;
 
     fn try_into(self) -> Result<BitUpdateIndexOpts, Self::Error> {
         let Self { add, mut cacheinfo } = self;
         if cacheinfo.len() != 3 {
-            return Err(anyhow!("option 'cacheinfo' expects arguments `<mode>,<sha1>,<path>`"));
+            bail!("option 'cacheinfo' expects arguments `<mode>,<sha1>,<path>`");
         }
 
         let cacheinfo = CacheInfo {

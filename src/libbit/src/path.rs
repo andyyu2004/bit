@@ -1,6 +1,7 @@
 use itertools::Itertools;
 
 use crate::interner::with_path_interner;
+use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::Deref;
 use std::path::Path;
@@ -19,6 +20,10 @@ impl BitPath {
 
     pub fn index(self) -> u32 {
         self.0
+    }
+
+    pub fn join(self, path: impl AsRef<Path>) -> Self {
+        Self::intern(self.as_path().join(path))
     }
 
     pub fn intern(p: impl AsRef<Path>) -> Self {
@@ -66,6 +71,12 @@ impl AsRef<str> for BitPath {
     }
 }
 
+impl AsRef<OsStr> for BitPath {
+    fn as_ref(&self) -> &OsStr {
+        OsStr::new(self.as_str())
+    }
+}
+
 impl AsRef<Path> for BitPath {
     fn as_ref(&self) -> &Path {
         self.as_path()
@@ -73,16 +84,22 @@ impl AsRef<Path> for BitPath {
 }
 
 impl Deref for BitPath {
-    type Target = str;
+    type Target = Path;
 
     fn deref(&self) -> &Self::Target {
-        self.as_str()
+        self.as_path()
     }
 }
 
 impl Debug for BitPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl PartialEq<String> for BitPath {
+    fn eq(&self, other: &String) -> bool {
+        self == other.as_str()
     }
 }
 

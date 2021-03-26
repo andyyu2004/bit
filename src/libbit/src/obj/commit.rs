@@ -51,7 +51,7 @@ impl BitRepo {
         }
         std::fs::remove_file(editmsg_filepath)?;
         if msg.is_empty() {
-            return Err(anyhow!("aborting commit due to empty commit message"));
+            bail!("aborting commit due to empty commit message");
         }
         Ok(msg)
     }

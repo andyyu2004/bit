@@ -6,10 +6,10 @@ mod tree;
 
 pub use blob::Blob;
 pub use commit::Commit;
-pub use obj_id::BitObjId;
+pub use obj_id::BitId;
 pub use tree::{Tree, TreeEntry};
 
-use crate::error::{BitError, BitResult};
+use crate::error::{BitGenericError, BitResult};
 use crate::io_ext::ReadExt;
 use crate::serialize::Serialize;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -97,7 +97,7 @@ impl FileMode {
 }
 
 impl FromStr for FileMode {
-    type Err = BitError;
+    type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mode = Self(u32::from_str_radix(s, 8)?);

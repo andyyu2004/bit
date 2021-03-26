@@ -1,10 +1,21 @@
-
-
-
-
+use crate::obj::BitId;
+use std::fmt::{self, Display, Formatter};
 
 pub type BitResult<T> = anyhow::Result<T>;
-pub type BitError = anyhow::Error;
+pub type BitGenericError = anyhow::Error;
+
+#[derive(Debug)]
+pub enum BitError {
+    ObjectNotFound(BitId),
+}
+
+impl Display for BitError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            BitError::ObjectNotFound(id) => write!(f, "bit object with hash `{}` not found", id),
+        }
+    }
+}
 
 // #[derive(Debug, Error)]
 // pub enum BitError {

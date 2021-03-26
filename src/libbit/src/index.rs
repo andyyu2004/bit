@@ -88,7 +88,7 @@ impl BitIndex {
     /// builds a tree object from the current index entries
     pub fn build_tree(&self, repo: &BitRepo) -> BitResult<Tree> {
         if self.has_conflicts() {
-            return Err(anyhow!("cannot write-tree an an index that is not fully merged"));
+            bail!("cannot write-tree an an index that is not fully merged");
         }
         TreeBuilder::new(self, repo, self.entries.values()).build()
     }

@@ -1,10 +1,12 @@
-use crate::error::{BitError, BitResult};
-use crate::obj::{self, BitObj};
+use crate::error::{BitGenericError, BitResult};
+use crate::obj::BitObj;
 use crate::path::BitPath;
 use sha1::digest::Output;
 use sha1::{Digest, Sha1};
+use std::borrow::Cow;
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::io::prelude::*;
 use std::ops::Index;
 use std::slice::SliceIndex;
 use std::str::FromStr;
@@ -45,13 +47,45 @@ impl quickcheck::Arbitrary for BitHash {
     }
 }
 
+// basically the same type as BitHash just with different (fewer) invariants
+// this is 40 bytes long instead of 20 like `BitHash`
+// as otherwise its a bit difficult to handle odd length input strings
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Ord, PartialOrd, Copy)]
+pub struct BitPartialHash([u8; 40]);
+
+impl FromStr for BitPartialHash {
+    type Err = BitGenericError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        assert!(s.len() < 40, "creating partial hash with an invalid hex string");
+        let mut buf = [0u8; 40];
+        buf.as_mut().write_all(s.as_bytes())?;
+        Ok(Self(buf))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn construct_partial_hash() -> BitResult<()> {
+        let hash = BitPartialHash::from_str("8e3")?;
+        assert_eq!(&hash.0[0..3], b"8e3");
+        assert_eq!(hash.0[3..], [0u8; 37]);
+        Ok(())
+    }
+}
+
 impl FromStr for BitHash {
-    type Err = BitError;
+    type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // only call this when preconditions are met
-        assert!(s.len() == 40, "SHA1 called with invalid hex string");
-        Ok(Self(hex::decode(s).unwrap().try_into().unwrap()))
+        assert!(s.len() == 40, "creating SHA1 with invalid hex string");
+        let mut buf = [0u8; 20];
+        hex::decode_to_slice(s, &mut buf)?;
+        Ok(Self(buf))
     }
 }
 
@@ -92,6 +126,6 @@ pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> BitHash {
 }
 
 pub fn hash_obj(obj: &impl BitObj) -> BitResult<BitHash> {
-    let bytes = obj::serialize_obj_with_headers(obj)?;
+    let bytes = obj.serialize_with_headers()?;
     Ok(hash_bytes(bytes.as_slice()))
 }

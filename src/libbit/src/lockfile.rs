@@ -1,7 +1,7 @@
 use crate::error::BitResult;
 use anyhow::Context;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
 
 const LOCK_FILE_EXT: &str = "lock";
@@ -13,38 +13,35 @@ pub struct Lockfile {
     aborted: bool,
 }
 
-impl Lockfile {
-    pub fn exists(path: impl AsRef<Path>) -> BitResult<bool> {
-        match File::with_options().create_new(true).write(true).open(&path) {
-            Ok(_) => Ok(false),
-            Err(err) => match err.kind() {
-                io::ErrorKind::AlreadyExists => Ok(true),
-                _ =>
-                    return Err(err).with_context(|| {
-                        format!("failed to check if file exists at `{}`", path.as_ref().display())
-                    }),
-            },
-        }
+impl Write for Lockfile {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.file.write(buf)
     }
 
+    fn flush(&mut self) -> io::Result<()> {
+        self.file.flush()
+    }
+}
+
+impl Lockfile {
     pub fn new(path: impl AsRef<Path>) -> BitResult<Self> {
         let path = path.as_ref();
         let lockfile_path = path.with_extension(LOCK_FILE_EXT);
+        path.parent().map(|parent| std::fs::create_dir_all(parent)).transpose()?;
         // read comments on `.create_new()` for more info
-        let file =
-            File::with_options().create_new(true).write(true).open(path).or_else(
-                |err| match err.kind() {
-                    io::ErrorKind::AlreadyExists => Err(err).with_context(|| {
-                        format!(
-                            "failed to lock file `{}` (`{}` already exists)",
-                            path.display(),
-                            lockfile_path.display()
-                        )
-                    }),
-                    _ => Err(err)
-                        .with_context(|| format!("failed to create file `{}`", path.display())),
-                },
-            )?;
+        let file = File::with_options().create_new(true).write(true).open(&lockfile_path).or_else(
+            |err| match err.kind() {
+                io::ErrorKind::AlreadyExists => Err(err).with_context(|| {
+                    format!(
+                        "failed to lock file `{}` (`{}` already exists)",
+                        path.display(),
+                        lockfile_path.display()
+                    )
+                }),
+                _ =>
+                    Err(err).with_context(|| format!("failed to create file `{}`", path.display())),
+            },
+        )?;
 
         Ok(Self { file, path: path.to_path_buf(), lockfile_path, aborted: false })
     }
@@ -56,7 +53,7 @@ impl Lockfile {
     /// commits this file by renaming it to the target file
     /// commits on drop unless rollback was called
     fn commit(&self) -> io::Result<()> {
-        std::fs::rename(&self.path, &self.lockfile_path)
+        std::fs::rename(&self.lockfile_path, &self.path)
     }
 
     fn cleanup(&self) -> BitResult<()> {
@@ -65,7 +62,7 @@ impl Lockfile {
         })
     }
 
-    fn rollback(&mut self) -> BitResult<()> {
+    pub fn rollback(&mut self) -> BitResult<()> {
         self.aborted = true;
         self.cleanup()
     }
@@ -85,7 +82,5 @@ impl Drop for Lockfile {
                 self.lockfile_path.display()
             )
         });
-
-        self.cleanup().unwrap()
     }
 }

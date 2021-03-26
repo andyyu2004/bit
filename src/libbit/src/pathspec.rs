@@ -1,4 +1,4 @@
-use crate::error::BitError;
+use crate::error::BitGenericError;
 use crate::path::BitPath;
 use itertools::Itertools;
 use std::str::FromStr;
@@ -23,7 +23,7 @@ pub struct FnMatch {
 }
 
 impl FromStr for Pathspec {
-    type Err = BitError;
+    type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.split("/").collect_vec();

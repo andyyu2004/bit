@@ -1,10 +1,10 @@
 use crate::error::BitResult;
-use crate::obj::{BitObjId, BitObjType};
+use crate::obj::{BitId, BitObjType};
 use crate::repo::BitRepo;
 
 #[derive(Debug)]
 pub struct BitCatFileOpts {
-    pub object: BitObjId,
+    pub object: BitId,
     pub op: BitCatFileOperation,
 }
 
@@ -24,15 +24,13 @@ impl BitRepo {
         match opts.op {
             // TODO not really a correct implementation currently
             // just prints it in an alternate format
-            BitCatFileOperation::PrintAsType(_ty) => print!("{:#}", self.read_obj_from_id(id)?),
-            BitCatFileOperation::ShowType => print!("{}", self.read_obj_type_from_id(id)?),
-            BitCatFileOperation::ShowSize => print!("{}", self.read_obj_size_from_id(id)?),
-            BitCatFileOperation::PrettyPrint => {
-                print!("{}", self.read_obj_from_id(id)?);
-            }
-            // just try to read the file and if it sulceeds then its fine
+            BitCatFileOperation::PrintAsType(_ty) => print!("{:#}", self.read_obj(id)?),
+            BitCatFileOperation::PrettyPrint => print!("{}", self.read_obj(id)?),
+            BitCatFileOperation::ShowType => print!("{}", self.read_obj_header(id)?.obj_type),
+            BitCatFileOperation::ShowSize => print!("{}", self.read_obj_header(id)?.size),
+            // just try to read the file and if it suceeds then its fine
             BitCatFileOperation::Exit => {
-                self.read_obj_from_id(id)?;
+                self.read_obj(id)?;
             }
         }
         Ok(())

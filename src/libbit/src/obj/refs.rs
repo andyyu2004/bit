@@ -13,7 +13,7 @@ impl Display for Ref {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Ref {
     /// refers directly to an object
     Direct(BitHash),
@@ -40,9 +40,9 @@ impl BitObj for Ref {
 }
 
 impl BitRepo {
-    pub fn resolve_ref(&self, r: &Ref) -> BitResult<BitObjKind> {
+    pub fn resolve_ref(&self, r: Ref) -> BitResult<BitObjKind> {
         match r {
-            Ref::Direct(hash) => self.read_obj_from_hash(hash),
+            Ref::Direct(hash) => self.read_obj(hash),
             Ref::Indirect(_path) => {
                 let _r = todo!();
                 // self.resolve_ref(r)

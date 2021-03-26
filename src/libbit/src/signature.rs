@@ -1,4 +1,4 @@
-use crate::error::{BitError, BitResult};
+use crate::error::{BitGenericError, BitResult};
 use crate::repo::BitRepo;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
@@ -64,7 +64,7 @@ pub struct BitSignature {
 }
 
 impl FromStr for BitTimeZoneOffset {
-    type Err = BitError;
+    type Err = BitGenericError;
 
     // format: (+|-)0200
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -81,7 +81,7 @@ impl FromStr for BitTimeZoneOffset {
 }
 
 impl FromStr for BitEpochTime {
-    type Err = BitError;
+    type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(s.parse().unwrap()))
@@ -89,7 +89,7 @@ impl FromStr for BitEpochTime {
 }
 
 impl FromStr for BitTime {
-    type Err = BitError;
+    type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut splits = s.split_ascii_whitespace();
@@ -100,7 +100,7 @@ impl FromStr for BitTime {
 }
 
 impl FromStr for BitSignature {
-    type Err = BitError;
+    type Err = BitGenericError;
 
     // Andy Yu <andyyu2004@gmail.com> 1616061862 +1300
     fn from_str(s: &str) -> BitResult<Self> {

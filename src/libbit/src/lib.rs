@@ -1,6 +1,5 @@
 #![feature(never_type)]
 #![feature(decl_macro)]
-#![feature(type_alias_impl_trait)]
 #![feature(once_cell)]
 #![feature(destructuring_assignment)]
 #![feature(map_first_last)]
@@ -34,12 +33,12 @@ pub mod path;
 pub mod pathspec;
 pub mod repo;
 
-mod db;
 mod diff;
 mod index;
-mod lockfile;
 mod interner;
 mod io_ext;
+mod lockfile;
+mod odb;
 mod serialize;
 mod signature;
 mod tls;
