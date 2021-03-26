@@ -53,7 +53,17 @@ impl Lockfile {
     /// commits this file by renaming it to the target file
     /// commits on drop unless rollback was called
     fn commit(&self) -> io::Result<()> {
-        std::fs::rename(&self.lockfile_path, &self.path)
+        if self.path.exists() {
+            let mut permissions = self.path.metadata()?.permissions();
+            permissions.set_readonly(false);
+            std::fs::set_permissions(&self.path, permissions)?;
+        }
+
+        std::fs::rename(&self.lockfile_path, &self.path)?;
+
+        let mut permissions = self.path.metadata()?.permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&self.path, permissions)
     }
 
     fn cleanup(&self) -> BitResult<()> {
