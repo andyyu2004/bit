@@ -157,12 +157,8 @@ impl Serialize for BitObjKind {
 
 // very boring impl which just delegates to the inner type
 impl BitObj for BitObjKind {
-    fn deserialize<R: Read>(reader: R) -> BitResult<Self> {
+    fn deserialize<R: BufRead>(reader: &mut R) -> BitResult<Self> {
         self::read_obj(reader)
-    }
-
-    fn deserialize_buffered<R: BufRead>(reader: &mut R) -> BitResult<Self> {
-        self::read_obj_buffered(reader)
     }
 
     // TODO this is kinda dumb
@@ -182,10 +178,13 @@ impl BitObj for BitObjKind {
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
 pub trait BitObj: Serialize + Sized + Debug + Display {
-    fn deserialize_buffered<R: BufRead>(reader: &mut R) -> BitResult<Self>;
-    fn deserialize<R: Read>(reader: R) -> BitResult<Self> {
-        Self::deserialize_buffered(&mut BufReader::new(reader))
+    fn deserialize<R: BufRead>(reader: &mut R) -> BitResult<Self>;
+
+    // convenience method that will wrap a BufReader around the raw `read` instance
+    fn deserialize_unbuffered<R: Read>(reader: R) -> BitResult<Self> {
+        Self::deserialize(&mut BufReader::new(reader))
     }
+
     fn obj_ty(&self) -> BitObjType;
 
     /// serialize objects append on the header of `type len`
@@ -234,49 +233,37 @@ impl FromStr for BitObjType {
     }
 }
 
-pub fn serialize_obj_with_headers(obj: &impl BitObj) -> BitResult<Vec<u8>> {
-    obj.serialize_with_headers()
-}
-
-pub fn read_obj_header_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjHeader> {
-    let obj_type = read_obj_type_buffered(reader)?;
-    let size = read_obj_size_buffered(reader)?;
+pub(crate) fn read_obj_header<R: BufRead>(reader: &mut R) -> BitResult<BitObjHeader> {
+    let obj_type = read_obj_type(reader)?;
+    let size = read_obj_size(reader)?;
     Ok(BitObjHeader { obj_type, size })
 }
 
-pub fn read_obj_header<R: Read>(reader: R) -> BitResult<BitObjHeader> {
-    read_obj_header_buffered(&mut BufReader::new(reader))
-}
-
-pub fn read_obj_type_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjType> {
+fn read_obj_type<R: BufRead>(reader: &mut R) -> BitResult<BitObjType> {
     let mut buf = vec![];
     let i = reader.read_until(0x20, &mut buf)?;
     Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
 }
 
-pub fn read_obj_type<R: Read>(reader: R) -> BitResult<BitObjType> {
-    read_obj_type_buffered(&mut BufReader::new(reader))
-}
-
-pub fn read_obj<R: Read>(read: R) -> BitResult<BitObjKind> {
-    read_obj_buffered(&mut BufReader::new(read))
-}
-
 /// assumes <type> has been read already
-pub fn read_obj_size_buffered<R: BufRead>(reader: &mut R) -> BitResult<usize> {
+fn read_obj_size<R: BufRead>(reader: &mut R) -> BitResult<usize> {
     let mut buf = vec![];
     let i = reader.read_until(0x00, &mut buf)?;
     let size = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
     Ok(size)
 }
 
+pub fn read_obj_unbuffered<R: Read>(reader: R) -> BitResult<BitObjKind> {
+    read_obj(&mut BufReader::new(reader))
+}
+
 /// format: <type>0x20<size>0x00<content>
-pub fn read_obj_buffered<R: BufRead>(reader: &mut R) -> BitResult<BitObjKind> {
-    let header = read_obj_header_buffered(reader)?;
+pub(crate) fn read_obj<R: BufRead>(reader: &mut R) -> BitResult<BitObjKind> {
+    let header = read_obj_header(reader)?;
     let buf = reader.read_to_vec()?;
     let contents = buf.as_slice();
-    debug_assert_eq!(contents.len(), header.size);
     assert_eq!(contents.len(), header.size);
+    let contents = &mut BufReader::new(contents);
 
     Ok(match header.obj_type {
         BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(contents)?),
@@ -297,7 +284,7 @@ mod tests {
         bytes.extend(b"blob ");
         bytes.extend(b"12\0");
         bytes.extend(b"abcd1234xywz");
-        read_obj(bytes.as_slice()).unwrap();
+        read_obj_unbuffered(bytes.as_slice()).unwrap();
     }
 
     #[test]
@@ -308,7 +295,7 @@ mod tests {
         bytes.extend(b"12\0");
         bytes.extend(b"abcd1234xyw");
 
-        let _ = read_obj(bytes.as_slice());
+        let _ = read_obj_unbuffered(bytes.as_slice());
     }
 
     #[test]
@@ -319,14 +306,14 @@ mod tests {
         bytes.extend(b"12\0");
         bytes.extend(b"abcd1234xywz");
 
-        let _ = read_obj(bytes.as_slice());
+        let _ = read_obj_unbuffered(bytes.as_slice());
     }
 
     #[test]
     fn write_read_blob_obj() -> BitResult<()> {
         let bit_obj = BitObjKind::Blob(Blob { bytes: b"hello".to_vec() });
-        let bytes = serialize_obj_with_headers(&bit_obj)?;
-        let parsed_bit_obj = read_obj(bytes.as_slice()).unwrap();
+        let bytes = bit_obj.serialize_with_headers()?;
+        let parsed_bit_obj = read_obj_unbuffered(bytes.as_slice()).unwrap();
         assert_eq!(bit_obj, parsed_bit_obj);
         Ok(())
     }
@@ -334,8 +321,8 @@ mod tests {
     #[quickcheck]
     fn read_write_blob_obj_preserves_bytes(bytes: Vec<u8>) -> BitResult<()> {
         let bit_obj = BitObjKind::Blob(Blob { bytes });
-        let serialized = serialize_obj_with_headers(&bit_obj)?;
-        let parsed_bit_obj = read_obj(serialized.as_slice()).unwrap();
+        let serialized = bit_obj.serialize_with_headers()?;
+        let parsed_bit_obj = read_obj_unbuffered(serialized.as_slice()).unwrap();
         assert_eq!(bit_obj, parsed_bit_obj);
         Ok(())
     }

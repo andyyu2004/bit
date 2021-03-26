@@ -30,7 +30,7 @@ impl Serialize for Ref {
 }
 
 impl BitObj for Ref {
-    fn deserialize_buffered<R: BufRead>(_reader: &mut R) -> BitResult<Self> {
+    fn deserialize<R: BufRead>(_reader: &mut R) -> BitResult<Self> {
         todo!()
     }
 

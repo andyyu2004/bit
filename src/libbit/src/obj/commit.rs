@@ -91,7 +91,7 @@ impl Serialize for Commit {
 }
 
 impl BitObj for Commit {
-    fn deserialize_buffered<R: BufRead>(r: &mut R) -> BitResult<Self> {
+    fn deserialize<R: BufRead>(r: &mut R) -> BitResult<Self> {
         let mut lines = r.lines();
         let mut attrs = HashMap::new();
 
@@ -160,7 +160,7 @@ mod test {
     #[test]
     fn parse_commit() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit") as &[u8];
-        let commit = Commit::deserialize(bytes)?;
+        let commit = Commit::deserialize_unbuffered(bytes)?;
         assert_eq!(hex::encode(commit.tree), "d8329fc1cc938780ffdd9f94e0d364e0ea74f579");
         // assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
         // assert_eq!(&commit.committer, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
@@ -172,7 +172,7 @@ mod test {
     #[test]
     fn parse_commit_with_multi_line_attr() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
-        let commit = Commit::deserialize(bytes.as_slice())?;
+        let commit = Commit::deserialize_unbuffered(bytes.as_slice())?;
         let gpgsig = r#"-----BEGIN PGP SIGNATURE-----
 iQIzBAABCAAdFiEExwXquOM8bWb4Q2zVGxM2FxoLkGQFAlsEjZQACgkQGxM2FxoL
 kGQdcBAAqPP+ln4nGDd2gETXjvOpOxLzIMEw4A9gU6CzWzm+oB8mEIKyaH0UFIPh
@@ -197,7 +197,7 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
         let mut buf = vec![];
         commit.serialize(&mut buf)?;
 
-        let parsed = Commit::deserialize(buf.as_slice())?;
+        let parsed = Commit::deserialize_unbuffered(buf.as_slice())?;
         assert_eq!(commit, parsed);
         Ok(())
     }
@@ -205,7 +205,7 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
     #[test]
     fn parse_commit_then_serialize_multiline() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
-        let commit = Commit::deserialize(bytes.as_slice())?;
+        let commit = Commit::deserialize_unbuffered(bytes.as_slice())?;
 
         let mut buf = vec![];
         commit.serialize(&mut buf)?;
@@ -216,7 +216,7 @@ Q52UWybBzpaP9HEd4XnR+HuQ4k2K0ns2KgNImsNvIyFwbpMUyUWLMPimaV1DWUXo
     #[test]
     fn parse_commit_then_serialize_single_line() -> BitResult<()> {
         let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit");
-        let commit = Commit::deserialize(bytes.as_slice())?;
+        let commit = Commit::deserialize_unbuffered(bytes.as_slice())?;
 
         println!("{}", commit);
 

@@ -189,34 +189,8 @@ impl BitRepo {
 
     /// writes `obj` into the object store returning its full hash
     pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<BitHash> {
-        // let bytes = :serialize_obj_with_headers(obj)?;
-        // let hash = hash::hash_bytes(bytes.as_slice());
-        // let (directory, file_path) = hash.split();
         self.odb.write(obj)
-        // self.with_bitfile(&["objects", &directory, &file_path], |file| {
-        //     let mut encoder = ZlibEncoder::new(file, Compression::default());
-        //     encoder.write_all(&bytes)?;
-        //     Ok(hash)
-        // })
     }
-
-    // pub fn obj_filepath_from_hash(&self, hash: &BitHash) -> PathBuf {
-    //     let (dir, file) = hash.split();
-    //     self.relative_paths(&["objects", &dir, &file])
-    // }
-
-    // pub fn obj_stream_from_hash(&self, hash: &BitHash) -> BitResult<impl Read> {
-    //     let obj_path = self.obj_filepath_from_hash(hash);
-    //     let file = File::open(obj_path)?;
-    //     Ok(ZlibDecoder::new(file))
-    // }
-
-    // pub fn obj_stream_from_id(&self, id: BitObjId) -> BitResult<impl Read> {
-    //     let hash = self.get_full_object_hash(id)?;
-    //     let obj_path = self.obj_filepath_from_hash(&hash);
-    //     let file = File::open(obj_path)?;
-    //     Ok(ZlibDecoder::new(file))
-    // }
 
     pub fn read_obj(&self, id: impl Into<BitId>) -> BitResult<BitObjKind> {
         self.odb.read(id.into())
@@ -225,33 +199,6 @@ impl BitRepo {
     pub fn read_obj_header(&self, id: impl Into<BitId>) -> BitResult<BitObjHeader> {
         self.odb.read_header(id.into())
     }
-
-    // pub fn read_obj_from_id(&self, id: BitObjId) -> BitResult<BitObjKind> {
-    //     let hash = self.get_full_object_hash(id)?;
-    //     let stream = self.obj_stream_from_hash(&hash)?;
-    //     obj::read_obj(stream)
-    // }
-
-    // pub fn read_obj_type_from_hash(&self, hash: &BitHash) -> BitResult<BitObjType> {
-    //     let stream = self.obj_stream_from_hash(hash)?;
-    //     obj::read_obj_type(stream)
-    // }
-
-    // pub fn read_obj_type_from_id(&self, id: BitObjId) -> BitResult<BitObjType> {
-    //     let stream = self.obj_stream_from_id(id)?;
-    //     obj::read_obj_type(stream)
-    // }
-
-    // pub fn read_obj_size_from_id(&self, id: BitObjId) -> BitResult<usize> {
-    //     let stream = self.obj_stream_from_id(id)?;
-    //     let header = obj::read_obj_header(stream)?;
-    //     Ok(header.size)
-    // }
-
-    // pub fn read_obj_from_hash(&self, hash: &BitHash) -> BitResult<BitObjKind> {
-    //     let stream = self.obj_stream_from_hash(&hash)?;
-    //     obj::read_obj(stream)
-    // }
 
     pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> BitPath {
         repo_relative_path(self, path)
@@ -263,35 +210,6 @@ impl BitRepo {
 
     pub(crate) fn mk_bitdir(&self, path: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(self.relative_path(path))
-    }
-
-    pub(crate) fn with_bitfile<R>(
-        &self,
-        paths: &[impl AsRef<Path>],
-        f: impl FnOnce(&mut File) -> BitResult<R>,
-    ) -> BitResult<R> {
-        let path = self.relative_paths(paths);
-        // the parent path must exist as this file is definitely not in the root directory
-        let parent = path.parent().unwrap();
-        fs::create_dir_all(parent)?;
-        // create a temporary file and perform all mutations there to avoid any
-        // filesystem related race conditions
-        // the rename/mv operation is atomic
-        let mut tmp_file = NamedTempFile::new_in(parent)?;
-        let ret = f(tmp_file.as_file_mut())?;
-        let mut permissions = tmp_file.as_file().metadata()?.permissions();
-        permissions.set_readonly(true);
-        std::fs::set_permissions(tmp_file.path(), permissions)?;
-
-        if path.exists() {
-            let mut permissions = std::fs::metadata(&path)?.permissions();
-            permissions.set_readonly(false);
-            std::fs::set_permissions(&path, permissions)?;
-        }
-
-        std::fs::rename(tmp_file.path(), path)?;
-
-        Ok(ret)
     }
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {

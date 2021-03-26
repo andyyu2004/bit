@@ -3,6 +3,7 @@ use crate::hash::{self, BitHash};
 use crate::obj::{self, BitObj, BitObjKind, BitObjType, Blob, Commit};
 use crate::repo::BitRepo;
 use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -15,7 +16,7 @@ pub struct BitHashObjectOpts {
 impl BitRepo {
     pub fn bit_hash_object(&self, opts: BitHashObjectOpts) -> BitResult<BitHash> {
         let path = opts.path.canonicalize()?;
-        let reader = File::open(&path)?;
+        let reader = &mut BufReader::new(File::open(&path)?);
         let object = match opts.objtype {
             obj::BitObjType::Tree => todo!(),
             obj::BitObjType::Tag => todo!(),

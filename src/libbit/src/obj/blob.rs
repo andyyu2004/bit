@@ -28,12 +28,6 @@ impl Blob {
     pub fn new(bytes: Vec<u8>) -> Self {
         Self { bytes }
     }
-
-    fn deserialize_shared<R: Read>(reader: &mut R) -> BitResult<Self> {
-        let mut bytes = vec![];
-        reader.read_to_end(&mut bytes)?;
-        Ok(Self { bytes })
-    }
 }
 
 impl Serialize for Blob {
@@ -44,16 +38,13 @@ impl Serialize for Blob {
 }
 
 impl BitObj for Blob {
-    fn deserialize<R: Read>(mut reader: R) -> BitResult<Self> {
-        Self::deserialize_shared(&mut reader)
-    }
-
-    fn deserialize_buffered<R: BufRead>(reader: &mut R) -> BitResult<Self> {
-        Self::deserialize_shared(reader)
+    fn deserialize<R: BufRead>(reader: &mut R) -> BitResult<Self> {
+        let mut bytes = vec![];
+        reader.read_to_end(&mut bytes)?;
+        Ok(Self { bytes })
     }
 
     fn obj_ty(&self) -> BitObjType {
         BitObjType::Blob
     }
 }
-

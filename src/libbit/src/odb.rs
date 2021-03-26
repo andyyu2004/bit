@@ -93,12 +93,12 @@ impl BitLooseObjDb {
 impl BitObjDbBackend for BitLooseObjDb {
     fn read(&self, id: BitId) -> BitResult<BitObjKind> {
         let mut stream = self.read_stream(id)?;
-        obj::read_obj_buffered(&mut stream)
+        obj::read_obj(&mut stream)
     }
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
         let mut stream = self.read_stream(id)?;
-        obj::read_obj_header_buffered(&mut stream)
+        obj::read_obj_header(&mut stream)
     }
 
     fn write(&self, obj: &impl BitObj) -> BitResult<BitHash> {
