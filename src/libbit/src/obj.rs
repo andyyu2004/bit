@@ -146,7 +146,7 @@ impl BitObjKind {
 }
 
 impl Serialize for BitObjKind {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         match self {
             BitObjKind::Blob(blob) => blob.serialize(writer),
             BitObjKind::Commit(commit) => commit.serialize(writer),
@@ -177,11 +177,16 @@ impl BitObj for BitObjKind {
 // print user facing content that may not be pretty
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
-pub trait BitObj: Serialize + Sized + Debug + Display {
-    fn deserialize<R: BufRead>(reader: &mut R) -> BitResult<Self>;
+pub trait BitObj: Serialize + Debug + Display {
+    fn deserialize<R: BufRead>(reader: &mut R) -> BitResult<Self>
+    where
+        Self: Sized;
 
     // convenience method that will wrap a BufReader around the raw `read` instance
-    fn deserialize_unbuffered<R: Read>(reader: R) -> BitResult<Self> {
+    fn deserialize_unbuffered<R: Read>(reader: R) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
         Self::deserialize(&mut BufReader::new(reader))
     }
 

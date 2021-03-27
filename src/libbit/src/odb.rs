@@ -23,8 +23,8 @@ impl BitObjDb {
 impl BitObjDbBackend for BitObjDb {
     // can't just pass in trait pointer
     fn read(&self, id: BitId) -> BitResult<BitObjKind> {
-        // TODO should only delegate to the packeddb if the error is
-        // not found, could do this by returning Result<Option<T>>
+        // TODO should only delegate to the packeddb if the error is not found,
+        // could do this by returning Result<Option<T>>
         // but that seems a bit painful? or check for existence first
         // before reading the file?
         self.loose.read(id)

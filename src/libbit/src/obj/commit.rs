@@ -66,7 +66,7 @@ impl Display for Commit {
 }
 
 impl Serialize for Commit {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         // adds the required spaces for multiline strings
         macro_rules! w {
             ($s:expr) => {

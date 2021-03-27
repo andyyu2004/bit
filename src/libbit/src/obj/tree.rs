@@ -50,7 +50,7 @@ pub struct Tree {
 }
 
 impl Serialize for Tree {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         for entry in &self.entries {
             entry.serialize(writer)?;
         }
@@ -128,7 +128,7 @@ impl TreeEntry {
         Ok(Self { mode, path, hash })
     }
 
-    pub fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    pub fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         // use alternate display impl to not pad an extra 0
         write!(writer, "{:#}", self.mode)?;
         writer.write_all(b" ")?;

@@ -389,7 +389,7 @@ impl BitIndex {
 }
 
 impl Serialize for BitIndexHeader {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         let Self { signature, version, entryc } = self;
         writer.write(signature)?;
         writer.write(&version.to_be_bytes())?;
@@ -399,7 +399,7 @@ impl Serialize for BitIndexHeader {
 }
 
 impl Serialize for BitIndexEntry {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         writer.write_u32(self.ctime_sec)?;
         writer.write_u32(self.ctime_nano)?;
         writer.write_u32(self.mtime_sec)?;
@@ -413,14 +413,13 @@ impl Serialize for BitIndexEntry {
         writer.write_bit_hash(&self.hash)?;
         writer.write_u16(self.flags.0)?;
         writer.write_all(self.filepath.as_bytes())?;
-        // TODO something wrong regarding the null byte of the filepath maybe?
         writer.write_all(&[0u8; 8][..self.padding_len()])?;
         Ok(())
     }
 }
 
 impl Serialize for BitIndexExtension {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         writer.write_all(&self.signature)?;
         writer.write_u32(self.size)?;
         writer.write_all(&self.data)?;
@@ -429,20 +428,20 @@ impl Serialize for BitIndexExtension {
 }
 
 impl Serialize for BitIndex {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
-        let mut writer = HashWriter::new_sha1(writer);
-        self.header.serialize(&mut writer)?;
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        let mut hash_writer = HashWriter::new_sha1(writer);
+        self.header.serialize(&mut hash_writer)?;
 
         for entry in self.entries.values() {
-            entry.serialize(&mut writer)?;
+            entry.serialize(&mut hash_writer)?;
         }
 
         for extension in &self.extensions {
-            extension.serialize(&mut writer)?;
+            extension.serialize(&mut hash_writer)?;
         }
 
-        let hash = BitHash::from(writer.finalize_hash());
-        writer.write_bit_hash(&hash)?;
+        let hash = BitHash::from(hash_writer.finalize_hash());
+        hash_writer.write_bit_hash(&hash)?;
         Ok(())
     }
 }

@@ -31,6 +31,7 @@ impl Interner {
         if let Some(&x) = self.set.get(s) {
             return x;
         }
+
         let ptr: &str =
             unsafe { std::str::from_utf8_unchecked(self.arena.alloc_slice_copy(s.as_bytes())) };
         let static_str = unsafe { &*(ptr as *const str) };

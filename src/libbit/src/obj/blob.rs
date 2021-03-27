@@ -31,7 +31,7 @@ impl Blob {
 }
 
 impl Serialize for Blob {
-    fn serialize<W: Write>(&self, writer: &mut W) -> BitResult<()> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         writer.write_all(&self.bytes)?;
         Ok(())
     }

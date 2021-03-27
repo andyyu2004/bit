@@ -3,7 +3,6 @@ use crate::obj::BitObj;
 use crate::path::BitPath;
 use sha1::digest::Output;
 use sha1::{Digest, Sha1};
-use std::borrow::Cow;
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::prelude::*;

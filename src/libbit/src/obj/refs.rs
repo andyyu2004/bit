@@ -24,7 +24,7 @@ pub enum Ref {
 }
 
 impl Serialize for Ref {
-    fn serialize<W: Write>(&self, _writer: &mut W) -> BitResult<()> {
+    fn serialize(&self, _writer: &mut dyn Write) -> BitResult<()> {
         todo!()
     }
 }

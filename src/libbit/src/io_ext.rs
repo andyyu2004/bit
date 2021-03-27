@@ -35,10 +35,10 @@ pub(crate) trait ReadExt: Read {
     }
 }
 
-impl<T: Read> ReadExt for T {
+impl<R: Read> ReadExt for R {
 }
 
-pub(crate) trait WriteExt: Write {
+pub trait WriteExt: Write {
     fn write_u16(&mut self, u: u16) -> std::io::Result<()> {
         self.write_all(&u.to_be_bytes())
     }
@@ -56,16 +56,16 @@ pub(crate) trait WriteExt: Write {
     }
 }
 
-impl<T: Write> WriteExt for T {
+impl<W: Write + ?Sized> WriteExt for W {
 }
 
 /// hashes all the bytes written into the writer
-pub(crate) struct HashWriter<'a, D, W> {
-    writer: &'a mut W,
+pub(crate) struct HashWriter<'a, D> {
+    writer: &'a mut dyn Write,
     hasher: D,
 }
 
-impl<'a, D: Digest, W: Write> Write for HashWriter<'a, D, W> {
+impl<'a, D: Digest> Write for HashWriter<'a, D> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let n = self.writer.write(buf)?;
         self.hasher.update(&buf[..n]);
@@ -77,18 +77,18 @@ impl<'a, D: Digest, W: Write> Write for HashWriter<'a, D, W> {
     }
 }
 
-impl<'a, D: Digest, W: Write> HashWriter<'a, D, W> {
+impl<'a, D: Digest> HashWriter<'a, D> {
     pub fn finalize_hash(&mut self) -> Output<D> {
         self.hasher.finalize_reset()
     }
 
-    pub fn new(writer: &'a mut W) -> Self {
+    pub fn new(writer: &'a mut dyn Write) -> Self {
         Self { writer, hasher: D::new() }
     }
 }
 
-impl<'a, W: Write> HashWriter<'a, sha1::Sha1, W> {
-    pub fn new_sha1(writer: &'a mut W) -> Self {
+impl<'a> HashWriter<'a, sha1::Sha1> {
+    pub fn new_sha1(writer: &'a mut dyn Write) -> Self {
         Self::new(writer)
     }
 }
