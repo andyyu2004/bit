@@ -10,8 +10,9 @@ use std::ops::Index;
 use std::slice::SliceIndex;
 use std::str::FromStr;
 
-pub type BitHash = SHA1Hash;
 pub const BIT_HASH_SIZE: usize = std::mem::size_of::<BitHash>();
+
+pub type BitHash = SHA1Hash;
 
 #[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd, Copy)]
 #[repr(transparent)]

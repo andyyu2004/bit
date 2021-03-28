@@ -6,7 +6,6 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::Serialize;
 use crate::util;
-use anyhow::anyhow;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
 use std::collections::{BTreeMap, BTreeSet};

@@ -12,7 +12,6 @@ use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
-use tempfile::NamedTempFile;
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
 pub const BIT_OBJECTS_FILE_PATH: &str = "objects";

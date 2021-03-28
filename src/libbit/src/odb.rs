@@ -10,13 +10,19 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 
 pub struct BitObjDb {
-    loose: BitLooseObjDb,
-    packed: BitPackedObjDb,
+    // backends will be searched in order
+    backends: Vec<Box<dyn BitObjDbBackend>>,
 }
 
 impl BitObjDb {
     pub fn new(objects_path: BitPath) -> Self {
-        Self { loose: BitLooseObjDb::new(objects_path), packed: BitPackedObjDb::new(objects_path) }
+        Self {
+            // we want to search the loose backend first
+            backends: vec![
+                Box::new(BitLooseObjDb::new(objects_path)),
+                Box::new(BitPackedObjDb::new(objects_path)),
+            ],
+        }
     }
 }
 
@@ -27,32 +33,29 @@ impl BitObjDbBackend for BitObjDb {
         // could do this by returning Result<Option<T>>
         // but that seems a bit painful? or check for existence first
         // before reading the file?
-        self.loose.read(id)
+        self.backends[0].read(id)
         // .or_else(|_| self.packed.read(id))
     }
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
-        self.loose.read_header(id)
+        self.backends[0].read_header(id)
         // .or_else(|_| self.packed.read_header(id))
     }
 
-    fn write(&self, obj: &impl BitObj) -> BitResult<BitHash> {
+    fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash> {
         // when to write to packed?
-        self.loose.write(obj)
+        self.backends[0].write(obj)
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
-        if let Ok(true) = self.loose.exists(id) {
-            return Ok(true);
-        }
-        self.packed.exists(id)
+        self.backends[0].exists(id)
     }
 }
 
 pub trait BitObjDbBackend {
     fn read(&self, id: BitId) -> BitResult<BitObjKind>;
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader>;
-    fn write(&self, obj: &impl BitObj) -> BitResult<BitHash>;
+    fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash>;
     fn exists(&self, id: BitId) -> BitResult<bool>;
 }
 
@@ -101,7 +104,7 @@ impl BitObjDbBackend for BitLooseObjDb {
         obj::read_obj_header(&mut stream)
     }
 
-    fn write(&self, obj: &impl BitObj) -> BitResult<BitHash> {
+    fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash> {
         let bytes = obj.serialize_with_headers()?;
         let hash = hash::hash_bytes(&bytes);
         let path = self.obj_path(hash);
@@ -147,7 +150,7 @@ impl BitObjDbBackend for BitPackedObjDb {
         bail!(BitError::ObjectNotFound(id))
     }
 
-    fn write(&self, obj: &impl BitObj) -> BitResult<BitHash> {
+    fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash> {
         todo!()
     }
 
