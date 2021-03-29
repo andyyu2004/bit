@@ -8,11 +8,12 @@ use crate::serialize::Serialize;
 use crate::util;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
+use std::collections::btree_map::Values;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::io::{prelude::*, BufReader};
-use std::iter::Peekable;
+use std::iter::{Copied, Peekable};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
@@ -33,6 +34,15 @@ pub struct BitIndex {
 pub struct BitIndexEntries(BitIndexEntriesMap);
 type BitIndexEntriesMap = BTreeMap<(BitPath, MergeStage), BitIndexEntry>;
 
+impl<'a> IntoIterator for &'a BitIndex {
+    type IntoIter = Copied<Values<'a, (BitPath, MergeStage), BitIndexEntry>>;
+    type Item = BitIndexEntry;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.values().copied()
+    }
+}
+
 impl BitIndex {
     fn create_tree(&self, _repo: &BitRepo) -> Tree {
         let entries = BTreeSet::new();
@@ -40,7 +50,7 @@ impl BitIndex {
     }
 
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = BitIndexEntry> + 'a {
-        self.entries.values().copied()
+        self.into_iter()
     }
 }
 
@@ -564,10 +574,12 @@ mod tests {
             assert_eq!(entries[0].mode, FileMode::DIR);
             assert_eq!(entries[1].path, "dir2");
             assert_eq!(entries[1].mode, FileMode::DIR);
-            assert_eq!(entries[2].path, "test.txt");
-            assert_eq!(entries[2].mode, FileMode::REG);
-            assert_eq!(entries[3].path, "zs");
-            assert_eq!(entries[3].mode, FileMode::DIR);
+            assert_eq!(entries[2].path, "exec");
+            assert_eq!(entries[2].mode, FileMode::EXEC);
+            assert_eq!(entries[3].path, "test.txt");
+            assert_eq!(entries[3].mode, FileMode::REG);
+            assert_eq!(entries[4].path, "zs");
+            assert_eq!(entries[4].mode, FileMode::DIR);
 
             let dir2_tree = repo.read_obj(entries[1].hash)?.as_tree();
             let dir2_tree_entries = dir2_tree.entries.into_iter().collect_vec();
@@ -582,7 +594,7 @@ mod tests {
             let coolfile_blob = repo.read_obj(coolfile_entry.hash)?.as_blob();
             assert_eq!(coolfile_blob.bytes, b"coolfile contents!");
 
-            let test_txt_blob = repo.read_obj(entries[2].hash)?.as_blob();
+            let test_txt_blob = repo.read_obj(entries[3].hash)?.as_blob();
             assert_eq!(test_txt_blob.bytes, b"hello\n");
             Ok(())
         })
