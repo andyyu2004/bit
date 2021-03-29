@@ -1,3 +1,4 @@
+mod cli_add;
 mod cli_commit_tree;
 mod cli_config;
 mod cli_ls_files;

@@ -51,6 +51,10 @@ impl Interner {
         let static_str = unsafe { &*(ptr as *const str) };
         self.map.insert(static_str, bitpath);
         self.paths.push(static_str);
+
+        debug_assert_eq!(self.intern_path(s), bitpath);
+        debug_assert_eq!(self.get_str(bitpath), s);
+
         bitpath
     }
 

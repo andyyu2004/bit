@@ -13,19 +13,19 @@ use std::os::linux::fs::MetadataExt;
 use std::path::Path;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-struct BitDiff {}
+pub struct BitDiff {}
 
-struct WorkdirIter {
+struct WorktreeIter {
     iter: Walk,
 }
 
-impl WorkdirIter {
+impl WorktreeIter {
     pub fn new(path: impl AsRef<Path>) -> Self {
         Self { iter: WalkBuilder::new(path).sort_by_file_path(Ord::cmp).build() }
     }
 }
 
-impl Iterator for WorkdirIter {
+impl Iterator for WorktreeIter {
     type Item = BitIndexEntry;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -130,16 +130,16 @@ where
 }
 
 impl BitRepo {
-    fn workdir_iterator(&self) -> impl Iterator<Item = BitIndexEntry> {
-        WorkdirIter::new(&self.worktree)
+    pub fn worktree_iter(&self) -> impl Iterator<Item = BitIndexEntry> {
+        WorktreeIter::new(&self.worktree)
     }
 
-    fn diff_workdir_index(&self) -> BitResult<BitDiff> {
-        self.with_index(|index| self.diff_from_iterators(index.iter(), self.workdir_iterator()))
+    pub fn diff_workdir_index(&self) -> BitResult<BitDiff> {
+        self.with_index(|index| self.diff_from_iterators(index.iter(), self.worktree_iter()))
     }
 
     /// both iterators must be sorted by path
-    fn diff_from_iterators(
+    pub fn diff_from_iterators(
         &self,
         old_iter: impl Iterator<Item = BitIndexEntry>,
         new_iter: impl Iterator<Item = BitIndexEntry>,

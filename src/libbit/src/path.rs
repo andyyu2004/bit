@@ -1,5 +1,3 @@
-use itertools::Itertools;
-
 use crate::interner::with_path_interner;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -80,6 +78,18 @@ impl AsRef<OsStr> for BitPath {
 impl AsRef<Path> for BitPath {
     fn as_ref(&self) -> &Path {
         self.as_path()
+    }
+}
+
+impl<'a> From<&'a Path> for BitPath {
+    fn from(p: &'a Path) -> Self {
+        Self::intern(p)
+    }
+}
+
+impl<'a> From<&'a str> for BitPath {
+    fn from(s: &'a str) -> Self {
+        Self::intern(s)
     }
 }
 

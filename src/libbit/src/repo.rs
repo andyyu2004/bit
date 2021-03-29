@@ -1,11 +1,14 @@
 use crate::error::BitResult;
 use crate::hash::{self, BitHash};
 use crate::index::BitIndex;
+use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, BitObjType};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::BitPath;
+use crate::serialize::Serialize;
 use crate::signature::BitSignature;
 use crate::tls;
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
@@ -116,8 +119,22 @@ impl BitRepo {
         f(&self.get_index().borrow())
     }
 
-    pub fn with_index_mut<R>(&self, f: impl FnOnce(&mut BitIndex) -> R) -> R {
-        f(&mut self.get_index().borrow_mut())
+    pub fn with_index_mut<R>(&self, f: impl FnOnce(&mut BitIndex) -> BitResult<R>) -> BitResult<R> {
+        let mut lockfile = Lockfile::new(self.index_path())?;
+        let index = &mut self.get_index().borrow_mut();
+        let r = f(index);
+        match r {
+            Ok(ret) => {
+                // TODO currently assumes that index changed and will always write to disk
+                // could add a check to see whether something was actually modified or not
+                index.serialize(&mut lockfile)?;
+                Ok(ret)
+            }
+            Err(err) => {
+                lockfile.rollback()?;
+                Err(err)
+            }
+        }
     }
 
     fn load(path: impl AsRef<Path>) -> BitResult<Self> {
@@ -213,14 +230,6 @@ impl BitRepo {
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.relative_path(path))
-    }
-}
-
-impl Drop for BitRepo {
-    fn drop(&mut self) {
-        if let Some(_index) = self.index.get() {
-            // TODO write index?
-        }
     }
 }
 

@@ -24,6 +24,8 @@ impl Write for Lockfile {
 }
 
 impl Lockfile {
+    /// accepts the path to the file to be locked
+    /// this function will create a lockfile with an extension `<path>.lock`
     pub fn new(path: impl AsRef<Path>) -> BitResult<Self> {
         let path = path.as_ref();
         let lockfile_path = path.with_extension(LOCK_FILE_EXT);
