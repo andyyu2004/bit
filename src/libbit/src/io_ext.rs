@@ -35,7 +35,7 @@ pub(crate) trait ReadExt: Read {
     }
 }
 
-impl<R: Read> ReadExt for R {
+impl<R: Read + ?Sized> ReadExt for R {
 }
 
 pub trait WriteExt: Write {

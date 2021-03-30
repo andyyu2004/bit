@@ -1,3 +1,5 @@
+use crate::serialize::Deserialize;
+
 use super::*;
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -49,6 +51,55 @@ impl Serialize for BitIndexEntry {
     }
 }
 
+impl Deserialize for BitIndexEntry {
+    fn deserialize(r: &mut dyn BufRead) -> BitResult<BitIndexEntry> {
+        let ctime_sec = r.read_u32()?;
+        let ctime_nano = r.read_u32()?;
+        let mtime_sec = r.read_u32()?;
+        let mtime_nano = r.read_u32()?;
+        let device = r.read_u32()?;
+        let inode = r.read_u32()?;
+        let mode = FileMode::new(r.read_u32()?);
+        let uid = r.read_u32()?;
+        let gid = r.read_u32()?;
+        let filesize = r.read_u32()?;
+        let hash = r.read_bit_hash()?;
+        let flags = BitIndexEntryFlags::new(r.read_u16()?);
+
+        // read filepath until null terminator (inclusive)
+        let mut filepath_bytes = vec![];
+        r.read_until(0x00, &mut filepath_bytes)?;
+        assert_eq!(*filepath_bytes.last().unwrap(), 0x00);
+        let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
+
+        let entry = BitIndexEntry {
+            ctime_sec,
+            ctime_nano,
+            mtime_sec,
+            mtime_nano,
+            device,
+            inode,
+            mode,
+            uid,
+            gid,
+            filesize,
+            hash,
+            flags,
+            filepath,
+        };
+
+        // read padding (to make entrysize multiple of 8)
+        let mut padding = [0u8; 8];
+        // we -1 from padding here as we have already read the
+        // null byte belonging to the end of the filepath
+        // this is safe as `0 < padding <= 8`
+        r.read_exact(&mut padding[..entry.padding_len() - 1])?;
+        assert_eq!(u64::from_be_bytes(padding), 0);
+
+        Ok(entry)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BitIndexEntry {
     pub ctime_sec: u32,
@@ -79,6 +130,11 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + std::mem::size_of::<u16>(); // flags
 
 impl BitIndexEntry {
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        todo!()
+        // Self {}
+    }
+
     pub fn stage(&self) -> MergeStage {
         self.flags.stage()
     }

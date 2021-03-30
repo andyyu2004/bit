@@ -13,7 +13,6 @@ num_enum = "0.5.1"
 anyhow = "1.0"
 quickcheck_derive = "0.3.0"
 scoped-tls = "1"
-toml = "0.5.8"
 sha-1 = "0.9.4"
 sha2 = "0.9.3"
 smallvec = "1.6.1"
@@ -30,7 +29,6 @@ dirs = "3"
 regex = "1"
 lazy_static = "1.4.0"
 tempfile = "3"
-serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 quickcheck = "1"

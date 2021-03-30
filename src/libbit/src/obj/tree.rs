@@ -3,7 +3,7 @@ use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
 use crate::path::BitPath;
-use crate::serialize::Serialize;
+use crate::serialize::{Deserialize, Serialize};
 use crate::tls;
 use crate::util;
 use std::cmp::Ordering;
@@ -58,8 +58,11 @@ impl Serialize for Tree {
     }
 }
 
-impl BitObj for Tree {
-    fn deserialize<R: BufRead>(r: &mut R) -> BitResult<Self> {
+impl Deserialize for Tree {
+    fn deserialize(r: &mut dyn BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
         let mut tree = Self::default();
 
         #[cfg(debug_assertions)]
@@ -79,7 +82,9 @@ impl BitObj for Tree {
         assert_eq!(tree.entries.iter().cloned().collect::<Vec<_>>(), v);
         Ok(tree)
     }
+}
 
+impl BitObj for Tree {
     fn obj_ty(&self) -> BitObjType {
         BitObjType::Tree
     }
@@ -111,7 +116,7 @@ impl Ord for TreeEntry {
 }
 
 impl TreeEntry {
-    pub fn parse<R: BufRead>(r: &mut R) -> BitResult<Self> {
+    pub fn parse(r: &mut dyn BufRead) -> BitResult<Self> {
         let mut buf = vec![];
         let i = r.read_until(0x20, &mut buf)?;
         let mode =

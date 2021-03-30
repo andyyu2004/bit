@@ -2,6 +2,7 @@ use crate::error::BitResult;
 use crate::hash::{self, BitHash};
 use crate::obj::{self, BitObj, BitObjKind, BitObjType, Blob, Commit};
 use crate::repo::BitRepo;
+use crate::serialize::Deserialize;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;

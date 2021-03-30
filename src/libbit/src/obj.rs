@@ -11,7 +11,7 @@ pub use tree::{Tree, TreeEntry};
 
 use crate::error::{BitGenericError, BitResult};
 use crate::io_ext::ReadExt;
-use crate::serialize::Serialize;
+use crate::serialize::{Deserialize, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::str::FromStr;
@@ -155,12 +155,14 @@ impl Serialize for BitObjKind {
     }
 }
 
-// very boring impl which just delegates to the inner type
-impl BitObj for BitObjKind {
-    fn deserialize<R: BufRead>(reader: &mut R) -> BitResult<Self> {
+impl Deserialize for BitObjKind {
+    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self> {
         self::read_obj(reader)
     }
+}
 
+// very boring impl which just delegates to the inner type
+impl BitObj for BitObjKind {
     // TODO this is kinda dumb
     // try make this method unnecssary
     fn obj_ty(&self) -> BitObjType {
@@ -177,19 +179,7 @@ impl BitObj for BitObjKind {
 // print user facing content that may not be pretty
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
-pub trait BitObj: Serialize + Debug + Display {
-    fn deserialize<R: BufRead>(reader: &mut R) -> BitResult<Self>
-    where
-        Self: Sized;
-
-    // convenience method that will wrap a BufReader around the raw `read` instance
-    fn deserialize_unbuffered<R: Read>(reader: R) -> BitResult<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize(&mut BufReader::new(reader))
-    }
-
+pub trait BitObj: Serialize + Deserialize + Debug + Display {
     fn obj_ty(&self) -> BitObjType;
 
     /// serialize objects append on the header of `type len`
@@ -238,32 +228,32 @@ impl FromStr for BitObjType {
     }
 }
 
-pub(crate) fn read_obj_header<R: BufRead>(reader: &mut R) -> BitResult<BitObjHeader> {
+pub(crate) fn read_obj_header(reader: &mut dyn BufRead) -> BitResult<BitObjHeader> {
     let obj_type = read_obj_type(reader)?;
     let size = read_obj_size(reader)?;
     Ok(BitObjHeader { obj_type, size })
 }
 
-fn read_obj_type<R: BufRead>(reader: &mut R) -> BitResult<BitObjType> {
+fn read_obj_type(reader: &mut dyn BufRead) -> BitResult<BitObjType> {
     let mut buf = vec![];
     let i = reader.read_until(0x20, &mut buf)?;
     Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
 }
 
 /// assumes <type> has been read already
-fn read_obj_size<R: BufRead>(reader: &mut R) -> BitResult<usize> {
+fn read_obj_size(reader: &mut dyn BufRead) -> BitResult<usize> {
     let mut buf = vec![];
     let i = reader.read_until(0x00, &mut buf)?;
     let size = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
     Ok(size)
 }
 
-pub fn read_obj_unbuffered<R: Read>(reader: R) -> BitResult<BitObjKind> {
+pub(crate) fn read_obj_unbuffered(reader: impl Read) -> BitResult<BitObjKind> {
     read_obj(&mut BufReader::new(reader))
 }
 
 /// format: <type>0x20<size>0x00<content>
-pub(crate) fn read_obj<R: BufRead>(reader: &mut R) -> BitResult<BitObjKind> {
+pub(crate) fn read_obj(reader: &mut dyn BufRead) -> BitResult<BitObjKind> {
     let header = read_obj_header(reader)?;
     let buf = reader.read_to_vec()?;
     let contents = buf.as_slice();

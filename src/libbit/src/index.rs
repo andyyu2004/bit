@@ -1,5 +1,6 @@
 mod index_entry;
 
+use flate2::Decompress;
 pub use index_entry::*;
 
 use crate::error::BitResult;
@@ -8,7 +9,7 @@ use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::obj::{FileMode, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
-use crate::serialize::Serialize;
+use crate::serialize::{Deserialize, Serialize};
 use crate::util;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
@@ -186,7 +187,7 @@ impl Ord for BitIndexEntry {
 }
 
 impl BitIndex {
-    fn parse_header<R: BufRead>(r: &mut R) -> BitResult<BitIndexHeader> {
+    fn parse_header(r: &mut dyn BufRead) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];
         r.read_exact(&mut signature)?;
         assert_eq!(&signature, b"DIRC");
@@ -195,53 +196,6 @@ impl BitIndex {
         let entryc = r.read_u32()?;
 
         Ok(BitIndexHeader { signature, version, entryc })
-    }
-
-    fn parse_index_entry<R: BufRead>(r: &mut R) -> BitResult<BitIndexEntry> {
-        let ctime_sec = r.read_u32()?;
-        let ctime_nano = r.read_u32()?;
-        let mtime_sec = r.read_u32()?;
-        let mtime_nano = r.read_u32()?;
-        let device = r.read_u32()?;
-        let inode = r.read_u32()?;
-        let mode = FileMode::new(r.read_u32()?);
-        let uid = r.read_u32()?;
-        let gid = r.read_u32()?;
-        let filesize = r.read_u32()?;
-        let hash = r.read_bit_hash()?;
-        let flags = BitIndexEntryFlags::new(r.read_u16()?);
-
-        // read filepath until null terminator (inclusive)
-        let mut filepath_bytes = vec![];
-        r.read_until(0x00, &mut filepath_bytes)?;
-        assert_eq!(*filepath_bytes.last().unwrap(), 0x00);
-        let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
-
-        let entry = BitIndexEntry {
-            ctime_sec,
-            ctime_nano,
-            mtime_sec,
-            mtime_nano,
-            device,
-            inode,
-            mode,
-            uid,
-            gid,
-            filesize,
-            hash,
-            flags,
-            filepath,
-        };
-
-        // read padding (to make entrysize multiple of 8)
-        let mut padding = [0u8; 8];
-        // we -1 from padding here as we have already read the
-        // null byte belonging to the end of the filepath
-        // this is safe as `0 < padding <= 8`
-        r.read_exact(&mut padding[..entry.padding_len() - 1])?;
-        assert_eq!(u64::from_be_bytes(padding), 0);
-
-        Ok(entry)
     }
 
     fn parse_extensions(mut buf: &[u8]) -> BitResult<Vec<BitIndexExtension>> {
@@ -265,7 +219,7 @@ impl BitIndex {
         let mut r = BufReader::new(&buf[..]);
         let header = Self::parse_header(&mut r)?;
         let entries = (0..header.entryc)
-            .map(|_| Self::parse_index_entry(&mut r))
+            .map(|_| BitIndexEntry::deserialize(&mut r))
             .collect::<Result<Vec<BitIndexEntry>, _>>()?
             .into();
 
@@ -321,6 +275,38 @@ impl Serialize for BitIndex {
         let hash = BitHash::from(hash_writer.finalize_hash());
         hash_writer.write_bit_hash(&hash)?;
         Ok(())
+    }
+}
+
+impl Deserialize for BitIndex {
+    fn deserialize(r: &mut dyn BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        let mut buf = vec![];
+        r.read_to_end(&mut buf)?;
+
+        let mut r = BufReader::new(&buf[..]);
+        let header = Self::parse_header(&mut r)?;
+        let entries = (0..header.entryc)
+            .map(|_| BitIndexEntry::deserialize(&mut r))
+            .collect::<Result<Vec<BitIndexEntry>, _>>()?
+            .into();
+
+        let mut remainder = vec![];
+        assert!(r.read_to_end(&mut remainder)? >= BIT_HASH_SIZE);
+        let extensions = Self::parse_extensions(&remainder)?;
+
+        let bit_index = Self { header, entries, extensions };
+
+        let (bytes, hash) = buf.split_at(buf.len() - BIT_HASH_SIZE);
+        let mut hasher = sha1::Sha1::new();
+        hasher.update(bytes);
+        let actual_hash = BitHash::from(hasher.finalize());
+        let expected_hash = BitHash::new(hash.try_into().unwrap());
+        assert_eq!(actual_hash, expected_hash);
+
+        Ok(bit_index)
     }
 }
 
