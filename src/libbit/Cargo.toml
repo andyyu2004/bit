@@ -36,3 +36,6 @@ serde = { version = "1", features = ["derive"] }
 quickcheck = "1"
 quickcheck_macros = "1"
 rand = "0.8.3"
+
+[lib]
+doctest = false
