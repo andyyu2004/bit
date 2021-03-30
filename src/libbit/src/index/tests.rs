@@ -50,7 +50,7 @@ fn parse_small_index() -> BitResult<()> {
             uid: 1000,
             gid: 1000,
             filesize: 6,
-            flags: BitIndexEntryFlags(12),
+            flags: BitIndexEntryFlags::new(12),
             filepath: BitPath::intern("dir/test.txt"),
             mode: FileMode::REG,
             hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
@@ -65,7 +65,7 @@ fn parse_small_index() -> BitResult<()> {
             uid: 1000,
             gid: 1000,
             filesize: 6,
-            flags: BitIndexEntryFlags(8),
+            flags: BitIndexEntryFlags::new(8),
             filepath: BitPath::intern("test.txt"),
             mode: FileMode::REG,
             hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
@@ -143,7 +143,7 @@ fn bit_index_write_tree_test() -> BitResult<()> {
 
 #[test]
 fn test_bit_index_entry_flags() {
-    let flags = BitIndexEntryFlags(0xb9fa);
+    let flags = BitIndexEntryFlags::new(0xb9fa);
     assert!(flags.assume_valid());
     assert!(!flags.extended());
     assert_eq!(flags.stage(), MergeStage::Stage3);
@@ -152,7 +152,6 @@ fn test_bit_index_entry_flags() {
 
 #[test]
 fn index_entry_padding_test() {
-    // dbg!(ENTRY_SIZE_WITHOUT_FILEPATH) = 62 atm;
     assert_eq!(BitIndexEntry::padding_len_for_filepath(8), 2);
     assert_eq!(BitIndexEntry::padding_len_for_filepath(9), 1);
     assert_eq!(BitIndexEntry::padding_len_for_filepath(10), 8);

@@ -4,6 +4,7 @@ mod cli_config;
 mod cli_ls_files;
 mod cli_update_index;
 
+use self::cli_add::BitAddCliOpts;
 // the bitopts and bitcliopts are distinct types for a few reasons
 // - the parsed format is often not very convenient for actual usage
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
@@ -33,6 +34,7 @@ pub fn run() -> BitResult<()> {
     BitRepo::find(root_path, |repo| match subcmd {
         BitSubCmd::Log(..) => todo!(),
         BitSubCmd::Init(..) => unreachable!(),
+        BitSubCmd::Add(opts) => repo.bit_add(opts.into()),
         BitSubCmd::HashObject(opts) => {
             let hash = repo.bit_hash_object(opts.into())?;
             println!("{}", hash);
@@ -68,6 +70,7 @@ pub struct BitCliOpts {
 #[derive(Clap)]
 pub enum BitSubCmd {
     Init(BitInitCliOpts),
+    Add(BitAddCliOpts),
     HashObject(BitHashObjectCliOpts),
     CatFile(BitCatFileCliOpts),
     Log(BitLogCliOpts),
