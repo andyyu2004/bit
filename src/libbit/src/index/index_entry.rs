@@ -1,11 +1,11 @@
+use super::*;
 use crate::cmd::BitHashObjectOpts;
 use crate::error::{BitError, BitGenericError};
+use crate::hash;
 use crate::obj::{BitObjType, Blob};
 use crate::serialize::Deserialize;
 use crate::tls;
 use std::os::linux::fs::MetadataExt;
-
-use super::*;
 
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct BitIndexEntries(BitIndexEntriesMap);
@@ -152,13 +152,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             uid: metadata.st_uid(),
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,
-            hash: tls::with_repo(|repo| {
-                repo.bit_hash_object(BitHashObjectOpts {
-                    objtype: BitObjType::Blob,
-                    do_write: false,
-                    path: filepath.to_path_buf(),
-                })
-            })?,
+            hash: hash::hash_obj(&blob)?,
             flags: BitIndexEntryFlags::with_path_len(filepath.len()),
             filepath,
         })
