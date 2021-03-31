@@ -1,6 +1,9 @@
+use crate::error::BitResult;
 use crate::interner::with_path_interner;
+use crate::io_ext::ReadExt;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::fs::File;
 use std::ops::Deref;
 use std::path::Path;
 
@@ -22,6 +25,10 @@ impl BitPath {
 
     pub fn join(self, path: impl AsRef<Path>) -> Self {
         Self::intern(self.as_path().join(path))
+    }
+
+    pub fn read_to_vec(self) -> BitResult<Vec<u8>> {
+        Ok(File::open(self)?.read_to_vec()?)
     }
 
     pub fn intern(p: impl AsRef<Path>) -> Self {

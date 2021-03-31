@@ -147,7 +147,14 @@ fn test_bit_index_entry_flags() {
     assert!(flags.assume_valid());
     assert!(!flags.extended());
     assert_eq!(flags.stage(), MergeStage::Stage3);
-    assert_eq!(flags.name_length(), 0x9fa);
+    assert_eq!(flags.path_len(), 0x9fa);
+}
+
+#[test]
+fn index_flags_test() {
+    // tests may look a bit dumb, but I'm bad at messing with bits
+    assert_eq!(BitIndexEntryFlags::with_path_len(20).path_len(), 20);
+    assert_eq!(BitIndexEntryFlags::with_path_len(0x1000).path_len(), 0xFFF);
 }
 
 #[test]

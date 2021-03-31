@@ -3,6 +3,7 @@ use crate::index::BitIndexEntry;
 use crate::obj::Tree;
 use crate::path::BitPath;
 use crate::tls;
+use fallible_iterator::FallibleIterator;
 use itertools::Itertools;
 use std::str::FromStr;
 
@@ -47,7 +48,7 @@ impl Pathspec {
 
     fn match_iterator(
         &self,
-        iterator: impl Iterator<Item = BitResult<BitIndexEntry>>,
+        iterator: impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>,
     ) -> PathspecMatches {
         PathspecMatches {}
     }

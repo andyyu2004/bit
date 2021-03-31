@@ -248,6 +248,7 @@ fn read_obj_size(reader: &mut dyn BufRead) -> BitResult<usize> {
     Ok(size)
 }
 
+#[cfg(test)]
 pub(crate) fn read_obj_unbuffered(reader: impl Read) -> BitResult<BitObjKind> {
     read_obj(&mut BufReader::new(reader))
 }

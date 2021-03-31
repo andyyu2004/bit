@@ -1,9 +1,6 @@
 mod index_entry;
 
-use flate2::Decompress;
-pub use index_entry::*;
-
-use crate::error::BitResult;
+use crate::error::{BitGenericError, BitResult};
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::obj::{FileMode, Tree, TreeEntry};
@@ -11,6 +8,9 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::util;
+use fallible_iterator::{FallibleIterator, IntoFallibleIterator};
+use flate2::Decompress;
+pub use index_entry::*;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
 use std::collections::btree_map::Values;
@@ -50,8 +50,11 @@ impl BitIndex {
         Tree { entries }
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = BitIndexEntry> + 'a {
-        self.into_iter()
+    pub fn iter<'a>(
+        &'a self,
+    ) -> impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError> + 'a {
+        // there may be a better way to do this conversion
+        fallible_iterator::convert(self.into_iter().map(Ok))
     }
 }
 

@@ -1,3 +1,5 @@
+use anyhow::Context;
+
 use crate::error::BitResult;
 use crate::hash::{self, BitHash};
 use crate::index::BitIndex;
@@ -67,7 +69,10 @@ impl BitRepo {
         path: impl AsRef<Path>,
         f: impl FnOnce(&BitRepo) -> BitResult<R>,
     ) -> BitResult<R> {
-        let canonical_path = path.as_ref().canonicalize()?;
+        let path = path.as_ref();
+        let canonical_path = path.canonicalize().with_context(|| {
+            format!("failed to find bit repository in nonexistent path `{}`", path.display())
+        })?;
         let repo = Self::find_inner(canonical_path.as_ref())?;
         tls::with_repo(&repo, f)
     }

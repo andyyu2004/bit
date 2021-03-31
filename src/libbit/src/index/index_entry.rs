@@ -1,4 +1,9 @@
+use crate::cmd::BitHashObjectOpts;
+use crate::error::{BitError, BitGenericError};
+use crate::obj::{BitObjType, Blob};
 use crate::serialize::Deserialize;
+use crate::tls;
+use std::os::linux::fs::MetadataExt;
 
 use super::*;
 
@@ -129,6 +134,38 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + BIT_HASH_SIZE // hash
             + std::mem::size_of::<u16>(); // flags
 
+impl TryFrom<BitPath> for BitIndexEntry {
+    type Error = BitGenericError;
+
+    fn try_from(filepath: BitPath) -> Result<Self, Self::Error> {
+        assert!(filepath.is_file());
+        let metadata = filepath.metadata().unwrap();
+        let blob = Blob::new(filepath.read_to_vec()?);
+        Ok(Self {
+            ctime_sec: metadata.st_ctime() as u32,
+            ctime_nano: metadata.st_ctime_nsec() as u32,
+            mtime_sec: metadata.st_mtime() as u32,
+            mtime_nano: metadata.st_mtime_nsec() as u32,
+            device: metadata.st_dev() as u32,
+            inode: metadata.st_ino() as u32,
+            mode: FileMode::new(metadata.st_mode()),
+            uid: metadata.st_uid(),
+            gid: metadata.st_gid(),
+            filesize: metadata.st_size() as u32,
+            hash: tls::REPO.with(|repo| {
+                repo.bit_hash_object(BitHashObjectOpts {
+                    objtype: BitObjType::Blob,
+                    do_write: false,
+                    path: filepath.to_path_buf(),
+                })
+                .unwrap()
+            }),
+            flags: BitIndexEntryFlags::with_path_len(filepath.len()),
+            filepath,
+        })
+    }
+}
+
 impl BitIndexEntry {
     pub fn new(path: impl AsRef<Path>) -> Self {
         todo!()
@@ -160,10 +197,14 @@ impl BitIndexEntry {
 /// 12 bits name length if length is less than 0xFFF; otherwise store 0xFFF
 // what is name really? probably path?
 // probably doesn't really matter and is fine to just default flags to 0
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, Default)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct BitIndexEntryFlags(u16);
 
 impl BitIndexEntryFlags {
+    pub fn with_path_len(len: usize) -> Self {
+        Self(std::cmp::min(0xFFF, len as u16))
+    }
+
     pub fn new(u: u16) -> Self {
         Self(u)
     }
@@ -181,7 +222,7 @@ impl BitIndexEntryFlags {
         MergeStage::try_from(stage as u8).unwrap()
     }
 
-    pub fn name_length(self) -> u16 {
+    pub fn path_len(self) -> u16 {
         self.0 & 0x0FFF
     }
 }

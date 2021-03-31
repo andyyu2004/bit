@@ -9,6 +9,7 @@ pub struct BitAddOpts {
 
 impl BitRepo {
     pub fn bit_add(&self, opts: BitAddOpts) -> BitResult<()> {
+        // with_index_mut(|index| index.add_entry(entry));
         Ok(())
     }
 }
