@@ -1,6 +1,9 @@
+use fallible_iterator::FallibleIterator;
+
 use super::FileMode;
-use crate::error::BitResult;
+use crate::error::{BitGenericError, BitResult};
 use crate::hash::BitHash;
+use crate::index::BitIndexEntry;
 use crate::obj::{BitObj, BitObjType};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, Serialize};
@@ -48,6 +51,19 @@ impl Display for TreeEntry {
 pub struct Tree {
     pub entries: BTreeSet<TreeEntry>,
 }
+
+// impl IntoIterator for Tree {
+//     type IntoIter = ();
+//     type Item;
+//     fn into_iter(self) -> Self::IntoIter {
+//         todo!()
+//     }
+// }
+// impl Tree {
+//     pub fn iter(&self) -> impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError> {
+//         todo!()
+//     }
+// }
 
 impl Serialize for Tree {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {

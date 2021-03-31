@@ -1,13 +1,12 @@
-use crate::error::{BitGenericError, BitResult};
+use crate::error::BitGenericError;
 use crate::index::BitIndexEntry;
-use crate::obj::Tree;
 use crate::path::BitPath;
 use crate::tls;
 use fallible_iterator::FallibleIterator;
 use itertools::Itertools;
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Pathspec {
     /// non-wildcard prefix
     /// up to either the first wildcard or the last slash
@@ -15,7 +14,15 @@ pub struct Pathspec {
     // pathspec: Vec<()>,
 }
 
-pub struct PathspecMatches {}
+pub struct PathspecMatch {
+    index_entry: BitIndexEntry,
+}
+
+impl PathspecMatch {
+    pub fn new(index_entry: BitIndexEntry) -> Self {
+        Self { index_entry }
+    }
+}
 
 impl Pathspec {
     // prefix is the section up to the first unescaped wildcard symbol
@@ -29,28 +36,36 @@ impl Pathspec {
         None
     }
 
-    fn match_worktree(&self) -> PathspecMatches {
+    pub fn match_worktree(
+        self,
+    ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
         tls::REPO.with(|repo| self.match_iterator(repo.worktree_iter()))
     }
 
-    fn match_index(&self) -> PathspecMatches {
+    pub fn match_index(
+        self,
+    ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
         tls::with_index(|index| self.match_iterator(index.iter()))
     }
 
-    fn match_tree(&self, tree: &Tree) -> PathspecMatches {
-        todo!()
-    }
+    // pub fn match_tree(
+    //     &self,
+    //     tree: &Tree,
+    // ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
+    // }
 
     // braindead implementation for now
-    fn matches_path(&self, path: BitPath) -> bool {
+    pub fn matches_path(&self, path: BitPath) -> bool {
         path.starts_with(self.prefix)
     }
 
     fn match_iterator(
-        &self,
+        self,
         iterator: impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>,
-    ) -> PathspecMatches {
-        PathspecMatches {}
+    ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
+        iterator
+            .filter(move |entry| Ok(self.matches_path(entry.filepath)))
+            .map(|entry| Ok(PathspecMatch::new(entry)))
     }
 
     fn is_wildcard(c: char) -> bool {

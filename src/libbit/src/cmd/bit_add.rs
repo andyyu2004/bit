@@ -1,6 +1,7 @@
 use crate::error::BitResult;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
+use crate::tls;
 
 #[derive(Debug)]
 pub struct BitAddOpts {
@@ -9,7 +10,7 @@ pub struct BitAddOpts {
 
 impl BitRepo {
     pub fn bit_add(&self, opts: BitAddOpts) -> BitResult<()> {
-        // with_index_mut(|index| index.add_entry(entry));
+        tls::with_index_mut(|index| index.add_all(&opts.pathspecs))?;
         Ok(())
     }
 }
