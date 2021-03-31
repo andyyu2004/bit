@@ -74,7 +74,7 @@ impl BitRepo {
             format!("failed to find bit repository in nonexistent path `{}`", path.display())
         })?;
         let repo = Self::find_inner(canonical_path.as_ref())?;
-        tls::with_repo(&repo, f)
+        tls::enter_repo(&repo, f)
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {

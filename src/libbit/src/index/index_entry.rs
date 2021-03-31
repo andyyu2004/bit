@@ -152,14 +152,13 @@ impl TryFrom<BitPath> for BitIndexEntry {
             uid: metadata.st_uid(),
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,
-            hash: tls::REPO.with(|repo| {
+            hash: tls::with_repo(|repo| {
                 repo.bit_hash_object(BitHashObjectOpts {
                     objtype: BitObjType::Blob,
                     do_write: false,
                     path: filepath.to_path_buf(),
                 })
-                .unwrap()
-            }),
+            })?,
             flags: BitIndexEntryFlags::with_path_len(filepath.len()),
             filepath,
         })

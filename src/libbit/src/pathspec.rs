@@ -6,7 +6,7 @@ use fallible_iterator::FallibleIterator;
 use itertools::Itertools;
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Pathspec {
     /// non-wildcard prefix
     /// up to either the first wildcard or the last slash

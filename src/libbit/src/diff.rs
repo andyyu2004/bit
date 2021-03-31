@@ -41,8 +41,10 @@ impl FallibleIterator for WorktreeIter {
         };
 
         let path = direntry.path();
-        let relative_path =
-            tls::REPO.with(|repo| pathdiff::diff_paths(path, &repo.worktree)).unwrap();
+        let relative_path = tls::with_repo(|repo| {
+            pathdiff::diff_paths(path, &repo.worktree)
+                .ok_or_else(|| anyhow!("failed to diffpaths to get relative path"))
+        })?;
         let metadata = direntry.metadata().unwrap();
         let index_entry = BitIndexEntry::try_from(BitPath::intern(relative_path));
 
@@ -118,7 +120,7 @@ impl BitRepo {
         WorktreeIter::new(&self.worktree)
     }
 
-    pub fn diff_workdir_index(&self) -> BitResult<BitDiff> {
+    pub fn diff_worktree_index(&self) -> BitResult<BitDiff> {
         self.with_index(|index| self.diff_from_iterators(index.iter(), self.worktree_iter()))
     }
 
