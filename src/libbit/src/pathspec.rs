@@ -1,4 +1,4 @@
-use crate::error::BitGenericError;
+use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndexEntry;
 use crate::obj::Tree;
 use crate::path::BitPath;
@@ -45,7 +45,10 @@ impl Pathspec {
         path.starts_with(self.prefix)
     }
 
-    fn match_iterator(&self, iterator: impl Iterator<Item = BitIndexEntry>) -> PathspecMatches {
+    fn match_iterator(
+        &self,
+        iterator: impl Iterator<Item = BitResult<BitIndexEntry>>,
+    ) -> PathspecMatches {
         PathspecMatches {}
     }
 
