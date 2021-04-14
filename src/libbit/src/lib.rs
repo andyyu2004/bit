@@ -1,7 +1,9 @@
 #![feature(never_type)]
 #![feature(decl_macro)]
 #![feature(once_cell)]
+#![feature(trait_alias)]
 #![feature(destructuring_assignment)]
+#![feature(type_name_of_val)]
 #![feature(map_first_last)]
 #![feature(is_sorted)]
 #![feature(cstring_from_vec_with_nul)]
@@ -37,6 +39,7 @@ mod diff;
 mod index;
 mod interner;
 mod io_ext;
+mod iter;
 mod lockfile;
 mod odb;
 mod serialize;

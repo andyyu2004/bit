@@ -120,6 +120,7 @@ pub struct BitIndexEntry {
     pub filesize: u32,
     pub hash: BitHash,
     pub flags: BitIndexEntryFlags,
+    //? is it necessary for this path to be relative to the repository workdir?
     pub filepath: BitPath,
 }
 
@@ -142,6 +143,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
         let metadata = filepath.metadata().unwrap();
         let blob = Blob::new(filepath.read_to_vec()?);
         Ok(Self {
+            filepath,
             ctime_sec: metadata.st_ctime() as u32,
             ctime_nano: metadata.st_ctime_nsec() as u32,
             mtime_sec: metadata.st_mtime() as u32,
@@ -154,7 +156,6 @@ impl TryFrom<BitPath> for BitIndexEntry {
             filesize: metadata.st_size() as u32,
             hash: hash::hash_obj(&blob)?,
             flags: BitIndexEntryFlags::with_path_len(filepath.len()),
-            filepath,
         })
     }
 }

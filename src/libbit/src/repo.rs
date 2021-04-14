@@ -221,6 +221,16 @@ impl BitRepo {
         self.odb.read_header(id.into())
     }
 
+    /// converts an absolute path into a path relative to the workdir of the repository
+    pub(crate) fn to_relative_path(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
+        let path = path.as_ref();
+        assert!(path.is_absolute());
+        Ok(BitPath::intern(path.strip_prefix(&self.worktree)?))
+        // pathdiff::diff_paths(path, &self.worktree)
+        // .map(BitPath::intern)
+        // .ok_or_else(|| anyhow!("failed to diffpaths to get relative path"))
+    }
+
     pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> BitPath {
         repo_relative_path(self, path)
     }

@@ -1,56 +1,11 @@
-use crate::cmd::BitHashObjectOpts;
 use crate::error::{BitError, BitGenericError, BitResult};
 use crate::index::{BitIndexEntry, BitIndexEntryFlags};
-use crate::obj::{BitObjType, FileMode};
-use crate::path::BitPath;
 use crate::repo::BitRepo;
-use crate::tls;
 use fallible_iterator::FallibleIterator;
 use fallible_iterator::{Fuse, Peekable};
-use ignore::{Walk, WalkBuilder};
-use std::convert::TryFrom;
-use std::path::Path;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BitDiff {}
-
-struct WorktreeIter {
-    iter: Walk,
-}
-
-impl WorktreeIter {
-    pub fn new(path: impl AsRef<Path>) -> Self {
-        Self { iter: WalkBuilder::new(path).sort_by_file_path(Ord::cmp).build() }
-    }
-}
-
-impl FallibleIterator for WorktreeIter {
-    type Error = BitGenericError;
-    type Item = BitIndexEntry;
-
-    fn next(&mut self) -> BitResult<Option<Self::Item>> {
-        // ignore directories
-        let direntry = loop {
-            match self.iter.next().transpose()? {
-                Some(entry) =>
-                    if entry.path().is_file() {
-                        break entry;
-                    },
-                None => return Ok(None),
-            }
-        };
-
-        let path = direntry.path();
-        let relative_path = tls::with_repo(|repo| {
-            pathdiff::diff_paths(path, &repo.worktree)
-                .ok_or_else(|| anyhow!("failed to diffpaths to get relative path"))
-        })?;
-        let metadata = direntry.metadata().unwrap();
-        let index_entry = BitIndexEntry::try_from(BitPath::intern(relative_path));
-
-        index_entry.map(Some)
-    }
-}
 
 struct DiffBuilder<O, N>
 where
@@ -114,12 +69,6 @@ where
 }
 
 impl BitRepo {
-    pub fn worktree_iter(
-        &self,
-    ) -> impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError> {
-        WorktreeIter::new(&self.worktree)
-    }
-
     pub fn diff_worktree_index(&self) -> BitResult<BitDiff> {
         self.with_index(|index| self.diff_from_iterators(index.iter(), self.worktree_iter()))
     }

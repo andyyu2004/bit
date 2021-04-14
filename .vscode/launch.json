@@ -17,7 +17,7 @@
       },
       // "sourceLanguages": ["rust"],
       "cwd": "${workspaceFolder}/examples/test",
-      "args": ["write-tree"]
+      "args": ["add", "test.txt"]
     }
     // {
     //   "type": "lldb",

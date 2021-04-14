@@ -10,10 +10,11 @@ use std::str::FromStr;
 pub struct Pathspec {
     /// non-wildcard prefix
     /// up to either the first wildcard or the last slash
-    prefix: BitPath,
+    pub prefix: BitPath,
     // pathspec: Vec<()>,
 }
 
+#[derive(Debug, Clone)]
 pub struct PathspecMatch {
     index_entry: BitIndexEntry,
 }
@@ -56,6 +57,8 @@ impl Pathspec {
 
     // braindead implementation for now
     pub fn matches_path(&self, path: BitPath) -> bool {
+        dbg!(self);
+        dbg!(path);
         path.starts_with(self.prefix)
     }
 

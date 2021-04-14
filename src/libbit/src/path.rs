@@ -1,6 +1,7 @@
 use crate::error::BitResult;
 use crate::interner::with_path_interner;
 use crate::io_ext::ReadExt;
+use std::any::Any;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
@@ -32,6 +33,12 @@ impl BitPath {
     }
 
     pub fn intern(p: impl AsRef<Path>) -> Self {
+        // a sanity check to avoid interning a path that is already a BitPath by accident
+        // this will result in a borrow_mut error, as the `as_ref` on a bitpath requires the interner
+        debug_assert!(
+            std::any::type_name_of_val(&p) != std::any::type_name::<BitPath>(),
+            "don't reintern a BitPath"
+        );
         with_path_interner(|interner| interner.intern_path(p.as_ref().to_str().unwrap()))
     }
 
