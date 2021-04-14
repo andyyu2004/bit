@@ -217,35 +217,6 @@ impl BitIndex {
         }
         Ok(extensions)
     }
-
-    // this impl currently is not ideal as it basically has to read it twice
-    // although the second time is reading from memory so maybe its not that bad?
-    pub fn deserialize<R: Read>(mut r: R) -> BitResult<BitIndex> {
-        let mut buf = vec![];
-        r.read_to_end(&mut buf)?;
-
-        let mut r = BufReader::new(&buf[..]);
-        let header = Self::parse_header(&mut r)?;
-        let entries = (0..header.entryc)
-            .map(|_| BitIndexEntry::deserialize(&mut r))
-            .collect::<Result<Vec<BitIndexEntry>, _>>()?
-            .into();
-
-        let mut remainder = vec![];
-        assert!(r.read_to_end(&mut remainder)? >= BIT_HASH_SIZE);
-        let extensions = Self::parse_extensions(&remainder)?;
-
-        let bit_index = Self { header, entries, extensions };
-
-        let (bytes, hash) = buf.split_at(buf.len() - BIT_HASH_SIZE);
-        let mut hasher = sha1::Sha1::new();
-        hasher.update(bytes);
-        let actual_hash = BitHash::from(hasher.finalize());
-        let expected_hash = BitHash::new(hash.try_into().unwrap());
-        assert_eq!(actual_hash, expected_hash);
-
-        Ok(bit_index)
-    }
 }
 
 impl Serialize for BitIndexHeader {
@@ -291,6 +262,8 @@ impl Deserialize for BitIndex {
     where
         Self: Sized,
     {
+        // this impl currently is not ideal as it basically has to read it twice
+        // although the second time is reading from memory so maybe its not that bad?
         let mut buf = vec![];
         r.read_to_end(&mut buf)?;
 
