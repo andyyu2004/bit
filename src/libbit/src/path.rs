@@ -73,7 +73,7 @@ impl BitPath {
 
     /// returns first component of the path
     pub fn root_component(self) -> &'static Path {
-        self.as_path().iter().nth(0).unwrap().as_ref()
+        self.as_path().iter().next().unwrap().as_ref()
     }
 }
 

@@ -29,7 +29,7 @@ impl Lockfile {
     pub fn new(path: impl AsRef<Path>) -> BitResult<Self> {
         let path = path.as_ref();
         let lockfile_path = path.with_extension(LOCK_FILE_EXT);
-        path.parent().map(|parent| std::fs::create_dir_all(parent)).transpose()?;
+        path.parent().map(std::fs::create_dir_all).transpose()?;
         // read comments on `.create_new()` for more info
         let file = File::with_options().create_new(true).write(true).open(&lockfile_path).or_else(
             |err| match err.kind() {

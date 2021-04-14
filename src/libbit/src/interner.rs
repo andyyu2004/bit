@@ -36,7 +36,7 @@ impl Interner {
             unsafe { std::str::from_utf8_unchecked(self.arena.alloc_slice_copy(s.as_bytes())) };
         let static_str = unsafe { &*(ptr as *const str) };
         self.set.insert(static_str);
-        return static_str;
+        static_str
     }
 
     pub fn intern_path(&mut self, s: &str) -> BitPath {
@@ -71,7 +71,7 @@ impl Interner {
         let slice = self.arena.alloc_slice_copy(&vec);
         // SAFETY &[&u8] to &[&str] where &str is known to be valid utf8;
         // from_utf8_unchecked is just a transmute under the hood anyway
-        unsafe { std::mem::transmute(slice) }
+        unsafe { &*(slice as *mut [&str] as *const [&str]) }
     }
 
     pub fn get_components(&mut self, bitpath: BitPath) -> &'static [&'static str] {

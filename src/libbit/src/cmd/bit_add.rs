@@ -13,8 +13,8 @@ impl BitRepo {
         // tls::with_index_mut(|index| index.add_all(&opts.pathspecs))?;
         for pathspec in opts.pathspecs {
             pathspec.match_worktree().for_each(|pathspec_match| {
-            // dbg!(pathspec_match);
-            Ok(())
+                // dbg!(pathspec_match);
+                Ok(())
             })?;
         }
         Ok(())

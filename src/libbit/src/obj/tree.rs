@@ -85,7 +85,7 @@ impl Deserialize for Tree {
         let mut v = vec![];
 
         // slightly weird way of checking if the reader is at EOF
-        while r.fill_buf()? != &[] {
+        while r.fill_buf()? != [] {
             let entry = TreeEntry::parse(r)?;
             #[cfg(debug_assertions)]
             v.push(entry.clone());

@@ -21,11 +21,7 @@ impl BitRepo {
             let name = config.name()?;
             let email = config.email()?;
             if let (Some(name), Some(email)) = (name, email) {
-                Ok(BitSignature {
-                    name: name.to_owned(),
-                    email: email.to_owned(),
-                    time: BitTime::now(),
-                })
+                Ok(BitSignature { name, email, time: BitTime::now() })
             } else {
                 // this is too dumb to tell if only one of the entries is missing but whatever
                 Err(anyhow!("{}", MISSING_IDENTITY_MSG))
@@ -105,8 +101,8 @@ impl FromStr for BitSignature {
     // Andy Yu <andyyu2004@gmail.com> 1616061862 +1300
     fn from_str(s: &str) -> BitResult<Self> {
         // assumes no < or > in name
-        let email_start_idx = s.find("<").unwrap();
-        let email_end_idx = s.find(">").unwrap();
+        let email_start_idx = s.find('<').unwrap();
+        let email_end_idx = s.find('>').unwrap();
 
         let name = s[..email_start_idx - 1].to_owned();
         let email = s[email_start_idx + 1..email_end_idx].to_owned();

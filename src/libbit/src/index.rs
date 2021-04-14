@@ -259,9 +259,9 @@ impl BitIndex {
 impl Serialize for BitIndexHeader {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         let Self { signature, version, entryc } = self;
-        writer.write(signature)?;
-        writer.write(&version.to_be_bytes())?;
-        writer.write(&entryc.to_be_bytes())?;
+        writer.write_all(signature)?;
+        writer.write_all(&version.to_be_bytes())?;
+        writer.write_all(&entryc.to_be_bytes())?;
         Ok(())
     }
 }

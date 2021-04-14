@@ -122,20 +122,20 @@ fn bit_index_write_tree_test() -> BitResult<()> {
         assert_eq!(entries[4].path, "zs");
         assert_eq!(entries[4].mode, FileMode::DIR);
 
-        let dir2_tree = repo.read_obj(entries[1].hash)?.as_tree();
+        let dir2_tree = repo.read_obj(entries[1].hash)?.into_tree();
         let dir2_tree_entries = dir2_tree.entries.into_iter().collect_vec();
         assert_eq!(dir2_tree_entries[0].path, "dir2.txt");
         assert_eq!(dir2_tree_entries[1].path, "nested");
 
-        let mut nested_tree = repo.read_obj(dir2_tree_entries[1].hash)?.as_tree();
+        let mut nested_tree = repo.read_obj(dir2_tree_entries[1].hash)?.into_tree();
         let coolfile_entry = nested_tree.entries.pop_first().unwrap();
         assert!(nested_tree.entries.is_empty());
         assert_eq!(coolfile_entry.path, "coolfile.txt");
 
-        let coolfile_blob = repo.read_obj(coolfile_entry.hash)?.as_blob();
+        let coolfile_blob = repo.read_obj(coolfile_entry.hash)?.into_blob();
         assert_eq!(coolfile_blob.bytes, b"coolfile contents!");
 
-        let test_txt_blob = repo.read_obj(entries[3].hash)?.as_blob();
+        let test_txt_blob = repo.read_obj(entries[3].hash)?.into_blob();
         assert_eq!(test_txt_blob.bytes, b"hello\n");
         Ok(())
     })

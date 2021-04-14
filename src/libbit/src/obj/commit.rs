@@ -44,7 +44,7 @@ impl BitRepo {
         let mut msg = String::new();
         for line in BufReader::new(File::open(&editmsg_filepath)?).lines() {
             let line = line?;
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue;
             }
             msg.push_str(&line);

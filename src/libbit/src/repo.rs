@@ -197,7 +197,7 @@ impl BitRepo {
         let mut head = this.mk_bitfile("HEAD")?;
         writeln!(head, "ref: refs/heads/master")?;
 
-        return Ok(this);
+        Ok(this)
     }
 
     /// todo only works with full hash
@@ -294,7 +294,7 @@ mod tests {
 
         // this doesn't call `bit_cat_file` directly but this function is
         // basically all that it does internally
-        let blob = repo.read_obj(hash)?.as_blob();
+        let blob = repo.read_obj(hash)?.into_blob();
 
         assert_eq!(blob.bytes, bytes);
         Ok(())

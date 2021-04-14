@@ -72,7 +72,7 @@ impl Pathspec {
     }
 
     fn is_wildcard(c: char) -> bool {
-        return c == '*' || c == '?' || c == '[';
+        c == '*' || c == '?' || c == '['
     }
 }
 
@@ -88,7 +88,7 @@ impl FromStr for Pathspec {
         let prefix_end = Self::find_prefix_end(&s);
         let prefix = match prefix_end {
             Some(i) => &s[..i],
-            None => &s[..],
+            None => s,
         };
         Ok(Self { prefix: BitPath::intern(prefix) })
     }

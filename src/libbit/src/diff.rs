@@ -3,6 +3,7 @@ use crate::index::{BitIndexEntry, BitIndexEntryFlags};
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 use fallible_iterator::{Fuse, Peekable};
+use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BitDiff {}
@@ -54,13 +55,11 @@ where
                 (Some(&old), Some(&new)) => {
                     // there is an old record that no longer has a matching new record
                     // therefore it has been deleted
-                    if old < new {
-                        self.handle_deleted_record(old)?
-                    } else if old > new {
-                        self.handle_created_record(new)?
-                    } else {
-                        self.handle_updated_record(old, new)?
-                    };
+                    match old.cmp(&new) {
+                        Ordering::Less => self.handle_deleted_record(old)?,
+                        Ordering::Equal => self.handle_updated_record(old, new)?,
+                        Ordering::Greater => self.handle_created_record(new)?,
+                    }
                 }
             };
         }

@@ -130,14 +130,14 @@ pub enum BitObjKind {
 }
 
 impl BitObjKind {
-    pub fn as_tree(self) -> Tree {
+    pub fn into_tree(self) -> Tree {
         match self {
             Self::Tree(tree) => tree,
             _ => panic!("expected tree"),
         }
     }
 
-    pub fn as_blob(self) -> Blob {
+    pub fn into_blob(self) -> Blob {
         match self {
             BitObjKind::Blob(blob) => blob,
             _ => panic!("expected blob"),
