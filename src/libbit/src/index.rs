@@ -1,15 +1,16 @@
 mod index_entry;
 
-use crate::error::{BitGenericError, BitResult};
+use crate::error::BitResult;
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
+use crate::iter::BitIterator;
 use crate::obj::{FileMode, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::util;
-use fallible_iterator::{FallibleIterator};
+use fallible_iterator::FallibleIterator;
 
 pub use index_entry::*;
 use itertools::Itertools;
@@ -52,7 +53,7 @@ impl BitIndex {
         Tree { entries }
     }
 
-    pub fn iter(&self) -> impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError> {
+    pub fn iter(&self) -> impl BitIterator {
         // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
         //  self from the returned iterator
         fallible_iterator::convert(self.entries.values().cloned().collect_vec().into_iter().map(Ok))

@@ -1,5 +1,6 @@
 use crate::error::BitGenericError;
 use crate::index::BitIndexEntry;
+use crate::iter::BitIterator;
 use crate::path::BitPath;
 use crate::tls;
 use fallible_iterator::FallibleIterator;
@@ -64,7 +65,7 @@ impl Pathspec {
 
     fn match_iterator(
         self,
-        iterator: impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>,
+        iterator: impl BitIterator,
     ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
         iterator
             .filter(move |entry| Ok(self.matches_path(entry.filepath)))

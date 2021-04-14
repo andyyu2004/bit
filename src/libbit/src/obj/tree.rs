@@ -1,7 +1,7 @@
 use fallible_iterator::FallibleIterator;
 
 use super::FileMode;
-use crate::error::{BitResult};
+use crate::error::BitResult;
 use crate::hash::BitHash;
 
 use crate::obj::{BitObj, BitObjType};
@@ -60,7 +60,7 @@ pub struct Tree {
 //     }
 // }
 // impl Tree {
-//     pub fn iter(&self) -> impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError> {
+//     pub fn iter(&self) -> impl BitIterator {
 //         todo!()
 //     }
 // }

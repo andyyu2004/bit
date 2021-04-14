@@ -40,13 +40,13 @@ impl FallibleIterator for WorktreeIter {
 }
 
 // an iterator adaptor that converts all absolute paths to relative ones
-struct Relative<I: BitEntryIterator> {
+struct Relative<I: BitIterator> {
     inner: I,
 }
 
-pub trait BitEntryIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>;
+pub trait BitIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>;
 
-trait BitIterator: FallibleIterator<Item = BitIndexEntry, Error = BitGenericError> {
+trait BitIteratorExt: BitIterator {
     fn relative(self) -> Relative<Self>
     where
         Self: Sized,
@@ -55,12 +55,12 @@ trait BitIterator: FallibleIterator<Item = BitIndexEntry, Error = BitGenericErro
     }
 }
 
-impl<I: BitEntryIterator> BitIterator for I {
+impl<I: BitIterator> BitIteratorExt for I {
 }
 
 impl<I> FallibleIterator for Relative<I>
 where
-    I: BitEntryIterator,
+    I: BitIterator,
 {
     type Error = I::Error;
     type Item = I::Item;
@@ -78,7 +78,7 @@ where
 }
 
 impl BitRepo {
-    pub fn worktree_iter(&self) -> impl BitEntryIterator {
+    pub fn worktree_iter(&self) -> impl BitIterator {
         WorktreeIter::new(&self.worktree).relative()
     }
 }

@@ -1,5 +1,6 @@
-use crate::error::{BitGenericError, BitResult};
-use crate::index::{BitIndexEntry};
+use crate::error::BitResult;
+use crate::index::BitIndexEntry;
+use crate::iter::BitIterator;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 use fallible_iterator::{Fuse, Peekable};
@@ -10,8 +11,8 @@ pub struct BitDiff {}
 
 struct DiffBuilder<O, N>
 where
-    O: FallibleIterator<Item = BitIndexEntry>,
-    N: FallibleIterator<Item = BitIndexEntry>,
+    O: BitIterator,
+    N: BitIterator,
 {
     old_iter: Peekable<Fuse<O>>,
     new_iter: Peekable<Fuse<N>>,
@@ -19,8 +20,8 @@ where
 
 impl<O, N> DiffBuilder<O, N>
 where
-    O: FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>,
-    N: FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>,
+    O: BitIterator,
+    N: BitIterator,
 {
     pub fn new(old_iter: O, new_iter: N) -> Self {
         Self { old_iter: old_iter.fuse().peekable(), new_iter: new_iter.fuse().peekable() }
@@ -75,8 +76,8 @@ impl BitRepo {
     /// both iterators must be sorted by path
     pub fn diff_from_iterators(
         &self,
-        old_iter: impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>,
-        new_iter: impl FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>,
+        old_iter: impl BitIterator,
+        new_iter: impl BitIterator,
     ) -> BitResult<BitDiff> {
         DiffBuilder::new(old_iter, new_iter).build_diff()
     }
