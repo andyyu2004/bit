@@ -1,10 +1,10 @@
 use super::*;
-use crate::cmd::BitHashObjectOpts;
-use crate::error::{BitError, BitGenericError};
+
+use crate::error::{BitGenericError};
 use crate::hash;
-use crate::obj::{BitObjType, Blob};
+use crate::obj::{Blob};
 use crate::serialize::Deserialize;
-use crate::tls;
+
 use std::os::linux::fs::MetadataExt;
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -161,7 +161,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
 }
 
 impl BitIndexEntry {
-    pub fn new(path: impl AsRef<Path>) -> Self {
+    pub fn new(_path: impl AsRef<Path>) -> Self {
         todo!()
         // Self {}
     }

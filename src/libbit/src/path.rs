@@ -1,7 +1,7 @@
 use crate::error::BitResult;
 use crate::interner::with_path_interner;
 use crate::io_ext::ReadExt;
-use std::any::Any;
+
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;

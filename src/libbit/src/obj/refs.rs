@@ -30,7 +30,7 @@ impl Serialize for Ref {
 }
 
 impl Deserialize for Ref {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(_reader: &mut dyn BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

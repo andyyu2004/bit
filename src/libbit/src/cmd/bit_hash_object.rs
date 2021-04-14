@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::hash::{self, BitHash};
-use crate::obj::{self, BitObj, BitObjKind, BitObjType, Blob, Commit};
+use crate::obj::{self, BitObjKind, BitObjType, Blob, Commit};
 use crate::repo::BitRepo;
 use crate::serialize::Deserialize;
 use std::fs::File;

@@ -1,10 +1,10 @@
 use anyhow::Context;
 
 use crate::error::BitResult;
-use crate::hash::{self, BitHash};
+use crate::hash::{BitHash};
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
-use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, BitObjType};
+use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::BitPath;
 use crate::serialize::Serialize;

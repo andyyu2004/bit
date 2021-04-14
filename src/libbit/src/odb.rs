@@ -150,7 +150,7 @@ impl BitObjDbBackend for BitPackedObjDb {
         bail!(BitError::ObjectNotFound(id))
     }
 
-    fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash> {
+    fn write(&self, _obj: &dyn BitObj) -> BitResult<BitHash> {
         todo!()
     }
 

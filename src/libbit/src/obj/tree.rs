@@ -1,9 +1,9 @@
 use fallible_iterator::FallibleIterator;
 
 use super::FileMode;
-use crate::error::{BitGenericError, BitResult};
+use crate::error::{BitResult};
 use crate::hash::BitHash;
-use crate::index::BitIndexEntry;
+
 use crate::obj::{BitObj, BitObjType};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, Serialize};

@@ -1,5 +1,5 @@
-use crate::error::{BitError, BitGenericError, BitResult};
-use crate::index::{BitIndexEntry, BitIndexEntryFlags};
+use crate::error::{BitGenericError, BitResult};
+use crate::index::{BitIndexEntry};
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 use fallible_iterator::{Fuse, Peekable};
