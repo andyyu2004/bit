@@ -67,6 +67,10 @@ impl FileMode {
         self.0
     }
 
+    pub const fn new(u: u32) -> Self {
+        Self(u)
+    }
+
     pub fn infer_obj_type(self) -> BitObjType {
         match self {
             Self::DIR => BitObjType::Tree,
@@ -107,12 +111,6 @@ impl FromStr for FileMode {
             mode
         );
         Ok(mode)
-    }
-}
-
-impl FileMode {
-    pub const fn new(u: u32) -> Self {
-        Self(u)
     }
 }
 

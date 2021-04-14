@@ -6,11 +6,13 @@ use libbit::pathspec::Pathspec;
 pub struct BitAddCliOpts {
     #[clap(multiple = true, required = true)]
     pathspecs: Vec<Pathspec>,
+    #[clap(short = 'n', long = "dry-run")]
+    dryrun: bool,
 }
 
 impl Into<BitAddOpts> for BitAddCliOpts {
     fn into(self) -> BitAddOpts {
-        let Self { pathspecs } = self;
-        BitAddOpts { pathspecs }
+        let Self { pathspecs, dryrun } = self;
+        BitAddOpts { pathspecs, dryrun }
     }
 }

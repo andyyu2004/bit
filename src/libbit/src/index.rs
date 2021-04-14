@@ -55,32 +55,23 @@ impl BitIndex {
 
     pub fn iter(&self) -> impl BitIterator {
         // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
-        //  self from the returned iterator
+        // `self` from the returned iterator
         fallible_iterator::convert(self.entries.values().cloned().collect_vec().into_iter().map(Ok))
     }
-}
 
-impl BitIndex {
     /// find entry by path
     pub fn find_entry(&self, path: BitPath, stage: MergeStage) -> Option<&BitIndexEntry> {
         self.entries.get(&(path, stage))
     }
 
     /// if entry with the same path already exists, it will be replaced
-    pub fn add_entry(&mut self, entry: BitIndexEntry) {
+    pub fn add_entry(&mut self, entry: BitIndexEntry) -> BitResult<()> {
         self.entries.insert((entry.filepath, entry.flags.stage()), entry);
+        Ok(())
     }
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
-        pathspec.match_worktree();
-        Ok(())
-    }
-
-    pub fn add_all(&mut self, pathspecs: &[Pathspec]) -> BitResult<()> {
-        for pathspec in pathspecs {
-            self.add(pathspec)?;
-        }
-        Ok(())
+        pathspec.match_worktree()?.for_each(|entry| self.add_entry(entry))
     }
 
     pub fn has_conflicts(&self) -> bool {
@@ -173,10 +164,10 @@ pub struct BitIndexExtension {
 #[repr(u8)]
 pub enum MergeStage {
     /// not merging
-    None   = 0,
-    Stage1 = 1,
-    Stage2 = 2,
-    Stage3 = 3,
+    NONE    = 0,
+    STAGE_1 = 1,
+    STAGE_2 = 2,
+    STAGE_3 = 3,
 }
 
 impl MergeStage {

@@ -13,8 +13,8 @@ impl BitRepo {
                     print!("{} {} {}\t", entry.mode, entry.hash, entry.stage())
                 }
                 println!("{}", entry.filepath)
-            })
-        });
-        Ok(())
+            });
+            Ok(())
+        })
     }
 }

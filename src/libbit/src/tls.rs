@@ -18,7 +18,7 @@ pub(crate) fn with_repo<R>(f: impl FnOnce(&BitRepo) -> BitResult<R>) -> BitResul
 }
 
 /// convenience functions to access the index without having a localrepo variable handy
-pub(crate) fn with_index<R>(f: impl FnOnce(&BitIndex) -> R) -> R {
+pub(crate) fn with_index<R>(f: impl FnOnce(&BitIndex) -> BitResult<R>) -> BitResult<R> {
     REPO.with(|repo| repo.with_index(f))
 }
 

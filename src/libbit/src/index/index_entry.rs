@@ -1,8 +1,8 @@
 use super::*;
 
-use crate::error::{BitGenericError};
+use crate::error::BitGenericError;
 use crate::hash;
-use crate::obj::{Blob};
+use crate::obj::Blob;
 use crate::serialize::Deserialize;
 
 use std::os::linux::fs::MetadataExt;
@@ -155,6 +155,9 @@ impl TryFrom<BitPath> for BitIndexEntry {
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,
             hash: hash::hash_obj(&blob)?,
+            // TODO this mode should have some transformation
+            // to make it fit the simplified git modes
+            // probably just by checking `executable ? 0o100755 : 0o100644`
             flags: BitIndexEntryFlags::with_path_len(filepath.len()),
         })
     }

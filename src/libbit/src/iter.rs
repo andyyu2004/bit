@@ -58,10 +58,7 @@ trait BitIteratorExt: BitIterator {
 impl<I: BitIterator> BitIteratorExt for I {
 }
 
-impl<I> FallibleIterator for Relative<I>
-where
-    I: BitIterator,
-{
+impl<I: BitIterator> FallibleIterator for Relative<I> {
     type Error = I::Error;
     type Item = I::Item;
 

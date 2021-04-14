@@ -1,7 +1,7 @@
 use anyhow::Context;
 
 use crate::error::BitResult;
-use crate::hash::{BitHash};
+use crate::hash::BitHash;
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
@@ -120,8 +120,14 @@ impl BitRepo {
         self.index.get_or_init(mk_index)
     }
 
-    pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex) -> R) -> R {
-        f(&self.get_index().borrow())
+    pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex) -> BitResult<R>) -> BitResult<R> {
+        let mut lockfile = Lockfile::new(self.index_path())?;
+        let r = f(&self.get_index().borrow());
+        // not actually writing anything here, so we rollback
+        // the lockfile is just to check that another process
+        // is not currently writing to the index
+        lockfile.rollback()?;
+        r
     }
 
     pub fn with_index_mut<R>(&self, f: impl FnOnce(&mut BitIndex) -> BitResult<R>) -> BitResult<R> {

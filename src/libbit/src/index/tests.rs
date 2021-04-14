@@ -146,7 +146,7 @@ fn test_bit_index_entry_flags() {
     let flags = BitIndexEntryFlags::new(0xb9fa);
     assert!(flags.assume_valid());
     assert!(!flags.extended());
-    assert_eq!(flags.stage(), MergeStage::Stage3);
+    assert_eq!(flags.stage(), MergeStage::STAGE_3);
     assert_eq!(flags.path_len(), 0x9fa);
 }
 

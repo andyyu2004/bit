@@ -1,9 +1,7 @@
-use crate::error::BitGenericError;
-use crate::index::BitIndexEntry;
+use crate::error::{BitGenericError, BitResult};
 use crate::iter::BitIterator;
 use crate::path::BitPath;
 use crate::tls;
-use fallible_iterator::FallibleIterator;
 use itertools::Itertools;
 use std::str::FromStr;
 
@@ -13,17 +11,6 @@ pub struct Pathspec {
     /// up to either the first wildcard or the last slash
     pub prefix: BitPath,
     // pathspec: Vec<()>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PathspecMatch {
-    index_entry: BitIndexEntry,
-}
-
-impl PathspecMatch {
-    pub fn new(index_entry: BitIndexEntry) -> Self {
-        Self { index_entry }
-    }
 }
 
 impl Pathspec {
@@ -38,38 +25,27 @@ impl Pathspec {
         None
     }
 
-    pub fn match_worktree(
-        self,
-    ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
+    pub fn match_worktree(self) -> BitResult<impl BitIterator> {
         tls::REPO.with(|repo| self.match_iterator(repo.worktree_iter()))
     }
 
-    pub fn match_index(
-        self,
-    ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
+    pub fn match_index(self) -> BitResult<impl BitIterator> {
         tls::with_index(|index| self.match_iterator(index.iter()))
     }
 
     // pub fn match_tree(
     //     &self,
     //     tree: &Tree,
-    // ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
+    // ) -> impl BitIterator {
     // }
 
     // braindead implementation for now
     pub fn matches_path(&self, path: BitPath) -> bool {
-        dbg!(self);
-        dbg!(path);
         path.starts_with(self.prefix)
     }
 
-    fn match_iterator(
-        self,
-        iterator: impl BitIterator,
-    ) -> impl FallibleIterator<Item = PathspecMatch, Error = BitGenericError> {
-        iterator
-            .filter(move |entry| Ok(self.matches_path(entry.filepath)))
-            .map(|entry| Ok(PathspecMatch::new(entry)))
+    fn match_iterator(self, iterator: impl BitIterator) -> BitResult<impl BitIterator> {
+        Ok(iterator.filter(move |entry| Ok(self.matches_path(entry.filepath))))
     }
 
     fn is_wildcard(c: char) -> bool {
