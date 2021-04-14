@@ -42,6 +42,7 @@ mod io_ext;
 mod iter;
 mod lockfile;
 mod odb;
+mod refs;
 mod serialize;
 mod signature;
 mod tls;

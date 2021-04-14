@@ -1,5 +1,6 @@
 mod bit_add;
 mod bit_cat_file;
+mod bit_commit;
 mod bit_commit_tree;
 mod bit_hash_object;
 mod bit_init;
@@ -9,6 +10,7 @@ mod bit_write_tree;
 
 pub use bit_add::*;
 pub use bit_cat_file::*;
+pub use bit_commit::*;
 pub use bit_hash_object::*;
 pub use bit_init::*;
 pub use bit_ls_files::*;

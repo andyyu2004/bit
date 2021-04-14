@@ -13,6 +13,12 @@ pub struct Lockfile {
     aborted: bool,
 }
 
+impl Read for Lockfile {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.file.read(buf)
+    }
+}
+
 impl Write for Lockfile {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.file.write(buf)
@@ -26,7 +32,7 @@ impl Write for Lockfile {
 impl Lockfile {
     /// accepts the path to the file to be locked
     /// this function will create a lockfile with an extension `<path>.lock`
-    pub fn new(path: impl AsRef<Path>) -> BitResult<Self> {
+    pub fn open(path: impl AsRef<Path>) -> BitResult<Self> {
         let path = path.as_ref();
         let lockfile_path = path.with_extension(LOCK_FILE_EXT);
         path.parent().map(std::fs::create_dir_all).transpose()?;
@@ -53,6 +59,7 @@ impl Lockfile {
     }
 
     /// commits this file by renaming it to the target file
+    /// replaces the old file if it exists
     /// commits on drop unless rollback was called
     fn commit(&self) -> io::Result<()> {
         if self.path.exists() {

@@ -1,32 +1,33 @@
-use anyhow::Context;
-
 use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
-use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
+use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::BitPath;
-use crate::serialize::Serialize;
+use crate::refs::BitRef;
+use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use crate::tls;
-use std::borrow::BorrowMut;
+use anyhow::Context;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, BufReader, Write};
 use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
-pub const BIT_OBJECTS_FILE_PATH: &str = "objects";
+pub const BIT_HEAD_FILE_PATH: &str = "HEAD";
 pub const BIT_CONFIG_FILE_PATH: &str = "config";
+pub const BIT_OBJECTS_DIR_PATH: &str = "objects";
 
 pub struct BitRepo {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
     pub worktree: BitPath,
     pub bitdir: BitPath,
+    head_filepath: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
     index: OnceCell<RefCell<BitIndex>>,
@@ -50,12 +51,13 @@ impl BitRepo {
         let bitdir = BitPath::intern(bitdir);
         let config_filepath = BitPath::intern(config_filepath);
         Self {
-            index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
-            index: OnceCell::new(),
-            odb: BitObjDb::new(bitdir.join(BIT_OBJECTS_FILE_PATH)),
             config_filepath,
             worktree,
             bitdir,
+            index: OnceCell::new(),
+            index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
+            head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
+            odb: BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH)),
         }
     }
 
@@ -94,34 +96,63 @@ impl BitRepo {
         }
     }
 
+    #[inline]
     pub fn config_path(&self) -> &Path {
         &self.config_filepath
     }
 
+    #[inline]
+    pub fn head_path(&self) -> &Path {
+        &self.head_filepath
+    }
+
+    #[inline]
     pub fn index_path(&self) -> &Path {
         &self.index_filepath
     }
 
-    fn index_file(&self) -> BitResult<File> {
-        let file = File::open(self.index_path());
+    pub fn read_head(&self) -> BitResult<BitRef> {
+        self.head_file_buf().and_then(|r| BitRef::deserialize(&mut r))
+    }
+
+    pub fn write_head(&self, bitref: BitRef) -> BitResult<()> {
+        let head = self.head_file()?;
+        bitref.serialize(&mut head)?;
+        Ok(())
+    }
+
+    fn head_file(&self) -> BitResult<Lockfile> {
+        Lockfile::open(self.head_path())
+    }
+
+    fn head_file_buf(&self) -> BitResult<BufReader<Lockfile>> {
+        Lockfile::open(self.head_path()).map(BufReader::new)
+    }
+
+    fn index_file_buf(&self) -> BitResult<BufReader<Lockfile>> {
+        self.index_file().map(BufReader::new)
+    }
+
+    fn index_file(&self) -> BitResult<Lockfile> {
+        let file = Lockfile::open(self.index_path());
         // assume an error means the file doesn't exist
         // not ideal but probably true is almost every case
         if file.is_err() {
             assert!(!self.index_path().exists());
         }
-        Ok(file?)
+        file
     }
 
     fn get_index(&self) -> &RefCell<BitIndex> {
         let mk_index = || {
-            let index = self.index_file().and_then(BitIndex::deserialize).unwrap_or_default();
-            RefCell::new(index)
+            let index = self.index_file_buf().and_then(|r| BitIndex::deserialize(&mut r));
+            RefCell::new(index.unwrap_or_default())
         };
         self.index.get_or_init(mk_index)
     }
 
     pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex) -> BitResult<R>) -> BitResult<R> {
-        let mut lockfile = Lockfile::new(self.index_path())?;
+        let mut lockfile = Lockfile::open(self.index_path())?;
         let r = f(&self.get_index().borrow());
         // not actually writing anything here, so we rollback
         // the lockfile is just to check that another process
@@ -131,7 +162,7 @@ impl BitRepo {
     }
 
     pub fn with_index_mut<R>(&self, f: impl FnOnce(&mut BitIndex) -> BitResult<R>) -> BitResult<R> {
-        let mut lockfile = Lockfile::new(self.index_path())?;
+        let mut lockfile = Lockfile::open(self.index_path())?;
         let index = &mut self.get_index().borrow_mut();
         let r = f(index);
         match r {
@@ -259,6 +290,7 @@ mod tests {
 
     use super::*;
     use crate::cmd::BitHashObjectOpts;
+    use crate::obj;
 
     #[test]
     fn repo_relative_paths() -> BitResult<()> {

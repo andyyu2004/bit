@@ -1,7 +1,6 @@
 mod blob;
 mod commit;
 mod obj_id;
-mod refs;
 mod tree;
 
 pub use blob::Blob;

@@ -10,8 +10,6 @@ use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::util;
-use fallible_iterator::FallibleIterator;
-
 pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
