@@ -9,6 +9,7 @@ impl BitRepo {
         Ok(())
     }
 
+    /// builds a tree object from the index and writes it to the object store
     pub fn write_tree(&self) -> BitResult<BitHash> {
         let tree = self.with_index(|index| index.build_tree(self))?;
         let hash = self.write_obj(&tree)?;

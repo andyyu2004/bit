@@ -1,16 +1,18 @@
 use crate::error::BitResult;
 use anyhow::Context;
+use std::cell::Cell;
 use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
 
 const LOCK_FILE_EXT: &str = "lock";
 
+#[derive(Debug)]
 pub struct Lockfile {
     file: File,
     path: PathBuf,
     lockfile_path: PathBuf,
-    aborted: bool,
+    committed: Cell<bool>,
 }
 
 impl Read for Lockfile {
@@ -51,11 +53,36 @@ impl Lockfile {
             },
         )?;
 
-        Ok(Self { file, path: path.to_path_buf(), lockfile_path, aborted: false })
+        Ok(Self { file, path: path.to_path_buf(), lockfile_path, committed: Cell::new(false) })
     }
 
-    pub fn write(&mut self, contents: &[u8]) -> io::Result<()> {
-        self.file.write_all(contents)
+    /// run's a function under the lock without having write access to the lock
+    pub fn with_read_lock<R>(&self, f: impl FnOnce() -> R) -> R {
+        let r = f();
+        self.rollback();
+        r
+    }
+
+    /// runs a function under the lock having mutable access to the underlying file
+    /// if the closure returns an `Err` then the transaction is rolled back, otherwise it is
+    /// committed to disk
+    pub fn with<R>(mut self, f: impl FnOnce(&mut Self) -> BitResult<R>) -> BitResult<R> {
+        match f(&mut self) {
+            Ok(r) => {
+                dbg!("committing");
+                self.commit().with_context(|| anyhow!(
+                        "failed to write lockfile to `{}`;  the updated contents are stored in `{}`; please remove this file when done",
+                        self.path.display(),
+                        self.lockfile_path.display()
+                    )
+                )?;
+                Ok(r)
+            }
+            Err(err) => {
+                self.rollback();
+                Err(err)
+            }
+        }
     }
 
     /// commits this file by renaming it to the target file
@@ -69,6 +96,7 @@ impl Lockfile {
         }
 
         std::fs::rename(&self.lockfile_path, &self.path)?;
+        self.committed.set(true);
 
         let mut permissions = self.path.metadata()?.permissions();
         permissions.set_readonly(true);
@@ -81,25 +109,18 @@ impl Lockfile {
         })
     }
 
-    pub fn rollback(&mut self) -> BitResult<()> {
-        self.aborted = true;
-        self.cleanup()
+    fn rollback(&self) {
+        // does rollback actually have to anything that the drop impl doesn't do?
+        // just exists for semantic purposes for now
     }
 }
 
 impl Drop for Lockfile {
     fn drop(&mut self) {
-        if self.aborted {
+        if self.committed.get() {
+            // if committed then the file has been renamed and there is nothing to cleanup
             return;
         }
-
-        self.commit().unwrap_or_else(|err| {
-            panic!(
-                "failed to write lockfile to `{}`: {}; the updated contents are stored in `{}`; please remove this file when done",
-                self.path.display(),
-                err,
-                self.lockfile_path.display()
-            )
-        });
+        self.cleanup().unwrap();
     }
 }

@@ -58,14 +58,24 @@ impl FromStr for BitRef {
     }
 }
 
-impl BitRepo {
-    pub fn resolve_ref(&self, r: BitRef) -> BitResult<BitObjKind> {
-        match r {
-            BitRef::Direct(hash) => self.read_obj(hash),
+impl BitRef {
+    pub fn resolve(&self, repo: &BitRepo) -> BitResult<BitHash> {
+        match self {
+            BitRef::Direct(hash) => Ok(*hash),
             BitRef::Indirect(_path) => {
                 // self.resolve_ref(r)
                 todo!();
             }
         }
+    }
+}
+
+impl BitRepo {
+    pub fn resolve_ref(&self, r: BitRef) -> BitResult<BitHash> {
+        r.resolve(self)
+    }
+
+    pub fn read_ref(&self, r: BitRef) -> BitResult<BitObjKind> {
+        self.resolve_ref(r).and_then(|hash| self.read_obj(hash))
     }
 }

@@ -117,8 +117,9 @@ impl BitObjDbBackend for BitLooseObjDb {
             }
             return Ok(hash);
         }
-        let lockfile = Lockfile::open(&path)?;
-        ZlibEncoder::new(lockfile, Compression::default()).write_all(&bytes)?;
+        Lockfile::open(&path)?.with(|lockfile| {
+            Ok(ZlibEncoder::new(lockfile, Compression::default()).write_all(&bytes)?)
+        })?;
         Ok(hash)
     }
 

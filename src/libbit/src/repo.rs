@@ -111,12 +111,12 @@ impl BitRepo {
         &self.index_filepath
     }
 
-    pub fn read_head(&self) -> BitResult<BitRef> {
-        self.head_file_buf().and_then(|r| BitRef::deserialize(&mut r))
+    pub fn read_head(&self) -> BitResult<Option<BitRef>> {
+        self.head_file_opt()?.map(BitRef::deserialize_unbuffered).transpose()
     }
 
     pub fn write_head(&self, bitref: BitRef) -> BitResult<()> {
-        let head = self.head_file()?;
+        let mut head = self.head_file()?;
         bitref.serialize(&mut head)?;
         Ok(())
     }
@@ -125,58 +125,65 @@ impl BitRepo {
         Lockfile::open(self.head_path())
     }
 
-    fn head_file_buf(&self) -> BitResult<BufReader<Lockfile>> {
-        Lockfile::open(self.head_path()).map(BufReader::new)
-    }
-
-    fn index_file_buf(&self) -> BitResult<BufReader<Lockfile>> {
-        self.index_file().map(BufReader::new)
-    }
-
-    fn index_file(&self) -> BitResult<Lockfile> {
-        let file = Lockfile::open(self.index_path());
-        // assume an error means the file doesn't exist
-        // not ideal but probably true is almost every case
-        if file.is_err() {
-            assert!(!self.index_path().exists());
+    /// similar to head_file except will return None when it doesn't exist
+    fn head_file_opt(&self) -> BitResult<Option<Lockfile>> {
+        let head_path = self.head_path();
+        let lockfile = Lockfile::open(head_path)?;
+        if !head_path.exists() {
+            return Ok(None);
         }
-        file
+        Ok(Some(lockfile))
+    }
+
+    fn index_file(&self) -> BitResult<Option<Lockfile>> {
+        // TODO rethink how lockfiles work for reading
+        // locks will need to be held, but will also need some way
+        // of reading the file (the actual file not the lockfile)
+        let index_path = self.index_path();
+        let lockfile = Lockfile::open(index_path);
+        if !index_path.exists() {
+            return Ok(None);
+        }
+        Some(lockfile).transpose()
     }
 
     fn get_index(&self) -> &RefCell<BitIndex> {
         let mk_index = || {
-            let index = self.index_file_buf().and_then(|r| BitIndex::deserialize(&mut r));
-            RefCell::new(index.unwrap_or_default())
+            // results get unwrapped and options get defaulted
+            // this allows us to distinguish from real errors and the index not existing
+            let index_file_opt = self.index_file().expect("failed to read index");
+            let index_opt = index_file_opt
+                .map(BitIndex::deserialize_unbuffered)
+                .transpose()
+                .expect("failed to deserialize index");
+            RefCell::new(index_opt.unwrap_or_default())
         };
         self.index.get_or_init(mk_index)
     }
 
+    // applies to `with_index` and `with_index_mut`
+    // must have call `get_index` before Lockfile::open
+    // otherwise the lockfile will already exist as get_index
+    // opens the lockfile too, pretty weird design but don't have better idea currently
     pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex) -> BitResult<R>) -> BitResult<R> {
-        let mut lockfile = Lockfile::open(self.index_path())?;
-        let r = f(&self.get_index().borrow());
-        // not actually writing anything here, so we rollback
-        // the lockfile is just to check that another process
-        // is not currently writing to the index
-        lockfile.rollback()?;
-        r
+        let index = self.get_index().borrow();
+        dbg!(&index);
+        Lockfile::open(self.index_path())?.with_read_lock(|| {
+            // not actually writing anything here, so we rollback
+            // the lockfile is just to check that another process
+            // is not currently writing to the index
+            f(&index)
+        })
     }
 
     pub fn with_index_mut<R>(&self, f: impl FnOnce(&mut BitIndex) -> BitResult<R>) -> BitResult<R> {
-        let mut lockfile = Lockfile::open(self.index_path())?;
         let index = &mut self.get_index().borrow_mut();
-        let r = f(index);
-        match r {
-            Ok(ret) => {
-                // TODO currently assumes that index changed and will always write to disk
-                // could add a check to see whether something was actually modified or not
-                index.serialize(&mut lockfile)?;
-                Ok(ret)
-            }
-            Err(err) => {
-                lockfile.rollback()?;
-                Err(err)
-            }
-        }
+        dbg!("fucker");
+        Lockfile::open(self.index_path())?.with(|lockfile| {
+            let r = f(index)?;
+            index.serialize(lockfile)?;
+            Ok(r)
+        })
     }
 
     fn load(path: impl AsRef<Path>) -> BitResult<Self> {

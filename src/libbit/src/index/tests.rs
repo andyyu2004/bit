@@ -8,7 +8,7 @@ use std::str::FromStr;
 #[test]
 fn parse_large_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
-    let index = BitIndex::deserialize(bytes)?;
+    let index = BitIndex::deserialize_unbuffered(bytes)?;
     assert_eq!(index.entries.len(), 31);
     Ok(())
 }
@@ -16,7 +16,7 @@ fn parse_large_index() -> BitResult<()> {
 #[test]
 fn parse_and_serialize_small_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/smallindex") as &[u8];
-    let index = BitIndex::deserialize(bytes)?;
+    let index = BitIndex::deserialize_unbuffered(bytes)?;
     let mut buf = vec![];
     index.serialize(&mut buf)?;
     assert_eq!(bytes, buf);
@@ -26,7 +26,7 @@ fn parse_and_serialize_small_index() -> BitResult<()> {
 #[test]
 fn parse_and_serialize_large_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
-    let index = BitIndex::deserialize(bytes)?;
+    let index = BitIndex::deserialize_unbuffered(bytes)?;
     let mut buf = vec![];
     index.serialize(&mut buf)?;
     assert_eq!(bytes, buf);
@@ -36,7 +36,7 @@ fn parse_and_serialize_large_index() -> BitResult<()> {
 #[test]
 fn parse_small_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/smallindex") as &[u8];
-    let index = BitIndex::deserialize(bytes)?;
+    let index = BitIndex::deserialize_unbuffered(bytes)?;
     // data from `git ls-files --stage --debug`
     // the flags show up as  `1` under git, not sure how they're parsed exactly
     let entries = vec![
@@ -107,7 +107,7 @@ fn parse_index_header() -> BitResult<()> {
 // reminder that the path of the tree entries should be relative to its immediate parent
 // TODO be nice to have some way to quickcheck some of this
 #[test]
-fn bit_index_write_tree_test() -> BitResult<()> {
+fn bit_index_build_tree_test() -> BitResult<()> {
     BitRepo::find("tests/repos/indextest", |repo| {
         let tree = repo.with_index(|index| index.build_tree(repo))?;
         let entries = tree.entries.into_iter().collect_vec();

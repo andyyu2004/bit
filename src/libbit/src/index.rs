@@ -46,11 +46,6 @@ impl<'a> IntoIterator for &'a BitIndex {
 }
 
 impl BitIndex {
-    fn create_tree(&self, _repo: &BitRepo) -> Tree {
-        let entries = BTreeSet::new();
-        Tree { entries }
-    }
-
     pub fn iter(&self) -> impl BitIterator {
         // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
         // `self` from the returned iterator
