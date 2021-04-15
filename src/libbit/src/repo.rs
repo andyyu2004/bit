@@ -278,7 +278,7 @@ mod tests {
         let mut file = File::create(&file_path)?;
         file.write_all(&bytes)?;
 
-        let hash = repo.bit_hash_object(BitHashObjectOpts {
+        let hash = repo.hash_object(BitHashObjectOpts {
             path: file_path,
             do_write: true,
             objtype: obj::BitObjType::Blob,

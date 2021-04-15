@@ -55,6 +55,7 @@ impl FromStr for BitRef {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        BitHash::from_str(s).unwrap();
         // probably fair to assume that a valid hash is not an indirect path
         if let Ok(hash) = BitHash::from_str(s) {
             return Ok(Self::Direct(hash));

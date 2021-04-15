@@ -81,7 +81,7 @@ impl FromStr for BitHash {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ensure!(s.len() != 40, "creating SHA1 with invalid hex string");
+        ensure!(s.len() == 40, "creating SHA1 with invalid hex string");
         let mut buf = [0u8; 20];
         hex::decode_to_slice(s, &mut buf)?;
         Ok(Self(buf))
