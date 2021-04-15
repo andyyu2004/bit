@@ -31,18 +31,37 @@ pub struct BitRepo {
     odb: BitObjDb,
 }
 
-impl Debug for BitRepo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<bitrepo>")
-    }
-}
-
 #[inline]
 fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> BitPath {
     repo.bitdir.join(path)
 }
 
 impl BitRepo {
+    pub fn default_signature(&self) -> BitResult<BitSignature> {
+        todo!()
+        // BitSignature { name: self.config, email: , time: () }
+    }
+
+    /// initialize a repository and use it in the closure
+    pub fn init_load<R>(
+        path: impl AsRef<Path>,
+        f: impl FnOnce(&Self) -> BitResult<R>,
+    ) -> BitResult<R> {
+        Self::init(&path)?;
+        let repo = Self::load(&path)?;
+        tls::enter_repo(&repo, f)
+    }
+
+    /// recursively searches parents starting from the current directory for a git repo
+    pub fn find<R>(path: impl AsRef<Path>, f: impl FnOnce(&Self) -> BitResult<R>) -> BitResult<R> {
+        let path = path.as_ref();
+        let canonical_path = path.canonicalize().with_context(|| {
+            format!("failed to find bit repository in nonexistent path `{}`", path.display())
+        })?;
+        let repo = Self::find_inner(canonical_path.as_ref())?;
+        tls::enter_repo(&repo, f)
+    }
+
     fn new(worktree: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> Self {
         let worktree = BitPath::intern(worktree);
         let bitdir = BitPath::intern(bitdir);
@@ -55,24 +74,6 @@ impl BitRepo {
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
             odb: BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH)),
         }
-    }
-
-    pub fn default_signature(&self) -> BitResult<BitSignature> {
-        todo!()
-        // BitSignature { name: self.config, email: , time: () }
-    }
-
-    /// recursively searches parents starting from the current directory for a git repo
-    pub fn find<R>(
-        path: impl AsRef<Path>,
-        f: impl FnOnce(&BitRepo) -> BitResult<R>,
-    ) -> BitResult<R> {
-        let path = path.as_ref();
-        let canonical_path = path.canonicalize().with_context(|| {
-            format!("failed to find bit repository in nonexistent path `{}`", path.display())
-        })?;
-        let repo = Self::find_inner(canonical_path.as_ref())?;
-        tls::enter_repo(&repo, f)
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {
@@ -162,7 +163,8 @@ impl BitRepo {
         Ok(this)
     }
 
-    pub fn init(path: impl AsRef<Path>) -> BitResult<Self> {
+    // returns unit as we don't want anyone accessing the repo directly like this
+    pub fn init(path: impl AsRef<Path>) -> BitResult<()> {
         let worktree = path.as_ref().canonicalize()?;
 
         if worktree.is_file() {
@@ -176,7 +178,7 @@ impl BitRepo {
         if bitdir.exists() {
             // reinitializing doesn't really do anything currently
             println!("reinitializing existing bit directory in `{}`", bitdir.display());
-            return Self::load(worktree);
+            return Ok(());
         }
 
         std::fs::create_dir(&bitdir)?;
@@ -199,9 +201,7 @@ impl BitRepo {
             config.set("core", "bare", false)?;
             config.set("core", "filemode", true)?;
             Ok(())
-        })?;
-
-        Ok(this)
+        })
     }
 
     /// todo only works with full hash
@@ -225,14 +225,23 @@ impl BitRepo {
         self.odb.read_header(id.into())
     }
 
+    pub(crate) fn canonicalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
+        // self.worktree should be a canonical, absolute path
+        // and path should be relative to it, so we can just join them
+        debug_assert!(self.worktree.is_absolute());
+        let path = path.as_ref();
+        let path = self.worktree.join(&path).canonicalize().with_context(|| {
+            anyhow!("failed to convert path `{}` to absolute path", path.display())
+        })?;
+        Ok(BitPath::intern(path))
+    }
+
     /// converts an absolute path into a path relative to the workdir of the repository
     pub(crate) fn to_relative_path(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
+        // this seems to work just as well as the pathdiff crate
         let path = path.as_ref();
         assert!(path.is_absolute());
         Ok(BitPath::intern(path.strip_prefix(&self.worktree)?))
-        // pathdiff::diff_paths(path, &self.worktree)
-        // .map(BitPath::intern)
-        // .ok_or_else(|| anyhow!("failed to diffpaths to get relative path"))
     }
 
     pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> BitPath {
@@ -249,6 +258,15 @@ impl BitRepo {
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.relative_path(path))
+    }
+}
+
+impl Debug for BitRepo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BitRepo")
+            .field("worktree", &self.worktree)
+            .field("bitdir", &self.bitdir)
+            .finish_non_exhaustive()
     }
 }
 

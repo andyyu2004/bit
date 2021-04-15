@@ -1,9 +1,9 @@
 use super::*;
-
 use crate::error::BitGenericError;
 use crate::hash;
 use crate::obj::Blob;
 use crate::serialize::Deserialize;
+use crate::tls;
 use std::fmt::{self, Debug, Formatter};
 use std::os::linux::fs::MetadataExt;
 
@@ -142,15 +142,28 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
 impl TryFrom<BitPath> for BitIndexEntry {
     type Error = BitGenericError;
 
-    fn try_from(filepath: BitPath) -> Result<Self, Self::Error> {
-        assert!(filepath.is_file());
+    fn try_from(path: BitPath) -> Result<Self, Self::Error> {
+        let canonical = if path.is_relative() {
+            tls::REPO.with(|repo| repo.canonicalize(path))?
+        } else {
+            debug_assert_eq!(
+                path.canonicalize().unwrap(),
+                *path,
+                "absolute filepath was non-canonical"
+            );
+            path
+        };
+
+        assert!(canonical.is_file());
+        let metadata = canonical.metadata().unwrap();
+
         // the path must be relative to the repository root
-        // otherwise, the flags will be off
-        assert!(filepath.is_relative());
-        let metadata = filepath.metadata().unwrap();
-        let blob = Blob::new(filepath.read_to_vec()?);
+        // as this is the correct representation for the index entry
+        // and otherwise, the pathlen in the flags will be off
+        let relative = tls::REPO.with(|repo| repo.to_relative_path(canonical))?;
+        let blob = Blob::new(path.read_to_vec()?);
         Ok(Self {
-            filepath,
+            filepath: relative,
             ctime_sec: metadata.st_ctime() as u32,
             ctime_nano: metadata.st_ctime_nsec() as u32,
             mtime_sec: metadata.st_mtime() as u32,
@@ -165,7 +178,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             // TODO this mode should have some transformation
             // to make it fit the simplified git modes
             // probably just by checking `executable ? 0o100755 : 0o100644`
-            flags: BitIndexEntryFlags::with_path_len(filepath.len()),
+            flags: BitIndexEntryFlags::with_path_len(relative.len()),
         })
     }
 }

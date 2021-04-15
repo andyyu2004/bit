@@ -4,6 +4,7 @@
 #![feature(bool_to_option)]
 #![feature(trait_alias)]
 #![feature(destructuring_assignment)]
+#![feature(debug_non_exhaustive)]
 #![feature(type_name_of_val)]
 #![feature(map_first_last)]
 #![feature(is_sorted)]

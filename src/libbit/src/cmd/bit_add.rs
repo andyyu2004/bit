@@ -10,6 +10,20 @@ pub struct BitAddOpts {
     pub dryrun: bool,
 }
 
+impl Default for BitAddOpts {
+    fn default() -> Self {
+        Self { pathspecs: Default::default(), dryrun: false }
+    }
+}
+
+impl BitAddOpts {
+    pub fn add_pathspec(self, pathspec: Pathspec) -> Self {
+        let mut pathspecs = self.pathspecs;
+        pathspecs.push(pathspec);
+        Self { pathspecs, ..self }
+    }
+}
+
 impl BitRepo {
     pub fn bit_add(&self, opts: BitAddOpts) -> BitResult<()> {
         tls::with_index_mut(|index| {

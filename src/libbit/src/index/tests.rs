@@ -1,7 +1,8 @@
-use itertools::Itertools;
-
 use super::*;
+use crate::cmd::BitAddOpts;
 use crate::path::BitPath;
+use itertools::Itertools;
+use std::fs::File;
 use std::io::BufReader;
 use std::str::FromStr;
 
@@ -11,6 +12,24 @@ fn parse_large_index() -> BitResult<()> {
     let index = BitIndex::deserialize_unbuffered(bytes)?;
     assert_eq!(index.entries.len(), 31);
     Ok(())
+}
+
+// this test adds something to the index and checks the index is still parseable
+#[test]
+fn add_file_to_index() -> BitResult<()> {
+    let basedir = tempfile::tempdir()?;
+    let basepath = basedir.path();
+    let filepath = basepath.join("a");
+    File::create(&filepath)?;
+    dbg!(&filepath);
+    assert!(filepath.exists());
+    assert!(filepath.is_file());
+
+    BitRepo::init_load(&basedir, |repo| {
+        dbg!(repo);
+        repo.bit_add(BitAddOpts::default().add_pathspec("a".parse().unwrap()))?;
+        repo.with_index(|_| Ok(()))
+    })
 }
 
 #[test]

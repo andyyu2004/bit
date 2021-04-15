@@ -1,5 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndexEntry;
+use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
 use fallible_iterator::FallibleIterator;
@@ -33,8 +34,7 @@ impl FallibleIterator for WorktreeIter {
             }
         };
 
-        let path = tls::REPO.with(|repo| repo.to_relative_path(direntry.path()))?;
-        BitIndexEntry::try_from(path).map(Some)
+        BitIndexEntry::try_from(BitPath::intern(direntry.path())).map(Some)
     }
 }
 

@@ -5,22 +5,24 @@ use crate::obj;
 #[test]
 fn repo_init_creates_correct_initial_local_config() -> BitResult<()> {
     let basedir = tempfile::tempdir()?;
-    let repo = BitRepo::init(&basedir)?;
-    repo.with_local_config(|config| {
-        assert_eq!(config.repositoryformatversion()?.unwrap(), 0);
-        assert_eq!(config.bare()?.unwrap(), false);
-        assert_eq!(config.filemode()?.unwrap(), true);
-        Ok(())
-    })?;
-    Ok(())
+    BitRepo::init_load(&basedir, |repo| {
+        repo.with_local_config(|config| {
+            assert_eq!(config.repositoryformatversion()?.unwrap(), 0);
+            assert_eq!(config.bare()?.unwrap(), false);
+            assert_eq!(config.filemode()?.unwrap(), true);
+            Ok(())
+        })
+    })
 }
+
 #[test]
 fn repo_relative_paths() -> BitResult<()> {
     let basedir = tempfile::tempdir()?;
-    let repo = BitRepo::init(&basedir)?;
-    let joined = repo.relative_paths(&["path", "to", "dir"]);
-    assert_eq!(joined, format!("{}/.git/path/to/dir", basedir.path().display()));
-    Ok(())
+    BitRepo::init_load(&basedir, |repo| {
+        let joined = repo.relative_paths(&["path", "to", "dir"]);
+        assert_eq!(joined, format!("{}/.git/path/to/dir", basedir.path().display()));
+        Ok(())
+    })
 }
 
 #[test]
@@ -35,29 +37,29 @@ fn init_on_file() -> io::Result<()> {
 
 fn prop_bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<()> {
     let basedir = tempfile::tempdir()?;
-    let repo = BitRepo::init(basedir.path())?;
+    BitRepo::init_load(basedir.path(), |repo| {
+        let file_path = basedir.path().join("test.txt");
+        let mut file = File::create(&file_path)?;
+        file.write_all(&bytes)?;
 
-    let file_path = basedir.path().join("test.txt");
-    let mut file = File::create(&file_path)?;
-    file.write_all(&bytes)?;
+        let hash = repo.hash_object(BitHashObjectOpts {
+            path: file_path,
+            do_write: true,
+            objtype: obj::BitObjType::Blob,
+        })?;
 
-    let hash = repo.hash_object(BitHashObjectOpts {
-        path: file_path,
-        do_write: true,
-        objtype: obj::BitObjType::Blob,
-    })?;
+        assert!(
+            repo.relative_paths(&["objects", &hex::encode(&hash[0..1]), &hex::encode(&hash[1..])])
+                .exists()
+        );
 
-    assert!(
-        repo.relative_paths(&["objects", &hex::encode(&hash[0..1]), &hex::encode(&hash[1..])])
-            .exists()
-    );
+        // this doesn't call `bit_cat_file` directly but this function is
+        // basically all that it does internally
+        let blob = repo.read_obj(hash)?.into_blob();
 
-    // this doesn't call `bit_cat_file` directly but this function is
-    // basically all that it does internally
-    let blob = repo.read_obj(hash)?.into_blob();
-
-    assert_eq!(blob.bytes, bytes);
-    Ok(())
+        assert_eq!(blob.bytes, bytes);
+        Ok(())
+    })
 }
 
 #[test]
