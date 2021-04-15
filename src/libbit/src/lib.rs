@@ -1,6 +1,7 @@
 #![feature(never_type)]
 #![feature(decl_macro)]
 #![feature(once_cell)]
+#![feature(bool_to_option)]
 #![feature(trait_alias)]
 #![feature(destructuring_assignment)]
 #![feature(type_name_of_val)]

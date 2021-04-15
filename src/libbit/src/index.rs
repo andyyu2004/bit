@@ -4,12 +4,13 @@ use crate::error::BitResult;
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
 use crate::iter::BitIterator;
+use crate::lockfile::Lockfile;
 use crate::obj::{FileMode, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
-use crate::util;
+use crate::{lockfile, util};
 pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
@@ -50,6 +51,13 @@ impl BitIndex {
         // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
         // `self` from the returned iterator
         fallible_iterator::convert(self.entries.values().cloned().collect_vec().into_iter().map(Ok))
+    }
+
+    pub fn from_lockfile(lockfile: &Lockfile) -> BitResult<Self> {
+        // not actually writing anything here, so we rollback
+        // the lockfile is just to check that another process
+        // is not currently writing to the index
+        Ok(lockfile.file().map(BitIndex::deserialize_unbuffered).transpose()?.unwrap_or_default())
     }
 
     /// find entry by path

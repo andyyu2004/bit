@@ -9,64 +9,94 @@ const LOCK_FILE_EXT: &str = "lock";
 
 #[derive(Debug)]
 pub struct Lockfile {
-    file: File,
+    // the file that this lockfile is guarding
+    // None if it does not exist
+    file: Option<File>,
+    // the lockfile itself
+    lockfile: File,
     path: PathBuf,
     lockfile_path: PathBuf,
     committed: Cell<bool>,
 }
 
-impl Read for Lockfile {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.file.read(buf)
-    }
-}
-
 impl Write for Lockfile {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.file.write(buf)
+        self.lockfile.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.file.flush()
+        self.lockfile.flush()
     }
 }
 
 impl Lockfile {
     /// accepts the path to the file to be locked
     /// this function will create a lockfile with an extension `<path>.lock`
-    pub fn open(path: impl AsRef<Path>) -> BitResult<Self> {
+    /// consumers of this api should never have access to the lockfile
+    /// directly, instead they should use the `with_` apis
+    fn open(path: impl AsRef<Path>) -> BitResult<Self> {
         let path = path.as_ref();
         let lockfile_path = path.with_extension(LOCK_FILE_EXT);
         path.parent().map(std::fs::create_dir_all).transpose()?;
         // read comments on `.create_new()` for more info
-        let file = File::with_options().create_new(true).write(true).open(&lockfile_path).or_else(
-            |err| match err.kind() {
-                io::ErrorKind::AlreadyExists => Err(err).with_context(|| {
-                    format!(
-                        "failed to lock file `{}` (`{}` already exists)",
-                        path.display(),
-                        lockfile_path.display()
-                    )
-                }),
-                _ =>
-                    Err(err).with_context(|| format!("failed to create file `{}`", path.display())),
-            },
-        )?;
+        let lockfile =
+            File::with_options().create_new(true).write(true).open(&lockfile_path).or_else(
+                |err| match err.kind() {
+                    io::ErrorKind::AlreadyExists => Err(err).with_context(|| {
+                        format!(
+                            "failed to lock file `{}` (`{}` already exists)",
+                            path.display(),
+                            lockfile_path.display()
+                        )
+                    }),
+                    _ => Err(err)
+                        .with_context(|| format!("failed to create file `{}`", path.display())),
+                },
+            )?;
 
-        Ok(Self { file, path: path.to_path_buf(), lockfile_path, committed: Cell::new(false) })
+        let file = path.exists().then(|| File::open(path)).transpose()?;
+
+        Ok(Self {
+            file,
+            lockfile,
+            lockfile_path,
+            path: path.to_path_buf(),
+            committed: Cell::new(false),
+        })
+    }
+
+    // should never have mutable access to `self.file`
+    // as any writes should be done to the lockfile only
+    pub fn file(&self) -> Option<&File> {
+        self.file.as_ref()
+    }
+
+    pub fn with_readonly<R>(
+        path: impl AsRef<Path>,
+        f: impl FnOnce(&Self) -> BitResult<R>,
+    ) -> BitResult<R> {
+        Self::open(path)?.with_readonly_inner(f)
     }
 
     /// run's a function under the lock without having write access to the lock
-    pub fn with_read_lock<R>(&self, f: impl FnOnce() -> R) -> R {
-        let r = f();
+    /// will never commit anything
+    fn with_readonly_inner<R>(&self, f: impl FnOnce(&Self) -> BitResult<R>) -> BitResult<R> {
+        let r = f(self);
         self.rollback();
         r
+    }
+
+    pub fn with_mut<R>(
+        path: impl AsRef<Path>,
+        f: impl FnOnce(&mut Self) -> BitResult<R>,
+    ) -> BitResult<R> {
+        Self::open(path)?.with_mut_inner(f)
     }
 
     /// runs a function under the lock having mutable access to the underlying file
     /// if the closure returns an `Err` then the transaction is rolled back, otherwise it is
     /// committed to disk
-    pub fn with<R>(mut self, f: impl FnOnce(&mut Self) -> BitResult<R>) -> BitResult<R> {
+    fn with_mut_inner<R>(mut self, f: impl FnOnce(&mut Self) -> BitResult<R>) -> BitResult<R> {
         match f(&mut self) {
             Ok(r) => {
                 dbg!("committing");

@@ -10,11 +10,9 @@ use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
-use std::io::{self, BufReader, Write};
-use std::lazy::OnceCell;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
@@ -30,7 +28,6 @@ pub struct BitRepo {
     head_filepath: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
-    index: OnceCell<RefCell<BitIndex>>,
     odb: BitObjDb,
 }
 
@@ -54,7 +51,6 @@ impl BitRepo {
             config_filepath,
             worktree,
             bitdir,
-            index: OnceCell::new(),
             index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
             odb: BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH)),
@@ -112,74 +108,30 @@ impl BitRepo {
     }
 
     pub fn read_head(&self) -> BitResult<Option<BitRef>> {
-        self.head_file_opt()?.map(BitRef::deserialize_unbuffered).transpose()
+        Lockfile::with_readonly(self.head_path(), |lockfile| {
+            lockfile.file().map(BitRef::deserialize_unbuffered).transpose()
+        })
     }
 
     pub fn write_head(&self, bitref: BitRef) -> BitResult<()> {
-        let mut head = self.head_file()?;
-        bitref.serialize(&mut head)?;
-        Ok(())
+        Lockfile::with_mut(self.head_path(), |lockfile| {
+            bitref.serialize(lockfile)?;
+            Ok(())
+        })
     }
 
-    fn head_file(&self) -> BitResult<Lockfile> {
-        Lockfile::open(self.head_path())
-    }
-
-    /// similar to head_file except will return None when it doesn't exist
-    fn head_file_opt(&self) -> BitResult<Option<Lockfile>> {
-        let head_path = self.head_path();
-        let lockfile = Lockfile::open(head_path)?;
-        if !head_path.exists() {
-            return Ok(None);
-        }
-        Ok(Some(lockfile))
-    }
-
-    fn index_file(&self) -> BitResult<Option<Lockfile>> {
-        // TODO rethink how lockfiles work for reading
-        // locks will need to be held, but will also need some way
-        // of reading the file (the actual file not the lockfile)
-        let index_path = self.index_path();
-        let lockfile = Lockfile::open(index_path);
-        if !index_path.exists() {
-            return Ok(None);
-        }
-        Some(lockfile).transpose()
-    }
-
-    fn get_index(&self) -> &RefCell<BitIndex> {
-        let mk_index = || {
-            // results get unwrapped and options get defaulted
-            // this allows us to distinguish from real errors and the index not existing
-            let index_file_opt = self.index_file().expect("failed to read index");
-            let index_opt = index_file_opt
-                .map(BitIndex::deserialize_unbuffered)
-                .transpose()
-                .expect("failed to deserialize index");
-            RefCell::new(index_opt.unwrap_or_default())
-        };
-        self.index.get_or_init(mk_index)
-    }
-
-    // applies to `with_index` and `with_index_mut`
-    // must have call `get_index` before Lockfile::open
-    // otherwise the lockfile will already exist as get_index
-    // opens the lockfile too, pretty weird design but don't have better idea currently
     pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex) -> BitResult<R>) -> BitResult<R> {
-        let index = self.get_index().borrow();
-        dbg!(&index);
-        Lockfile::open(self.index_path())?.with_read_lock(|| {
+        Lockfile::with_readonly(self.index_path(), |lockfile| {
             // not actually writing anything here, so we rollback
             // the lockfile is just to check that another process
             // is not currently writing to the index
-            f(&index)
+            f(&BitIndex::from_lockfile(&lockfile)?)
         })
     }
 
     pub fn with_index_mut<R>(&self, f: impl FnOnce(&mut BitIndex) -> BitResult<R>) -> BitResult<R> {
-        let index = &mut self.get_index().borrow_mut();
-        dbg!("fucker");
-        Lockfile::open(self.index_path())?.with(|lockfile| {
+        Lockfile::with_mut(self.index_path(), |lockfile| {
+            let index = &mut BitIndex::from_lockfile(&lockfile)?;
             let r = f(index)?;
             index.serialize(lockfile)?;
             Ok(r)
