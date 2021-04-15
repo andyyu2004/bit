@@ -4,7 +4,7 @@ use crate::error::BitGenericError;
 use crate::hash;
 use crate::obj::Blob;
 use crate::serialize::Deserialize;
-
+use std::fmt::{self, Debug, Formatter};
 use std::os::linux::fs::MetadataExt;
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -77,6 +77,8 @@ impl Deserialize for BitIndexEntry {
         assert_eq!(*filepath_bytes.last().unwrap(), 0x00);
         let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
 
+        assert_eq!(flags.path_len() as usize, filepath.len());
+
         let entry = BitIndexEntry {
             ctime_sec,
             ctime_nano,
@@ -140,6 +142,9 @@ impl TryFrom<BitPath> for BitIndexEntry {
 
     fn try_from(filepath: BitPath) -> Result<Self, Self::Error> {
         assert!(filepath.is_file());
+        // the path must be relative to the repository root
+        // otherwise, the flags will be off
+        assert!(filepath.is_relative());
         let metadata = filepath.metadata().unwrap();
         let blob = Blob::new(filepath.read_to_vec()?);
         Ok(Self {
@@ -194,8 +199,19 @@ impl BitIndexEntry {
 /// 12 bits name length if length is less than 0xFFF; otherwise store 0xFFF
 // what is name really? probably path?
 // probably doesn't really matter and is fine to just default flags to 0
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct BitIndexEntryFlags(u16);
+
+impl Debug for BitIndexEntryFlags {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BitIndexEntryFlags")
+            .field("assume_valid", &self.assume_valid())
+            .field("stage", &self.stage())
+            .field("path_len", &self.path_len())
+            .field("extended", &self.extended())
+            .finish()
+    }
+}
 
 impl BitIndexEntryFlags {
     pub fn with_path_len(len: usize) -> Self {

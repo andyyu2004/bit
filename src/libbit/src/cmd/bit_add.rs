@@ -13,6 +13,7 @@ pub struct BitAddOpts {
 impl BitRepo {
     pub fn bit_add(&self, opts: BitAddOpts) -> BitResult<()> {
         tls::with_index_mut(|index| {
+            dbg!(&index);
             for pathspec in opts.pathspecs {
                 if opts.dryrun {
                     pathspec
@@ -22,6 +23,7 @@ impl BitRepo {
                     index.add(&pathspec)?;
                 }
             }
+            dbg!(&index);
             Ok(())
         })
     }

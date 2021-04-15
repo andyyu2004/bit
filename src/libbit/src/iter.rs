@@ -34,48 +34,21 @@ impl FallibleIterator for WorktreeIter {
             }
         };
 
-        let path = direntry.path();
-        BitIndexEntry::try_from(BitPath::intern(path)).map(Some)
+        let path = tls::REPO.with(|repo| repo.to_relative_path(direntry.path()))?;
+        BitIndexEntry::try_from(path).map(Some)
     }
-}
-
-// an iterator adaptor that converts all absolute paths to relative ones
-struct Relative<I: BitIterator> {
-    inner: I,
 }
 
 pub trait BitIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>;
 
-trait BitIteratorExt: BitIterator {
-    fn relative(self) -> Relative<Self>
-    where
-        Self: Sized,
-    {
-        Relative { inner: self }
+impl BitRepo {
+    pub fn worktree_iter(&self) -> impl BitIterator {
+        WorktreeIter::new(&self.worktree)
     }
+}
+
+trait BitIteratorExt: BitIterator {
 }
 
 impl<I: BitIterator> BitIteratorExt for I {
-}
-
-impl<I: BitIterator> FallibleIterator for Relative<I> {
-    type Error = I::Error;
-    type Item = I::Item;
-
-    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        match self.inner.next()? {
-            Some(entry) => {
-                let filepath = tls::REPO.with(|repo| repo.to_relative_path(entry.filepath))?;
-                Ok(Some(BitIndexEntry { filepath, ..entry }))
-            }
-
-            None => Ok(None),
-        }
-    }
-}
-
-impl BitRepo {
-    pub fn worktree_iter(&self) -> impl BitIterator {
-        WorktreeIter::new(&self.worktree).relative()
-    }
 }
