@@ -11,6 +11,7 @@ use self::cli_add::BitAddCliOpts;
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
 // - probably will make it such that libbit doesn't even expose full commands
 //   and be something more like libgit2
+use self::cli_commit::BitCommitCliOpts;
 use self::cli_commit_tree::BitCommitTreeCliOpts;
 use self::cli_config::BitConfigCliOpts;
 use self::cli_ls_files::BitLsFilesCliOpts;
@@ -36,26 +37,17 @@ pub fn run() -> BitResult<()> {
         BitSubCmd::Log(..) => todo!(),
         BitSubCmd::Init(..) => unreachable!(),
         BitSubCmd::Add(opts) => repo.bit_add(opts.into()),
-        BitSubCmd::HashObject(opts) => {
-            let hash = repo.bit_hash_object(opts.into())?;
-            println!("{}", hash);
-            Ok(())
-        }
+        BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),
         BitSubCmd::WriteTree => repo.bit_write_tree(),
         BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
         BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
         BitSubCmd::Config(opts) => opts.execute(repo),
         BitSubCmd::UpdateIndex(opts) => {
             dbg!(opts);
-            Ok(())
+            todo!()
         }
-        BitSubCmd::CommitTree(opts) => {
-            let message = match opts.message {
-                Some(message) => message,
-                None => repo.read_commit_msg()?,
-            };
-            repo.bit_commit_tree(opts.parent, message, opts.tree)
-        }
+        BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
+        BitSubCmd::Commit(opts) => repo.bit_commit(opts.message),
     })
 }
 
@@ -72,6 +64,7 @@ pub struct BitCliOpts {
 pub enum BitSubCmd {
     Init(BitInitCliOpts),
     Add(BitAddCliOpts),
+    Commit(BitCommitCliOpts),
     HashObject(BitHashObjectCliOpts),
     CatFile(BitCatFileCliOpts),
     Log(BitLogCliOpts),

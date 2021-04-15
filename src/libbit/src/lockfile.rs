@@ -99,7 +99,6 @@ impl Lockfile {
     fn with_mut_inner<R>(mut self, f: impl FnOnce(&mut Self) -> BitResult<R>) -> BitResult<R> {
         match f(&mut self) {
             Ok(r) => {
-                dbg!("committing");
                 self.commit().with_context(|| anyhow!(
                         "failed to write lockfile to `{}`;  the updated contents are stored in `{}`; please remove this file when done",
                         self.path.display(),

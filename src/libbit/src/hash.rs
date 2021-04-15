@@ -57,7 +57,7 @@ impl FromStr for BitPartialHash {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        assert!(s.len() < 40, "creating partial hash with an invalid hex string");
+        ensure!(s.len() < 40, "creating partial hash with an invalid hex string");
         let mut buf = [0u8; 40];
         buf.as_mut().write_all(s.as_bytes())?;
         Ok(Self(buf))
@@ -81,8 +81,7 @@ impl FromStr for BitHash {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // only call this when preconditions are met
-        assert!(s.len() == 40, "creating SHA1 with invalid hex string");
+        ensure!(s.len() != 40, "creating SHA1 with invalid hex string");
         let mut buf = [0u8; 20];
         hex::decode_to_slice(s, &mut buf)?;
         Ok(Self(buf))
