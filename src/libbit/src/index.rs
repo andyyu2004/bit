@@ -10,7 +10,7 @@ use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
-use crate::{lockfile, util};
+use crate::util;
 pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
@@ -24,11 +24,13 @@ use std::iter::{Copied, Peekable};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
+const BIT_INDEX_HEADER_SIG: &[u8; 4] = b"DIRC";
+const BIT_INDEX_VERSION: u32 = 2;
+
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct BitIndex {
-    pub header: BitIndexHeader,
     /// sorted by ascending by filepath (interpreted as unsigned bytes)
     /// ties broken by stage (a part of flags)
     // the link says `name` which usually refers to the hash
@@ -199,7 +201,7 @@ impl BitIndex {
     fn parse_header(r: &mut dyn BufRead) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];
         r.read_exact(&mut signature)?;
-        assert_eq!(&signature, b"DIRC");
+        assert_eq!(&signature, BIT_INDEX_HEADER_SIG);
         let version = r.read_u32()?;
         assert_eq!(version, 2, "Only index format v2 is supported");
         let entryc = r.read_u32()?;
@@ -242,7 +244,13 @@ impl Serialize for BitIndexExtension {
 impl Serialize for BitIndex {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         let mut hash_writer = HashWriter::new_sha1(writer);
-        self.header.serialize(&mut hash_writer)?;
+
+        let header = BitIndexHeader {
+            signature: *BIT_INDEX_HEADER_SIG,
+            version: BIT_INDEX_VERSION,
+            entryc: self.entries.len() as u32,
+        };
+        header.serialize(&mut hash_writer)?;
 
         for entry in self.entries.values() {
             entry.serialize(&mut hash_writer)?;
@@ -279,7 +287,7 @@ impl Deserialize for BitIndex {
         assert!(r.read_to_end(&mut remainder)? >= BIT_HASH_SIZE);
         let extensions = Self::parse_extensions(&remainder)?;
 
-        let bit_index = Self { header, entries, extensions };
+        let bit_index = Self { entries, extensions };
 
         let (bytes, hash) = buf.split_at(buf.len() - BIT_HASH_SIZE);
         let mut hasher = sha1::Sha1::new();

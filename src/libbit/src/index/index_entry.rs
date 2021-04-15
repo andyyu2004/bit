@@ -38,6 +38,7 @@ impl From<Vec<BitIndexEntry>> for BitIndexEntries {
 
 impl Serialize for BitIndexEntry {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        assert!(self.filepath.is_relative());
         writer.write_u32(self.ctime_sec)?;
         writer.write_u32(self.ctime_nano)?;
         writer.write_u32(self.mtime_sec)?;
@@ -77,6 +78,7 @@ impl Deserialize for BitIndexEntry {
         assert_eq!(*filepath_bytes.last().unwrap(), 0x00);
         let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
 
+        assert!(filepath.is_relative());
         assert_eq!(flags.path_len() as usize, filepath.len());
 
         let entry = BitIndexEntry {
@@ -169,11 +171,6 @@ impl TryFrom<BitPath> for BitIndexEntry {
 }
 
 impl BitIndexEntry {
-    pub fn new(_path: impl AsRef<Path>) -> Self {
-        todo!()
-        // Self {}
-    }
-
     pub fn stage(&self) -> MergeStage {
         self.flags.stage()
     }

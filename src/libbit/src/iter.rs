@@ -1,6 +1,5 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndexEntry;
-use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
 use fallible_iterator::FallibleIterator;
@@ -47,8 +46,7 @@ impl BitRepo {
     }
 }
 
-trait BitIteratorExt: BitIterator {
-}
+trait BitIteratorExt: BitIterator {}
 
 impl<I: BitIterator> BitIteratorExt for I {
 }

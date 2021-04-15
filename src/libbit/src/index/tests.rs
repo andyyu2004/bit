@@ -73,11 +73,7 @@ fn parse_small_index() -> BitResult<()> {
     ]
     .into();
 
-    let expected_index = BitIndex {
-        header: BitIndexHeader { signature: [b'D', b'I', b'R', b'C'], version: 2, entryc: 2 },
-        entries,
-        extensions: vec![],
-    };
+    let expected_index = BitIndex { entries, extensions: vec![] };
 
     assert_eq!(expected_index, index);
     Ok(())
