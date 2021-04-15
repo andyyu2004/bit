@@ -16,7 +16,7 @@ pub enum BitRef {
     /// if the ref is `ref: refs/remote/origin/master`
     /// then the `BitPath` contains `refs/remote/origin/master`
     /// possibly bitpath is not the best representation but its ok for now
-    Indirect(BitPath),
+    Symbolic(BitPath),
 }
 
 impl From<BitHash> for BitRef {
@@ -29,7 +29,7 @@ impl Display for BitRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             BitRef::Direct(hash) => write!(f, "{}", hash),
-            BitRef::Indirect(path) => write!(f, "{}", path),
+            BitRef::Symbolic(path) => write!(f, "{}", path),
         }
     }
 }
@@ -55,13 +55,12 @@ impl FromStr for BitRef {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        BitHash::from_str(s).unwrap();
         // probably fair to assume that a valid hash is not an indirect path
         if let Ok(hash) = BitHash::from_str(s) {
             return Ok(Self::Direct(hash));
         }
         // TODO validation of indirect?
-        Ok(Self::Indirect(BitPath::intern(s)))
+        Ok(Self::Symbolic(BitPath::intern(s)))
     }
 }
 
@@ -69,7 +68,7 @@ impl BitRef {
     pub fn resolve(&self, repo: &BitRepo) -> BitResult<BitHash> {
         match self {
             BitRef::Direct(hash) => Ok(*hash),
-            BitRef::Indirect(_path) => {
+            BitRef::Symbolic(_path) => {
                 // self.resolve_ref(r)
                 todo!();
             }

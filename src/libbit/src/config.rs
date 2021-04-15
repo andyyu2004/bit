@@ -134,12 +134,12 @@ impl<'c> BitConfig<'c> {
             .transpose()
     }
 
-    pub fn set(&mut self, section_name: &str, key: &str, value: &str) -> BitResult<()> {
+    pub fn set(&mut self, section_name: &str, key: &str, value: impl ToString) -> BitResult<()> {
         let mut section = match self.inner.section_mut(section_name, None) {
             Ok(section) => section,
             Err(_) => self.inner.new_section(section_name.intern(), None),
         };
-        section.set(key.intern().into(), value.intern().as_bytes().into());
+        section.set(key.intern().into(), value.to_string().intern().as_bytes().into());
         self.write()?;
         Ok(())
     }
@@ -168,5 +168,8 @@ macro_rules! get_opt {
 }
 
 get_opt!(core.repositoryformatversion: i64);
+get_opt!(core.bare: bool);
+get_opt!(core.filemode: bool);
+
 get_opt!(user.name: String);
 get_opt!(user.email: String);
