@@ -5,10 +5,8 @@ impl BitRepo {
     pub fn bit_commit(&self, message: Option<String>) -> BitResult<()> {
         let parent = self.read_head()?.map(|r| r.resolve(self)).transpose()?;
         let tree = self.write_tree()?;
-        self.commit_tree(parent, message, tree)?;
+        let hash = self.commit_tree(parent, message, tree)?;
+        self.update_head(hash)?;
         Ok(())
     }
-
-
-
 }

@@ -19,6 +19,12 @@ pub enum BitRef {
     Indirect(BitPath),
 }
 
+impl From<BitHash> for BitRef {
+    fn from(hash: BitHash) -> Self {
+        Self::Direct(hash)
+    }
+}
+
 impl Display for BitRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {

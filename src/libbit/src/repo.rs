@@ -113,9 +113,9 @@ impl BitRepo {
         })
     }
 
-    pub fn write_head(&self, bitref: BitRef) -> BitResult<()> {
+    pub fn update_head(&self, bitref: impl Into<BitRef>) -> BitResult<()> {
         Lockfile::with_mut(self.head_path(), |lockfile| {
-            bitref.serialize(lockfile)?;
+            bitref.into().serialize(lockfile)?;
             Ok(())
         })
     }
