@@ -185,7 +185,6 @@ impl BitRepo {
 
         let this = Self::new(worktree, bitdir, config_filepath);
         this.mk_bitdir("objects")?;
-        this.mk_bitdir("branches")?;
         this.mk_bitdir("refs/tags")?;
         this.mk_bitdir("refs/heads")?;
 
