@@ -36,7 +36,15 @@ pub fn run() -> BitResult<()> {
     BitRepo::find(root_path, |repo| match subcmd {
         BitSubCmd::Log(..) => todo!(),
         BitSubCmd::Init(..) => unreachable!(),
-        BitSubCmd::Add(opts) => repo.bit_add(opts.into()),
+        // TODO the real behaviour is more complex than this
+        BitSubCmd::Add(opts) =>
+            if opts.dryrun {
+                repo.bit_add_dryrun(&opts.pathspecs)
+            } else if opts.all {
+                repo.bit_add_all()
+            } else {
+                repo.bit_add(&opts.pathspecs)
+            },
         BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),
         BitSubCmd::WriteTree => repo.bit_write_tree(),
         BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),

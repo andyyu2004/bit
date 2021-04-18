@@ -11,7 +11,7 @@ pub(crate) struct Interner {
     map: HashMap<&'static str, BitPath>,
     set: HashSet<&'static str>,
     paths: Vec<&'static str>,
-    components: HashMap<BitPath, &'static [&'static str]>,
+    components: HashMap<BitPath, &'static [BitPath]>,
 }
 
 pub trait Intern {
@@ -20,7 +20,7 @@ pub trait Intern {
 
 impl Intern for str {
     fn intern(&self) -> &'static Self {
-        with_path_interner(|interner| interner.intern_str(self))
+        with_path_interner_mut(|interner| interner.intern_str(self))
     }
 }
 
@@ -58,23 +58,17 @@ impl Interner {
         bitpath
     }
 
-    fn intern_components(&mut self, path: impl AsRef<Path>) -> &'static [&'static str] {
+    fn intern_components(&mut self, path: impl AsRef<Path>) -> &'static [BitPath] {
         // recursively interns each of the paths components
         let vec = path
             .as_ref()
             .iter()
-            .map(|os_str| {
-                let bitpath = self.intern_path(os_str.to_str().unwrap());
-                self.get_str(bitpath)
-            })
+            .map(|os_str| self.intern_path(os_str.to_str().unwrap()))
             .collect_vec();
-        let slice = self.arena.alloc_slice_copy(&vec);
-        // SAFETY &[&u8] to &[&str] where &str is known to be valid utf8;
-        // from_utf8_unchecked is just a transmute under the hood anyway
-        unsafe { &*(slice as *mut [&str] as *const [&str]) }
+        unsafe { &*(self.arena.alloc_slice_copy(&vec) as *const _) }
     }
 
-    pub fn get_components(&mut self, bitpath: BitPath) -> &'static [&'static str] {
+    pub fn get_components(&mut self, bitpath: BitPath) -> &'static [BitPath] {
         if let Some(components) = self.components.get(&bitpath) {
             return components;
         }
@@ -93,6 +87,10 @@ thread_local! {
     static INTERNER: RefCell<Interner> = Default::default();
 }
 
-pub(crate) fn with_path_interner<R>(f: impl FnOnce(&mut Interner) -> R) -> R {
+pub(crate) fn with_path_interner<R>(f: impl FnOnce(&Interner) -> R) -> R {
+    INTERNER.with(|interner| f(&*interner.borrow()))
+}
+
+pub(crate) fn with_path_interner_mut<R>(f: impl FnOnce(&mut Interner) -> R) -> R {
     INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
 }

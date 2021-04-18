@@ -23,7 +23,7 @@ pub const BIT_OBJECTS_DIR_PATH: &str = "objects";
 pub struct BitRepo {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
-    pub worktree: BitPath,
+    pub workdir: BitPath,
     pub bitdir: BitPath,
     head_filepath: BitPath,
     config_filepath: BitPath,
@@ -62,13 +62,13 @@ impl BitRepo {
         tls::enter_repo(&repo, f)
     }
 
-    fn new(worktree: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> Self {
-        let worktree = BitPath::intern(worktree);
+    fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> Self {
+        let workdir = BitPath::intern(workdir);
         let bitdir = BitPath::intern(bitdir);
         let config_filepath = BitPath::intern(config_filepath);
         Self {
             config_filepath,
-            worktree,
+            workdir,
             bitdir,
             index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
@@ -228,9 +228,9 @@ impl BitRepo {
     pub(crate) fn canonicalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
         // self.worktree should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
-        debug_assert!(self.worktree.is_absolute());
+        debug_assert!(self.workdir.is_absolute());
         let path = path.as_ref();
-        let path = self.worktree.join(&path).canonicalize().with_context(|| {
+        let path = self.workdir.join(&path).canonicalize().with_context(|| {
             anyhow!("failed to convert path `{}` to absolute path", path.display())
         })?;
         Ok(BitPath::intern(path))
@@ -241,7 +241,7 @@ impl BitRepo {
         // this seems to work just as well as the pathdiff crate
         let path = path.as_ref();
         assert!(path.is_absolute());
-        Ok(BitPath::intern(path.strip_prefix(&self.worktree)?))
+        Ok(BitPath::intern(path.strip_prefix(&self.workdir)?))
     }
 
     pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> BitPath {
@@ -264,7 +264,7 @@ impl BitRepo {
 impl Debug for BitRepo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BitRepo")
-            .field("worktree", &self.worktree)
+            .field("worktree", &self.workdir)
             .field("bitdir", &self.bitdir)
             .finish_non_exhaustive()
     }
@@ -272,4 +272,3 @@ impl Debug for BitRepo {
 
 #[cfg(test)]
 mod tests;
-

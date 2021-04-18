@@ -42,7 +42,7 @@ pub trait BitIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGeneri
 
 impl BitRepo {
     pub fn worktree_iter(&self) -> impl BitIterator {
-        WorktreeIter::new(&self.worktree)
+        WorktreeIter::new(&self.workdir)
     }
 }
 

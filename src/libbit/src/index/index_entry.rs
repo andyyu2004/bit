@@ -9,6 +9,7 @@ use std::os::linux::fs::MetadataExt;
 
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct BitIndexEntries(BitIndexEntriesMap);
+
 type BitIndexEntriesMap = BTreeMap<(BitPath, MergeStage), BitIndexEntry>;
 
 impl Deref for BitIndexEntries {
@@ -128,6 +129,12 @@ pub struct BitIndexEntry {
     pub filepath: BitPath,
 }
 
+impl BitIndexEntry {
+    pub fn as_key(&self) -> (BitPath, MergeStage) {
+        (self.filepath, self.stage())
+    }
+}
+
 const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + std::mem::size_of::<u64>() // mtime
             + std::mem::size_of::<u32>() // device
@@ -154,7 +161,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             path
         };
 
-        assert!(canonical.is_file());
+        ensure!(canonical.is_file());
         let metadata = canonical.metadata().unwrap();
 
         // the path must be relative to the repository root

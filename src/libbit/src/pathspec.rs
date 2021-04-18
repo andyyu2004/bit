@@ -3,6 +3,7 @@ use crate::iter::BitIterator;
 use crate::path::BitPath;
 use crate::tls;
 use itertools::Itertools;
+use std::convert::TryFrom;
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -11,6 +12,14 @@ pub struct Pathspec {
     /// up to either the first wildcard or the last slash
     pub prefix: BitPath,
     // pathspec: Vec<()>,
+}
+
+impl TryFrom<&str> for Pathspec {
+    type Error = BitGenericError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::from_str(s)
+    }
 }
 
 impl Pathspec {
@@ -63,7 +72,7 @@ impl FromStr for Pathspec {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let prefix_end = Self::find_prefix_end(&s);
-        let prefix = match prefix_end {
+        let mut prefix = match prefix_end {
             Some(i) => &s[..i],
             None => s,
         };

@@ -69,12 +69,29 @@ impl BitIndex {
 
     /// if entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, entry: BitIndexEntry) -> BitResult<()> {
-        self.entries.insert((entry.filepath, entry.flags.stage()), entry);
+        self.remove_collisions(&entry)?;
+        self.entries.insert(entry.as_key(), entry);
+        Ok(())
+    }
+
+    /// removes collisions where there was originally a file but was replaced by a directory
+    fn remove_file_dir_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
+        //? only removing entries with no merge stage (may need changes)
+        for component in entry.filepath.accumulative_components() {
+            self.entries.remove(&(component, MergeStage::None));
+        }
+        Ok(())
+    }
+
+    /// remove directory/file and file/directory collisions that are possible in the index
+    fn remove_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
+        self.remove_file_dir_collisions(entry)?;
         Ok(())
     }
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
-        pathspec.match_worktree()?.for_each(|entry| self.add_entry(entry))
+        pathspec.match_worktree()?.for_each(|entry| self.add_entry(entry))?;
+        Ok(())
     }
 
     pub fn has_conflicts(&self) -> bool {
@@ -167,10 +184,16 @@ pub struct BitIndexExtension {
 #[repr(u8)]
 pub enum MergeStage {
     /// not merging
-    NONE    = 0,
-    STAGE_1 = 1,
-    STAGE_2 = 2,
-    STAGE_3 = 3,
+    None   = 0,
+    Stage1 = 1,
+    Stage2 = 2,
+    Stage3 = 3,
+}
+
+impl Default for MergeStage {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 impl MergeStage {

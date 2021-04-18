@@ -1,43 +1,27 @@
 use crate::error::BitResult;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
-use crate::tls;
 use fallible_iterator::FallibleIterator;
 
-#[derive(Debug)]
-pub struct BitAddOpts {
-    pub pathspecs: Vec<Pathspec>,
-    pub dryrun: bool,
-}
-
-impl Default for BitAddOpts {
-    fn default() -> Self {
-        Self { pathspecs: Default::default(), dryrun: false }
-    }
-}
-
-impl BitAddOpts {
-    pub fn add_pathspec(self, pathspec: Pathspec) -> Self {
-        let mut pathspecs = self.pathspecs;
-        pathspecs.push(pathspec);
-        Self { pathspecs, ..self }
-    }
-}
-
 impl BitRepo {
-    pub fn bit_add(&self, opts: BitAddOpts) -> BitResult<()> {
-        tls::with_index_mut(|index| {
-            dbg!(&index);
-            for pathspec in opts.pathspecs {
-                if opts.dryrun {
-                    pathspec
-                        .match_worktree()?
-                        .for_each(|entry| Ok(println!("add `{}`", entry.filepath)))?;
-                } else {
-                    index.add(&pathspec)?;
-                }
+    pub fn bit_add_dryrun(&self, pathspecs: &[Pathspec]) -> BitResult<()> {
+        for pathspec in pathspecs {
+            pathspec
+                .match_worktree()?
+                .for_each(|entry| Ok(println!("add `{}`", entry.filepath)))?;
+        }
+        Ok(())
+    }
+
+    pub fn bit_add_all(&self) -> BitResult<()> {
+        self.with_index_mut(|index| self.worktree_iter().for_each(|entry| index.add_entry(entry)))
+    }
+
+    pub fn bit_add(&self, pathspecs: &[Pathspec]) -> BitResult<()> {
+        self.with_index_mut(|index| {
+            for pathspec in pathspecs {
+                index.add(&pathspec)?;
             }
-            dbg!(&index);
             Ok(())
         })
     }

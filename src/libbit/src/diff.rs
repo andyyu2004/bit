@@ -2,7 +2,6 @@ use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::iter::BitIterator;
 use crate::repo::BitRepo;
-use fallible_iterator::FallibleIterator;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 

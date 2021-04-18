@@ -1,10 +1,34 @@
 use super::*;
-use crate::cmd::BitAddOpts;
+use crate::error::BitGenericError;
 use crate::path::BitPath;
 use itertools::Itertools;
 use std::fs::File;
 use std::io::BufReader;
 use std::str::FromStr;
+
+impl BitRepo {
+    pub fn index_add(
+        &self,
+        pathspec: impl TryInto<Pathspec, Error = BitGenericError>,
+    ) -> BitResult<()> {
+        self.with_index_mut(|index| index.add(&pathspec.try_into()?))
+    }
+
+    // creates a repository in a temporary directory and initializes it
+    pub fn with_test_repo<R>(f: impl FnOnce(&BitRepo) -> BitResult<R>) -> BitResult<R> {
+        let basedir = tempfile::tempdir()?;
+        let basepath = basedir.path();
+        BitRepo::init_load(&basedir, f)
+    }
+}
+
+impl BitIndex {
+    #[cfg(test)]
+    pub fn add_str(&mut self, s: &str) -> BitResult<()> {
+        let pathspec = s.parse::<Pathspec>()?;
+        pathspec.match_worktree()?.for_each(|entry| self.add_entry(entry))
+    }
+}
 
 #[test]
 fn parse_large_index() -> BitResult<()> {
@@ -14,20 +38,171 @@ fn parse_large_index() -> BitResult<()> {
     Ok(())
 }
 
+/// check all files in a directory are added (recursively)
+#[test]
+fn index_add_directory() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        let dir = repo.workdir.join("dir");
+        std::fs::create_dir(&dir)?;
+        std::fs::create_dir(dir.join("c"))?;
+        File::create(dir.join("c/d"))?;
+        File::create(dir.join("a"))?;
+        File::create(dir.join("b"))?;
+        repo.with_index_mut(|index| {
+            index.add_str("dir")?;
+            assert!(index.entries.len() == 3);
+            let mut entries = index.entries.values();
+            assert_eq!(entries.next().unwrap().filepath, "dir/a");
+            assert_eq!(entries.next().unwrap().filepath, "dir/b");
+            assert_eq!(entries.next().unwrap().filepath, "dir/c/d");
+            Ok(())
+        })
+    })
+}
+
+/// file `a` and file `a/somefile` should not exist simultaneously
+/// however, naively we can achieve the above state in the index by the following
+/// ```
+///  touch a
+///  bit add a
+///  rm a
+///  mkdir a
+///  touch a/somefile
+///  bit add a
+/// ```
+/// to avoid the above the index needs to perform some conflict detection when adding
+/// `
+#[test]
+fn index_file_directory_collision() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        let a = repo.workdir.join("a");
+        File::create(&a)?;
+        repo.with_index_mut(|index| {
+            index.add_str("a")?;
+            std::fs::remove_file(&a)?;
+            std::fs::create_dir(&a)?;
+            File::create(a.join("somefile"))?;
+            index.add_str("a")?;
+
+            assert_eq!(index.entries.len(), 1);
+            let mut entries = index.entries.values();
+            assert_eq!(entries.next().unwrap().filepath, "a/somefile");
+            Ok(())
+        })
+    })
+}
+
+macro_rules! bit_add_all {
+    ($repo:expr) => {
+        $repo.bit_add_all()?
+    };
+}
+
+macro_rules! mkdir {
+    ($repo:expr, $path:expr) => {
+        std::fs::create_dir($repo.workdir.join($path))?
+    };
+}
+
+macro_rules! touch {
+    ($repo:expr, $path:expr) => {
+        std::fs::File::create($repo.workdir.join($path))?
+    };
+}
+
+macro_rules! rmdir {
+    ($repo:expr, $path:expr) => {
+        std::fs::remove_dir($repo.workdir.join($path))?
+    };
+}
+
+macro_rules! rm {
+    ($repo:expr, $path:expr) => {
+        std::fs::remove_file($repo.workdir.join($path))?
+    };
+}
+
+/// ```
+///  mkdir foo
+///  touch foo/bar
+///  touch bar
+///  bit add -A
+///  rm foo/bar
+///  mkdir foo/bar
+///  touch foo/bar/baz
+///  bit add -A
+/// ```
+/// check that `bar` is not removed but `foo/bar` is
+#[test]
+fn index_nested_file_directory_collision() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        mkdir!(repo, "foo");
+        touch!(repo, "foo/bar");
+        touch!(repo, "bar");
+        bit_add_all!(repo);
+        rm!(repo, "foo/bar");
+        mkdir!(repo, "foo/bar");
+        touch!(repo, "foo/bar/baz");
+        bit_add_all!(repo);
+
+        repo.with_index_mut(|index| {
+            assert_eq!(index.entries.len(), 2);
+            let mut entries = index.entries.values();
+            assert_eq!(entries.next().unwrap().filepath, "bar");
+            assert_eq!(entries.next().unwrap().filepath, "foo/bar/baz");
+            Ok(())
+        })
+    })
+}
+
+/// the opposite problem of the one above
+/// ```
+///  mkdir foo
+///  touch foo/a
+///  touch foo/b
+///  mkdir foo/bar
+///  touch foo/bar/baz
+///  bit add foo
+///  rm -r foo
+///  touch foo
+///  bit add foo
+/// ```
+/// adding the file `foo` should remove all the entries
+/// of the directory foo recursively
+#[test]
+fn index_directory_file_collision() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        repo.with_index_mut(|index| {
+            let foo = repo.workdir.join("foo");
+            std::fs::create_dir(foo)?;
+            File::create(foo.join("a"))?;
+            File::create(foo.join("b"))?;
+            std::fs::create_dir(foo.join("bar"))?;
+            File::create(foo.join("bar/baz"))?;
+            index.add_str("foo")?;
+            assert_eq!(index.entries.len(), 3);
+            std::fs::remove_dir_all(foo)?;
+            File::create(foo)?;
+            index.add_str("foo")?;
+
+            assert_eq!(index.entries.len(), 1);
+            let mut entries = index.entries.values();
+            assert_eq!(entries.next().unwrap().filepath, "foo");
+            Ok(())
+        })
+    })
+}
+
 // this test adds something to the index and checks the index is still parseable
+// `with_index` reparses it
 #[test]
 fn add_file_to_index() -> BitResult<()> {
-    let basedir = tempfile::tempdir()?;
-    let basepath = basedir.path();
-    let filepath = basepath.join("a");
-    File::create(&filepath)?;
-    dbg!(&filepath);
-    assert!(filepath.exists());
-    assert!(filepath.is_file());
-
-    BitRepo::init_load(&basedir, |repo| {
-        dbg!(repo);
-        repo.bit_add(BitAddOpts::default().add_pathspec("a".parse().unwrap()))?;
+    BitRepo::with_test_repo(|repo| {
+        let filepath = repo.workdir.join("a");
+        File::create(&filepath)?;
+        assert!(filepath.exists());
+        assert!(filepath.is_file());
+        repo.index_add("a")?;
         repo.with_index(|_| Ok(()))
     })
 }
@@ -161,7 +336,7 @@ fn test_bit_index_entry_flags() {
     let flags = BitIndexEntryFlags::new(0xb9fa);
     assert!(flags.assume_valid());
     assert!(!flags.extended());
-    assert_eq!(flags.stage(), MergeStage::STAGE_3);
+    assert_eq!(flags.stage(), MergeStage::Stage3);
     assert_eq!(flags.path_len(), 0x9fa);
 }
 

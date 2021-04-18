@@ -8,7 +8,6 @@ pub struct BitCatFileOpts {
     pub op: BitCatFileOperation,
 }
 
-/// check docs on [`BitCatFileCliOpts`]
 #[derive(Debug)]
 pub enum BitCatFileOperation {
     PrintAsType(BitObjType),

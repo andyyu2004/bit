@@ -1,7 +1,7 @@
 use crate::error::BitResult;
-use crate::interner::with_path_interner;
+use crate::interner::{with_path_interner, with_path_interner_mut};
 use crate::io_ext::ReadExt;
-
+use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
@@ -16,7 +16,7 @@ use std::path::Path;
 pub struct BitPath(u32);
 
 impl BitPath {
-    pub fn new(u: u32) -> Self {
+    pub(crate) fn new(u: u32) -> Self {
         Self(u)
     }
 
@@ -32,22 +32,30 @@ impl BitPath {
         Ok(File::open(self)?.read_to_vec()?)
     }
 
-    pub fn intern(p: impl AsRef<Path>) -> Self {
-        // a sanity check to avoid interning a path that is already a BitPath by accident
-        // this will result in a borrow_mut error, as the `as_ref` on a bitpath requires the interner
-        debug_assert!(
-            std::any::type_name_of_val(&p) != std::any::type_name::<BitPath>(),
-            "don't reintern a BitPath"
-        );
-        with_path_interner(|interner| interner.intern_path(p.as_ref().to_str().unwrap()))
+    pub fn intern(path: impl AsRef<Path>) -> Self {
+        // this must be outside the `interner` closure as the `as_ref` impl may use the interner
+        // leading to refcell panics
+        let path = path.as_ref();
+        with_path_interner_mut(|interner| interner.intern_path(path.to_str().unwrap()))
     }
 
     pub fn as_str(self) -> &'static str {
         with_path_interner(|interner| interner.get_str(self))
     }
 
-    pub fn components(self) -> &'static [&'static str] {
-        with_path_interner(|interner| interner.get_components(self))
+    /// returns the components of a path
+    /// foo/bar/baz -> [foo, bar, baz]
+    pub fn components(self) -> &'static [BitPath] {
+        with_path_interner_mut(|interner| interner.get_components(self))
+    }
+
+    /// similar to `[BitPath::components](crate::path::BitPath::components)`
+    /// foo/bar/baz -> [foo, foo/bar, foo/bar/baz]
+    pub fn accumulative_components(self) -> impl Iterator<Item = BitPath> {
+        self.components().iter().scan(BitPath::intern(""), |ps, p| {
+            *ps = ps.join(p);
+            Some(*ps)
+        })
     }
 
     pub fn try_split_path_at(self, idx: usize) -> Option<(BitPath, BitPath)> {
@@ -55,8 +63,9 @@ impl BitPath {
         if idx >= components.len() {
             return None;
         }
-        let (x, y) = (&components[0..idx], &components[idx]);
-        Some((BitPath::intern(&x.join("/")), Self::intern(&y)))
+        let (x, y) = (&components[..idx], &components[idx]);
+        let xs = x.join("/");
+        Some((BitPath::intern(xs), Self::intern(&y)))
     }
 
     pub fn len(self) -> usize {
@@ -98,6 +107,12 @@ impl AsRef<Path> for BitPath {
 impl<'a> From<&'a Path> for BitPath {
     fn from(p: &'a Path) -> Self {
         Self::intern(p)
+    }
+}
+
+impl Borrow<str> for BitPath {
+    fn borrow(&self) -> &'static str {
+        self.as_str()
     }
 }
 
@@ -159,3 +174,6 @@ impl Ord for BitPath {
         self.as_str().cmp(other.as_str())
     }
 }
+
+#[cfg(test)]
+mod tests;
