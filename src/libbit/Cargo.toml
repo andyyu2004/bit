@@ -30,6 +30,8 @@ regex = "1"
 lazy_static = "1.4.0"
 tempfile = "3"
 fallible-iterator = "0.2.0"
+colored = "2.0.0"
+gitignore = "1.0.7"
 
 [dev-dependencies]
 quickcheck = "1"

@@ -67,9 +67,85 @@ where
     }
 }
 
+pub trait Differ {
+    fn on_create(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        Ok(())
+    }
+
+    fn on_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        Ok(())
+    }
+
+    fn on_delete(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        Ok(())
+    }
+}
+pub struct GenericDiff<'d, D, I, J>
+where
+    D: Differ,
+    I: BitIterator,
+    J: BitIterator,
+{
+    differ: &'d mut D,
+    old_iter: Peekable<Fuse<I>>,
+    new_iter: Peekable<Fuse<J>>,
+}
+
+impl<'d, D, I, J> GenericDiff<'d, D, I, J>
+where
+    D: Differ,
+    I: BitIterator,
+    J: BitIterator,
+{
+    fn new(differ: &'d mut D, old_iter: I, new_iter: J) -> Self {
+        Self { old_iter: old_iter.fuse().peekable(), new_iter: new_iter.fuse().peekable(), differ }
+    }
+
+    pub fn run(differ: &'d mut D, old_iter: I, new_iter: J) -> BitResult<()> {
+        Self::new(differ, old_iter, new_iter).diff_generic()
+    }
+
+    fn handle_delete(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        self.old_iter.next()?;
+        self.differ.on_delete(old)
+    }
+
+    fn handle_create(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        self.new_iter.next()?;
+        self.differ.on_create(new)
+    }
+
+    fn handle_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        debug_assert_eq!(old.filepath, new.filepath);
+        self.old_iter.next()?;
+        self.new_iter.next()?;
+        self.differ.on_update(old, new)
+    }
+
+    pub fn diff_generic(&mut self) -> BitResult<()> {
+        loop {
+            match (self.old_iter.peek()?, self.new_iter.peek()?) {
+                (None, None) => break,
+                (None, Some(&new)) => self.handle_create(new)?,
+                (Some(&old), None) => self.handle_delete(old)?,
+                (Some(&old), Some(&new)) => {
+                    // there is an old record that no longer has a matching new record
+                    // therefore it has been deleted
+                    match old.cmp(&new) {
+                        Ordering::Less => self.handle_delete(old)?,
+                        Ordering::Equal => self.handle_update(old, new)?,
+                        Ordering::Greater => self.handle_create(new)?,
+                    }
+                }
+            };
+        }
+        Ok(())
+    }
+}
+
 impl BitRepo {
     pub fn diff_worktree_index(&self) -> BitResult<BitDiff> {
-        self.with_index(|index| self.diff_from_iterators(index.iter(), self.worktree_iter()))
+        self.with_index(|index| self.diff_from_iterators(index.iter(), self.worktree_iter()?))
     }
 
     /// both iterators must be sorted by path

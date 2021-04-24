@@ -42,7 +42,7 @@ impl Pathspec {
     }
 
     pub fn match_worktree(self) -> BitResult<impl BitIterator> {
-        tls::REPO.with(|repo| self.match_iterator(repo.worktree_iter()))
+        tls::REPO.with(|repo| self.match_iterator(repo.worktree_iter()?))
     }
 
     pub fn match_index(self) -> BitResult<impl BitIterator> {

@@ -3,6 +3,7 @@ mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
 mod cli_ls_files;
+mod cli_status;
 mod cli_update_index;
 
 use self::cli_add::BitAddCliOpts;
@@ -11,11 +12,12 @@ use self::cli_add::BitAddCliOpts;
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
 // - probably will make it such that libbit doesn't even expose full commands
 //   and be something more like libgit2
-use self::cli_commit::BitCommitCliOpts;
-use self::cli_commit_tree::BitCommitTreeCliOpts;
-use self::cli_config::BitConfigCliOpts;
-use self::cli_ls_files::BitLsFilesCliOpts;
-use self::cli_update_index::BitUpdateIndexCliOpts;
+use cli_commit::BitCommitCliOpts;
+use cli_commit_tree::BitCommitTreeCliOpts;
+use cli_config::BitConfigCliOpts;
+use cli_ls_files::BitLsFilesCliOpts;
+use cli_status::BitStatusCliOpts;
+use cli_update_index::BitUpdateIndexCliOpts;
 
 use clap::{AppSettings, Clap};
 use libbit::cmd::*;
@@ -54,6 +56,7 @@ pub fn run() -> BitResult<()> {
             dbg!(opts);
             todo!()
         }
+        BitSubCmd::Status(_opts) => Ok(println!("{}", repo.status_report()?)),
         BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
         BitSubCmd::Commit(opts) => repo.bit_commit(opts.message),
     })
@@ -70,16 +73,17 @@ pub struct BitCliOpts {
 
 #[derive(Clap)]
 pub enum BitSubCmd {
-    Init(BitInitCliOpts),
     Add(BitAddCliOpts),
-    Commit(BitCommitCliOpts),
-    HashObject(BitHashObjectCliOpts),
     CatFile(BitCatFileCliOpts),
-    Log(BitLogCliOpts),
-    UpdateIndex(BitUpdateIndexCliOpts),
-    LsFiles(BitLsFilesCliOpts),
     CommitTree(BitCommitTreeCliOpts),
     Config(BitConfigCliOpts),
+    Commit(BitCommitCliOpts),
+    HashObject(BitHashObjectCliOpts),
+    Init(BitInitCliOpts),
+    Log(BitLogCliOpts),
+    LsFiles(BitLsFilesCliOpts),
+    Status(BitStatusCliOpts),
+    UpdateIndex(BitUpdateIndexCliOpts),
     WriteTree,
 }
 

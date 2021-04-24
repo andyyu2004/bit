@@ -13,8 +13,15 @@ struct WorktreeIter {
 }
 
 impl WorktreeIter {
-    pub fn new(path: impl AsRef<Path>) -> Self {
-        Self { walk: WalkBuilder::new(path).sort_by_file_path(Ord::cmp).build() }
+    pub fn new(root: BitPath) -> BitResult<Self> {
+        Ok(Self { walk: WalkBuilder::new(root).sort_by_file_path(Ord::cmp).hidden(false).build() })
+    }
+
+    // we need to explicitly ignore our root `.bit/.git` directories
+    fn ignored(&self, path: &Path) -> BitResult<bool> {
+        let path = tls::REPO.with(|repo| repo.to_relative_path(path))?;
+        let fst_component = path.components()[0];
+        Ok(fst_component == ".bit" || fst_component == ".git")
     }
 }
 
@@ -26,10 +33,12 @@ impl FallibleIterator for WorktreeIter {
         // ignore directories
         let direntry = loop {
             match self.walk.next().transpose()? {
-                Some(entry) =>
-                    if entry.path().is_file() {
+                Some(entry) => {
+                    let path = entry.path();
+                    if path.is_file() && !self.ignored(path)? {
                         break entry;
-                    },
+                    }
+                }
                 None => return Ok(None),
             }
         };
@@ -41,8 +50,8 @@ impl FallibleIterator for WorktreeIter {
 pub trait BitIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>;
 
 impl BitRepo {
-    pub fn worktree_iter(&self) -> impl BitIterator {
-        WorktreeIter::new(&self.workdir)
+    pub fn worktree_iter(&self) -> BitResult<impl BitIterator> {
+        WorktreeIter::new(self.workdir)
     }
 }
 

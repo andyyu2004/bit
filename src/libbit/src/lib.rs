@@ -35,6 +35,7 @@ pub mod obj;
 pub mod path;
 pub mod pathspec;
 pub mod repo;
+pub mod status;
 
 mod diff;
 mod index;
