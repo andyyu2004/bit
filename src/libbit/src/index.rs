@@ -83,9 +83,28 @@ impl BitIndex {
         Ok(())
     }
 
+    /// removes collisions where there was originally a directory but was replaced by a file
+    fn remove_dir_file_collisions(&mut self, index_entry: &BitIndexEntry) -> BitResult<()> {
+        //? unsure which implementation is better
+        // doesn't seem to be a nice way to remove a range of a btreemap
+        // self.entries.retain(|(path, _), _| !path.starts_with(index_entry.filepath));
+        let mut to_remove = vec![];
+        for (&(path, stage), _) in self.entries.range((index_entry.filepath, MergeStage::None)..) {
+            if !path.starts_with(index_entry.filepath) {
+                break;
+            }
+            to_remove.push((path, stage));
+        }
+        for ref key in to_remove {
+            self.entries.remove(key);
+        }
+        Ok(())
+    }
+
     /// remove directory/file and file/directory collisions that are possible in the index
     fn remove_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
         self.remove_file_dir_collisions(entry)?;
+        self.remove_dir_file_collisions(entry)?;
         Ok(())
     }
 
@@ -226,7 +245,7 @@ impl BitIndex {
         r.read_exact(&mut signature)?;
         assert_eq!(&signature, BIT_INDEX_HEADER_SIG);
         let version = r.read_u32()?;
-        assert_eq!(version, 2, "Only index format v2 is supported");
+        ensure!(version == 2, "Only index format v2 is supported");
         let entryc = r.read_u32()?;
 
         Ok(BitIndexHeader { signature, version, entryc })

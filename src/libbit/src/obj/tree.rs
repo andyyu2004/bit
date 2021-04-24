@@ -1,9 +1,6 @@
-use fallible_iterator::FallibleIterator;
-
 use super::FileMode;
 use crate::error::BitResult;
 use crate::hash::BitHash;
-
 use crate::obj::{BitObj, BitObjType};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, Serialize};
@@ -85,7 +82,7 @@ impl Deserialize for Tree {
         let mut v = vec![];
 
         // slightly weird way of checking if the reader is at EOF
-        while r.fill_buf()? != [] {
+        while !r.fill_buf()?.is_empty() {
             let entry = TreeEntry::parse(r)?;
             #[cfg(debug_assertions)]
             v.push(entry.clone());

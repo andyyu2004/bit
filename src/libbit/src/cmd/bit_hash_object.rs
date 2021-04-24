@@ -16,7 +16,7 @@ pub struct BitHashObjectOpts {
 
 impl BitRepo {
     pub fn bit_hash_object(&self, opts: BitHashObjectOpts) -> BitResult<()> {
-        let hash = self.hash_object(opts.into())?;
+        let hash = self.hash_object(opts)?;
         println!("{}", hash);
         Ok(())
     }

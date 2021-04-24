@@ -17,7 +17,6 @@ impl BitRepo {
     // creates a repository in a temporary directory and initializes it
     pub fn with_test_repo<R>(f: impl FnOnce(&BitRepo) -> BitResult<R>) -> BitResult<R> {
         let basedir = tempfile::tempdir()?;
-        let basepath = basedir.path();
         BitRepo::init_load(&basedir, f)
     }
 }
