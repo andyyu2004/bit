@@ -120,10 +120,9 @@ where
         self.old_iter.next()?;
         self.new_iter.next()?;
         // if we are here then we know that the path and stage of the entries match
-        // but that does not mean that the file has not changed
-        if old != new {
-            // equality check includes checks for nanosecond precision mtime (at least on my computer)
-            // and more importantly compares the hashes
+        // however, that does not mean that the file has not changed
+        if old.hash != new.hash {
+            // we simply check the hash to determine whether anything has changed
             // this implementation doesn't do many optimizations so we don't have issues such as
             // racily clean entries etc (I think?)
             self.differ.on_update(old, new)?;

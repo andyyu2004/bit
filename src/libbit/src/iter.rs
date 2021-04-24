@@ -51,7 +51,14 @@ pub trait BitIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGeneri
 
 impl BitRepo {
     pub fn worktree_iter(&self) -> BitResult<impl BitIterator> {
-        WorktreeIter::new(self.workdir)
+        let mut entries: Vec<_> = WorktreeIter::new(self.workdir)?.collect()?;
+        // TODO worktree iterator does not return in the correct order
+        // the comparator function on works per directory
+        // for some reason git places files before directory
+        // i.e. src/index.rs < index/mod.rs
+        // but no directory I've seen does this so we just collect and sort for now
+        entries.sort();
+        Ok(fallible_iterator::convert(entries.into_iter().map(Ok)))
     }
 }
 

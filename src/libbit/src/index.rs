@@ -204,6 +204,7 @@ pub struct BitIndexExtension {
 }
 
 // could probably do with better variant names once I know whats going on
+
 #[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, TryFromPrimitive, Copy, Clone)]
 #[repr(u8)]
 pub enum MergeStage {

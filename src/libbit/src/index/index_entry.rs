@@ -177,7 +177,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             mtime_nano: metadata.st_mtime_nsec() as u32,
             device: metadata.st_dev() as u32,
             inode: metadata.st_ino() as u32,
-            mode: FileMode::new(metadata.st_mode()),
+            mode: FileMode::from_metadata(&metadata),
             uid: metadata.st_uid(),
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,

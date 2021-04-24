@@ -190,13 +190,15 @@ impl Ord for BitPath {
 
     // return (c1 < c2) ? -1 : (c1 > c2) ? 1 : 0;
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // only compare paths that are relative to bit workdir
         // files with the same subpath should come before directories
-        assert!(self.is_relative());
-        assert!(other.is_relative());
-        use std::cmp::Ordering::*;
-        self.as_str().cmp(other.as_str())
+        // doesn't make sense to compare relative with absolute and vice versa
+        assert_eq!(self.is_relative(), other.is_relative());
+        bit_path_cmp(self, other)
     }
+}
+
+pub fn bit_path_cmp(this: &Path, other: &Path) -> std::cmp::Ordering {
+    this.to_str().unwrap().cmp(other.to_str().unwrap())
 }
 
 impl<I> Index<I> for BitPath

@@ -12,7 +12,9 @@ use crate::error::{BitGenericError, BitResult};
 use crate::io_ext::ReadExt;
 use crate::serialize::{Deserialize, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
+use std::fs::Metadata;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
 
 impl Display for BitObjKind {
@@ -64,6 +66,15 @@ impl FileMode {
     #[cfg(debug_assertions)]
     pub fn inner(self) -> u32 {
         self.0
+    }
+
+    pub fn from_metadata(metadata: &Metadata) -> Self {
+        if metadata.is_dir() {
+            return Self::DIR;
+        }
+        let permissions = metadata.permissions();
+        let is_executable = permissions.mode() & 0o111;
+        if is_executable != 0 { Self::EXEC } else { Self::REG }
     }
 
     pub const fn new(u: u32) -> Self {

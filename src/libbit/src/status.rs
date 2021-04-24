@@ -77,15 +77,15 @@ impl Differ for WorktreeIndexDiffer<'_> {
 impl Display for BitStatusReport {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if !(self.modified.is_empty()) {
-            writeln!(f, "changes not staged for commit")?;
-            writeln!(f, "  use `git add <file>...` to update what will be committed")?;
-            writeln!(f, "  use 'git restore <file>...' to discard changes in working directory")?;
+            writeln!(f, "Changes not staged for commit")?;
+            writeln!(f, "  (use `bit add <file>...` to update what will be committed)")?;
+            writeln!(f, "  (use 'bit restore <file>...' to discard changes in working directory)")?;
             for path in &self.modified {
-                writeln!(f, "\t{}", path.red())?;
+                writeln!(f, "\t{}:   {}", "modified".red(), path.red())?;
             }
         }
         if !self.untracked.is_empty() {
-            writeln!(f, "untracked files:")?;
+            writeln!(f, "Untracked files:")?;
             writeln!(f, "  (use `bit add <file>...` to include in what will be committed)")?;
             for path in &self.untracked {
                 writeln!(f, "\t{}", path.red())?;
