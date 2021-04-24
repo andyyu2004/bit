@@ -4,49 +4,67 @@ use crate::index::BitIndexEntry;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use colored::*;
+use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
 pub struct BitStatusReport {
     untracked: Vec<BitPath>,
+    modified: Vec<BitPath>,
 }
 
 impl BitRepo {
     pub fn status_report(&self) -> BitResult<BitStatusReport> {
-        let untracked = UntrackedBuilder::new(self).get_untracked()?;
-        Ok(BitStatusReport { untracked })
+        let WorktreeIndexDiff { untracked, modified } =
+            WorktreeIndexDiffer::new(self).run_diff()?;
+        Ok(BitStatusReport { untracked, modified })
     }
 
     pub fn untracked_files(&self) -> BitResult<Vec<BitPath>> {
-        UntrackedBuilder::new(self).get_untracked()
+        WorktreeIndexDiffer::new(self).run_diff().map(|diff| diff.untracked)
     }
 }
 
-pub(crate) struct UntrackedBuilder<'r> {
+#[derive(Debug)]
+struct WorktreeIndexDiff {
+    untracked: Vec<BitPath>,
+    modified: Vec<BitPath>,
+}
+
+pub(crate) struct WorktreeIndexDiffer<'r> {
     repo: &'r BitRepo,
     untracked: Vec<BitPath>,
+    modified: Vec<BitPath>,
+    // directories that only contain untracked files
+    _untracked_dirs: HashSet<BitPath>,
 }
 
-impl<'r> UntrackedBuilder<'r> {
+impl<'r> WorktreeIndexDiffer<'r> {
     pub fn new(repo: &'r BitRepo) -> Self {
-        Self { repo, untracked: Default::default() }
+        Self {
+            repo,
+            untracked: Default::default(),
+            modified: Default::default(),
+            _untracked_dirs: Default::default(),
+        }
     }
 
-    fn get_untracked(mut self) -> BitResult<Vec<BitPath>> {
+    fn run_diff(mut self) -> BitResult<WorktreeIndexDiff> {
         let repo = self.repo;
         repo.with_index(|index| GenericDiff::run(&mut self, index.iter(), repo.worktree_iter()?))?;
-        Ok(self.untracked)
+        Ok(WorktreeIndexDiff { untracked: self.untracked, modified: self.modified })
     }
 }
 
-impl Differ for UntrackedBuilder<'_> {
+impl Differ for WorktreeIndexDiffer<'_> {
     fn on_create(&mut self, new: BitIndexEntry) -> BitResult<()> {
         self.untracked.push(new.filepath);
         Ok(())
     }
 
-    fn on_update(&mut self, _old: BitIndexEntry, _new: BitIndexEntry) -> BitResult<()> {
-        Ok(())
+    fn on_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        assert_eq!(old.filepath, new.filepath);
+        Ok(self.modified.push(new.filepath))
     }
 
     fn on_delete(&mut self, _old: BitIndexEntry) -> BitResult<()> {
@@ -54,15 +72,24 @@ impl Differ for UntrackedBuilder<'_> {
     }
 }
 
+// TODO if a directory only contains untracked directories
+// it should just print the directory and not its contents
 impl Display for BitStatusReport {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.untracked.is_empty() {
-            return Ok(());
+        if !(self.modified.is_empty()) {
+            writeln!(f, "changes not staged for commit")?;
+            writeln!(f, "  use `git add <file>...` to update what will be committed")?;
+            writeln!(f, "  use 'git restore <file>...' to discard changes in working directory")?;
+            for path in &self.modified {
+                writeln!(f, "\t{}", path.red())?;
+            }
         }
-        writeln!(f, "untracked files:")?;
-        writeln!(f, "  (use `bit add <file>...` to include in what will be committed)")?;
-        for path in &self.untracked {
-            writeln!(f, "\t{}", path.as_str().red())?;
+        if !self.untracked.is_empty() {
+            writeln!(f, "untracked files:")?;
+            writeln!(f, "  (use `bit add <file>...` to include in what will be committed)")?;
+            for path in &self.untracked {
+                writeln!(f, "\t{}", path.red())?;
+            }
         }
         Ok(())
     }

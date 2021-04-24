@@ -210,6 +210,18 @@ impl BitIndexEntry {
     }
 }
 
+impl PartialOrd for BitIndexEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BitIndexEntry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.filepath.cmp(&other.filepath).then_with(|| self.stage().cmp(&other.stage()))
+    }
+}
+
 /// 1  bit  assume-valid
 /// 1  bit  extended
 /// 2  bits stage

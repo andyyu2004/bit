@@ -232,18 +232,6 @@ impl Display for MergeStage {
     }
 }
 
-impl PartialOrd for BitIndexEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for BitIndexEntry {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.filepath.cmp(&other.filepath).then_with(|| self.stage().cmp(&other.stage()))
-    }
-}
-
 impl BitIndex {
     fn parse_header(r: &mut dyn BufRead) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];

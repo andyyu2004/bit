@@ -1,4 +1,5 @@
 use super::*;
+use crate::repo::BitRepo;
 
 #[test]
 fn test_path_components() {
@@ -16,4 +17,18 @@ fn test_path_accumulative_components() {
     assert_eq!(components.next().unwrap(), "foo");
     assert_eq!(components.next().unwrap(), "foo/bar");
     assert_eq!(components.next().unwrap(), "foo/bar/baz");
+}
+
+macro_rules! p {
+    ($path:expr) => {
+        BitPath::intern($path)
+    };
+}
+
+#[test]
+fn test_path_ordering() {
+    // we do need some actual files
+    assert!(p!("foo") < p!("foo/"));
+    assert!(p!("foo") < p!("foo/bar"));
+    assert!(p!("foo") == p!("foo"));
 }

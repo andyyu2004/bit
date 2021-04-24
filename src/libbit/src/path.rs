@@ -1,12 +1,14 @@
 use crate::error::BitResult;
 use crate::interner::{with_path_interner, with_path_interner_mut};
 use crate::io_ext::ReadExt;
+use crate::tls;
 use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
-use std::ops::Deref;
+use std::ops::{Deref, Index};
 use std::path::Path;
+use std::slice::SliceIndex;
 
 /// interned path (where path is just a string)
 // interning paths is likely not worth it, but its nice to have it as a copy type
@@ -167,9 +169,44 @@ impl PartialOrd for BitPath {
 }
 
 impl Ord for BitPath {
-    // ordered as raw bytes
+    // from libgit2 where `compare` is `strncmp` or `strncasecmp`
+    // int git_path_cmp(..)
+    // unsigned char c1, c2;
+    // size_t len = len1 < len2 ? len1 : len2;
+    // int cmp;
+
+    // cmp = compare(name1, name2, len);
+    // if (cmp)
+    // 	return cmp;
+
+    // c1 = name1[len];
+    // c2 = name2[len];
+
+    // if (c1 == '\0' && isdir1)
+    // 	c1 = '/';
+
+    // if (c2 == '\0' && isdir2)
+    // 	c2 = '/';
+
+    // return (c1 < c2) ? -1 : (c1 > c2) ? 1 : 0;
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.as_path().cmp(other.as_path())
+        // only compare paths that are relative to bit workdir
+        // files with the same subpath should come before directories
+        assert!(self.is_relative());
+        assert!(other.is_relative());
+        use std::cmp::Ordering::*;
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl<I> Index<I> for BitPath
+where
+    I: SliceIndex<str>,
+{
+    type Output = I::Output;
+
+    fn index(&self, index: I) -> &Self::Output {
+        &self.as_str()[index]
     }
 }
 

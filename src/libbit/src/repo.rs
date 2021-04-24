@@ -226,7 +226,7 @@ impl BitRepo {
     }
 
     pub(crate) fn canonicalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
-        // self.worktree should be a canonical, absolute path
+        // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
         let path = path.as_ref();

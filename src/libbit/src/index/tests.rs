@@ -51,15 +51,14 @@ fn test_parse_large_index() -> BitResult<()> {
 #[test]
 fn test_index_add_directory() -> BitResult<()> {
     BitRepo::with_test_repo(|repo| {
-        let dir = repo.workdir.join("dir");
-        std::fs::create_dir(&dir)?;
-        std::fs::create_dir(dir.join("c"))?;
-        File::create(dir.join("c/d"))?;
-        File::create(dir.join("a"))?;
-        File::create(dir.join("b"))?;
+        mkdir!(repo, "dir");
+        mkdir!(repo, "dir/c");
+        touch!(repo, "dir/c/d");
+        touch!(repo, "dir/a");
+        touch!(repo, "dir/b");
         repo.with_index_mut(|index| {
             index.add_str("dir")?;
-            assert!(index.entries.len() == 3);
+            assert_eq!(index.entries.len(), 3);
             let mut entries = index.entries.values();
             assert_eq!(entries.next().unwrap().filepath, "dir/a");
             assert_eq!(entries.next().unwrap().filepath, "dir/b");

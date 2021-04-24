@@ -115,11 +115,20 @@ where
         self.differ.on_create(new)
     }
 
-    fn handle_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+    fn handle_potential_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         debug_assert_eq!(old.filepath, new.filepath);
         self.old_iter.next()?;
         self.new_iter.next()?;
-        self.differ.on_update(old, new)
+        // if we are here then we know that the path and stage of the entries match
+        // but that does not mean that the file has not changed
+        if old != new {
+            // equality check includes checks for nanosecond precision mtime (at least on my computer)
+            // and more importantly compares the hashes
+            // this implementation doesn't do many optimizations so we don't have issues such as
+            // racily clean entries etc (I think?)
+            self.differ.on_update(old, new)?;
+        }
+        Ok(())
     }
 
     pub fn diff_generic(&mut self) -> BitResult<()> {
@@ -133,7 +142,7 @@ where
                     // therefore it has been deleted
                     match old.cmp(&new) {
                         Ordering::Less => self.handle_delete(old)?,
-                        Ordering::Equal => self.handle_update(old, new)?,
+                        Ordering::Equal => self.handle_potential_update(old, new)?,
                         Ordering::Greater => self.handle_create(new)?,
                     }
                 }
