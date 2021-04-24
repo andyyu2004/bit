@@ -109,7 +109,12 @@ impl BitIndex {
     }
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
-        pathspec.match_worktree()?.for_each(|entry| self.add_entry(entry))?;
+        let mut did_add = false;
+        pathspec.match_worktree()?.for_each(|entry| {
+            did_add = true;
+            self.add_entry(entry)
+        })?;
+        ensure!(did_add, "no files added: pathspec `{}` did not match any files", pathspec);
         Ok(())
     }
 

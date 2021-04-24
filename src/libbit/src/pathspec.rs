@@ -4,6 +4,7 @@ use crate::path::BitPath;
 use crate::tls;
 use itertools::Itertools;
 use std::convert::TryFrom;
+use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -19,6 +20,12 @@ impl TryFrom<&str> for Pathspec {
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         Self::from_str(s)
+    }
+}
+
+impl Display for Pathspec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.prefix)
     }
 }
 

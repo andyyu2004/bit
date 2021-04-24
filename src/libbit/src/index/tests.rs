@@ -30,7 +30,16 @@ impl BitIndex {
 }
 
 #[test]
-fn parse_large_index() -> BitResult<()> {
+fn test_add_non_matching_pathspec() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        let err = repo.index_add("wer").unwrap_err();
+        assert_eq!(err.to_string(), "no files added: pathspec `wer` did not match any files");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_parse_large_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
     let index = BitIndex::deserialize_unbuffered(bytes)?;
     assert_eq!(index.entries.len(), 31);
@@ -39,7 +48,7 @@ fn parse_large_index() -> BitResult<()> {
 
 /// check all files in a directory are added (recursively)
 #[test]
-fn index_add_directory() -> BitResult<()> {
+fn test_index_add_directory() -> BitResult<()> {
     BitRepo::with_test_repo(|repo| {
         let dir = repo.workdir.join("dir");
         std::fs::create_dir(&dir)?;
