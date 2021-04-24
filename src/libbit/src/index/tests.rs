@@ -1,6 +1,7 @@
 use super::*;
 use crate::error::BitGenericError;
 use crate::path::BitPath;
+use crate::*;
 use itertools::Itertools;
 use std::fs::File;
 use std::io::BufReader;
@@ -98,36 +99,6 @@ fn index_file_directory_collision() -> BitResult<()> {
             Ok(())
         })
     })
-}
-
-macro_rules! bit_add_all {
-    ($repo:expr) => {
-        $repo.bit_add_all()?
-    };
-}
-
-macro_rules! mkdir {
-    ($repo:expr, $path:expr) => {
-        std::fs::create_dir($repo.workdir.join($path))?
-    };
-}
-
-macro_rules! touch {
-    ($repo:expr, $path:expr) => {
-        std::fs::File::create($repo.workdir.join($path))?
-    };
-}
-
-macro_rules! rmdir {
-    ($repo:expr, $path:expr) => {
-        std::fs::remove_dir($repo.workdir.join($path))?
-    };
-}
-
-macro_rules! rm {
-    ($repo:expr, $path:expr) => {
-        std::fs::remove_file($repo.workdir.join($path))?
-    };
 }
 
 /// ```

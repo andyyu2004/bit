@@ -56,7 +56,7 @@ pub fn run() -> BitResult<()> {
             dbg!(opts);
             todo!()
         }
-        BitSubCmd::Status(_opts) => Ok(println!("{}", repo.status_report()?)),
+        BitSubCmd::Status(_opts) => Ok(print!("{}", repo.status_report()?)),
         BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
         BitSubCmd::Commit(opts) => repo.bit_commit(opts.message),
     })

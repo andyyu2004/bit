@@ -16,9 +16,13 @@ impl BitRepo {
         let untracked = UntrackedBuilder::new(self).get_untracked()?;
         Ok(BitStatusReport { untracked })
     }
+
+    pub fn untracked_files(&self) -> BitResult<Vec<BitPath>> {
+        UntrackedBuilder::new(self).get_untracked()
+    }
 }
 
-struct UntrackedBuilder<'r> {
+pub(crate) struct UntrackedBuilder<'r> {
     repo: &'r BitRepo,
     untracked: Vec<BitPath>,
 }
@@ -37,7 +41,6 @@ impl<'r> UntrackedBuilder<'r> {
 
 impl Differ for UntrackedBuilder<'_> {
     fn on_create(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        println!("create {}", new.filepath);
         self.untracked.push(new.filepath);
         Ok(())
     }
@@ -47,13 +50,15 @@ impl Differ for UntrackedBuilder<'_> {
     }
 
     fn on_delete(&mut self, _old: BitIndexEntry) -> BitResult<()> {
-        println!("delete {}", _old.filepath);
         Ok(())
     }
 }
 
 impl Display for BitStatusReport {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.untracked.is_empty() {
+            return Ok(());
+        }
         writeln!(f, "untracked files:")?;
         writeln!(f, "  (use `bit add <file>...` to include in what will be committed)")?;
         for path in &self.untracked {
@@ -62,3 +67,6 @@ impl Display for BitStatusReport {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

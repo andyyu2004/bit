@@ -25,3 +25,37 @@ pub fn generate_sane_string(range: std::ops::Range<usize>) -> String {
     s
 }
 
+macro_rules! bit_add_all {
+    ($repo:expr) => {
+        $repo.bit_add_all()?
+    };
+}
+
+macro_rules! mkdir {
+    ($repo:expr, $path:expr) => {
+        std::fs::create_dir($repo.workdir.join($path))?
+    };
+}
+
+macro_rules! bit_add {
+    ($repo:expr, $pathspec:expr) => {
+        $repo.index_add($pathspec)?
+    };
+}
+macro_rules! touch {
+    ($repo:expr, $path:expr) => {
+        std::fs::File::create($repo.workdir.join($path))?
+    };
+}
+
+macro_rules! rmdir {
+    ($repo:expr, $path:expr) => {
+        std::fs::remove_dir($repo.workdir.join($path))?
+    };
+}
+
+macro_rules! rm {
+    ($repo:expr, $path:expr) => {
+        std::fs::remove_file($repo.workdir.join($path))?
+    };
+}

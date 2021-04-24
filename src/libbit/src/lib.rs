@@ -25,6 +25,7 @@ extern crate scoped_tls;
 extern crate anyhow;
 
 #[cfg(test)]
+#[macro_use]
 mod test_utils;
 
 pub mod cmd;
