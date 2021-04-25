@@ -61,17 +61,17 @@ impl<'r> WorktreeIndexDiffer<'r> {
 }
 
 impl Differ for WorktreeIndexDiffer<'_> {
-    fn on_create(&mut self, new: BitIndexEntry) -> BitResult<()> {
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         self.untracked.push(new.filepath);
         Ok(())
     }
 
-    fn on_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         assert_eq!(old.filepath, new.filepath);
         Ok(self.modified.push(new.filepath))
     }
 
-    fn on_delete(&mut self, _old: BitIndexEntry) -> BitResult<()> {
+    fn on_deleted(&mut self, _old: BitIndexEntry) -> BitResult<()> {
         Ok(())
     }
 }
