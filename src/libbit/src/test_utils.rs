@@ -60,6 +60,7 @@ macro_rules! modify {
         use std::io::prelude::*;
         std::fs::File::with_options()
             .read(false)
+            .append(false)
             .write(true)
             .open($repo.workdir.join($path))?
             .write_all($content.as_ref())?

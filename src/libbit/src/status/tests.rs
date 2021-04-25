@@ -44,16 +44,17 @@ fn test_status_modified_then_reverted() -> BitResult<()> {
         touch!(repo: "foo/bar");
         touch!(repo: "foo/baz");
         touch!(repo: "foo.l");
+        modify!(repo: "foo/bar" < "original content");
         bit_add_all!(repo);
         modify!(repo: "foo.l");
-        modify!(repo: "foo/bar");
-        modify!(repo: "foo/bar" < "stuf");
+        modify!(repo: "foo/bar" < "changed content");
+        // revert foo/bar back to original contents
+        modify!(repo: "foo/bar" < "original content");
 
         let diff = repo.worktree_index_diff()?;
-        assert_eq!(diff.modified.len(), 2);
+        assert_eq!(diff.modified.len(), 1);
         let mut modified = diff.modified.into_iter();
         assert_eq!(modified.next().unwrap(), "foo.l");
-        assert_eq!(modified.next().unwrap(), "foo/bar");
         Ok(())
     })
 }
