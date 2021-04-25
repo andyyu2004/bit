@@ -51,11 +51,11 @@ fn test_parse_large_index() -> BitResult<()> {
 #[test]
 fn test_index_add_directory() -> BitResult<()> {
     BitRepo::with_test_repo(|repo| {
-        mkdir!(repo, "dir");
-        mkdir!(repo, "dir/c");
-        touch!(repo, "dir/c/d");
-        touch!(repo, "dir/a");
-        touch!(repo, "dir/b");
+        mkdir!(repo: "dir");
+        mkdir!(repo: "dir/c");
+        touch!(repo: "dir/c/d");
+        touch!(repo: "dir/a");
+        touch!(repo: "dir/b");
         repo.with_index_mut(|index| {
             index.add_str("dir")?;
             assert_eq!(index.entries.len(), 3);
@@ -114,13 +114,13 @@ fn index_file_directory_collision() -> BitResult<()> {
 #[test]
 fn index_nested_file_directory_collision() -> BitResult<()> {
     BitRepo::with_test_repo(|repo| {
-        mkdir!(repo, "foo");
-        touch!(repo, "foo/bar");
-        touch!(repo, "bar");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar");
+        touch!(repo: "bar");
         bit_add_all!(repo);
-        rm!(repo, "foo/bar");
-        mkdir!(repo, "foo/bar");
-        touch!(repo, "foo/bar/baz");
+        rm!(repo: "foo/bar");
+        mkdir!(repo: "foo/bar");
+        touch!(repo: "foo/bar/baz");
         bit_add_all!(repo);
 
         repo.with_index_mut(|index| {

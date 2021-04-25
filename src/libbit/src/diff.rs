@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::index::BitIndexEntry;
+use crate::index::{BitIndexEntries, BitIndexEntry};
 use crate::iter::BitIterator;
 use crate::repo::BitRepo;
 use fallible_iterator::{Fuse, Peekable};
@@ -91,6 +91,15 @@ where
     new_iter: Peekable<Fuse<J>>,
 }
 
+impl BitIndexEntry {
+    pub fn has_changed(&self, other: &Self) -> BitResult<bool> {
+        // we simply check the hash to determine whether anything has changed
+        // this implementation doesn't do many optimizations so we don't have issues such as
+        // racily clean entries etc (I think?)
+        Ok(self.hash != other.hash)
+    }
+}
+
 impl<'d, D, I, J> GenericDiff<'d, D, I, J>
 where
     D: Differ,
@@ -121,10 +130,7 @@ where
         self.new_iter.next()?;
         // if we are here then we know that the path and stage of the entries match
         // however, that does not mean that the file has not changed
-        if old.hash != new.hash {
-            // we simply check the hash to determine whether anything has changed
-            // this implementation doesn't do many optimizations so we don't have issues such as
-            // racily clean entries etc (I think?)
+        if old.has_changed(&new)? {
             self.differ.on_update(old, new)?;
         }
         Ok(())

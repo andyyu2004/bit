@@ -32,18 +32,18 @@ macro_rules! bit_add_all {
 }
 
 macro_rules! mkdir {
-    ($repo:expr, $path:expr) => {
+    ($repo:ident: $path:expr) => {
         std::fs::create_dir($repo.workdir.join($path))?
     };
 }
 
 macro_rules! bit_add {
-    ($repo:expr, $pathspec:expr) => {
+    ($repo:ident: $pathspec:expr) => {
         $repo.index_add($pathspec)?
     };
 }
 macro_rules! touch {
-    ($repo:expr, $path:expr) => {
+    ($repo:ident: $path:expr) => {
         std::fs::File::create($repo.workdir.join($path))?
     };
 }
@@ -55,7 +55,25 @@ macro_rules! random {
 }
 
 macro_rules! modify {
-    ($repo:expr, $path:expr) => {
+    ($repo:ident: $path:literal < $content:expr) => {
+        #[allow(unused_imports)]
+        use std::io::prelude::*;
+        std::fs::File::with_options()
+            .read(false)
+            .write(true)
+            .open($repo.workdir.join($path))?
+            .write_all($content.as_ref())?
+    };
+    ($repo:ident: $path:literal << $content:expr) => {
+        #[allow(unused_imports)]
+        use std::io::prelude::*;
+        std::fs::File::with_options()
+            .read(false)
+            .append(true)
+            .open($repo.workdir.join($path))?
+            .write_all($content.as_ref())?
+    };
+    ($repo:ident: $path:literal) => {
         #[allow(unused_imports)]
         use std::io::prelude::*;
         std::fs::File::with_options()
@@ -65,14 +83,15 @@ macro_rules! modify {
             .write_all(random!().as_bytes())?
     };
 }
+
 macro_rules! rmdir {
-    ($repo:expr, $path:expr) => {
+    ($repo:ident: $path:expr) => {
         std::fs::remove_dir($repo.workdir.join($path))?
     };
 }
 
 macro_rules! rm {
-    ($repo:expr, $path:expr) => {
+    ($repo:ident: $path:expr) => {
         std::fs::remove_file($repo.workdir.join($path))?
     };
 }
