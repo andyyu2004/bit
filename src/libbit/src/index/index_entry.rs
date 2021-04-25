@@ -150,26 +150,20 @@ impl TryFrom<BitPath> for BitIndexEntry {
     type Error = BitGenericError;
 
     fn try_from(path: BitPath) -> Result<Self, Self::Error> {
-        let canonical = if path.is_relative() {
-            tls::REPO.with(|repo| repo.canonicalize(path))?
-        } else {
-            debug_assert_eq!(
-                path.canonicalize().unwrap(),
-                *path,
-                "absolute filepath was non-canonical"
-            );
-            path
-        };
+        let (canonical, relative) = tls::with_repo(|repo| {
+            let canonical = repo.canonicalize(path)?;
+            let relative = repo.to_relative_path(canonical)?;
+            Ok((canonical, relative))
+        })?;
 
         ensure!(canonical.is_file());
         let metadata = canonical.metadata().unwrap();
 
+        // let obj = Blob::new(canonical.read_to_vec()?);
+        // let hash = hash::hash_obj(&obj)?;
         // the path must be relative to the repository root
         // as this is the correct representation for the index entry
         // and otherwise, the pathlen in the flags will be off
-        let relative = tls::REPO.with(|repo| repo.to_relative_path(canonical))?;
-        // TODO this is really slow having to read in every file in the repository and hash it
-        let blob = Blob::new(path.read_to_vec()?);
         Ok(Self {
             filepath: relative,
             ctime_sec: metadata.st_ctime() as u32,
@@ -182,10 +176,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             uid: metadata.st_uid(),
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,
-            hash: hash::hash_obj(&blob)?,
-            // TODO this mode should have some transformation
-            // to make it fit the simplified git modes
-            // probably just by checking `executable ? 0o100755 : 0o100644`
+            hash: BitHash::ZERO,
             flags: BitIndexEntryFlags::with_path_len(relative.len()),
         })
     }

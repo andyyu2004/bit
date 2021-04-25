@@ -1,7 +1,9 @@
 use crate::error::BitResult;
+use crate::hash::BitHash;
 use crate::index::{BitIndexEntries, BitIndexEntry};
 use crate::iter::BitIterator;
 use crate::repo::BitRepo;
+use crate::tls;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 
@@ -33,11 +35,24 @@ where
 }
 
 impl BitIndexEntry {
+    /// determines whether two index_entries are definitely different
+    /// `self` should be the "old" entry, and `other` should be the "new" one
     pub fn has_changed(&self, other: &Self) -> BitResult<bool> {
-        // we simply check the hash to determine whether anything has changed
-        // this implementation doesn't do many optimizations so we don't have issues such as
-        // racily clean entries etc (I think?)
-        Ok(self.hash != other.hash)
+        // the "old" entry should always have a calculated hash
+        assert!(self.hash.is_known());
+        //? there are probably some problems with this current implementation
+        // TODO check assume_unchanged and skip_worktree here
+        if self.mtime_sec == other.mtime_sec && self.mtime_nano == other.mtime_nano {
+            return Ok(false);
+        } else if self.hash == other.hash {
+            return Ok(false);
+        }
+
+        let mut other_hash = other.hash;
+        if other_hash.is_zero() {
+            other_hash = tls::REPO.with(|repo| repo.hash_blob(other.filepath))?;
+        }
+        Ok(self.hash != other_hash)
     }
 }
 
@@ -66,8 +81,6 @@ where
     }
 
     fn handle_potential_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        debug_assert_eq!(old.filepath, new.filepath);
-        self.old_iter.next()?;
         self.new_iter.next()?;
         // if we are here then we know that the path and stage of the entries match
         // however, that does not mean that the file has not changed

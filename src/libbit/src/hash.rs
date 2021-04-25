@@ -25,12 +25,30 @@ impl From<Output<Sha1>> for SHA1Hash {
 }
 
 impl BitHash {
+    /// this represents an unknown hash
+    // didn't find anywhere that SHA1 can't return 0
+    // but libgit2 also uses this special value
+    // and its so incredibly unlikely even if it is possible
+    pub const ZERO: Self = Self([0; 20]);
+
+    #[inline]
     pub fn new(bytes: [u8; 20]) -> Self {
         Self(bytes)
     }
 
+    #[inline]
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
+    }
+
+    #[inline]
+    pub fn is_zero(self) -> bool {
+        self == BitHash::ZERO
+    }
+
+    #[inline]
+    pub fn is_known(self) -> bool {
+        self != BitHash::ZERO
     }
 
     /// split hash into the first two hex digits (hence first byte)

@@ -1,8 +1,8 @@
 use crate::error::BitResult;
-use crate::hash::BitHash;
+use crate::hash::{self, BitHash};
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
-use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind};
+use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::BitPath;
 use crate::refs::BitRef;
@@ -225,15 +225,34 @@ impl BitRepo {
         self.odb.read_header(id.into())
     }
 
+    pub fn hash_blob(&self, path: BitPath) -> BitResult<BitHash> {
+        let path = self.canonicalize(path)?;
+        let bytes = path.read_to_vec()?;
+        let blob = Blob::new(bytes);
+        hash::hash_obj(&blob)
+    }
+
+    /// converts relative_paths to absolute paths
+    /// checks absolute paths exist and has a base relative to the bit directory
     pub(crate) fn canonicalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
         let path = path.as_ref();
-        let path = self.workdir.join(&path).canonicalize().with_context(|| {
-            anyhow!("failed to convert path `{}` to absolute path", path.display())
-        })?;
-        Ok(BitPath::intern(path))
+        if path.is_relative() {
+            let canonical = self.workdir.join(&path).canonicalize().with_context(|| {
+                anyhow!("failed to convert path `{}` to absolute path", path.display())
+            })?;
+            Ok(BitPath::intern(canonical))
+        } else {
+            assert!(
+                path.starts_with(&self.workdir),
+                "absolute path `{}` is not under current bit directory `{}`",
+                path.display(),
+                self.workdir
+            );
+            Ok(BitPath::intern(path))
+        }
     }
 
     /// converts an absolute path into a path relative to the workdir of the repository
