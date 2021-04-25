@@ -48,6 +48,23 @@ macro_rules! touch {
     };
 }
 
+macro_rules! random {
+    () => {
+        crate::test_utils::generate_sane_string(50..1000)
+    };
+}
+
+macro_rules! modify {
+    ($repo:expr, $path:expr) => {
+        #[allow(unused_imports)]
+        use std::io::prelude::*;
+        std::fs::File::with_options()
+            .read(false)
+            .write(true)
+            .open($repo.workdir.join($path))?
+            .write_all(random!().as_bytes())?
+    };
+}
 macro_rules! rmdir {
     ($repo:expr, $path:expr) => {
         std::fs::remove_dir($repo.workdir.join($path))?

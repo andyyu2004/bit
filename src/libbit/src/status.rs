@@ -20,13 +20,17 @@ impl BitRepo {
         Ok(BitStatusReport { untracked, modified })
     }
 
+    pub fn worktree_index_diff(&self) -> BitResult<WorktreeIndexDiff> {
+        WorktreeIndexDiffer::new(self).run_diff()
+    }
+
     pub fn untracked_files(&self) -> BitResult<Vec<BitPath>> {
-        WorktreeIndexDiffer::new(self).run_diff().map(|diff| diff.untracked)
+        self.worktree_index_diff().map(|diff| diff.untracked)
     }
 }
 
 #[derive(Debug)]
-struct WorktreeIndexDiff {
+pub struct WorktreeIndexDiff {
     untracked: Vec<BitPath>,
     modified: Vec<BitPath>,
 }

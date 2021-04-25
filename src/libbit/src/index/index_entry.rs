@@ -168,6 +168,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
         // as this is the correct representation for the index entry
         // and otherwise, the pathlen in the flags will be off
         let relative = tls::REPO.with(|repo| repo.to_relative_path(canonical))?;
+        // TODO this is really slow having to read in every file in the repository and hash it
         let blob = Blob::new(path.read_to_vec()?);
         Ok(Self {
             filepath: relative,

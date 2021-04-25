@@ -16,3 +16,23 @@ fn test_status_untracked_files() -> BitResult<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_status_modified_files() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        mkdir!(repo, "foo");
+        touch!(repo, "foo/bar");
+        touch!(repo, "foo/baz");
+        touch!(repo, "foo.l");
+        bit_add!(repo, ".");
+        modify!(repo, "foo.l");
+        modify!(repo, "foo/bar");
+
+        let diff = repo.worktree_index_diff()?;
+        assert_eq!(diff.modified.len(), 2);
+        let mut modified = diff.modified.into_iter();
+        assert_eq!(modified.next().unwrap(), "foo.l");
+        assert_eq!(modified.next().unwrap(), "foo/bar");
+        Ok(())
+    })
+}

@@ -5,6 +5,7 @@ use crate::tls;
 use itertools::Itertools;
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
+use std::path::Path;
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -56,8 +57,8 @@ impl Pathspec {
     // }
 
     // braindead implementation for now
-    pub fn matches_path(&self, path: BitPath) -> bool {
-        path.starts_with(self.prefix)
+    pub fn matches_path(&self, path: impl AsRef<Path>) -> bool {
+        path.as_ref().starts_with(self.prefix)
     }
 
     fn match_iterator(self, iterator: impl BitIterator) -> BitResult<impl BitIterator> {
@@ -78,8 +79,11 @@ impl FromStr for Pathspec {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "." {
+            return Ok(Self { prefix: BitPath::intern("") });
+        }
         let prefix_end = Self::find_prefix_end(&s);
-        let mut prefix = match prefix_end {
+        let prefix = match prefix_end {
             Some(i) => &s[..i],
             None => s,
         };
@@ -100,13 +104,22 @@ mod tests {
         Ok(())
     }
 
+    // TODO temporary
+    #[test]
+    pub fn test_pathspec_dot_matches_all() -> BitResult<()> {
+        let pathspec = Pathspec::from_str(".")?;
+        pathspec.matches_path("wer");
+        pathspec.matches_path("foo/bar");
+        Ok(())
+    }
+
     #[test]
     pub fn pathspec_matches_test() -> BitResult<()> {
         let pathspec = Pathspec::from_str("hello")?;
-        assert!(pathspec.matches_path("hello".into()));
+        assert!(pathspec.matches_path("hello"));
 
         let pathspec = Pathspec::from_str("path")?;
-        assert!(pathspec.matches_path("path/to/dir".into()));
+        assert!(pathspec.matches_path("path/to/dir"));
         Ok(())
     }
 }
