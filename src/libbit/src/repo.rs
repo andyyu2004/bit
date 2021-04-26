@@ -89,7 +89,7 @@ impl BitRepo {
 
         match path.parent() {
             Some(parent) => Self::find_inner(parent),
-            None => Err(anyhow!("not a bit repository (or any of the parent directories")),
+            None => Err(anyhow!("not a bit repository (or any of the parent directories)")),
         }
     }
 
@@ -180,7 +180,7 @@ impl BitRepo {
 
         if bitdir.exists() {
             // reinitializing doesn't really do anything currently
-            println!("reinitializing existing bit directory in `{}`", bitdir.display());
+            println!("reinitialized existing bit repository in `{}`", bitdir.display());
             return Ok(());
         }
 
@@ -204,7 +204,10 @@ impl BitRepo {
             config.set("core", "bare", false)?;
             config.set("core", "filemode", true)?;
             Ok(())
-        })
+        })?;
+
+        println!("initialized empty bit repository in `{}`", this.bitdir.display());
+        Ok(())
     }
 
     /// todo only works with full hash
