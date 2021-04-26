@@ -147,8 +147,8 @@ impl TryFrom<BitPath> for BitIndexEntry {
             Ok((canonical, relative))
         })?;
 
-        ensure!(canonical.is_file());
-        let metadata = canonical.metadata().unwrap();
+        ensure!(!canonical.is_dir(), "bit index entry should not be a directory");
+        let metadata = canonical.symlink_metadata().unwrap();
 
         // the path must be relative to the repository root
         // as this is the correct representation for the index entry

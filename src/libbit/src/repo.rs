@@ -196,8 +196,9 @@ impl BitRepo {
         let mut desc = this.mk_bitfile("description")?;
         writeln!(desc, "Unnamed repository; edit this file 'description' to name the repository.")?;
 
-        let mut head = this.mk_bitfile("HEAD")?;
-        writeln!(head, "ref: refs/heads/master")?;
+        // TODO no branches yet, can't commit as we don't resolve refs yet :)
+        // let mut head = this.mk_bitfile("HEAD")?;
+        // writeln!(head, "ref: refs/heads/master")?;
 
         this.with_local_config(|config| {
             config.set("core", "repositoryformatversion", 0)?;
