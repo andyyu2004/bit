@@ -8,13 +8,17 @@ use ignore::{Walk, WalkBuilder};
 use std::convert::TryFrom;
 use std::path::Path;
 
-struct WorktreeIter {
+struct WorktreeIter<'r> {
+    repo: &'r BitRepo,
     walk: Walk,
 }
 
-impl WorktreeIter {
-    pub fn new(root: BitPath) -> BitResult<Self> {
-        Ok(Self { walk: WalkBuilder::new(root).sort_by_file_path(Ord::cmp).hidden(false).build() })
+impl<'r> WorktreeIter<'r> {
+    pub fn new(repo: &'r BitRepo) -> BitResult<Self> {
+        Ok(Self {
+            repo,
+            walk: WalkBuilder::new(repo.workdir).sort_by_file_path(Ord::cmp).hidden(false).build(),
+        })
     }
 
     // we need to explicitly ignore our root `.bit/.git` directories
@@ -25,7 +29,7 @@ impl WorktreeIter {
     }
 }
 
-impl FallibleIterator for WorktreeIter {
+impl FallibleIterator for WorktreeIter<'_> {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
@@ -51,7 +55,7 @@ pub trait BitIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGeneri
 
 impl BitRepo {
     pub fn worktree_iter(&self) -> BitResult<impl BitIterator> {
-        let mut entries: Vec<_> = WorktreeIter::new(self.workdir)?.collect()?;
+        let mut entries: Vec<_> = WorktreeIter::new(self)?.collect()?;
         // TODO worktree iterator does not return in the correct order
         // the comparator function on works per directory
         // for some reason git places files before directory

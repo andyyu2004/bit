@@ -63,6 +63,10 @@ impl<'a, 'r> WorktreeIndexDiffer<'a, 'r> {
 }
 
 impl Differ for WorktreeIndexDiffer<'_, '_> {
+    fn index(&self) -> &BitIndex {
+        self.index
+    }
+
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         self.untracked.push(new.filepath);
         Ok(())
@@ -73,9 +77,6 @@ impl Differ for WorktreeIndexDiffer<'_, '_> {
         Ok(self.modified.push(new.filepath))
     }
 
-    fn has_changes(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<bool> {
-        self.index.has_changed(&old, &new)
-    }
 }
 
 // TODO if a directory only contains untracked directories

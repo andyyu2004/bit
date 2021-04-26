@@ -97,6 +97,26 @@ impl<'r> BitIndex<'r> {
     pub fn is_racy_entry(&self, entry: &BitIndexEntry) -> bool {
         self.mtime.map(|mtime| mtime <= entry.mtime).unwrap_or(false)
     }
+
+    /// if entry with the same path already exists, it will be replaced
+    pub fn add_entry(&self, mut entry: BitIndexEntry) -> BitResult<()> {
+        self.remove_collisions(&entry)?;
+        if entry.hash.is_zero() {
+            entry.hash = self.repo.hash_blob(entry.filepath)?;
+        }
+        self.entries.borrow_mut().insert(entry.as_key(), entry);
+        Ok(())
+    }
+
+    pub fn add(&self, pathspec: &Pathspec) -> BitResult<()> {
+        let mut did_add = false;
+        pathspec.match_worktree()?.for_each(|entry| {
+            did_add = true;
+            self.add_entry(entry)
+        })?;
+        ensure!(did_add, "no files added: pathspec `{}` did not match any files", pathspec);
+        Ok(())
+    }
 }
 
 type IndexIterator = impl Iterator<Item = BitIndexEntry>;
@@ -115,16 +135,6 @@ impl BitIndexInner {
     /// find entry by path
     pub fn find_entry(&self, path: BitPath, stage: MergeStage) -> Option<BitIndexEntry> {
         self.entries.borrow().get(&(path, stage)).copied()
-    }
-
-    /// if entry with the same path already exists, it will be replaced
-    pub fn add_entry(&self, mut entry: BitIndexEntry) -> BitResult<()> {
-        self.remove_collisions(&entry)?;
-        if entry.hash.is_zero() {
-            entry.hash = tls::REPO.with(|repo| repo.hash_blob(entry.filepath))?;
-        }
-        self.entries.borrow_mut().insert(entry.as_key(), entry);
-        Ok(())
     }
 
     /// removes collisions where there was originally a file but was replaced by a directory
@@ -160,16 +170,6 @@ impl BitIndexInner {
     fn remove_collisions(&self, entry: &BitIndexEntry) -> BitResult<()> {
         self.remove_file_dir_collisions(entry)?;
         self.remove_dir_file_collisions(entry)?;
-        Ok(())
-    }
-
-    pub fn add(&self, pathspec: &Pathspec) -> BitResult<()> {
-        let mut did_add = false;
-        pathspec.match_worktree()?.for_each(|entry| {
-            did_add = true;
-            self.add_entry(entry)
-        })?;
-        ensure!(did_add, "no files added: pathspec `{}` did not match any files", pathspec);
         Ok(())
     }
 
