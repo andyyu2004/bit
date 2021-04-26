@@ -94,8 +94,14 @@ impl<'r> BitIndex<'r> {
         TreeBuilder::new(self).build()
     }
 
-    pub fn is_racy_entry(&self, entry: &BitIndexEntry) -> bool {
-        self.mtime.map(|mtime| mtime <= entry.mtime).unwrap_or(false)
+    pub fn is_racy_entry(&self, worktree_entry: &BitIndexEntry) -> bool {
+        // shouldn't strict equality be enough but libgit2 is `<=`
+        // all index entries should have time `<=` the index file as
+        // they are read before the index is written
+        // all worktree entries that have been modified since the index has been written
+        // clearly has mtime >= the index mtime.
+        // so racy entries are the one's with mtime strictly equal to the index file's mtime
+        self.mtime.map(|mtime| mtime == worktree_entry.mtime).unwrap_or(false)
     }
 
     /// if entry with the same path already exists, it will be replaced
