@@ -1,4 +1,5 @@
 use crate::hash::BitHash;
+use crate::time::Timespec;
 use sha1::{digest::Output, Digest};
 use std::io::prelude::*;
 
@@ -14,6 +15,12 @@ pub(crate) trait ReadExt: Read {
         let mut buf = [0u8; 4];
         self.read_exact(&mut buf)?;
         Ok(u32::from_be_bytes(buf))
+    }
+
+    fn read_timespec(&mut self) -> std::io::Result<Timespec> {
+        let sec = self.read_u32()?;
+        let nano = self.read_u32()?;
+        Ok(Timespec::new(sec, nano))
     }
 
     fn read_u64(&mut self) -> std::io::Result<u64> {
@@ -45,6 +52,11 @@ pub trait WriteExt: Write {
 
     fn write_u32(&mut self, u: u32) -> std::io::Result<()> {
         self.write_all(&u.to_be_bytes())
+    }
+
+    fn write_timespec(&mut self, t: Timespec) -> std::io::Result<()> {
+        self.write_u32(t.sec)?;
+        self.write_u32(t.nano)
     }
 
     fn write_u64(&mut self, u: u64) -> std::io::Result<()> {

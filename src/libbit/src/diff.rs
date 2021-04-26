@@ -34,35 +34,11 @@ where
 }
 
 impl BitIndexEntry {
-    /// determines whether two index_entries are definitely different
-    /// `self` should be the "old" entry, and `other` should be the "new" one
     pub fn has_changed(&self, other: &Self) -> BitResult<bool> {
-        // the "old" entry should always have a calculated hash
-        assert!(self.hash.is_known());
-        //? there are probably some problems with this current implementation
-        //? check assume_unchanged and skip_worktree here?
-        // the following condition causes some non deterministic results (due to racy git)?
-        // if self.mtime_sec == other.mtime_sec && self.mtime_nano == other.mtime_nano {
-        // return Ok(false);
-        // }
-        // for now we just ignore the mtime and just consider the other values
-        // this conservative approach is probably generally good enough as
-        // its unlikely that after changing a file that the size will be exactly the same
-        // actually there are similar issues with ctime as well which is odd, unsure of the cause of either
-        // so will just avoiding using either for now :)
-        if self.hash == other.hash {
+        if !self.has_maybe_changed(other)? {
+            // definitely has not changed
             return Ok(false);
         }
-        if self.filesize != other.filesize
-            || self.inode != other.inode
-            || self.filepath != other.filepath
-            || tls::with_config(|config| config.filemode())? && self.mode != other.mode
-        {
-            return Ok(true);
-        }
-
-        // file may have changed, but we are not certain, so check the hash
-
         dbg!("bad path");
         let mut other_hash = other.hash;
         if other_hash.is_zero() {
@@ -77,6 +53,41 @@ impl BitIndexEntry {
             // tls::with_index(|index| index.update_stat())
         }
         Ok(changed)
+    }
+
+    /// determines whether two index_entries are definitely different
+    /// `self` should be the "old" entry, and `other` should be the "new" one
+    pub fn has_maybe_changed(&self, other: &Self) -> BitResult<bool> {
+        // the "old" entry should always have a calculated hash
+        assert!(self.hash.is_known());
+        // if tls::with_index(|index| Ok(index.is_racy_entry(other)))? {
+        //     return Ok(true);
+        // }
+
+        //? there are probably some problems with this current implementation
+        //? check assume_unchanged and skip_worktree here?
+        // the following condition causes some non deterministic results (due to racy git)?
+        // if self.mtime_sec == other.mtime_sec && self.mtime_nano == other.mtime_nano {
+        // return Ok(false);
+        // }
+        // for now we just ignore the mtime and just consider the other values
+        // this conservative approach is probably generally good enough as
+        // its unlikely that after changing a file that the size will be exactly the same
+        // actually there are similar issues with ctime as well which is odd, unsure of the cause of either
+        // so will just avoiding using either for now :)
+        if self.hash == other.hash || self.mtime == other.mtime {
+            return Ok(false);
+        }
+        if self.filesize != other.filesize
+            || self.inode != other.inode
+            || self.filepath != other.filepath
+            || tls::with_config(|config| config.filemode())? && self.mode != other.mode
+        {
+            return Ok(true);
+        }
+        Ok(true)
+
+        // file may have changed, but we are not certain, so check the hash
     }
 }
 

@@ -1,6 +1,7 @@
 use super::*;
 use crate::error::BitGenericError;
 use crate::serialize::Deserialize;
+use crate::time::Timespec;
 use crate::tls;
 use std::fmt::{self, Debug, Formatter};
 use std::os::linux::fs::MetadataExt;
@@ -38,10 +39,8 @@ impl From<Vec<BitIndexEntry>> for BitIndexEntries {
 impl Serialize for BitIndexEntry {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         assert!(self.filepath.is_relative());
-        writer.write_u32(self.ctime_sec)?;
-        writer.write_u32(self.ctime_nano)?;
-        writer.write_u32(self.mtime_sec)?;
-        writer.write_u32(self.mtime_nano)?;
+        writer.write_timespec(self.ctime)?;
+        writer.write_timespec(self.mtime)?;
         writer.write_u32(self.device)?;
         writer.write_u32(self.inode)?;
         writer.write_u32(self.mode.as_u32())?;
@@ -58,10 +57,8 @@ impl Serialize for BitIndexEntry {
 
 impl Deserialize for BitIndexEntry {
     fn deserialize(r: &mut dyn BufRead) -> BitResult<BitIndexEntry> {
-        let ctime_sec = r.read_u32()?;
-        let ctime_nano = r.read_u32()?;
-        let mtime_sec = r.read_u32()?;
-        let mtime_nano = r.read_u32()?;
+        let ctime = r.read_timespec()?;
+        let mtime = r.read_timespec()?;
         let device = r.read_u32()?;
         let inode = r.read_u32()?;
         let mode = FileMode::new(r.read_u32()?);
@@ -81,10 +78,8 @@ impl Deserialize for BitIndexEntry {
         assert_eq!(flags.path_len() as usize, filepath.len());
 
         let entry = BitIndexEntry {
-            ctime_sec,
-            ctime_nano,
-            mtime_sec,
-            mtime_nano,
+            ctime,
+            mtime,
             device,
             inode,
             mode,
@@ -110,10 +105,8 @@ impl Deserialize for BitIndexEntry {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BitIndexEntry {
-    pub ctime_sec: u32,
-    pub ctime_nano: u32,
-    pub mtime_sec: u32,
-    pub mtime_nano: u32,
+    pub ctime: Timespec,
+    pub mtime: Timespec,
     pub device: u32,
     pub inode: u32,
     pub mode: FileMode,
@@ -157,17 +150,13 @@ impl TryFrom<BitPath> for BitIndexEntry {
         ensure!(canonical.is_file());
         let metadata = canonical.metadata().unwrap();
 
-        // let obj = Blob::new(canonical.read_to_vec()?);
-        // let hash = hash::hash_obj(&obj)?;
         // the path must be relative to the repository root
         // as this is the correct representation for the index entry
         // and otherwise, the pathlen in the flags will be off
         Ok(Self {
             filepath: relative,
-            ctime_sec: metadata.st_ctime() as u32,
-            ctime_nano: metadata.st_ctime_nsec() as u32,
-            mtime_sec: metadata.st_mtime() as u32,
-            mtime_nano: metadata.st_mtime_nsec() as u32,
+            ctime: Timespec::ctime(&metadata),
+            mtime: Timespec::mtime(&metadata),
             device: metadata.st_dev() as u32,
             inode: metadata.st_ino() as u32,
             mode: FileMode::from_metadata(&metadata),

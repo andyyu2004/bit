@@ -48,5 +48,6 @@ mod odb;
 mod refs;
 mod serialize;
 mod signature;
+mod time;
 mod tls;
 mod util;

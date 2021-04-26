@@ -4,6 +4,9 @@ edition = "2018"
 name = "libbit"
 version = "0.1.0"
 
+[features]
+# use_nsec = []
+
 [dependencies]
 flate2 = "1.0.20"
 hex = "0.4.2"

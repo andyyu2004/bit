@@ -213,10 +213,8 @@ fn parse_small_index() -> BitResult<()> {
     // the flags show up as  `1` under git, not sure how they're parsed exactly
     let entries = vec![
         BitIndexEntry {
-            ctime_sec: 1615087202,
-            ctime_nano: 541384113,
-            mtime_sec: 1615087202,
-            mtime_nano: 541384113,
+            ctime: Timespec::new(1615087202, 541384113),
+            mtime: Timespec::new(1615087202, 541384113),
             device: 66310,
             inode: 981997,
             uid: 1000,
@@ -228,10 +226,8 @@ fn parse_small_index() -> BitResult<()> {
             hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
         },
         BitIndexEntry {
-            ctime_sec: 1613643244,
-            ctime_nano: 672563537,
-            mtime_sec: 1613643244,
-            mtime_nano: 672563537,
+            ctime: Timespec::new(1613643244, 672563537),
+            mtime: Timespec::new(1613643244, 672563537),
             device: 66310,
             inode: 966938,
             uid: 1000,

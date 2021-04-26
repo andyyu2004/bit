@@ -10,6 +10,7 @@ use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
+use crate::time::Timespec;
 use crate::tls;
 use crate::util;
 pub use index_entry::*;
@@ -28,8 +29,11 @@ use std::path::Path;
 const BIT_INDEX_HEADER_SIG: &[u8; 4] = b"DIRC";
 const BIT_INDEX_VERSION: u32 = 2;
 
+#[derive(Debug)]
 pub struct BitIndex<'r> {
     repo: &'r BitRepo,
+    // index file may not yet exist
+    mtime: Option<Timespec>,
     inner: BitIndexInner,
 }
 
@@ -78,7 +82,8 @@ impl<'r> BitIndex<'r> {
             .map(BitIndexInner::deserialize_unbuffered)
             .transpose()?
             .unwrap_or_default();
-        Ok(Self { repo, inner })
+        let mtime = std::fs::metadata(repo.index_path()).as_ref().map(Timespec::mtime).ok();
+        Ok(Self { repo, inner, mtime })
     }
 
     /// builds a tree object from the current index entries
@@ -87,6 +92,10 @@ impl<'r> BitIndex<'r> {
             bail!("cannot write-tree an an index that is not fully merged");
         }
         TreeBuilder::new(self).build()
+    }
+
+    pub fn is_racy_entry(&self, entry: &BitIndexEntry) -> bool {
+        self.mtime.map(|mtime| mtime == entry.mtime).unwrap_or(false)
     }
 }
 
