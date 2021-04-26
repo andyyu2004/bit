@@ -1,6 +1,6 @@
 use crate::diff::{Differ, GenericDiff};
 use crate::error::BitResult;
-use crate::index::BitIndexEntry;
+use crate::index::{BitIndex, BitIndexEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use colored::*;
@@ -15,13 +15,12 @@ pub struct BitStatusReport {
 
 impl BitRepo {
     pub fn status_report(&self) -> BitResult<BitStatusReport> {
-        let WorktreeIndexDiff { untracked, modified } =
-            WorktreeIndexDiffer::new(self).run_diff()?;
+        let WorktreeIndexDiff { untracked, modified } = self.worktree_index_diff()?;
         Ok(BitStatusReport { untracked, modified })
     }
 
     pub fn worktree_index_diff(&self) -> BitResult<WorktreeIndexDiff> {
-        WorktreeIndexDiffer::new(self).run_diff()
+        self.with_index(|index| WorktreeIndexDiffer::new(index).run_diff())
     }
 
     pub fn untracked_files(&self) -> BitResult<Vec<BitPath>> {
@@ -35,18 +34,20 @@ pub struct WorktreeIndexDiff {
     modified: Vec<BitPath>,
 }
 
-pub(crate) struct WorktreeIndexDiffer<'r> {
+pub(crate) struct WorktreeIndexDiffer<'a, 'r> {
     repo: &'r BitRepo,
+    index: &'a BitIndex<'r>,
     untracked: Vec<BitPath>,
     modified: Vec<BitPath>,
     // directories that only contain untracked files
     _untracked_dirs: HashSet<BitPath>,
 }
 
-impl<'r> WorktreeIndexDiffer<'r> {
-    pub fn new(repo: &'r BitRepo) -> Self {
+impl<'a, 'r> WorktreeIndexDiffer<'a, 'r> {
+    pub fn new(index: &'a BitIndex<'r>) -> Self {
         Self {
-            repo,
+            index,
+            repo: index.repo,
             untracked: Default::default(),
             modified: Default::default(),
             _untracked_dirs: Default::default(),
@@ -55,12 +56,13 @@ impl<'r> WorktreeIndexDiffer<'r> {
 
     fn run_diff(mut self) -> BitResult<WorktreeIndexDiff> {
         let repo = self.repo;
-        repo.with_index(|index| GenericDiff::run(&mut self, index.iter(), repo.worktree_iter()?))?;
+        let index_iter = self.index.iter();
+        GenericDiff::run(&mut self, index_iter, repo.worktree_iter()?)?;
         Ok(WorktreeIndexDiff { untracked: self.untracked, modified: self.modified })
     }
 }
 
-impl Differ for WorktreeIndexDiffer<'_> {
+impl Differ for WorktreeIndexDiffer<'_, '_> {
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         self.untracked.push(new.filepath);
         Ok(())
@@ -69,6 +71,10 @@ impl Differ for WorktreeIndexDiffer<'_> {
     fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         assert_eq!(old.filepath, new.filepath);
         Ok(self.modified.push(new.filepath))
+    }
+
+    fn has_changes(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<bool> {
+        self.index.has_changed(&old, &new)
     }
 }
 

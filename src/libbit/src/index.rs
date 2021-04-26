@@ -31,7 +31,7 @@ const BIT_INDEX_VERSION: u32 = 2;
 
 #[derive(Debug)]
 pub struct BitIndex<'r> {
-    repo: &'r BitRepo,
+    pub repo: &'r BitRepo,
     // index file may not yet exist
     mtime: Option<Timespec>,
     inner: BitIndexInner,
@@ -95,7 +95,7 @@ impl<'r> BitIndex<'r> {
     }
 
     pub fn is_racy_entry(&self, entry: &BitIndexEntry) -> bool {
-        self.mtime.map(|mtime| mtime == entry.mtime).unwrap_or(false)
+        self.mtime.map(|mtime| mtime <= entry.mtime).unwrap_or(false)
     }
 }
 
