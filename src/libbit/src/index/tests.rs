@@ -43,7 +43,7 @@ fn test_add_non_matching_pathspec() -> BitResult<()> {
 fn test_parse_large_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
     let index = BitIndexInner::deserialize_unbuffered(bytes)?;
-    assert_eq!(index.entries.len(), 31);
+    assert_eq!(index.len(), 31);
     Ok(())
 }
 
@@ -58,11 +58,12 @@ fn test_index_add_directory() -> BitResult<()> {
         touch!(repo: "dir/b");
         repo.with_index_mut(|index| {
             index.add_str("dir")?;
-            assert_eq!(index.entries.len(), 3);
-            let mut entries = index.entries.values();
-            assert_eq!(entries.next().unwrap().filepath, "dir/a");
-            assert_eq!(entries.next().unwrap().filepath, "dir/b");
-            assert_eq!(entries.next().unwrap().filepath, "dir/c/d");
+            assert_eq!(index.len(), 3);
+            let entries = index.entries.borrow();
+            let mut iterator = entries.values();
+            assert_eq!(iterator.next().unwrap().filepath, "dir/a");
+            assert_eq!(iterator.next().unwrap().filepath, "dir/b");
+            assert_eq!(iterator.next().unwrap().filepath, "dir/c/d");
             Ok(())
         })
     })
@@ -92,9 +93,10 @@ fn index_file_directory_collision() -> BitResult<()> {
             File::create(a.join("somefile"))?;
             index.add_str("a")?;
 
-            assert_eq!(index.entries.len(), 1);
-            let mut entries = index.entries.values();
-            assert_eq!(entries.next().unwrap().filepath, "a/somefile");
+            assert_eq!(index.len(), 1);
+            let entries = index.entries.borrow();
+            let mut iterator = entries.values();
+            assert_eq!(iterator.next().unwrap().filepath, "a/somefile");
             Ok(())
         })
     })
@@ -124,10 +126,11 @@ fn index_nested_file_directory_collision() -> BitResult<()> {
         bit_add_all!(repo);
 
         repo.with_index_mut(|index| {
-            assert_eq!(index.entries.len(), 2);
-            let mut entries = index.entries.values();
-            assert_eq!(entries.next().unwrap().filepath, "bar");
-            assert_eq!(entries.next().unwrap().filepath, "foo/bar/baz");
+            assert_eq!(index.len(), 2);
+            let entries = index.entries.borrow();
+            let mut iterator = entries.values();
+            assert_eq!(iterator.next().unwrap().filepath, "bar");
+            assert_eq!(iterator.next().unwrap().filepath, "foo/bar/baz");
             Ok(())
         })
     })
@@ -158,14 +161,15 @@ fn index_directory_file_collision() -> BitResult<()> {
             std::fs::create_dir(foo.join("bar"))?;
             File::create(foo.join("bar/baz"))?;
             index.add_str("foo")?;
-            assert_eq!(index.entries.len(), 3);
+            assert_eq!(index.len(), 3);
             std::fs::remove_dir_all(foo)?;
             File::create(foo)?;
             index.add_str("foo")?;
 
-            assert_eq!(index.entries.len(), 1);
-            let mut entries = index.entries.values();
-            assert_eq!(entries.next().unwrap().filepath, "foo");
+            assert_eq!(index.len(), 1);
+            let entries = index.entries.borrow();
+            let mut iter = entries.values();
+            assert_eq!(iter.next().unwrap().filepath, "foo");
             Ok(())
         })
     })
@@ -241,7 +245,7 @@ fn parse_small_index() -> BitResult<()> {
     ]
     .into();
 
-    let expected_index = BitIndexInner { entries, extensions: vec![] };
+    let expected_index = BitIndexInner::new(entries, vec![]);
 
     assert_eq!(expected_index, index);
     Ok(())
