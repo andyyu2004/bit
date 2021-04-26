@@ -34,65 +34,87 @@ where
     new_iter: Peekable<Fuse<J>>,
 }
 
+#[derive(Debug)]
+enum Changed {
+    Yes,
+    No,
+    Maybe,
+}
+
 impl<'r> BitIndex<'r> {
     /// determine's whether `new` is *definitely* different from `old`
     // (preferably without comparing hashes)
     pub fn has_changes(&self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<bool> {
-        if !self.has_maybe_changed(old, new)? {
-            // definitely has not changed
-            return Ok(false);
-        }
+        trace!("BitIndex::has_changes({} -> {})?", old.filepath, new.filepath);
+        // should only be comparing the same file
+        assert_eq!(old.filepath, new.filepath);
+        // the "old" entry should always have a calculated hash
+        assert!(old.hash.is_known());
+        match self.has_changed(old, new)? {
+            Changed::Yes => Ok(true),
+            Changed::No => Ok(false),
+            Changed::Maybe => {
+                // file may have changed, but we are not certain, so check the hash
+                let mut new_hash = new.hash;
+                if new_hash.is_zero() {
+                    new_hash = self.repo.hash_blob(new.filepath)?;
+                }
 
-        dbg!("bad path");
-        let mut new_hash = new.hash;
-        if new_hash.is_zero() {
-            new_hash = self.repo.hash_blob(new.filepath)?;
+                let changed = old.hash != new_hash;
+                eprintln!("{}", old.filepath);
+                if !changed {
+                    // TODO update index entries so we don't hit this path again
+                    // maybe the parameters to this function need to be less general
+                    // and rather than be `old` and `new` needs to be `index_entry` and `worktree_entry
+                    self.update_stat(*new)?;
+                }
+                Ok(changed)
+            }
         }
+    }
 
-        let changed = old.hash != new_hash;
-        if !changed {
-            // TODO update index entries so we don't hit this path again
-            // maybe the parameters to this function need to be less general
-            // and rather than be `old` and `new` needs to be `index_entry` and `worktree_entry
-            // tls::with_index(|index| index.update_stat())
-        }
-        Ok(changed)
+    fn update_stat(&self, entry: BitIndexEntry) -> BitResult<()> {
+        Ok(())
+        // self.add_entry(entry)
     }
 
     /// determines whether two index_entries are definitely different
     /// `new` should be the "old" entry, and `other` should be the "new" one
-    pub fn has_maybe_changed(&self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<bool> {
-        // the "old" entry should always have a calculated hash
-        assert!(old.hash.is_known());
-
-        if self.is_racy_entry(new) {
-            return Ok(true);
+    fn has_changed(&self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<Changed> {
+        if self.is_racy_entry(old) {
+            debug!("racy entry {}", new.filepath);
+            return Ok(Changed::Maybe);
         }
 
-        //? there are probably some problems with this current implementation
         //? check assume_unchanged and skip_worktree here?
-        // the following condition causes some non deterministic results (due to racy git)?
-        // if self.mtime_sec == other.mtime_sec && self.mtime_nano == other.mtime_nano {
-        // return Ok(false);
-        // }
-        // for now we just ignore the mtime and just consider the other values
-        // this conservative approach is probably generally good enough as
-        // its unlikely that after changing a file that the size will be exactly the same
-        // actually there are similar issues with ctime as well which is odd, unsure of the cause of either
-        // so will just avoiding using either for now :)
-        if old.hash == new.hash || old.mtime == new.mtime {
-            return Ok(false);
+        if old.hash == new.hash {
+            debug!("{} unchanged: hashes match {} {}", old.filepath, old.hash, new.hash);
+            return Ok(Changed::No);
         }
-        if old.filesize != new.filesize
-            || old.inode != new.inode
-            || old.filepath != new.filepath
-            || tls::with_config(|config| config.filemode())? && old.mode != new.mode
-        {
-            return Ok(true);
-        }
-        Ok(true)
 
-        // file may have changed, but we are not certain, so check the hash
+        if old.mtime == new.mtime {
+            debug!("{} unchanged: non-racy mtime match {} {}", old.filepath, old.mtime, new.mtime);
+            return Ok(Changed::No);
+        }
+
+        if old.filesize != new.filesize {
+            debug!("{} changed: filesize {} -> {}", old.filepath, old.filesize, new.filesize);
+            return Ok(Changed::Yes);
+        }
+
+        if old.inode != new.inode {
+            debug!("{} changed: inode {} -> {}", old.filepath, old.inode, new.inode);
+            return Ok(Changed::Yes);
+        }
+
+        if tls::with_config(|config| config.filemode())? && old.mode != new.mode {
+            debug!("{} changed: filemode {} -> {}", old.filepath, old.mode, new.mode);
+            return Ok(Changed::Yes);
+        }
+
+        debug!("{} uncertain if changed", old.filepath);
+
+        Ok(Changed::Maybe)
     }
 }
 

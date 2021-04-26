@@ -2,7 +2,6 @@ use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndexEntry;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
-use crate::tls;
 use fallible_iterator::FallibleIterator;
 use ignore::{Walk, WalkBuilder};
 use std::convert::TryFrom;
@@ -23,7 +22,7 @@ impl<'r> WorktreeIter<'r> {
 
     // we need to explicitly ignore our root `.bit/.git` directories
     fn ignored(&self, path: &Path) -> BitResult<bool> {
-        let path = tls::REPO.with(|repo| repo.to_relative_path(path))?;
+        let path = self.repo.to_relative_path(path)?;
         let fst_component = path.components()[0];
         Ok(fst_component == ".bit" || fst_component == ".git")
     }

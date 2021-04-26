@@ -29,6 +29,9 @@ extern crate anyhow;
 #[macro_use]
 mod test_utils;
 
+#[macro_use]
+extern crate log;
+
 pub mod cmd;
 pub mod config;
 pub mod error;

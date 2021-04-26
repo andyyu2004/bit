@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::fmt::{self, Display, Formatter};
 use std::fs::Metadata;
 use std::os::unix::prelude::MetadataExt;
 
@@ -25,6 +26,12 @@ impl Timespec {
 
     pub fn mtime(metadata: &Metadata) -> Self {
         Self::new_i64(metadata.mtime(), metadata.mtime_nsec())
+    }
+}
+
+impl Display for Timespec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.sec, self.nano)
     }
 }
 

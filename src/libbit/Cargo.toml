@@ -10,6 +10,8 @@ version = "0.1.0"
 [dependencies]
 flate2 = "1.0.20"
 hex = "0.4.2"
+log = "0.4.14"
+env_logger = "0.8.3"
 libc = "0.2.88"
 snailquote = "0.3.0"
 num_enum = "0.5.1"

@@ -13,7 +13,7 @@ use crate::io_ext::ReadExt;
 use crate::serialize::{Deserialize, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
 
@@ -61,6 +61,7 @@ impl FileMode {
     pub const IFLNK: u32 = 0o120000;
     /* Regular file.  */
     pub const IFREG: u32 = 0o100644;
+    pub const LINK: Self = Self(Self::IFLNK);
     pub const REG: Self = Self(Self::IFREG);
 
     #[cfg(debug_assertions)]
@@ -69,12 +70,15 @@ impl FileMode {
     }
 
     pub fn from_metadata(metadata: &Metadata) -> Self {
-        if metadata.is_dir() {
-            return Self::DIR;
+        if metadata.file_type().is_symlink() {
+            Self::LINK
+        } else if metadata.is_dir() {
+            Self::DIR
+        } else {
+            let permissions = metadata.permissions();
+            let is_executable = permissions.mode() & 0o111;
+            if is_executable != 0 { Self::EXEC } else { Self::REG }
         }
-        let permissions = metadata.permissions();
-        let is_executable = permissions.mode() & 0o111;
-        if is_executable != 0 { Self::EXEC } else { Self::REG }
     }
 
     pub const fn new(u: u32) -> Self {
@@ -116,7 +120,7 @@ impl FromStr for FileMode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mode = Self(u32::from_str_radix(s, 8)?);
         assert!(
-            mode == Self::DIR || mode == Self::EXEC || mode == Self::REG,
+            mode == Self::DIR || mode == Self::EXEC || mode == Self::REG || mode == Self::LINK,
             "invalid bit file mode `{}`",
             mode
         );
@@ -257,7 +261,7 @@ fn read_obj_size(reader: &mut dyn BufRead) -> BitResult<usize> {
 }
 
 #[cfg(test)]
-pub(crate) fn read_obj_unbuffered(reader: impl Read) -> BitResult<BitObjKind> {
+pub(crate) fn read_obj_unbuffered(reader: impl std::io::Read) -> BitResult<BitObjKind> {
     read_obj(&mut BufReader::new(reader))
 }
 
