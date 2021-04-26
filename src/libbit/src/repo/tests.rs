@@ -9,7 +9,7 @@ fn repo_init_creates_correct_initial_local_config() -> BitResult<()> {
         repo.with_local_config(|config| {
             assert_eq!(config.repositoryformatversion()?.unwrap(), 0);
             assert_eq!(config.bare()?.unwrap(), false);
-            assert_eq!(config.filemode()?.unwrap(), true);
+            assert_eq!(config.filemode()?, true);
             Ok(())
         })
     })

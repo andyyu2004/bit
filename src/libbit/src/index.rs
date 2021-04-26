@@ -10,6 +10,7 @@ use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
+use crate::tls;
 use crate::util;
 pub use index_entry::*;
 use itertools::Itertools;
@@ -27,10 +28,29 @@ use std::path::Path;
 const BIT_INDEX_HEADER_SIG: &[u8; 4] = b"DIRC";
 const BIT_INDEX_VERSION: u32 = 2;
 
+pub struct BitIndex<'r> {
+    repo: &'r BitRepo,
+    inner: BitIndexInner,
+}
+
+impl<'r> Deref for BitIndex<'r> {
+    type Target = BitIndexInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'r> DerefMut for BitIndex<'r> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
 #[derive(Debug, PartialEq, Clone, Default)]
-pub struct BitIndex {
+pub struct BitIndexInner {
     /// sorted by ascending by filepath (interpreted as unsigned bytes)
     /// ties broken by stage (a part of flags)
     // the link says `name` which usually refers to the hash
@@ -39,7 +59,7 @@ pub struct BitIndex {
     pub extensions: Vec<BitIndexExtension>,
 }
 
-impl<'a> IntoIterator for &'a BitIndex {
+impl<'a> IntoIterator for &'a BitIndexInner {
     type IntoIter = Copied<Values<'a, (BitPath, MergeStage), BitIndexEntry>>;
     type Item = BitIndexEntry;
 
@@ -48,18 +68,33 @@ impl<'a> IntoIterator for &'a BitIndex {
     }
 }
 
-impl BitIndex {
+impl<'r> BitIndex<'r> {
+    pub fn from_lockfile(repo: &'r BitRepo, lockfile: &Lockfile) -> BitResult<Self> {
+        // not actually writing anything here, so we rollback
+        // the lockfile is just to check that another process
+        // is not currently writing to the index
+        let inner = lockfile
+            .file()
+            .map(BitIndexInner::deserialize_unbuffered)
+            .transpose()?
+            .unwrap_or_default();
+        Ok(Self { repo, inner })
+    }
+
+    /// builds a tree object from the current index entries
+    pub fn build_tree(&self) -> BitResult<Tree> {
+        if self.has_conflicts() {
+            bail!("cannot write-tree an an index that is not fully merged");
+        }
+        TreeBuilder::new(self).build()
+    }
+}
+
+impl BitIndexInner {
     pub fn iter(&self) -> impl BitIterator {
         // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
         // `self` from the returned iterator
         fallible_iterator::convert(self.entries.values().cloned().collect_vec().into_iter().map(Ok))
-    }
-
-    pub fn from_lockfile(lockfile: &Lockfile) -> BitResult<Self> {
-        // not actually writing anything here, so we rollback
-        // the lockfile is just to check that another process
-        // is not currently writing to the index
-        Ok(lockfile.file().map(BitIndex::deserialize_unbuffered).transpose()?.unwrap_or_default())
     }
 
     /// find entry by path
@@ -68,8 +103,11 @@ impl BitIndex {
     }
 
     /// if entry with the same path already exists, it will be replaced
-    pub fn add_entry(&mut self, entry: BitIndexEntry) -> BitResult<()> {
+    pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
+        if entry.hash.is_zero() {
+            entry.hash = tls::REPO.with(|repo| repo.hash_blob(entry.filepath))?;
+        }
         self.entries.insert(entry.as_key(), entry);
         Ok(())
     }
@@ -121,27 +159,20 @@ impl BitIndex {
     pub fn has_conflicts(&self) -> bool {
         self.entries.keys().any(|(_, stage)| stage.is_merging())
     }
-
-    /// builds a tree object from the current index entries
-    pub fn build_tree(&self, repo: &BitRepo) -> BitResult<Tree> {
-        if self.has_conflicts() {
-            bail!("cannot write-tree an an index that is not fully merged");
-        }
-        TreeBuilder::new(self, repo, self.entries.values()).build()
-    }
 }
 
-struct TreeBuilder<'a, I: Iterator<Item = &'a BitIndexEntry>> {
-    index: &'a BitIndex,
+struct TreeBuilder<'a, 'r> {
+    index: &'a BitIndex<'r>,
     repo: &'a BitRepo,
-    index_entries: Peekable<I>,
+    index_entries:
+        Peekable<std::collections::btree_map::Values<'a, (BitPath, MergeStage), BitIndexEntry>>,
     // count the number of blobs created (not subtrees)
     // should match the number of index entries
 }
 
-impl<'a, I: Iterator<Item = &'a BitIndexEntry>> TreeBuilder<'a, I> {
-    pub fn new(index: &'a BitIndex, repo: &'a BitRepo, entries: I) -> Self {
-        Self { index, repo, index_entries: entries.peekable() }
+impl<'a, 'r> TreeBuilder<'a, 'r> {
+    pub fn new(index: &'a BitIndex<'r>) -> Self {
+        Self { index, repo: index.repo, index_entries: index.entries.values().peekable() }
     }
 
     fn build_tree(&mut self, current_index_dir: impl AsRef<Path>, depth: usize) -> BitResult<Tree> {
@@ -233,7 +264,7 @@ impl Display for MergeStage {
     }
 }
 
-impl BitIndex {
+impl BitIndexInner {
     fn parse_header(r: &mut dyn BufRead) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];
         r.read_exact(&mut signature)?;
@@ -277,7 +308,7 @@ impl Serialize for BitIndexExtension {
     }
 }
 
-impl Serialize for BitIndex {
+impl Serialize for BitIndexInner {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         let mut hash_writer = HashWriter::new_sha1(writer);
 
@@ -302,7 +333,7 @@ impl Serialize for BitIndex {
     }
 }
 
-impl Deserialize for BitIndex {
+impl Deserialize for BitIndexInner {
     fn deserialize(r: &mut dyn BufRead) -> BitResult<Self>
     where
         Self: Sized,

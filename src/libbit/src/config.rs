@@ -145,9 +145,9 @@ impl<'c> BitConfig<'c> {
     }
 }
 
-//* be careful to not recursively call the generated method on the global config
 /// generates accessors for each property
-/// searches up into global scope if the property is not found locally
+/// searches up into global scope if the property is not found locally returning None
+// if none of the configurations contain the value
 macro_rules! get_opt {
     ($section:ident.$field:ident:$ty:ty) => {
         impl<'c> BitConfig<'c> {
@@ -158,8 +158,25 @@ macro_rules! get_opt {
                     Some(value) => return Ok(Some(value)),
                     None => match self.scope {
                         BitConfigScope::Global => Ok(None),
-                        BitConfigScope::Local =>
-                            Self::with_global_config(|global| global.get(section, field)),
+                        BitConfigScope::Local => Self::with_global_config(|global| global.$field()),
+                    },
+                }
+            }
+        }
+    };
+}
+
+macro_rules! get {
+    ($section:ident.$field:ident:$ty:ty, $default:expr) => {
+        impl<'c> BitConfig<'c> {
+            pub fn $field(&self) -> BitResult<$ty> {
+                let section = stringify!($section);
+                let field = stringify!($field);
+                match self.get(section, field)? {
+                    Some(value) => return Ok(value),
+                    None => match self.scope {
+                        BitConfigScope::Global => Ok($default),
+                        BitConfigScope::Local => Self::with_global_config(|global| global.$field()),
                     },
                 }
             }
@@ -169,7 +186,7 @@ macro_rules! get_opt {
 
 get_opt!(core.repositoryformatversion: i64);
 get_opt!(core.bare: bool);
-get_opt!(core.filemode: bool);
+get!(core.filemode: bool, false);
 
 get_opt!(user.name: String);
 get_opt!(user.email: String);

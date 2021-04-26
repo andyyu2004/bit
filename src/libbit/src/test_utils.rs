@@ -54,34 +54,47 @@ macro_rules! random {
     };
 }
 
+macro_rules! stat {
+    ($repo:ident: $path:literal) => {
+        #[allow(unused_imports)]
+        use std::os::linux::fs::*;
+        let metadata = std::fs::metadata($repo.workdir.join($path))?;
+        eprint!("ctime {}:{}; ", metadata.st_ctime(), metadata.st_ctime_nsec());
+        eprintln!("mtime {}:{}", metadata.st_mtime(), metadata.st_mtime_nsec() as u32);
+    };
+}
+
 macro_rules! modify {
     ($repo:ident: $path:literal < $content:expr) => {
         #[allow(unused_imports)]
         use std::io::prelude::*;
-        std::fs::File::with_options()
+        let mut file = std::fs::File::with_options()
             .read(false)
             .append(false)
             .write(true)
-            .open($repo.workdir.join($path))?
-            .write_all($content.as_ref())?
+            .open($repo.workdir.join($path))?;
+        file.write_all($content.as_ref())?;
+        file.sync_all()?
     };
     ($repo:ident: $path:literal << $content:expr) => {
         #[allow(unused_imports)]
         use std::io::prelude::*;
-        std::fs::File::with_options()
+        let mut file = std::fs::File::with_options()
             .read(false)
             .append(true)
-            .open($repo.workdir.join($path))?
-            .write_all($content.as_ref())?
+            .open($repo.workdir.join($path))?;
+        file.write_all($content.as_ref())?;
+        file.sync_all()?;
     };
     ($repo:ident: $path:literal) => {
         #[allow(unused_imports)]
         use std::io::prelude::*;
-        std::fs::File::with_options()
+        let mut file = std::fs::File::with_options()
             .read(false)
             .write(true)
-            .open($repo.workdir.join($path))?
-            .write_all(random!().as_bytes())?
+            .open($repo.workdir.join($path))?;
+        file.write_all(random!().as_bytes())?;
+        file.sync_all()?;
     };
 }
 

@@ -1,6 +1,5 @@
 use crate::error::BitResult;
-use crate::hash::BitHash;
-use crate::index::{BitIndexEntries, BitIndexEntry};
+use crate::index::BitIndexEntry;
 use crate::iter::BitIterator;
 use crate::repo::BitRepo;
 use crate::tls;
@@ -11,15 +10,15 @@ use std::cmp::Ordering;
 pub struct BitDiff {}
 
 pub trait Differ {
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+    fn on_created(&mut self, _new: BitIndexEntry) -> BitResult<()> {
         Ok(())
     }
 
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+    fn on_modified(&mut self, _old: BitIndexEntry, _new: BitIndexEntry) -> BitResult<()> {
         Ok(())
     }
 
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+    fn on_deleted(&mut self, _old: BitIndexEntry) -> BitResult<()> {
         Ok(())
     }
 }
@@ -41,18 +40,43 @@ impl BitIndexEntry {
         // the "old" entry should always have a calculated hash
         assert!(self.hash.is_known());
         //? there are probably some problems with this current implementation
-        // TODO check assume_unchanged and skip_worktree here
-        if self.mtime_sec == other.mtime_sec && self.mtime_nano == other.mtime_nano {
-            return Ok(false);
-        } else if self.hash == other.hash {
+        //? check assume_unchanged and skip_worktree here?
+        // the following condition causes some non deterministic results (due to racy git)?
+        // if self.mtime_sec == other.mtime_sec && self.mtime_nano == other.mtime_nano {
+        // return Ok(false);
+        // }
+        // for now we just ignore the mtime and just consider the other values
+        // this conservative approach is probably generally good enough as
+        // its unlikely that after changing a file that the size will be exactly the same
+        // actually there are similar issues with ctime as well which is odd, unsure of the cause of either
+        // so will just avoiding using either for now :)
+        if self.hash == other.hash {
             return Ok(false);
         }
+        if self.filesize != other.filesize
+            || self.inode != other.inode
+            || self.filepath != other.filepath
+            || tls::with_config(|config| config.filemode())? && self.mode != other.mode
+        {
+            return Ok(true);
+        }
 
+        // file may have changed, but we are not certain, so check the hash
+
+        dbg!("bad path");
         let mut other_hash = other.hash;
         if other_hash.is_zero() {
             other_hash = tls::REPO.with(|repo| repo.hash_blob(other.filepath))?;
         }
-        Ok(self.hash != other_hash)
+
+        let changed = self.hash != other_hash;
+        if !changed {
+            // TODO update index entries so we don't hit this path again
+            // maybe the parameters to this function need to be less general
+            // and rather than be `old` and `new` needs to be `index_entry` and `worktree_entry
+            // tls::with_index(|index| index.update_stat())
+        }
+        Ok(changed)
     }
 }
 

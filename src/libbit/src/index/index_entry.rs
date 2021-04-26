@@ -1,7 +1,5 @@
 use super::*;
 use crate::error::BitGenericError;
-use crate::hash;
-use crate::obj::Blob;
 use crate::serialize::Deserialize;
 use crate::tls;
 use std::fmt::{self, Debug, Formatter};

@@ -70,10 +70,6 @@ impl Differ for WorktreeIndexDiffer<'_> {
         assert_eq!(old.filepath, new.filepath);
         Ok(self.modified.push(new.filepath))
     }
-
-    fn on_deleted(&mut self, _old: BitIndexEntry) -> BitResult<()> {
-        Ok(())
-    }
 }
 
 // TODO if a directory only contains untracked directories

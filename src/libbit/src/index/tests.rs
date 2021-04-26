@@ -22,7 +22,7 @@ impl BitRepo {
     }
 }
 
-impl BitIndex {
+impl<'r> BitIndex<'r> {
     #[cfg(test)]
     pub fn add_str(&mut self, s: &str) -> BitResult<()> {
         let pathspec = s.parse::<Pathspec>()?;
@@ -42,7 +42,7 @@ fn test_add_non_matching_pathspec() -> BitResult<()> {
 #[test]
 fn test_parse_large_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
-    let index = BitIndex::deserialize_unbuffered(bytes)?;
+    let index = BitIndexInner::deserialize_unbuffered(bytes)?;
     assert_eq!(index.entries.len(), 31);
     Ok(())
 }
@@ -188,7 +188,7 @@ fn add_file_to_index() -> BitResult<()> {
 #[test]
 fn parse_and_serialize_small_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/smallindex") as &[u8];
-    let index = BitIndex::deserialize_unbuffered(bytes)?;
+    let index = BitIndexInner::deserialize_unbuffered(bytes)?;
     let mut buf = vec![];
     index.serialize(&mut buf)?;
     assert_eq!(bytes, buf);
@@ -198,7 +198,7 @@ fn parse_and_serialize_small_index() -> BitResult<()> {
 #[test]
 fn parse_and_serialize_large_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
-    let index = BitIndex::deserialize_unbuffered(bytes)?;
+    let index = BitIndexInner::deserialize_unbuffered(bytes)?;
     let mut buf = vec![];
     index.serialize(&mut buf)?;
     assert_eq!(bytes, buf);
@@ -208,7 +208,7 @@ fn parse_and_serialize_large_index() -> BitResult<()> {
 #[test]
 fn parse_small_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/smallindex") as &[u8];
-    let index = BitIndex::deserialize_unbuffered(bytes)?;
+    let index = BitIndexInner::deserialize_unbuffered(bytes)?;
     // data from `git ls-files --stage --debug`
     // the flags show up as  `1` under git, not sure how they're parsed exactly
     let entries = vec![
@@ -245,7 +245,7 @@ fn parse_small_index() -> BitResult<()> {
     ]
     .into();
 
-    let expected_index = BitIndex { entries, extensions: vec![] };
+    let expected_index = BitIndexInner { entries, extensions: vec![] };
 
     assert_eq!(expected_index, index);
     Ok(())
@@ -254,7 +254,7 @@ fn parse_small_index() -> BitResult<()> {
 #[test]
 fn parse_index_header() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
-    let header = BitIndex::parse_header(&mut BufReader::new(bytes))?;
+    let header = BitIndexInner::parse_header(&mut BufReader::new(bytes))?;
     assert_eq!(
         header,
         BitIndexHeader { signature: [b'D', b'I', b'R', b'C'], version: 2, entryc: 0x1f }
@@ -277,7 +277,7 @@ fn parse_index_header() -> BitResult<()> {
 #[test]
 fn bit_index_build_tree_test() -> BitResult<()> {
     BitRepo::find("tests/repos/indextest", |repo| {
-        let tree = repo.with_index(|index| index.build_tree(repo))?;
+        let tree = repo.with_index(|index| index.build_tree())?;
         let entries = tree.entries.into_iter().collect_vec();
         assert_eq!(entries[0].path, "dir");
         assert_eq!(entries[0].mode, FileMode::DIR);
