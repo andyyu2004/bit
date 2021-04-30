@@ -1,6 +1,13 @@
 stages:
   - build
 
+# bit looks at ~/.gitconfig file so we can just use git to do this
+before_script:
+  - apt-get update -yq
+  - apt install git
+  - git config --global user.email "andyyu2004@gmail.com"
+  - git config --global user.name "Andy Yu"
+
 rust-nightly:
   stage: build
   image: rustlang/rust:nightly

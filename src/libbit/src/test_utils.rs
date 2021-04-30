@@ -25,6 +25,12 @@ pub fn generate_sane_string(range: std::ops::Range<usize>) -> String {
     s
 }
 
+macro_rules! bit_commit {
+    ($repo:expr) => {
+        $repo.commit(Some(String::from("arbitrary message")))?;
+    };
+}
+
 macro_rules! bit_add_all {
     ($repo:expr) => {
         $repo.bit_add_all()?
@@ -42,9 +48,18 @@ macro_rules! bit_add {
         $repo.index_add($pathspec)?
     };
 }
+
 macro_rules! touch {
     ($repo:ident: $path:expr) => {
         std::fs::File::create($repo.workdir.join($path))?
+    };
+}
+
+macro_rules! symlink {
+    ($repo:ident: $original:literal <- $link:literal) => {
+        let original = $repo.workdir.join($original);
+        let link = $repo.workdir.join($link);
+        std::os::unix::fs::symlink(original, link)?
     };
 }
 
@@ -58,9 +73,15 @@ macro_rules! stat {
     ($repo:ident: $path:literal) => {
         #[allow(unused_imports)]
         use std::os::linux::fs::*;
-        let metadata = std::fs::metadata($repo.workdir.join($path))?;
-        eprint!("ctime {}:{}; ", metadata.st_ctime(), metadata.st_ctime_nsec());
-        eprintln!("mtime {}:{}", metadata.st_mtime(), metadata.st_mtime_nsec() as u32);
+        let metadata = std::fs::symlink_metadata($repo.workdir.join($path))?;
+        eprintln!(
+            "ctime {}:{}; mtime: {} {}; size: {}",
+            metadata.st_ctime(),
+            metadata.st_ctime_nsec(),
+            metadata.st_mtime(),
+            metadata.st_mtime_nsec() as u32,
+            metadata.st_size()
+        );
     };
 }
 

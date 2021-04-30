@@ -64,6 +64,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "env_logger",
  "libbit",
  "regex",
 ]
@@ -267,8 +268,11 @@ version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17392a012ea30ef05a610aa97dfb49496e71c9f676b27879922ea5bdf60d9d3f"
 dependencies = [
+ "atty",
+ "humantime",
  "log",
  "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -402,6 +406,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
 
 [[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+
+[[package]]
 name = "ignore"
 version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -459,6 +469,7 @@ dependencies = [
  "chrono",
  "colored",
  "dirs",
+ "env_logger",
  "fallible-iterator",
  "flate2",
  "git-config",
@@ -469,6 +480,7 @@ dependencies = [
  "itertools",
  "lazy_static",
  "libc",
+ "log",
  "num_enum",
  "pathdiff",
  "quickcheck",

@@ -5,6 +5,7 @@ mod util;
 extern crate anyhow;
 
 pub fn main() -> libbit::error::BitResult<()> {
+    env_logger::builder().parse_env("BIT_LOG").init();
     if let Err(err) = cli::run() {
         eprintln!("{}", err)
     }

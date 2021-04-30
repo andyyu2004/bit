@@ -77,10 +77,6 @@ impl<'a, 'r> Differ<'r> for WorktreeIndexDiffer<'a, 'r> {
         assert_eq!(old.filepath, new.filepath);
         Ok(self.modified.push(new.filepath))
     }
-
-    fn has_changes(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<bool> {
-        self.index.has_changed(&old, &new)
-    }
 }
 
 // TODO if a directory only contains untracked directories

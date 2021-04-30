@@ -89,3 +89,18 @@ fn test_status_modified_then_reverted_with_same_filesizes() -> BitResult<()> {
     }
     Ok(())
 }
+
+#[test]
+fn test_status_on_symlink() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        touch!(repo: "foo");
+        modify!(repo: "foo" < "some content that is not the same size as the symlink itself");
+        symlink!(repo: "foo" <- "link");
+        bit_add_all!(repo);
+        bit_commit!(repo);
+        let diff = repo.worktree_index_diff()?;
+        assert_eq!(diff.modified.len(), 0);
+        assert_eq!(diff.untracked.len(), 0);
+        Ok(())
+    })
+}

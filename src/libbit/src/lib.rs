@@ -1,4 +1,5 @@
 #![feature(never_type)]
+#![feature(min_type_alias_impl_trait)]
 #![feature(decl_macro)]
 #![feature(once_cell)]
 #![feature(bool_to_option)]
@@ -27,6 +28,9 @@ extern crate anyhow;
 #[cfg(test)]
 #[macro_use]
 mod test_utils;
+
+#[macro_use]
+extern crate log;
 
 pub mod cmd;
 pub mod config;
