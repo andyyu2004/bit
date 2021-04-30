@@ -1,5 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndexEntry;
+use crate::obj::Tree;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
@@ -50,10 +51,24 @@ impl FallibleIterator for WorktreeIter<'_> {
     }
 }
 
+struct HeadIter<'r> {
+    repo: &'r BitRepo,
+    root: Tree,
+}
+
+impl<'r> FallibleIterator for HeadIter<'r> {
+    type Error = BitGenericError;
+    type Item = BitIndexEntry;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        todo!()
+    }
+}
+
 pub trait BitIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>;
 
 impl BitRepo {
-    pub fn worktree_iter(&self) -> BitResult<impl BitIterator> {
+    pub fn worktree_iter(&self) -> BitResult<impl BitIterator + '_> {
         let mut entries: Vec<_> = WorktreeIter::new(self)?.collect()?;
         // TODO worktree iterator does not return in the correct order
         // the comparator function on works per directory
@@ -62,6 +77,13 @@ impl BitRepo {
         // but no directory I've seen does this so we just collect and sort for now
         entries.sort();
         Ok(fallible_iterator::convert(entries.into_iter().map(Ok)))
+    }
+
+    pub fn head_iter(&self) -> BitResult<impl BitIterator + '_> {
+        let head = self.read_head()?.expect("todo, what to do if no head yet");
+        let hash = head.resolve(self)?;
+        let root = self.read_obj(hash)?.into_tree();
+        Ok(HeadIter { repo: self, root })
     }
 }
 

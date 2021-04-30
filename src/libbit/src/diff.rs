@@ -23,6 +23,7 @@ pub trait Differ<'r> {
         Ok(())
     }
 }
+
 pub struct GenericDiff<'d, 'r, D, I, J>
 where
     D: Differ<'r>,

@@ -122,7 +122,7 @@ impl<'r> BitIndex<'r> {
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
         let mut did_add = false;
-        pathspec.match_worktree()?.for_each(|entry| {
+        pathspec.match_worktree(self.repo)?.for_each(|entry| {
             did_add = true;
             self.add_entry(entry)
         })?;
@@ -135,12 +135,12 @@ type IndexIterator = impl Iterator<Item = BitIndexEntry>;
 
 impl BitIndexInner {
     pub fn std_iter(&self) -> IndexIterator {
+        // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
+        // `self` from the returned iterator
         self.entries.values().cloned().collect_vec().into_iter()
     }
 
     pub fn iter(&self) -> impl BitIterator {
-        // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
-        // `self` from the returned iterator
         fallible_iterator::convert(self.std_iter().map(Ok))
     }
 

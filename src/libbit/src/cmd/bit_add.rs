@@ -6,8 +6,7 @@ use fallible_iterator::FallibleIterator;
 impl BitRepo {
     pub fn bit_add_dryrun(&self, pathspecs: &[Pathspec]) -> BitResult<()> {
         for pathspec in pathspecs {
-            pathspec
-                .match_worktree()?
+            self.match_worktree_with(pathspec)?
                 .for_each(|entry| Ok(println!("add `{}`", entry.filepath)))?;
         }
         Ok(())

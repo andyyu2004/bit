@@ -1,6 +1,7 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::iter::BitIterator;
 use crate::path::BitPath;
+use crate::repo::BitRepo;
 use crate::tls;
 use itertools::Itertools;
 use std::convert::TryFrom;
@@ -30,6 +31,12 @@ impl Display for Pathspec {
     }
 }
 
+impl BitRepo {
+    pub fn match_worktree_with(&self, pathspec: &Pathspec) -> BitResult<impl BitIterator + '_> {
+        pathspec.match_worktree(self)
+    }
+}
+
 impl Pathspec {
     // prefix is the section up to the first unescaped wildcard symbol
     fn find_prefix_end(s: &str) -> Option<usize> {
@@ -42,8 +49,8 @@ impl Pathspec {
         None
     }
 
-    pub fn match_worktree(self) -> BitResult<impl BitIterator> {
-        tls::REPO.with(|repo| self.match_iterator(repo.worktree_iter()?))
+    pub fn match_worktree<'r>(self, repo: &'r BitRepo) -> BitResult<impl BitIterator + 'r> {
+        self.match_iterator(repo.worktree_iter()?)
     }
 
     pub fn match_index(self) -> BitResult<impl BitIterator> {
