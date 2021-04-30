@@ -45,6 +45,12 @@ impl<'r> Deref for BitIndex<'r> {
     }
 }
 
+impl<'r> DerefMut for BitIndex<'r> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -53,13 +59,13 @@ pub struct BitIndexInner {
     /// ties broken by stage (a part of flags)
     // the link says `name` which usually refers to the hash
     // but it is sorted by filepath
-    entries: RefCell<BitIndexEntries>,
+    entries: BitIndexEntries,
     pub extensions: Vec<BitIndexExtension>,
 }
 
 impl BitIndexInner {
     pub fn new(entries: BitIndexEntries, extensions: Vec<BitIndexExtension>) -> Self {
-        Self { entries: RefCell::new(entries), extensions }
+        Self { entries, extensions }
     }
 }
 
@@ -68,7 +74,7 @@ impl BitIndexInner {
 //     type Item = BitIndexEntry;
 
 //     fn into_iter(self) -> Self::IntoIter {
-//         self.entries.borrow().values().copied()
+//         self.entries.values().copied()
 //     }
 // }
 
@@ -105,16 +111,16 @@ impl<'r> BitIndex<'r> {
     }
 
     /// if entry with the same path already exists, it will be replaced
-    pub fn add_entry(&self, mut entry: BitIndexEntry) -> BitResult<()> {
+    pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
         if entry.hash.is_zero() {
             entry.hash = self.repo.hash_blob(entry.filepath)?;
         }
-        self.entries.borrow_mut().insert(entry.as_key(), entry);
+        self.entries.insert(entry.as_key(), entry);
         Ok(())
     }
 
-    pub fn add(&self, pathspec: &Pathspec) -> BitResult<()> {
+    pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
         let mut did_add = false;
         pathspec.match_worktree()?.for_each(|entry| {
             did_add = true;
@@ -129,7 +135,7 @@ type IndexIterator = impl Iterator<Item = BitIndexEntry>;
 
 impl BitIndexInner {
     pub fn std_iter(&self) -> IndexIterator {
-        self.entries.borrow().values().cloned().collect_vec().into_iter()
+        self.entries.values().cloned().collect_vec().into_iter()
     }
 
     pub fn iter(&self) -> impl BitIterator {
@@ -140,51 +146,49 @@ impl BitIndexInner {
 
     /// find entry by path
     pub fn find_entry(&self, path: BitPath, stage: MergeStage) -> Option<BitIndexEntry> {
-        self.entries.borrow().get(&(path, stage)).copied()
+        self.entries.get(&(path, stage)).copied()
     }
 
     /// removes collisions where there was originally a file but was replaced by a directory
-    fn remove_file_dir_collisions(&self, entry: &BitIndexEntry) -> BitResult<()> {
+    fn remove_file_dir_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
         //? only removing entries with no merge stage (may need changes)
-        let mut entries = self.entries.borrow_mut();
         for component in entry.filepath.accumulative_components() {
-            entries.remove(&(component, MergeStage::None));
+            self.entries.remove(&(component, MergeStage::None));
         }
         Ok(())
     }
 
     /// removes collisions where there was originally a directory but was replaced by a file
-    fn remove_dir_file_collisions(&self, index_entry: &BitIndexEntry) -> BitResult<()> {
+    fn remove_dir_file_collisions(&mut self, index_entry: &BitIndexEntry) -> BitResult<()> {
         //? unsure which implementation is better
         // doesn't seem to be a nice way to remove a range of a btreemap
         // self.entries.retain(|(path, _), _| !path.starts_with(index_entry.filepath));
         let mut to_remove = vec![];
-        let mut entries = self.entries.borrow_mut();
-        for (&(path, stage), _) in entries.range((index_entry.filepath, MergeStage::None)..) {
+        for (&(path, stage), _) in self.entries.range((index_entry.filepath, MergeStage::None)..) {
             if !path.starts_with(index_entry.filepath) {
                 break;
             }
             to_remove.push((path, stage));
         }
         for ref key in to_remove {
-            entries.remove(key);
+            self.entries.remove(key);
         }
         Ok(())
     }
 
     /// remove directory/file and file/directory collisions that are possible in the index
-    fn remove_collisions(&self, entry: &BitIndexEntry) -> BitResult<()> {
+    fn remove_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
         self.remove_file_dir_collisions(entry)?;
         self.remove_dir_file_collisions(entry)?;
         Ok(())
     }
 
     pub fn len(&self) -> usize {
-        self.entries.borrow().len()
+        self.entries.len()
     }
 
     pub fn has_conflicts(&self) -> bool {
-        self.entries.borrow().keys().any(|(_, stage)| stage.is_merging())
+        self.entries.keys().any(|(_, stage)| stage.is_merging())
     }
 }
 
@@ -338,15 +342,14 @@ impl Serialize for BitIndexInner {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         let mut hash_writer = HashWriter::new_sha1(writer);
 
-        let entries = self.entries.borrow();
         let header = BitIndexHeader {
             signature: *BIT_INDEX_HEADER_SIG,
             version: BIT_INDEX_VERSION,
-            entryc: entries.len() as u32,
+            entryc: self.entries.len() as u32,
         };
         header.serialize(&mut hash_writer)?;
 
-        for entry in entries.values() {
+        for entry in self.entries.values() {
             entry.serialize(&mut hash_writer)?;
         }
 
