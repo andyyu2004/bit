@@ -20,7 +20,7 @@ impl BitRepo {
     }
 
     pub fn worktree_index_diff(&self) -> BitResult<WorktreeIndexDiff> {
-        self.with_index(|index| WorktreeIndexDiffer::new(index).run_diff())
+        self.with_index_mut(|index| WorktreeIndexDiffer::new(index).run_diff())
     }
 
     pub fn untracked_files(&self) -> BitResult<Vec<BitPath>> {
@@ -36,7 +36,7 @@ pub struct WorktreeIndexDiff {
 
 pub(crate) struct WorktreeIndexDiffer<'a, 'r> {
     repo: &'r BitRepo,
-    index: &'a BitIndex<'r>,
+    index: &'a mut BitIndex<'r>,
     untracked: Vec<BitPath>,
     modified: Vec<BitPath>,
     // directories that only contain untracked files
@@ -44,10 +44,11 @@ pub(crate) struct WorktreeIndexDiffer<'a, 'r> {
 }
 
 impl<'a, 'r> WorktreeIndexDiffer<'a, 'r> {
-    pub fn new(index: &'a BitIndex<'r>) -> Self {
+    pub fn new(index: &'a mut BitIndex<'r>) -> Self {
+        let repo = index.repo;
         Self {
             index,
-            repo: index.repo,
+            repo,
             untracked: Default::default(),
             modified: Default::default(),
             _untracked_dirs: Default::default(),
@@ -62,7 +63,11 @@ impl<'a, 'r> WorktreeIndexDiffer<'a, 'r> {
     }
 }
 
-impl Differ for WorktreeIndexDiffer<'_, '_> {
+impl<'a, 'r> Differ<'r> for WorktreeIndexDiffer<'a, 'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.index
+    }
+
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         self.untracked.push(new.filepath);
         Ok(())

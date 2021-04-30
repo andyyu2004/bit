@@ -9,7 +9,8 @@ use std::cmp::Ordering;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BitDiff {}
 
-pub trait Differ {
+pub trait Differ<'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r>;
     fn has_changes(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<bool>;
     fn on_created(&mut self, _new: BitIndexEntry) -> BitResult<()> {
         Ok(())
@@ -23,15 +24,16 @@ pub trait Differ {
         Ok(())
     }
 }
-pub struct GenericDiff<'d, D, I, J>
+pub struct GenericDiff<'d, 'r, D, I, J>
 where
-    D: Differ,
+    D: Differ<'r>,
     I: BitIterator,
     J: BitIterator,
 {
     differ: &'d mut D,
     old_iter: Peekable<Fuse<I>>,
     new_iter: Peekable<Fuse<J>>,
+    pd: std::marker::PhantomData<&'r ()>,
 }
 
 impl<'r> BitIndex<'r> {
@@ -85,14 +87,19 @@ impl<'r> BitIndex<'r> {
     }
 }
 
-impl<'d, D, I, J> GenericDiff<'d, D, I, J>
+impl<'d, 'r, D, I, J> GenericDiff<'d, 'r, D, I, J>
 where
-    D: Differ,
+    D: Differ<'r>,
     I: BitIterator,
     J: BitIterator,
 {
     fn new(differ: &'d mut D, old_iter: I, new_iter: J) -> Self {
-        Self { old_iter: old_iter.fuse().peekable(), new_iter: new_iter.fuse().peekable(), differ }
+        Self {
+            old_iter: old_iter.fuse().peekable(),
+            new_iter: new_iter.fuse().peekable(),
+            differ,
+            pd: std::marker::PhantomData,
+        }
     }
 
     pub fn run(differ: &'d mut D, old_iter: I, new_iter: J) -> BitResult<()> {
