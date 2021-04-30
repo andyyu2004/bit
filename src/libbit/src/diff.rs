@@ -51,7 +51,7 @@ impl<'r> BitIndex<'r> {
         assert_eq!(old.filepath, new.filepath);
         // the "old" entry should always have a calculated hash
         assert!(old.hash.is_known());
-        match self.has_changed(old, new)? {
+        match self.has_changes_inner(old, new)? {
             Changed::Yes => Ok(true),
             Changed::No => Ok(false),
             Changed::Maybe => {
@@ -81,7 +81,7 @@ impl<'r> BitIndex<'r> {
 
     /// determines whether two index_entries are definitely different
     /// `new` should be the "old" entry, and `other` should be the "new" one
-    fn has_changed(&self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<Changed> {
+    fn has_changes_inner(&self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<Changed> {
         if self.is_racy_entry(old) {
             debug!("racy entry {}", new.filepath);
             return Ok(Changed::Maybe);
