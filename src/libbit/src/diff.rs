@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::index::{BitIndex, BitIndexEntry};
+use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::BitIterator;
 use crate::repo::BitRepo;
 use crate::tls;
@@ -43,14 +43,18 @@ enum Changed {
 }
 
 impl<'r> BitIndex<'r> {
+    //? maybe the parameters to this function need to be less general
+    //? and rather than be `old` and `new` needs to be `index_entry` and `worktree_entry
     /// determine's whether `new` is *definitely* different from `old`
     // (preferably without comparing hashes)
-    pub fn has_changes(&self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<bool> {
+    pub fn has_changes(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<bool> {
         trace!("BitIndex::has_changes({} -> {})?", old.filepath, new.filepath);
         // should only be comparing the same file
         assert_eq!(old.filepath, new.filepath);
         // the "old" entry should always have a calculated hash
         assert!(old.hash.is_known());
+        assert_eq!(old.stage(), MergeStage::None);
+
         match self.has_changes_inner(old, new)? {
             Changed::Yes => Ok(true),
             Changed::No => Ok(false),
@@ -64,19 +68,15 @@ impl<'r> BitIndex<'r> {
                 let changed = old.hash != new_hash;
                 eprintln!("{}", old.filepath);
                 if !changed {
-                    // TODO update index entries so we don't hit this path again
-                    // maybe the parameters to this function need to be less general
-                    // and rather than be `old` and `new` needs to be `index_entry` and `worktree_entry
-                    self.update_stat(*new)?;
+                    // update index entries so we don't hit this slow path again
+                    // we just replace the old entry with the new one to do the update
+                    // TODO add test for this
+                    debug_assert_eq!(old.as_key(), new.as_key());
+                    self.add_entry(*new)?;
                 }
                 Ok(changed)
             }
         }
-    }
-
-    fn update_stat(&self, entry: BitIndexEntry) -> BitResult<()> {
-        Ok(())
-        // self.add_entry(entry)
     }
 
     /// determines whether two index_entries are definitely different
@@ -88,6 +88,8 @@ impl<'r> BitIndex<'r> {
         }
 
         //? check assume_unchanged and skip_worktree here?
+
+        // these checks confirm whether entries have definitely NOT changed
         if old.hash == new.hash {
             debug!("{} unchanged: hashes match {} {}", old.filepath, old.hash, new.hash);
             return Ok(Changed::No);
@@ -97,6 +99,9 @@ impl<'r> BitIndex<'r> {
             debug!("{} unchanged: non-racy mtime match {} {}", old.filepath, old.mtime, new.mtime);
             return Ok(Changed::No);
         }
+
+        // these checks confirm if the entry definitely have changed
+        // could probably add in a few of the other fields but not that important?
 
         if old.filesize != new.filesize {
             debug!("{} changed: filesize {} -> {}", old.filepath, old.filesize, new.filesize);
