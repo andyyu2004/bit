@@ -51,6 +51,7 @@ impl FallibleIterator for WorktreeIter<'_> {
     }
 }
 
+#[derive(Debug)]
 struct HeadIter<'r> {
     repo: &'r BitRepo,
     // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself

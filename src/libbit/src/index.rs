@@ -129,7 +129,7 @@ impl<'r> BitIndex<'r> {
     }
 }
 
-type IndexIterator = impl Iterator<Item = BitIndexEntry> + Clone;
+type IndexIterator = impl Iterator<Item = BitIndexEntry> + Clone + std::fmt::Debug;
 
 impl BitIndexInner {
     pub fn std_iter(&self) -> IndexIterator {

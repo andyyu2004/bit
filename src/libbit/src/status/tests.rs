@@ -9,10 +9,11 @@ fn test_status_untracked_files() -> BitResult<()> {
         touch!(repo: "baz");
         bit_add!(repo: "bar");
 
-        let untracked = repo.untracked_files()?;
-        assert_eq!(untracked.len(), 2);
-        assert_eq!(untracked[0], "baz");
-        assert_eq!(untracked[1], "foo");
+        let diff = repo.diff_index_worktree()?;
+        assert!(diff.modified.is_empty());
+        assert_eq!(diff.untracked.len(), 2);
+        assert_eq!(diff.untracked[0], "baz");
+        assert_eq!(diff.untracked[1], "foo");
         Ok(())
     })
 }
@@ -29,6 +30,7 @@ fn test_status_modified_files() -> BitResult<()> {
         modify!(repo: "foo/bar");
 
         let diff = repo.diff_index_worktree()?;
+        assert!(diff.untracked.is_empty());
         assert_eq!(diff.modified.len(), 2);
         let mut modified = diff.modified.into_iter();
         assert_eq!(modified.next().unwrap(), "foo.l");
@@ -54,6 +56,7 @@ fn test_status_modified_then_reverted() -> BitResult<()> {
             modify!(repo: "foo/bar" < "original content");
 
             let diff = repo.diff_index_worktree()?;
+            assert!(diff.untracked.is_empty());
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
             assert_eq!(modified.next().unwrap(), "foo.l");
@@ -72,14 +75,12 @@ fn test_status_modified_then_reverted_with_same_filesizes() -> BitResult<()> {
             touch!(repo: "foo/baz");
             touch!(repo: "foo.l");
             modify!(repo: "foo/bar" < "abc");
-            stat!(repo: "foo/bar");
             bit_add_all!(repo);
             modify!(repo: "foo.l");
             modify!(repo: "foo/bar" < "123");
             // revert foo/bar back to original contents
             modify!(repo: "foo/bar" < "abc");
 
-            stat!(repo: "foo/bar");
             let diff = repo.diff_index_worktree()?;
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
@@ -120,7 +121,7 @@ fn test_status_staged_modified_files() -> BitResult<()> {
 }
 
 #[test]
-fn test_status_staged_new_files() -> BitResult<()> {
+fn test_status_staged_new_files_simple() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         touch!(repo: "new");
         bit_add!(repo: "new");
@@ -133,32 +134,33 @@ fn test_status_staged_new_files() -> BitResult<()> {
     })
 }
 
-#[test]
-fn test_status_staged_deleted_files() -> BitResult<()> {
-    BitRepo::with_sample_repo(|repo| {
-        rm!(repo: "foo");
-        bit_add!(repo: "foo");
-        let diff = repo.diff_head_index()?;
-        assert!(diff.new.is_empty());
-        assert!(diff.staged.is_empty());
-        assert_eq!(diff.deleted.len(), 1);
-        assert_eq!(diff.deleted[0], "foo");
-        Ok(())
-    })
-}
-#[test]
-fn test_status_staged_deleted_directory() -> BitResult<()> {
-    BitRepo::with_sample_repo(|repo| {
-        rm!(repo: "new");
-        bit_add!(repo: "new");
-        let diff = repo.diff_head_index()?;
-        // assert!(diff.deleted.is_empty());
-        assert!(diff.staged.is_empty());
-        assert_eq!(diff.new.len(), 1);
-        assert_eq!(diff.new[0], "new");
-        Ok(())
-    })
-}
+// #[test]
+// fn test_status_staged_deleted_files() -> BitResult<()> {
+//     BitRepo::with_sample_repo(|repo| {
+//         rm!(repo: "foo");
+//         bit_add!(repo: "foo");
+//         let diff = repo.diff_head_index()?;
+//         assert!(diff.new.is_empty());
+//         assert!(diff.staged.is_empty());
+//         assert_eq!(diff.deleted.len(), 1);
+//         assert_eq!(diff.deleted[0], "foo");
+//         Ok(())
+//     })
+// }
+
+// #[test]
+// fn test_status_staged_deleted_directory() -> BitResult<()> {
+//     BitRepo::with_sample_repo(|repo| {
+//         rm!(repo: "new");
+//         bit_add!(repo: "new");
+//         let diff = repo.diff_head_index()?;
+//         // assert!(diff.deleted.is_empty());
+//         assert!(diff.staged.is_empty());
+//         assert_eq!(diff.new.len(), 1);
+//         assert_eq!(diff.new[0], "new");
+//         Ok(())
+//     })
+// }
 
 #[test]
 fn test_status_staged_new_files_no_head() -> BitResult<()> {

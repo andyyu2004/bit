@@ -4,7 +4,7 @@ use crate::iter::BitIterator;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
-use fallible_iterator::{Fuse, Peekable};
+use fallible_iterator::{FallibleIterator, Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -169,6 +169,7 @@ where
     }
 
     fn handle_potential_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        self.old_iter.next()?;
         self.new_iter.next()?;
         // if we are here then we know that the path and stage of the entries match
         // however, that does not mean that the file has not changed
@@ -202,10 +203,6 @@ where
 impl BitRepo {
     pub fn diff_index_worktree(&self) -> BitResult<IndexWorktreeDiff> {
         self.with_index_mut(|index| IndexWorktreeDiffer::new(index).run_diff())
-    }
-
-    pub fn untracked_files(&self) -> BitResult<Vec<BitPath>> {
-        self.diff_index_worktree().map(|diff| diff.untracked)
     }
 
     pub fn diff_head_index(&self) -> BitResult<HeadIndexDiff> {
