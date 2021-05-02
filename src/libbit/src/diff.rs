@@ -1,16 +1,20 @@
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::BitIterator;
+use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BitDiff {}
 
 pub trait Differ<'r> {
+    type Diff;
     fn index_mut(&mut self) -> &mut BitIndex<'r>;
+    fn run_diff(self) -> BitResult<Self::Diff>;
     fn on_created(&mut self, _new: BitIndexEntry) -> BitResult<()> {
         Ok(())
     }
@@ -24,7 +28,7 @@ pub trait Differ<'r> {
     }
 }
 
-pub struct GenericDiff<'d, 'r, D, I, J>
+pub struct GenericDiffer<'d, 'r, D, I, J>
 where
     D: Differ<'r>,
     I: BitIterator,
@@ -126,7 +130,7 @@ impl<'r> BitIndex<'r> {
     }
 }
 
-impl<'d, 'r, D, I, J> GenericDiff<'d, 'r, D, I, J>
+impl<'d, 'r, D, I, J> GenericDiffer<'d, 'r, D, I, J>
 where
     D: Differ<'r>,
     I: BitIterator,
@@ -187,31 +191,126 @@ where
 }
 
 impl BitRepo {
-    pub fn diff_worktree_index(&self) -> BitResult<BitDiff> {
-        self.with_index(|index| self.diff_from_iterators(index.iter(), self.worktree_iter()?))
+    pub fn diff_index_worktree(&self) -> BitResult<IndexWorktreeDiff> {
+        self.with_index_mut(|index| IndexWorktreeDiffer::new(index).run_diff())
     }
 
-    /// both iterators must be sorted by path
-    pub fn diff_from_iterators(
-        &self,
-        old_iter: impl BitIterator,
-        new_iter: impl BitIterator,
-    ) -> BitResult<BitDiff> {
-        todo!()
+    pub fn untracked_files(&self) -> BitResult<Vec<BitPath>> {
+        self.diff_index_worktree().map(|diff| diff.untracked)
+    }
+
+    pub fn diff_head_index(&self) -> BitResult<HeadIndexDiff> {
+        self.with_index_mut(|index| HeadIndexDiffer::new(index).run_diff())
+    }
+}
+
+pub(crate) struct HeadIndexDiffer<'a, 'r> {
+    repo: &'r BitRepo,
+    index: &'a mut BitIndex<'r>,
+    added: Vec<BitPath>,
+    staged: Vec<BitPath>,
+    deleted: Vec<BitPath>,
+}
+
+impl<'a, 'r> HeadIndexDiffer<'a, 'r> {
+    pub fn new(index: &'a mut BitIndex<'r>) -> Self {
+        let repo = index.repo;
+        Self {
+            index,
+            repo,
+            added: Default::default(),
+            staged: Default::default(),
+            deleted: Default::default(),
+        }
+    }
+}
+
+impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
+    type Diff = HeadIndexDiff;
+
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.index
+    }
+
+    fn run_diff(mut self) -> BitResult<HeadIndexDiff> {
+        let repo = self.repo;
+        let index_iter = self.index.iter();
+        GenericDiffer::run(&mut self, repo.head_iter()?, index_iter)?;
+        Ok(HeadIndexDiff { added: self.added, staged: self.staged })
+    }
+
+    fn on_created(&mut self, _new: BitIndexEntry) -> BitResult<()> {
+        unreachable!("new file in HEAD tree that is not in the index!")
+    }
+
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        Ok(self.deleted.push(old.filepath))
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        assert_eq!(old.filepath, new.filepath);
+        Ok(self.staged.push(new.filepath))
+    }
+}
+
+#[derive(Debug)]
+pub struct HeadIndexDiff {
+    pub staged: Vec<BitPath>,
+    pub added: Vec<BitPath>,
+}
+
+#[derive(Debug)]
+pub struct IndexWorktreeDiff {
+    pub untracked: Vec<BitPath>,
+    pub modified: Vec<BitPath>,
+}
+
+pub(crate) struct IndexWorktreeDiffer<'a, 'r> {
+    repo: &'r BitRepo,
+    index: &'a mut BitIndex<'r>,
+    untracked: Vec<BitPath>,
+    modified: Vec<BitPath>,
+    // directories that only contain untracked files
+    _untracked_dirs: HashSet<BitPath>,
+}
+
+impl<'a, 'r> IndexWorktreeDiffer<'a, 'r> {
+    pub fn new(index: &'a mut BitIndex<'r>) -> Self {
+        let repo = index.repo;
+        Self {
+            index,
+            repo,
+            untracked: Default::default(),
+            modified: Default::default(),
+            _untracked_dirs: Default::default(),
+        }
+    }
+}
+
+impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
+    type Diff = IndexWorktreeDiff;
+
+    fn run_diff(mut self) -> BitResult<IndexWorktreeDiff> {
+        let repo = self.repo;
+        let index_iter = self.index.iter();
+        GenericDiffer::run(&mut self, index_iter, repo.worktree_iter()?)?;
+        Ok(IndexWorktreeDiff { untracked: self.untracked, modified: self.modified })
+    }
+
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.index
+    }
+
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        self.untracked.push(new.filepath);
+        Ok(())
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        assert_eq!(old.filepath, new.filepath);
+        Ok(self.modified.push(new.filepath))
     }
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn simple_diff() -> BitResult<()> {
-        Ok(())
-        // BitRepo::find("tests/repos/difftest", |repo| {
-        //     let diff = repo.diff_workdir_index()?;
-        //     dbg!(diff);
-        //     Ok(())
-        // })
-    }
-}
+mod tests;

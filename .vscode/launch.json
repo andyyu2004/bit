@@ -16,7 +16,7 @@
         }
       },
       // "sourceLanguages": ["rust"],
-      "cwd": "${workspaceFolder}/examples/test2",
+      "cwd": "${workspaceFolder}/examples/test3",
       "args": ["status"]
     }
     // {

@@ -34,6 +34,7 @@ impl BitRepo {
         message: String,
         parent: Option<BitHash>,
     ) -> BitResult<Commit> {
+        // TODO validate hashes of parent and tree
         let author = self.user_signature()?;
         let committer = author.clone();
         Ok(Commit { tree, parent, message, author, committer, gpgsig: None })

@@ -77,14 +77,16 @@ impl BitLooseObjDb {
         Ok(hash)
     }
 
-    fn obj_path(&self, hash: BitHash) -> BitPath {
+    fn obj_path(&self, hash: BitHash) -> BitResult<BitPath> {
         let (dir, file) = hash.split();
-        self.objects_path.join(dir).join(file)
+        let path = self.objects_path.join(dir).join(file);
+        // ensure!(path.exists(), "invalid object hash `{}`, loose object file does not exist", hash);
+        Ok(path)
     }
 
     fn locate_obj(&self, id: BitId) -> BitResult<BitPath> {
         let hash = self.expand_id(id)?;
-        Ok(self.obj_path(hash))
+        Ok(self.obj_path(hash)?)
     }
 
     fn read_stream(&self, id: BitId) -> BitResult<impl BufRead> {
@@ -107,7 +109,7 @@ impl BitObjDbBackend for BitLooseObjDb {
     fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash> {
         let bytes = obj.serialize_with_headers()?;
         let hash = hash::hash_bytes(&bytes);
-        let path = self.obj_path(hash);
+        let path = self.obj_path(hash)?;
         if path.as_path().exists() {
             #[cfg(debug_assertions)]
             {

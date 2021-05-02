@@ -20,7 +20,6 @@ impl BitRepo {
         message: Option<String>,
         tree: BitHash,
     ) -> BitResult<BitHash> {
-        // TODO validate hashes of parent and tree
         let message = match message {
             Some(msg) => msg,
             None => self.read_commit_msg()?,

@@ -1,7 +1,22 @@
 use std::collections::BTreeSet;
 
+use crate::hash::BitHash;
+use crate::path::BitPath;
+
 use super::*;
 use quickcheck_macros::quickcheck;
+
+#[test]
+fn test_tree_entry_ordering() {
+    let mut entries = BTreeSet::new();
+    let dir = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar"), hash: BitHash::ZERO };
+    let file =
+        TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), hash: BitHash::ZERO };
+    entries.insert(dir);
+    entries.insert(file);
+    assert_eq!(entries.pop_first().unwrap().path, "bar.ext");
+    assert_eq!(entries.pop_first().unwrap().path, "bar");
+}
 
 #[test]
 fn valid_obj_read() {

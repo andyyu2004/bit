@@ -28,7 +28,7 @@ fn test_status_modified_files() -> BitResult<()> {
         modify!(repo: "foo.l");
         modify!(repo: "foo/bar");
 
-        let diff = repo.worktree_index_diff()?;
+        let diff = repo.diff_index_worktree()?;
         assert_eq!(diff.modified.len(), 2);
         let mut modified = diff.modified.into_iter();
         assert_eq!(modified.next().unwrap(), "foo.l");
@@ -53,7 +53,7 @@ fn test_status_modified_then_reverted() -> BitResult<()> {
             // revert foo/bar back to original contents
             modify!(repo: "foo/bar" < "original content");
 
-            let diff = repo.worktree_index_diff()?;
+            let diff = repo.diff_index_worktree()?;
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
             assert_eq!(modified.next().unwrap(), "foo.l");
@@ -80,7 +80,7 @@ fn test_status_modified_then_reverted_with_same_filesizes() -> BitResult<()> {
             modify!(repo: "foo/bar" < "abc");
 
             stat!(repo: "foo/bar");
-            let diff = repo.worktree_index_diff()?;
+            let diff = repo.diff_index_worktree()?;
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
             assert_eq!(modified.next().unwrap(), "foo.l");
@@ -98,7 +98,7 @@ fn test_status_on_symlink() -> BitResult<()> {
         symlink!(repo: "foo" <- "link");
         bit_add_all!(repo);
         bit_commit!(repo);
-        let diff = repo.worktree_index_diff()?;
+        let diff = repo.diff_index_worktree()?;
         assert_eq!(diff.modified.len(), 0);
         assert_eq!(diff.untracked.len(), 0);
         Ok(())

@@ -228,6 +228,10 @@ impl BitRepo {
         self.odb.read(id.into())
     }
 
+    pub fn obj_exists(&self, id: impl Into<BitId>) -> BitResult<bool> {
+        self.odb.exists(id.into())
+    }
+
     pub fn read_obj_header(&self, id: impl Into<BitId>) -> BitResult<BitObjHeader> {
         self.odb.read_header(id.into())
     }
@@ -274,6 +278,7 @@ impl BitRepo {
         repo_relative_path(self, path)
     }
 
+    #[cfg(test)]
     pub(crate) fn relative_paths(&self, paths: &[impl AsRef<Path>]) -> BitPath {
         paths.iter().fold(self.bitdir, |base, path| base.join(path))
     }

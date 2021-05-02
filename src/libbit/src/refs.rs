@@ -1,5 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::hash::BitHash;
+use crate::lockfile::Lockfile;
 use crate::obj::BitObjKind;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -8,7 +9,7 @@ use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::str::FromStr;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum BitRef {
     /// refers directly to an object
     Direct(BitHash),
@@ -16,7 +17,7 @@ pub enum BitRef {
     /// if the ref is `ref: refs/remote/origin/master`
     /// then the `BitPath` contains `refs/remote/origin/master`
     /// possibly bitpath is not the best representation but its ok for now
-    Symbolic(BitPath),
+    Symbolic(SymbolicRef),
 }
 
 impl From<BitHash> for BitRef {
@@ -60,7 +61,30 @@ impl FromStr for BitRef {
             return Ok(Self::Direct(hash));
         }
         // TODO validation of indirect?
-        Ok(Self::Symbolic(BitPath::intern(s)))
+        SymbolicRef::from_str(s).map(Self::Symbolic)
+    }
+}
+
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub struct SymbolicRef {
+    path: BitPath,
+}
+
+impl Display for SymbolicRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.path)
+    }
+}
+
+impl FromStr for SymbolicRef {
+    type Err = BitGenericError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // symbolic ref is of the form `ref: <ref>`
+        const PREFIX: &str = "ref: ";
+        let (prefix, r) = s.split_at(PREFIX.len());
+        ensure!(prefix == PREFIX, "malformed symbolic reference `{}`", s);
+        Ok(Self { path: BitPath::intern(r.trim_end()) })
     }
 }
 
@@ -68,9 +92,23 @@ impl BitRef {
     pub fn resolve(&self, repo: &BitRepo) -> BitResult<BitHash> {
         match self {
             BitRef::Direct(hash) => Ok(*hash),
-            BitRef::Symbolic(_path) => {
-                // self.resolve_ref(r)
-                todo!();
+            BitRef::Symbolic(sym) => {
+                // TODO do we have to create the ref file if it doesn't exist yet?
+                // i.e. HEAD points to refs/heads/master on initialization even when master doesn't exist
+                // as there are no commits yet
+                let ref_path = repo.relative_path(sym.path);
+                let hash = Lockfile::with_readonly(ref_path, |_| {
+                    let contents = std::fs::read_to_string(ref_path)?;
+                    BitHash::from_str(contents.trim_end())
+                })?;
+                ensure!(
+                    repo.obj_exists(hash)?,
+                    "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
+                    ref_path,
+                    hash,
+                    sym
+                );
+                Ok(hash)
             }
         }
     }
