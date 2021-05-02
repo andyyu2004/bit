@@ -2,7 +2,7 @@ use crate::error::BitResult;
 use crate::hash::{self, BitHash};
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
-use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob};
+use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Tree};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::BitPath;
 use crate::refs::BitRef;
@@ -106,6 +106,21 @@ impl BitRepo {
     #[inline]
     pub fn index_path(&self) -> &Path {
         &self.index_filepath
+    }
+
+    /// the tree belonging to the `HEAD` reference, or an empty tree if HEAD doesn't exist
+    pub fn head_tree(&self) -> BitResult<Tree> {
+        let hash = match self.resolved_head()? {
+            Some(hash) => hash,
+            None => return Ok(Tree::default()),
+        };
+        let commit = self.read_obj(hash)?.into_commit();
+        Ok(self.read_obj(commit.tree())?.into_tree())
+    }
+
+    /// returns the resolved hash of the HEAD symref
+    pub fn resolved_head(&self) -> BitResult<Option<BitHash>> {
+        self.read_head()?.and_then(|r| r.resolve(self).transpose()).transpose()
     }
 
     pub fn read_head(&self) -> BitResult<Option<BitRef>> {

@@ -1,7 +1,6 @@
 use crate::error::BitResult;
 use crate::interner::{with_path_interner, with_path_interner_mut};
 use crate::io_ext::ReadExt;
-use crate::tls;
 use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -24,6 +23,10 @@ impl BitPath {
 
     pub fn empty() -> Self {
         Self::intern("")
+    }
+
+    pub fn is_empty(self) -> bool {
+        self == Self::empty()
     }
 
     pub fn index(self) -> u32 {

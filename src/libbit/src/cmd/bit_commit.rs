@@ -10,7 +10,7 @@ impl BitRepo {
     }
 
     pub fn commit(&self, message: Option<String>) -> BitResult<BitRef> {
-        let parent = self.read_head()?.map(|r| r.resolve(self)).transpose()?;
+        let parent = self.resolved_head()?;
         let tree = self.write_tree()?;
         let hash = self.commit_tree(parent, message, tree)?;
         let bitref = BitRef::Direct(hash);

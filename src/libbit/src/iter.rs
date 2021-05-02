@@ -112,10 +112,7 @@ impl BitRepo {
     }
 
     pub fn head_iter(&self) -> BitResult<impl BitIterator + '_> {
-        let head = self.read_head()?.expect("todo, what to do if no head yet");
-        let hash = head.resolve(self)?;
-        let commit = self.read_obj(hash)?.into_commit();
-        let tree = self.read_obj(commit.tree())?.into_tree();
+        let tree = self.head_tree()?;
         Ok(HeadIter::new(self, tree))
     }
 }

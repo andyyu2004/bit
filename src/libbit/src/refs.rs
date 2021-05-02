@@ -89,14 +89,17 @@ impl FromStr for SymbolicRef {
 }
 
 impl BitRef {
-    pub fn resolve(&self, repo: &BitRepo) -> BitResult<BitHash> {
+    pub fn resolve(&self, repo: &BitRepo) -> BitResult<Option<BitHash>> {
         match self {
-            BitRef::Direct(hash) => Ok(*hash),
+            BitRef::Direct(hash) => Ok(Some(*hash)),
             BitRef::Symbolic(sym) => {
                 // TODO do we have to create the ref file if it doesn't exist yet?
                 // i.e. HEAD points to refs/heads/master on initialization even when master doesn't exist
                 // as there are no commits yet
                 let ref_path = repo.relative_path(sym.path);
+                if !ref_path.exists() {
+                    return Ok(None);
+                }
                 let hash = Lockfile::with_readonly(ref_path, |_| {
                     let contents = std::fs::read_to_string(ref_path)?;
                     BitHash::from_str(contents.trim_end())
@@ -108,18 +111,14 @@ impl BitRef {
                     hash,
                     sym
                 );
-                Ok(hash)
+                Ok(Some(hash))
             }
         }
     }
 }
 
 impl BitRepo {
-    pub fn resolve_ref(&self, r: BitRef) -> BitResult<BitHash> {
+    pub fn resolve_ref(&self, r: BitRef) -> BitResult<Option<BitHash>> {
         r.resolve(self)
-    }
-
-    pub fn read_ref(&self, r: BitRef) -> BitResult<BitObjKind> {
-        self.resolve_ref(r).and_then(|hash| self.read_obj(hash))
     }
 }

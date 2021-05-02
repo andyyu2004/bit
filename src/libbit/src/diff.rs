@@ -12,6 +12,7 @@ use std::collections::HashSet;
 pub struct BitDiff {}
 
 pub trait Differ<'r> {
+    /// the type of the resulting diff (returned by `Self::run_diff`)
     type Diff;
     fn index_mut(&mut self) -> &mut BitIndex<'r>;
     fn run_diff(self) -> BitResult<Self::Diff>;
@@ -64,6 +65,15 @@ impl<'r> BitIndex<'r> {
             Changed::Yes => Ok(true),
             Changed::No => Ok(false),
             Changed::Maybe => {
+                // this section should only be hit if `old` is an index entry
+                // there are currently only two types of diffs, index-worktree and head-index,
+                // where the left side is `old` and the right is `new`
+                // so the `old` parameter is either a head entry or an index entry
+                // a head_entry should never reach this section as it should always have a known hash
+                // (from the TreeEntry). To assert this we just check the filepath to be empty
+                // (as this is the default value given when a tree entry is converted to an index entry)
+                assert!(!old.filepath.is_empty());
+
                 // file may have changed, but we are not certain, so check the hash
                 let mut new_hash = new.hash;
                 if new_hash.is_zero() {
@@ -71,7 +81,6 @@ impl<'r> BitIndex<'r> {
                 }
 
                 let changed = old.hash != new_hash;
-                eprintln!("{}", old.filepath);
                 if !changed {
                     // update index entries so we don't hit this slow path again
                     // we just replace the old entry with the new one to do the update
@@ -207,7 +216,7 @@ impl BitRepo {
 pub(crate) struct HeadIndexDiffer<'a, 'r> {
     repo: &'r BitRepo,
     index: &'a mut BitIndex<'r>,
-    added: Vec<BitPath>,
+    new: Vec<BitPath>,
     staged: Vec<BitPath>,
     deleted: Vec<BitPath>,
 }
@@ -218,7 +227,7 @@ impl<'a, 'r> HeadIndexDiffer<'a, 'r> {
         Self {
             index,
             repo,
-            added: Default::default(),
+            new: Default::default(),
             staged: Default::default(),
             deleted: Default::default(),
         }
@@ -236,11 +245,11 @@ impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
         let repo = self.repo;
         let index_iter = self.index.iter();
         GenericDiffer::run(&mut self, repo.head_iter()?, index_iter)?;
-        Ok(HeadIndexDiff { added: self.added, staged: self.staged })
+        Ok(HeadIndexDiff { deleted: self.deleted, staged: self.staged, new: self.new })
     }
 
-    fn on_created(&mut self, _new: BitIndexEntry) -> BitResult<()> {
-        unreachable!("new file in HEAD tree that is not in the index!")
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        Ok(self.new.push(new.filepath))
     }
 
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
@@ -255,8 +264,9 @@ impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
 
 #[derive(Debug)]
 pub struct HeadIndexDiff {
+    pub new: Vec<BitPath>,
     pub staged: Vec<BitPath>,
-    pub added: Vec<BitPath>,
+    pub deleted: Vec<BitPath>,
 }
 
 #[derive(Debug)]

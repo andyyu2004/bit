@@ -104,3 +104,73 @@ fn test_status_on_symlink() -> BitResult<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_status_staged_modified_files() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        modify!(repo: "foo");
+        bit_add!(repo: "foo");
+        let diff = repo.diff_head_index()?;
+        // assert!(diff.deleted.is_empty());
+        assert!(diff.new.is_empty());
+        assert_eq!(diff.staged.len(), 1);
+        assert_eq!(diff.staged[0], "foo");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_status_staged_new_files() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "new");
+        bit_add!(repo: "new");
+        let diff = repo.diff_head_index()?;
+        assert!(diff.deleted.is_empty());
+        assert!(diff.staged.is_empty());
+        assert_eq!(diff.new.len(), 1);
+        assert_eq!(diff.new[0], "new");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_status_staged_deleted_files() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        rm!(repo: "foo");
+        bit_add!(repo: "foo");
+        let diff = repo.diff_head_index()?;
+        assert!(diff.new.is_empty());
+        assert!(diff.staged.is_empty());
+        assert_eq!(diff.deleted.len(), 1);
+        assert_eq!(diff.deleted[0], "foo");
+        Ok(())
+    })
+}
+#[test]
+fn test_status_staged_deleted_directory() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        rm!(repo: "new");
+        bit_add!(repo: "new");
+        let diff = repo.diff_head_index()?;
+        // assert!(diff.deleted.is_empty());
+        assert!(diff.staged.is_empty());
+        assert_eq!(diff.new.len(), 1);
+        assert_eq!(diff.new[0], "new");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_status_staged_new_files_no_head() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        touch!(repo: "foo");
+        touch!(repo: "bar");
+        bit_add!(repo: "foo");
+        let diff = repo.diff_head_index()?;
+        assert!(diff.deleted.is_empty());
+        assert!(diff.staged.is_empty());
+        assert_eq!(diff.new.len(), 1);
+        assert_eq!(diff.new[0], "foo");
+        Ok(())
+    })
+}

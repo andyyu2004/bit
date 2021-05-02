@@ -14,6 +14,7 @@ fn test_tree_entry_ordering() {
         TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), hash: BitHash::ZERO };
     entries.insert(dir);
     entries.insert(file);
+    // files come first
     assert_eq!(entries.pop_first().unwrap().path, "bar.ext");
     assert_eq!(entries.pop_first().unwrap().path, "bar");
 }
