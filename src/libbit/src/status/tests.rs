@@ -19,6 +19,27 @@ fn test_status_untracked_files() -> BitResult<()> {
 }
 
 #[test]
+fn test_status_add_and_delete_file() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        touch!(repo: "foo");
+        bit_add_all!(repo);
+        rm!(repo: "foo");
+
+        let diff = repo.status_report()?;
+        assert!(diff.staged.modified.is_empty());
+        assert!(diff.staged.deleted.is_empty());
+        assert!(diff.unstaged.untracked.is_empty());
+        assert!(diff.unstaged.modified.is_empty());
+
+        assert_eq!(diff.staged.new.len(), 1);
+        assert_eq!(diff.unstaged.deleted.len(), 1);
+        assert_eq!(diff.staged.new[0], "foo");
+        assert_eq!(diff.unstaged.deleted[0], "foo");
+        Ok(())
+    })
+}
+
+#[test]
 fn test_status_modified_files() -> BitResult<()> {
     BitRepo::with_test_repo(|repo| {
         mkdir!(repo: "foo");
@@ -114,8 +135,8 @@ fn test_status_staged_modified_files() -> BitResult<()> {
         let diff = repo.diff_head_index()?;
         // assert!(diff.deleted.is_empty());
         assert!(diff.new.is_empty());
-        assert_eq!(diff.staged.len(), 1);
-        assert_eq!(diff.staged[0], "foo");
+        assert_eq!(diff.modified.len(), 1);
+        assert_eq!(diff.modified[0], "foo");
         Ok(())
     })
 }
@@ -127,7 +148,7 @@ fn test_status_staged_new_files_simple() -> BitResult<()> {
         bit_add!(repo: "new");
         let diff = repo.diff_head_index()?;
         assert!(diff.deleted.is_empty());
-        assert!(diff.staged.is_empty());
+        assert!(diff.modified.is_empty());
         assert_eq!(diff.new.len(), 1);
         assert_eq!(diff.new[0], "new");
         Ok(())
@@ -170,7 +191,7 @@ fn test_status_staged_new_files_no_head() -> BitResult<()> {
         bit_add!(repo: "foo");
         let diff = repo.diff_head_index()?;
         assert!(diff.deleted.is_empty());
-        assert!(diff.staged.is_empty());
+        assert!(diff.modified.is_empty());
         assert_eq!(diff.new.len(), 1);
         assert_eq!(diff.new[0], "foo");
         Ok(())

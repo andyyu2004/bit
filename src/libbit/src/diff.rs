@@ -16,17 +16,9 @@ pub trait Differ<'r> {
     type Diff;
     fn index_mut(&mut self) -> &mut BitIndex<'r>;
     fn run_diff(self) -> BitResult<Self::Diff>;
-    fn on_created(&mut self, _new: BitIndexEntry) -> BitResult<()> {
-        Ok(())
-    }
-
-    fn on_modified(&mut self, _old: BitIndexEntry, _new: BitIndexEntry) -> BitResult<()> {
-        Ok(())
-    }
-
-    fn on_deleted(&mut self, _old: BitIndexEntry) -> BitResult<()> {
-        Ok(())
-    }
+    fn on_created(&mut self, _new: BitIndexEntry) -> BitResult<()>;
+    fn on_modified(&mut self, _old: BitIndexEntry, _new: BitIndexEntry) -> BitResult<()>;
+    fn on_deleted(&mut self, _old: BitIndexEntry) -> BitResult<()>;
 }
 
 pub struct GenericDiffer<'d, 'r, D, I, J>
@@ -242,7 +234,7 @@ impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
         let repo = self.repo;
         let index_iter = self.index.iter();
         GenericDiffer::run(&mut self, repo.head_iter()?, index_iter)?;
-        Ok(HeadIndexDiff { deleted: self.deleted, staged: self.staged, new: self.new })
+        Ok(HeadIndexDiff { deleted: self.deleted, modified: self.staged, new: self.new })
     }
 
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
@@ -262,14 +254,27 @@ impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
 #[derive(Debug)]
 pub struct HeadIndexDiff {
     pub new: Vec<BitPath>,
-    pub staged: Vec<BitPath>,
+    pub modified: Vec<BitPath>,
     pub deleted: Vec<BitPath>,
+}
+
+impl HeadIndexDiff {
+    pub fn is_empty(&self) -> bool {
+        self.new.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
+    }
 }
 
 #[derive(Debug)]
 pub struct IndexWorktreeDiff {
     pub untracked: Vec<BitPath>,
     pub modified: Vec<BitPath>,
+    pub deleted: Vec<BitPath>,
+}
+
+impl IndexWorktreeDiff {
+    pub fn is_empty(&self) -> bool {
+        self.untracked.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
+    }
 }
 
 pub(crate) struct IndexWorktreeDiffer<'a, 'r> {
@@ -277,6 +282,7 @@ pub(crate) struct IndexWorktreeDiffer<'a, 'r> {
     index: &'a mut BitIndex<'r>,
     untracked: Vec<BitPath>,
     modified: Vec<BitPath>,
+    deleted: Vec<BitPath>,
     // directories that only contain untracked files
     _untracked_dirs: HashSet<BitPath>,
 }
@@ -289,6 +295,7 @@ impl<'a, 'r> IndexWorktreeDiffer<'a, 'r> {
             repo,
             untracked: Default::default(),
             modified: Default::default(),
+            deleted: Default::default(),
             _untracked_dirs: Default::default(),
         }
     }
@@ -301,7 +308,11 @@ impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
         let repo = self.repo;
         let index_iter = self.index.iter();
         GenericDiffer::run(&mut self, index_iter, repo.worktree_iter()?)?;
-        Ok(IndexWorktreeDiff { untracked: self.untracked, modified: self.modified })
+        Ok(IndexWorktreeDiff {
+            untracked: self.untracked,
+            modified: self.modified,
+            deleted: self.deleted,
+        })
     }
 
     fn index_mut(&mut self) -> &mut BitIndex<'r> {
@@ -316,6 +327,10 @@ impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
     fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         assert_eq!(old.filepath, new.filepath);
         Ok(self.modified.push(new.filepath))
+    }
+
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        Ok(self.deleted.push(old.filepath))
     }
 }
 
