@@ -38,7 +38,7 @@ impl Display for BitStatusReport {
             writeln!(f, "Changes not staged for commit")?;
             writeln!(f, "  (use `bit add <file>...` to update what will be committed)")?;
             writeln!(f, "  (use 'bit restore <file>...' to discard changes in working directory)")?;
-            for path in &self.staged.modified {
+            for path in &self.unstaged.modified {
                 writeln!(f, "\t{}:   {}", "modified".red(), path.red())?;
             }
             for path in &self.unstaged.deleted {
