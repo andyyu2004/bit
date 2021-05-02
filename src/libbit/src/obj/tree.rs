@@ -118,19 +118,21 @@ impl PartialOrd for TreeEntry {
 
 impl Ord for TreeEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.path.cmp(&other.path).then_with(|| {
-            // this slightly odd code is emulating what is done in libgit2 (sort of)
-            // this basically just has the effect of ordering files before directories
-
-            //? does this ordering need to be consistent with BitPath::ord?
-            let c1 = if self.mode.is_dir() { '/' } else { '\0' };
-            let c2 = if other.mode.is_dir() { '/' } else { '\0' };
-            c1.cmp(&c2)
-        })
+        self.sort_path().cmp(&other.sort_path())
     }
 }
 
 impl TreeEntry {
+    // we must have files sorted before directories
+    // i.e. index.rs < index/
+    // however, the trailing slash is not actually stored in the tree entry path (TODO confirm against git)
+    // we (hackily) fix this by appending a symbol with ascii code > `.`
+    // the natural choice would be to append a slash but that breaks the assertion on `BitPath::cmp` which expects
+    // a relative path so we rather arbitrarily chose = which fixes this ordering issue
+    fn sort_path(&self) -> BitPath {
+        if self.mode == FileMode::DIR { self.path.join("=") } else { self.path }
+    }
+
     pub fn parse(r: &mut dyn BufRead) -> BitResult<Self> {
         let mut buf = vec![];
         let i = r.read_until(0x20, &mut buf)?;

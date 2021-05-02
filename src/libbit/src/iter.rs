@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndexEntry;
-use crate::obj::Tree;
+use crate::obj::{FileMode, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
@@ -53,7 +53,22 @@ impl FallibleIterator for WorktreeIter<'_> {
 
 struct HeadIter<'r> {
     repo: &'r BitRepo,
-    root: Tree,
+    // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself
+    entry_stack: Vec<(BitPath, TreeEntry)>,
+}
+
+impl<'r> HeadIter<'r> {
+    pub fn new(repo: &'r BitRepo, root: Tree) -> Self {
+        Self {
+            repo,
+            entry_stack: root
+                .entries
+                .into_iter()
+                .rev()
+                .map(|entry| (BitPath::empty(), entry))
+                .collect(),
+        }
+    }
 }
 
 impl<'r> FallibleIterator for HeadIter<'r> {
@@ -61,7 +76,24 @@ impl<'r> FallibleIterator for HeadIter<'r> {
     type Item = BitIndexEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        todo!()
+        loop {
+            match self.entry_stack.pop() {
+                Some((base, mut entry)) => match entry.mode {
+                    FileMode::DIR => {
+                        let tree = self.repo.read_obj(entry.hash)?.into_tree();
+                        let path = base.join(entry.path);
+                        self.entry_stack
+                            .extend(tree.entries.into_iter().rev().map(|entry| (path, entry)))
+                    }
+                    FileMode::REG | FileMode::LINK | FileMode::EXEC => {
+                        entry.path = base.join(entry.path);
+                        return Ok(Some(BitIndexEntry::from(entry)));
+                    }
+                    _ => unreachable!(),
+                },
+                None => return Ok(None),
+            }
+        }
     }
 }
 
@@ -82,8 +114,9 @@ impl BitRepo {
     pub fn head_iter(&self) -> BitResult<impl BitIterator + '_> {
         let head = self.read_head()?.expect("todo, what to do if no head yet");
         let hash = head.resolve(self)?;
-        let root = self.read_obj(hash)?.into_tree();
-        Ok(HeadIter { repo: self, root })
+        let commit = self.read_obj(hash)?.into_commit();
+        let tree = self.read_obj(commit.tree())?.into_tree();
+        Ok(HeadIter::new(self, tree))
     }
 }
 
@@ -91,3 +124,6 @@ trait BitIteratorExt: BitIterator {}
 
 impl<I: BitIterator> BitIteratorExt for I {
 }
+
+#[cfg(test)]
+mod tests;

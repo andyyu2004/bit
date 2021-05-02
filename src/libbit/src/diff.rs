@@ -83,13 +83,10 @@ impl<'r> BitIndex<'r> {
     /// determines whether two index_entries are definitely different
     /// `new` should be the "old" entry, and `other` should be the "new" one
     fn has_changes_inner(&self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<Changed> {
-        if self.is_racy_entry(old) {
-            debug!("racy entry {}", new.filepath);
-            return Ok(Changed::Maybe);
-        }
-
         //? check assume_unchanged and skip_worktree here?
 
+        // we must check the hash before anything else in case the entry is generated from a `TreeEntry`
+        // where most of the fields are zeroed but the hash is known
         // these checks confirm whether entries have definitely NOT changed
         if old.hash == new.hash {
             debug!("{} unchanged: hashes match {} {}", old.filepath, old.hash, new.hash);
@@ -97,6 +94,10 @@ impl<'r> BitIndex<'r> {
         }
 
         if old.mtime == new.mtime {
+            if self.is_racy_entry(old) {
+                debug!("racy entry {}", new.filepath);
+                return Ok(Changed::Maybe);
+            }
             debug!("{} unchanged: non-racy mtime match {} {}", old.filepath, old.mtime, new.mtime);
             return Ok(Changed::No);
         }

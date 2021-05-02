@@ -103,6 +103,10 @@ impl Deserialize for BitIndexEntry {
     }
 }
 
+/// a representation of an individual entry into the indexfile
+/// this also the uniform representation of tree (head) entries,
+/// index entries, and workdir entries
+/// and is the yielded type of `BitIterator`
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BitIndexEntry {
     pub ctime: Timespec,
@@ -114,10 +118,31 @@ pub struct BitIndexEntry {
     /// group identifier of the current user
     pub gid: u32,
     pub filesize: u32,
+    /// may be zero if left uncalculated (for efficiency)
     pub hash: BitHash,
     pub flags: BitIndexEntryFlags,
     //? is it necessary for this path to be relative to the repository workdir?
     pub filepath: BitPath,
+}
+
+impl From<TreeEntry> for BitIndexEntry {
+    fn from(entry: TreeEntry) -> Self {
+        // its fine to zero most of these fields as we know the hash, and that is what we
+        // use to determine whether something has changed or not
+        Self {
+            ctime: Timespec::zero(),
+            mtime: Timespec::zero(),
+            device: 0,
+            inode: 0,
+            mode: entry.mode,
+            uid: 0,
+            gid: 0,
+            filesize: 0,
+            hash: entry.hash,
+            flags: BitIndexEntryFlags::new(0),
+            filepath: entry.path,
+        }
+    }
 }
 
 impl BitIndexEntry {

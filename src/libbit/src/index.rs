@@ -11,13 +11,11 @@ use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::time::Timespec;
-use crate::tls;
 use crate::util;
 pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
-use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
@@ -131,7 +129,7 @@ impl<'r> BitIndex<'r> {
     }
 }
 
-type IndexIterator = impl Iterator<Item = BitIndexEntry>;
+type IndexIterator = impl Iterator<Item = BitIndexEntry> + Clone;
 
 impl BitIndexInner {
     pub fn std_iter(&self) -> IndexIterator {

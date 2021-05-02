@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::*;
 use quickcheck_macros::quickcheck;
 

@@ -22,6 +22,10 @@ impl BitPath {
         Self(u)
     }
 
+    pub fn empty() -> Self {
+        Self::intern("")
+    }
+
     pub fn index(self) -> u32 {
         self.0
     }
@@ -169,36 +173,25 @@ impl PartialOrd for BitPath {
 }
 
 impl Ord for BitPath {
-    // from libgit2 where `compare` is `strncmp` or `strncasecmp`
-    // int git_path_cmp(..)
-    // unsigned char c1, c2;
-    // size_t len = len1 < len2 ? len1 : len2;
-    // int cmp;
-
-    // cmp = compare(name1, name2, len);
-    // if (cmp)
-    // 	return cmp;
-
-    // c1 = name1[len];
-    // c2 = name2[len];
-
-    // if (c1 == '\0' && isdir1)
-    // 	c1 = '/';
-
-    // if (c2 == '\0' && isdir2)
-    // 	c2 = '/';
-
-    // return (c1 < c2) ? -1 : (c1 > c2) ? 1 : 0;
+    // from git (readcache.c)
+    //     int name_compare(const char *name1, size_t len1, const char *name2, size_t len2)
+    // {
+    // 	size_t min_len = (len1 < len2) ? len1 : len2;
+    // 	int cmp = memcmp(name1, name2, min_len);
+    // 	if (cmp)
+    // 		return cmp;
+    // 	if (len1 < len2)
+    // 		return -1;
+    // 	if (len1 > len2)
+    // 		return 1;
+    // 	return 0;
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // files with the same subpath should come before directories
         // doesn't make sense to compare relative with absolute and vice versa
         assert_eq!(self.is_relative(), other.is_relative());
-        bit_path_cmp(self, other)
+        let minlen = std::cmp::min(self.len(), other.len());
+        self[..minlen].cmp(&other[..minlen]).then_with(|| self.len().cmp(&other.len()))
     }
-}
-
-pub fn bit_path_cmp(this: &Path, other: &Path) -> std::cmp::Ordering {
-    this.to_str().unwrap().cmp(other.to_str().unwrap())
 }
 
 impl<I> Index<I> for BitPath

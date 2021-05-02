@@ -149,6 +149,13 @@ impl BitObjKind {
         }
     }
 
+    pub fn into_commit(self) -> Commit {
+        match self {
+            Self::Commit(commit) => commit,
+            _ => panic!("expected commit"),
+        }
+    }
+
     pub fn into_blob(self) -> Blob {
         match self {
             BitObjKind::Blob(blob) => blob,

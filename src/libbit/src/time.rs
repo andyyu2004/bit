@@ -10,6 +10,10 @@ pub struct Timespec {
 }
 
 impl Timespec {
+    pub fn zero() -> Self {
+        Self::new(0, 0)
+    }
+
     pub fn new(sec: u32, nano: u32) -> Self {
         Self { sec, nano }
     }

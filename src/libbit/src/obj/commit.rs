@@ -20,6 +20,13 @@ pub struct Commit {
     gpgsig: Option<String>,
 }
 
+impl Commit {
+    /// Get a reference to the commit's tree.
+    pub fn tree(&self) -> BitHash {
+        self.tree
+    }
+}
+
 impl BitRepo {
     pub fn mk_commit(
         &self,

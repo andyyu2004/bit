@@ -469,7 +469,6 @@ dependencies = [
  "chrono",
  "colored",
  "dirs",
- "env_logger",
  "fallible-iterator",
  "flate2",
  "git-config",

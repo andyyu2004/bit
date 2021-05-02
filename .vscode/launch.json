@@ -16,8 +16,8 @@
         }
       },
       // "sourceLanguages": ["rust"],
-      "cwd": "${workspaceFolder}/examples/conflict",
-      "args": ["add", "a"]
+      "cwd": "${workspaceFolder}/examples/test2",
+      "args": ["status"]
     }
     // {
     //   "type": "lldb",

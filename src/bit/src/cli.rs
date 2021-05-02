@@ -21,7 +21,6 @@ use cli_update_index::BitUpdateIndexCliOpts;
 
 use clap::{AppSettings, Clap};
 use libbit::cmd::*;
-
 use libbit::error::BitResult;
 use libbit::obj::{BitId, BitObjType};
 use libbit::repo::BitRepo;

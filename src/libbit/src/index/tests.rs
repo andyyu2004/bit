@@ -14,7 +14,7 @@ impl BitRepo {
         self.with_index_mut(|index| index.add(&pathspec.try_into()?))
     }
 
-    // creates a repository in a temporary directory and initializes it
+    // creates an empty repository in a temporary directory and initializes it
     pub fn with_test_repo<R>(f: impl FnOnce(&BitRepo) -> BitResult<R>) -> BitResult<R> {
         let basedir = tempfile::tempdir()?;
         BitRepo::init_load(&basedir, f)
