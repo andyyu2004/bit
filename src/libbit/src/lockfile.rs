@@ -36,6 +36,7 @@ impl Lockfile {
     /// directly, instead they should use the `with_` apis
     fn open(path: impl AsRef<Path>) -> BitResult<Self> {
         let path = path.as_ref();
+        assert!(!path.exists() || path.is_file(), "cannot create lock on symlinks or directories");
         let lockfile_path = path.with_extension(LOCK_FILE_EXT);
         path.parent().map(std::fs::create_dir_all).transpose()?;
         // read comments on `.create_new()` for more info
