@@ -4,7 +4,7 @@ use crate::iter::BitIterator;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
-use fallible_iterator::{FallibleIterator, Fuse, Peekable};
+use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -12,18 +12,21 @@ use std::collections::HashSet;
 pub struct BitDiff {}
 
 pub trait Differ<'r> {
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()>;
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()>;
+}
+
+pub trait DiffBuilder<'r>: Differ<'r> {
     /// the type of the resulting diff (returned by `Self::run_diff`)
     type Diff;
     fn index_mut(&mut self) -> &mut BitIndex<'r>;
     fn run_diff(self) -> BitResult<Self::Diff>;
-    fn on_created(&mut self, _new: BitIndexEntry) -> BitResult<()>;
-    fn on_modified(&mut self, _old: BitIndexEntry, _new: BitIndexEntry) -> BitResult<()>;
-    fn on_deleted(&mut self, _old: BitIndexEntry) -> BitResult<()>;
 }
 
 pub struct GenericDiffer<'d, 'r, D, I, J>
 where
-    D: Differ<'r>,
+    D: DiffBuilder<'r>,
     I: BitIterator,
     J: BitIterator,
 {
@@ -68,7 +71,7 @@ impl<'r> BitIndex<'r> {
 
                 // file may have changed, but we are not certain, so check the hash
                 let mut new_hash = new.hash;
-                if new_hash.is_zero() {
+                if new_hash.is_unknown() {
                     new_hash = self.repo.hash_blob(new.filepath)?;
                 }
 
@@ -131,9 +134,37 @@ impl<'r> BitIndex<'r> {
     }
 }
 
+impl<'d, 'r, D, I, J> Differ<'r> for GenericDiffer<'d, 'r, D, I, J>
+where
+    D: DiffBuilder<'r>,
+    I: BitIterator,
+    J: BitIterator,
+{
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        self.old_iter.next()?;
+        self.differ.on_deleted(old)
+    }
+
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        self.new_iter.next()?;
+        self.differ.on_created(new)
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        self.old_iter.next()?;
+        self.new_iter.next()?;
+        // if we are here then we know that the path and stage of the entries match
+        // however, that does not mean that the file has not changed
+        if self.differ.index_mut().has_changes(&old, &new)? {
+            self.differ.on_modified(old, new)?;
+        }
+        Ok(())
+    }
+}
+
 impl<'d, 'r, D, I, J> GenericDiffer<'d, 'r, D, I, J>
 where
-    D: Differ<'r>,
+    D: DiffBuilder<'r>,
     I: BitIterator,
     J: BitIterator,
 {
@@ -146,68 +177,57 @@ where
         }
     }
 
-    pub fn run(differ: &'d mut D, old_iter: I, new_iter: J) -> BitResult<()> {
-        Self::new(differ, old_iter, new_iter).diff_generic()
-    }
-
-    fn handle_delete(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        self.old_iter.next()?;
-        self.differ.on_deleted(old)
-    }
-
-    fn handle_create(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        self.new_iter.next()?;
-        self.differ.on_created(new)
-    }
-
-    fn handle_potential_update(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        self.old_iter.next()?;
-        self.new_iter.next()?;
-        // if we are here then we know that the path and stage of the entries match
-        // however, that does not mean that the file has not changed
-        if self.differ.index_mut().has_changes(&old, &new)? {
-            self.differ.on_modified(old, new)?;
-        }
-        Ok(())
-    }
-
     pub fn diff_generic(&mut self) -> BitResult<()> {
         loop {
             match (self.old_iter.peek()?, self.new_iter.peek()?) {
                 (None, None) => break,
-                (None, Some(&new)) => self.handle_create(new)?,
-                (Some(&old), None) => self.handle_delete(old)?,
+                (None, Some(&new)) => self.on_created(new)?,
+                (Some(&old), None) => self.on_deleted(old)?,
                 (Some(&old), Some(&new)) => {
                     // there is an old record that no longer has a matching new record
                     // therefore it has been deleted
                     match old.cmp(&new) {
-                        Ordering::Less => self.handle_delete(old)?,
-                        Ordering::Equal => self.handle_potential_update(old, new)?,
-                        Ordering::Greater => self.handle_create(new)?,
+                        Ordering::Less => self.on_deleted(old)?,
+                        Ordering::Equal => self.on_modified(old, new)?,
+                        Ordering::Greater => self.on_created(new)?,
                     }
                 }
             };
         }
         Ok(())
     }
+
+    pub fn run(differ: &'d mut D, old_iter: I, new_iter: J) -> BitResult<()> {
+        Self::new(differ, old_iter, new_iter).diff_generic()
+    }
 }
 
 impl BitRepo {
     pub fn diff_index_worktree(&self) -> BitResult<IndexWorktreeDiff> {
-        self.with_index_mut(|index| IndexWorktreeDiffer::new(index).run_diff())
+        self.with_index_mut(|index| index.diff_worktree())
     }
 
     pub fn diff_head_index(&self) -> BitResult<HeadIndexDiff> {
-        self.with_index_mut(|index| HeadIndexDiffer::new(index).run_diff())
+        self.with_index_mut(|index| index.diff_head())
+    }
+}
+
+impl<'r> BitIndex<'r> {
+    pub fn diff_worktree(&mut self) -> BitResult<IndexWorktreeDiff> {
+        IndexWorktreeDiffer::new(self).run_diff()
+    }
+
+    pub fn diff_head(&mut self) -> BitResult<HeadIndexDiff> {
+        HeadIndexDiffer::new(self).run_diff()
     }
 }
 
 pub(crate) struct HeadIndexDiffer<'a, 'r> {
     repo: &'r BitRepo,
     index: &'a mut BitIndex<'r>,
-    new: Vec<BitPath>,
-    staged: Vec<BitPath>,
-    deleted: Vec<BitPath>,
+    new: Vec<BitIndexEntry>,
+    staged: Vec<(BitIndexEntry, BitIndexEntry)>,
+    deleted: Vec<BitIndexEntry>,
 }
 
 impl<'a, 'r> HeadIndexDiffer<'a, 'r> {
@@ -223,7 +243,7 @@ impl<'a, 'r> HeadIndexDiffer<'a, 'r> {
     }
 }
 
-impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
+impl<'a, 'r> DiffBuilder<'r> for HeadIndexDiffer<'a, 'r> {
     type Diff = HeadIndexDiff;
 
     fn index_mut(&mut self) -> &mut BitIndex<'r> {
@@ -236,26 +256,28 @@ impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
         GenericDiffer::run(&mut self, repo.head_iter()?, index_iter)?;
         Ok(HeadIndexDiff { deleted: self.deleted, modified: self.staged, new: self.new })
     }
+}
 
+impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        Ok(self.new.push(new.filepath))
+        Ok(self.new.push(new))
     }
 
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        Ok(self.deleted.push(old.filepath))
+        Ok(self.deleted.push(old))
     }
 
     fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         assert_eq!(old.filepath, new.filepath);
-        Ok(self.staged.push(new.filepath))
+        Ok(self.staged.push((old, new)))
     }
 }
 
 #[derive(Debug)]
 pub struct HeadIndexDiff {
-    pub new: Vec<BitPath>,
-    pub modified: Vec<BitPath>,
-    pub deleted: Vec<BitPath>,
+    pub new: Vec<BitIndexEntry>,
+    pub modified: Vec<(BitIndexEntry, BitIndexEntry)>,
+    pub deleted: Vec<BitIndexEntry>,
 }
 
 impl HeadIndexDiff {
@@ -263,12 +285,45 @@ impl HeadIndexDiff {
         self.new.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
     }
 }
+pub trait Diff {
+    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()>;
+}
+
+impl Diff for HeadIndexDiff {
+    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()> {
+        for &deleted in self.deleted.iter() {
+            differ.on_deleted(deleted)?;
+        }
+        for &(old, new) in self.modified.iter() {
+            differ.on_modified(old, new)?;
+        }
+        for &new in self.new.iter() {
+            differ.on_created(new)?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug)]
 pub struct IndexWorktreeDiff {
-    pub untracked: Vec<BitPath>,
-    pub modified: Vec<BitPath>,
-    pub deleted: Vec<BitPath>,
+    pub untracked: Vec<BitIndexEntry>,
+    pub modified: Vec<(BitIndexEntry, BitIndexEntry)>,
+    pub deleted: Vec<BitIndexEntry>,
+}
+
+impl Diff for IndexWorktreeDiff {
+    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()> {
+        for &deleted in self.deleted.iter() {
+            differ.on_deleted(deleted)?;
+        }
+        for &(old, new) in self.modified.iter() {
+            differ.on_modified(old, new)?;
+        }
+        for &untracked in self.untracked.iter() {
+            differ.on_created(untracked)?;
+        }
+        Ok(())
+    }
 }
 
 impl IndexWorktreeDiff {
@@ -276,13 +331,12 @@ impl IndexWorktreeDiff {
         self.untracked.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
     }
 }
-
 pub(crate) struct IndexWorktreeDiffer<'a, 'r> {
     repo: &'r BitRepo,
     index: &'a mut BitIndex<'r>,
-    untracked: Vec<BitPath>,
-    modified: Vec<BitPath>,
-    deleted: Vec<BitPath>,
+    untracked: Vec<BitIndexEntry>,
+    modified: Vec<(BitIndexEntry, BitIndexEntry)>,
+    deleted: Vec<BitIndexEntry>,
     // directories that only contain untracked files
     _untracked_dirs: HashSet<BitPath>,
 }
@@ -301,7 +355,7 @@ impl<'a, 'r> IndexWorktreeDiffer<'a, 'r> {
     }
 }
 
-impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
+impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
     type Diff = IndexWorktreeDiff;
 
     fn run_diff(mut self) -> BitResult<IndexWorktreeDiff> {
@@ -318,19 +372,21 @@ impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
     fn index_mut(&mut self) -> &mut BitIndex<'r> {
         self.index
     }
+}
 
+impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        self.untracked.push(new.filepath);
+        self.untracked.push(new);
         Ok(())
     }
 
     fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         assert_eq!(old.filepath, new.filepath);
-        Ok(self.modified.push(new.filepath))
+        Ok(self.modified.push((old, new)))
     }
 
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        Ok(self.deleted.push(old.filepath))
+        Ok(self.deleted.push(old))
     }
 }
 

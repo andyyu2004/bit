@@ -1,5 +1,6 @@
 mod index_entry;
 
+use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::{BitHash, BIT_HASH_SIZE};
 use crate::io_ext::{HashWriter, ReadExt, WriteExt};
@@ -12,6 +13,7 @@ use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::time::Timespec;
 use crate::util;
+use fallible_iterator::FallibleIterator;
 pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
@@ -104,27 +106,60 @@ impl<'r> BitIndex<'r> {
         // they are read before the index is written
         // all worktree entries that have been modified since the index has been written
         // clearly has mtime >= the index mtime.
-        // so racy entries are the one's with mtime strictly equal to the index file's mtime
+        // so racily clean entries are the one's with mtime strictly equal to the index file's mtime
         self.mtime.map(|mtime| mtime == worktree_entry.mtime).unwrap_or(false)
     }
 
     /// if entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
-        if entry.hash.is_zero() {
+        if entry.hash.is_unknown() {
             entry.hash = self.repo.hash_blob(entry.filepath)?;
         }
         self.entries.insert(entry.as_key(), entry);
         Ok(())
     }
 
+    pub fn remove_entry(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
+        assert!(
+            self.entries.remove(&entry.as_key()).is_some(),
+            "tried to remove nonexistent entry `{:?}`",
+            entry.as_key()
+        );
+        Ok(())
+    }
+
+    /// makes the index exactly match the working tree (removes, updates, and adds)
+    pub fn add_all(&mut self) -> BitResult<()> {
+        struct AddAll<'a, 'r> {
+            index: &'a mut BitIndex<'r>,
+        }
+        impl<'a, 'r> Differ<'r> for AddAll<'a, 'r> {
+            fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+                self.index.add_entry(new)
+            }
+
+            fn on_modified(&mut self, _old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+                self.index.add_entry(new)
+            }
+
+            fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+                self.index.remove_entry(&old)
+            }
+        }
+        let diff = self.diff_worktree()?;
+        diff.apply(&mut AddAll { index: self })?;
+        self.repo.worktree_iter()?.for_each(|entry| self.add_entry(entry))
+    }
+
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
-        let mut did_add = false;
-        pathspec.match_worktree(self.repo)?.for_each(|entry| {
-            did_add = true;
-            self.add_entry(entry)
-        })?;
-        ensure!(did_add, "no files added: pathspec `{}` did not match any files", pathspec);
+        let mut iter = pathspec.match_worktree(self.repo)?.peekable();
+        ensure!(
+            iter.peek()?.is_some(),
+            "no files added: pathspec `{}` did not match any files",
+            pathspec
+        );
+        iter.for_each(|entry| self.add_entry(entry))?;
         Ok(())
     }
 }

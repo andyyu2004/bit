@@ -4,7 +4,7 @@ use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Tree};
 use crate::odb::{BitObjDb, BitObjDbBackend};
-use crate::path::BitPath;
+use crate::path::{self, BitPath};
 use crate::refs::BitRef;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
@@ -211,9 +211,8 @@ impl BitRepo {
         let mut desc = this.mk_bitfile("description")?;
         writeln!(desc, "Unnamed repository; edit this file 'description' to name the repository.")?;
 
-        // TODO no branches yet, can't commit as we don't resolve refs yet :)
-        // let mut head = this.mk_bitfile("HEAD")?;
-        // writeln!(head, "ref: refs/heads/master")?;
+        let mut head = this.mk_bitfile("HEAD")?;
+        writeln!(head, "ref: refs/heads/master")?;
 
         this.with_local_config(|config| {
             config.set("core", "repositoryformatversion", 0)?;
@@ -252,7 +251,7 @@ impl BitRepo {
     }
 
     pub fn hash_blob(&self, path: BitPath) -> BitResult<BitHash> {
-        let path = self.canonicalize(path)?;
+        let path = self.normalize(path)?;
         let bytes = path.read_to_vec()?;
         let blob = Blob::new(bytes);
         hash::hash_obj(&blob)
@@ -260,16 +259,19 @@ impl BitRepo {
 
     /// converts relative_paths to absolute paths
     /// checks absolute paths exist and has a base relative to the bit directory
-    pub(crate) fn canonicalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
+    pub(crate) fn normalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
         let path = path.as_ref();
         if path.is_relative() {
-            let canonical = self.workdir.join(&path).canonicalize().with_context(|| {
-                anyhow!("failed to convert path `{}` to absolute path", path.display())
-            })?;
-            Ok(BitPath::intern(canonical))
+            let normalized = path::normalize(&self.workdir.join(&path));
+            ensure!(
+                normalized.symlink_metadata().is_ok(),
+                "normalized path `{}` does not exist",
+                normalized.display()
+            );
+            Ok(BitPath::intern(normalized))
         } else {
             assert!(
                 path.starts_with(&self.workdir),

@@ -12,8 +12,8 @@ fn test_status_untracked_files() -> BitResult<()> {
         let diff = repo.diff_index_worktree()?;
         assert!(diff.modified.is_empty());
         assert_eq!(diff.untracked.len(), 2);
-        assert_eq!(diff.untracked[0], "baz");
-        assert_eq!(diff.untracked[1], "foo");
+        assert_eq!(diff.untracked[0].filepath, "baz");
+        assert_eq!(diff.untracked[1].filepath, "foo");
         Ok(())
     })
 }
@@ -33,8 +33,8 @@ fn test_status_add_and_delete_file() -> BitResult<()> {
 
         assert_eq!(diff.staged.new.len(), 1);
         assert_eq!(diff.unstaged.deleted.len(), 1);
-        assert_eq!(diff.staged.new[0], "foo");
-        assert_eq!(diff.unstaged.deleted[0], "foo");
+        assert_eq!(diff.staged.new[0].filepath, "foo");
+        assert_eq!(diff.unstaged.deleted[0].filepath, "foo");
         Ok(())
     })
 }
@@ -54,8 +54,8 @@ fn test_status_modified_files() -> BitResult<()> {
         assert!(diff.untracked.is_empty());
         assert_eq!(diff.modified.len(), 2);
         let mut modified = diff.modified.into_iter();
-        assert_eq!(modified.next().unwrap(), "foo.l");
-        assert_eq!(modified.next().unwrap(), "foo/bar");
+        assert_eq!(modified.next().unwrap().1.filepath, "foo.l");
+        assert_eq!(modified.next().unwrap().1.filepath, "foo/bar");
         Ok(())
     })
 }
@@ -80,7 +80,7 @@ fn test_status_modified_then_reverted() -> BitResult<()> {
             assert!(diff.untracked.is_empty());
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
-            assert_eq!(modified.next().unwrap(), "foo.l");
+            assert_eq!(modified.next().unwrap().1.filepath, "foo.l");
             Ok(())
         })?;
     }
@@ -105,7 +105,7 @@ fn test_status_modified_then_reverted_with_same_filesizes() -> BitResult<()> {
             let diff = repo.diff_index_worktree()?;
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
-            assert_eq!(modified.next().unwrap(), "foo.l");
+            assert_eq!(modified.next().unwrap().1.filepath, "foo.l");
             Ok(())
         })?;
     }
@@ -136,7 +136,7 @@ fn test_status_staged_modified_files() -> BitResult<()> {
         // assert!(diff.deleted.is_empty());
         assert!(diff.new.is_empty());
         assert_eq!(diff.modified.len(), 1);
-        assert_eq!(diff.modified[0], "foo");
+        assert_eq!(diff.modified[0].1.filepath, "foo");
         Ok(())
     })
 }
@@ -150,38 +150,33 @@ fn test_status_staged_new_files_simple() -> BitResult<()> {
         assert!(diff.deleted.is_empty());
         assert!(diff.modified.is_empty());
         assert_eq!(diff.new.len(), 1);
-        assert_eq!(diff.new[0], "new");
+        assert_eq!(diff.new[0].filepath, "new");
         Ok(())
     })
 }
 
-// #[test]
-// fn test_status_staged_deleted_files() -> BitResult<()> {
-//     BitRepo::with_sample_repo(|repo| {
-//         rm!(repo: "foo");
-//         bit_add!(repo: "foo");
-//         let diff = repo.diff_head_index()?;
-//         assert!(diff.new.is_empty());
-//         assert!(diff.staged.is_empty());
-//         assert_eq!(diff.deleted.len(), 1);
-//         assert_eq!(diff.deleted[0], "foo");
-//         Ok(())
-//     })
-// }
+#[test]
+fn test_mode_change_is_detected() {
+}
 
-// #[test]
-// fn test_status_staged_deleted_directory() -> BitResult<()> {
-//     BitRepo::with_sample_repo(|repo| {
-//         rm!(repo: "new");
-//         bit_add!(repo: "new");
-//         let diff = repo.diff_head_index()?;
-//         // assert!(diff.deleted.is_empty());
-//         assert!(diff.staged.is_empty());
-//         assert_eq!(diff.new.len(), 1);
-//         assert_eq!(diff.new[0], "new");
-//         Ok(())
-//     })
-// }
+#[test]
+fn test_status_staged_deleted_directory() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        rmdir!(repo: "dir");
+        bit_add_all!(repo);
+        let diff = repo.diff_head_index()?;
+        assert!(diff.modified.is_empty());
+        assert!(diff.new.is_empty());
+        assert_eq!(diff.deleted.len(), 4);
+
+        let mut iter = diff.deleted.into_iter();
+        assert_eq!(iter.next().unwrap().filepath, "dir/bar.l");
+        assert_eq!(iter.next().unwrap().filepath, "dir/bar/qux");
+        assert_eq!(iter.next().unwrap().filepath, "dir/baz");
+        assert_eq!(iter.next().unwrap().filepath, "dir/link");
+        Ok(())
+    })
+}
 
 #[test]
 fn test_status_staged_new_files_no_head() -> BitResult<()> {
@@ -193,7 +188,7 @@ fn test_status_staged_new_files_no_head() -> BitResult<()> {
         assert!(diff.deleted.is_empty());
         assert!(diff.modified.is_empty());
         assert_eq!(diff.new.len(), 1);
-        assert_eq!(diff.new[0], "foo");
+        assert_eq!(diff.new[0].filepath, "foo");
         Ok(())
     })
 }

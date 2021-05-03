@@ -42,7 +42,7 @@ impl BitHash {
     }
 
     #[inline]
-    pub fn is_zero(self) -> bool {
+    pub fn is_unknown(self) -> bool {
         self == BitHash::ZERO
     }
 

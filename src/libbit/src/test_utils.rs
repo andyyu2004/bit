@@ -119,9 +119,10 @@ macro_rules! modify {
     };
 }
 
+/// `rm -r`
 macro_rules! rmdir {
     ($repo:ident: $path:expr) => {
-        std::fs::remove_dir($repo.workdir.join($path))?
+        std::fs::remove_dir_all($repo.workdir.join($path))?
     };
 }
 

@@ -39,7 +39,7 @@ impl FallibleIterator for WorktreeIter<'_> {
             match self.walk.next().transpose()? {
                 Some(entry) => {
                     let path = entry.path();
-                    if path.is_file() && !self.ignored(path)? {
+                    if !path.is_dir() && !self.ignored(path)? {
                         break entry;
                     }
                 }
@@ -107,7 +107,7 @@ impl BitRepo {
         // the comparator function on works per directory
         // for some reason git places files before directory
         // i.e. src/index.rs < index/mod.rs
-        // but no directory I've seen does this so we just collect and sort for now
+        // but no directory traverser I've seen does this so we just collect and sort for now
         entries.sort();
         Ok(fallible_iterator::convert(entries.into_iter().map(Ok)))
     }

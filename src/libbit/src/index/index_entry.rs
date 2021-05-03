@@ -167,7 +167,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
 
     fn try_from(path: BitPath) -> Result<Self, Self::Error> {
         let (canonical, relative) = tls::with_repo(|repo| {
-            let canonical = repo.canonicalize(path)?;
+            let canonical = repo.normalize(path)?;
             let relative = repo.to_relative_path(canonical)?;
             Ok((canonical, relative))
         })?;

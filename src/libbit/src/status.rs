@@ -25,11 +25,11 @@ impl Display for BitStatusReport {
         if !self.staged.is_empty() {
             writeln!(f, "Changes to be committed")?;
             writeln!(f, "  (use `bit restore --staged <file>...` to unstage) (unimplemented)")?;
-            for path in &self.staged.new {
-                writeln!(f, "\t{}:   {}", "new file".green(), path.green())?;
+            for new in &self.staged.new {
+                writeln!(f, "\t{}:   {}", "new file".green(), new.filepath.green())?;
             }
-            for path in &self.staged.modified {
-                writeln!(f, "\t{}:   {}", "modified".green(), path.green())?;
+            for (_, modified) in &self.staged.modified {
+                writeln!(f, "\t{}:   {}", "modified".green(), modified.filepath.green())?;
             }
             writeln!(f)?;
         }
@@ -38,11 +38,11 @@ impl Display for BitStatusReport {
             writeln!(f, "Changes not staged for commit")?;
             writeln!(f, "  (use `bit add <file>...` to update what will be committed)")?;
             writeln!(f, "  (use 'bit restore <file>...' to discard changes in working directory)")?;
-            for path in &self.unstaged.modified {
-                writeln!(f, "\t{}:   {}", "modified".red(), path.red())?;
+            for (_, modified) in &self.unstaged.modified {
+                writeln!(f, "\t{}:   {}", "modified".red(), modified.filepath.red())?;
             }
-            for path in &self.unstaged.deleted {
-                writeln!(f, "\t{}:   {}", "deleted".red(), path.red())?;
+            for deleted in &self.unstaged.deleted {
+                writeln!(f, "\t{}:   {}", "deleted".red(), deleted.filepath.red())?;
             }
             writeln!(f)?;
         }
@@ -50,8 +50,8 @@ impl Display for BitStatusReport {
         if !self.unstaged.untracked.is_empty() {
             writeln!(f, "Untracked files:")?;
             writeln!(f, "  (use `bit add <file>...` to include in what will be committed)")?;
-            for path in &self.unstaged.untracked {
-                writeln!(f, "\t{}", path.red())?;
+            for untracked in &self.unstaged.untracked {
+                writeln!(f, "\t{}", untracked.filepath.red())?;
             }
         }
         Ok(())

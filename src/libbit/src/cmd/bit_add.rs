@@ -13,7 +13,7 @@ impl BitRepo {
     }
 
     pub fn bit_add_all(&self) -> BitResult<()> {
-        self.with_index_mut(|index| self.worktree_iter()?.for_each(|entry| index.add_entry(entry)))
+        self.with_index_mut(|index| index.add_all())
     }
 
     pub fn bit_add(&self, pathspecs: &[Pathspec]) -> BitResult<()> {

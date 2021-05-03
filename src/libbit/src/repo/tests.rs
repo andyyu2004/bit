@@ -63,6 +63,14 @@ fn prop_bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<
 }
 
 #[test]
+fn test_hash_symlink() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let _ = repo.hash_blob("dir/link".into())?;
+        Ok(())
+    })
+}
+
+#[test]
 fn test_bit_hash_object_cat_file_are_inverses_blob() -> BitResult<()> {
     prop_bit_hash_object_cat_file_are_inverses_blob(b"hello".to_vec())
 }

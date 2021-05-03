@@ -193,6 +193,33 @@ fn index_directory_file_collision() -> BitResult<()> {
     })
 }
 
+#[test]
+fn test_status_staged_deleted_files() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        rm!(repo: "foo");
+        bit_add_all!(repo);
+        let diff = repo.diff_head_index()?;
+        assert!(diff.new.is_empty());
+        assert!(diff.modified.is_empty());
+        assert_eq!(diff.deleted.len(), 1);
+        assert_eq!(diff.deleted[0].filepath, "foo");
+        Ok(())
+    })
+}
+
+// tests that `add_all` correctly stages removes deleted files from the index
+#[test]
+fn test_stage_deleted_file() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        touch!(repo: "foo");
+        bit_add_all!(repo);
+        rm!(repo: "foo");
+        bit_add_all!(repo);
+        assert!(repo.with_index(|index| Ok(index.entries.is_empty()))?);
+        Ok(())
+    })
+}
+
 // this test adds something to the index and checks the index is still parseable
 // `with_index` reparses it
 #[test]

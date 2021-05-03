@@ -1,4 +1,5 @@
 #![feature(never_type)]
+#![feature(associated_type_defaults)]
 #![feature(min_type_alias_impl_trait)]
 #![feature(decl_macro)]
 #![feature(once_cell)]
