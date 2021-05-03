@@ -38,7 +38,14 @@ impl BitPath {
     }
 
     pub fn read_to_vec(self) -> BitResult<Vec<u8>> {
-        Ok(File::open(self)?.read_to_vec()?)
+        if self.symlink_metadata()?.file_type().is_symlink() {
+            // don't know of a better way to convert a path to bytes
+            // its probably intentionally hidden
+            // however, this will break for non utf8 encoded paths
+            Ok(std::fs::read_link(self)?.to_str().unwrap().as_bytes().to_vec())
+        } else {
+            Ok(File::open(self)?.read_to_vec()?)
+        }
     }
 
     pub fn intern(path: impl AsRef<Path>) -> Self {

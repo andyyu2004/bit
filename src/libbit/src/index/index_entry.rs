@@ -166,14 +166,14 @@ impl TryFrom<BitPath> for BitIndexEntry {
     type Error = BitGenericError;
 
     fn try_from(path: BitPath) -> Result<Self, Self::Error> {
-        let (canonical, relative) = tls::with_repo(|repo| {
-            let canonical = repo.normalize(path)?;
-            let relative = repo.to_relative_path(canonical)?;
-            Ok((canonical, relative))
+        let (normalized, relative) = tls::with_repo(|repo| {
+            let normalized = repo.normalize(path)?;
+            let relative = repo.to_relative_path(normalized)?;
+            Ok((normalized, relative))
         })?;
 
-        ensure!(!canonical.is_dir(), "bit index entry should not be a directory");
-        let metadata = canonical.symlink_metadata().unwrap();
+        ensure!(!normalized.is_dir(), "bit index entry should not be a directory");
+        let metadata = normalized.symlink_metadata().unwrap();
 
         // the path must be relative to the repository root
         // as this is the correct representation for the index entry

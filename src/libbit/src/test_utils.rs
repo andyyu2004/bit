@@ -119,6 +119,36 @@ macro_rules! modify {
     };
 }
 
+macro_rules! readlink {
+    ($repo:ident: $path:expr) => {
+        std::fs::read_link($repo.workdir.join($path))?
+    };
+}
+
+macro_rules! hash_symlink {
+    ($repo:ident: $path:expr) => {{
+        let path = readlink!($repo: $path);
+        hash_blob!(path.to_str().unwrap().as_bytes())
+    }};
+}
+
+macro_rules! hash_blob {
+    ($bytes:expr) => {
+        crate::hash::hash_obj(&Blob::new($bytes.to_vec()))?;
+    };
+}
+macro_rules! hash_file {
+    ($repo:ident: $path:expr) => {
+        hash_blob!(cat!($repo: $path).as_bytes())
+    };
+}
+
+macro_rules! cat {
+    ($repo:ident: $path:expr) => {
+        std::fs::read_to_string($repo.workdir.join($path))?
+    };
+}
+
 /// `rm -r`
 macro_rules! rmdir {
     ($repo:ident: $path:expr) => {

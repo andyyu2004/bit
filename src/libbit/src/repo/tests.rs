@@ -1,5 +1,6 @@
 use super::*;
 use crate::cmd::BitHashObjectOpts;
+use crate::hash::{hash_bytes, hash_obj};
 use crate::obj;
 
 #[test]
@@ -63,9 +64,14 @@ fn prop_bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<
 }
 
 #[test]
-fn test_hash_symlink() -> BitResult<()> {
+fn test_read_symlink_reads_contents_unresolved() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        let _ = repo.hash_blob("dir/link".into())?;
+        modify!(repo: "foo" < "test content");
+        assert_eq!(cat!(repo: "foo"), "test content");
+        let hash = repo.hash_blob("dir/link".into())?;
+
+        let symlink_hash = hash_symlink!(repo: "dir/link");
+        assert_eq!(symlink_hash, hash);
         Ok(())
     })
 }
