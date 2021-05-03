@@ -31,6 +31,9 @@ impl Display for BitStatusReport {
             for (_, modified) in &self.staged.modified {
                 writeln!(f, "\t{}:   {}", "modified".green(), modified.filepath.green())?;
             }
+            for deleted in &self.staged.deleted {
+                writeln!(f, "\t{}:   {}", "deleted".green(), deleted.filepath.green())?;
+            }
             writeln!(f)?;
         }
 
