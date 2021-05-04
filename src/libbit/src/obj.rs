@@ -9,7 +9,7 @@ pub use obj_id::BitId;
 pub use tree::{Tree, TreeEntry};
 
 use crate::error::{BitGenericError, BitResult};
-use crate::io_ext::ReadExt;
+use crate::io::ReadExt;
 use crate::serialize::{Deserialize, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;

@@ -1,5 +1,6 @@
 #![deny(rust_2018_idioms)]
 #![feature(never_type)]
+#![feature(maybe_uninit_uninit_array, maybe_uninit_slice)]
 #![feature(associated_type_defaults)]
 #![feature(min_type_alias_impl_trait)]
 #![feature(decl_macro)]
@@ -37,6 +38,9 @@ mod test_utils;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+mod macros;
+
 pub mod cmd;
 pub mod config;
 pub mod error;
@@ -51,7 +55,7 @@ mod delta;
 mod diff;
 mod index;
 mod interner;
-mod io_ext;
+mod io;
 mod iter;
 mod lockfile;
 mod odb;

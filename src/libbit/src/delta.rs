@@ -94,8 +94,8 @@ impl<'a, 's> DeltaIndexCompressor<'a, 's> {
         (l, r)
     }
 
+    // everything here is wrong (including anything it calls transitively)
     fn compress(mut self) -> Vec<DeltaOp<'s>> {
-        dbg!(&self.delta_index);
         loop {
             let slice = self.slice();
             dbg!(unsafe { std::str::from_utf8_unchecked(slice) });

@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::interner::{with_path_interner, with_path_interner_mut};
-use crate::io_ext::ReadExt;
+use crate::io::ReadExt;
 use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};

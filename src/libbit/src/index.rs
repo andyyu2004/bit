@@ -3,7 +3,7 @@ mod index_entry;
 use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::{BitHash, BIT_HASH_SIZE};
-use crate::io_ext::{HashWriter, ReadExt, WriteExt};
+use crate::io::{HashReader, HashWriter, ReadExt, WriteExt};
 use crate::iter::BitIterator;
 use crate::lockfile::Lockfile;
 use crate::obj::{FileMode, Tree, TreeEntry};
@@ -390,7 +390,7 @@ impl Serialize for BitIndexInner {
             extension.serialize(&mut hash_writer)?;
         }
 
-        let hash = BitHash::from(hash_writer.finalize_hash());
+        let hash = hash_writer.finalize_sha1_hash();
         hash_writer.write_bit_hash(&hash)?;
         Ok(())
     }
@@ -403,6 +403,8 @@ impl Deserialize for BitIndexInner {
     {
         // this impl currently is not ideal as it basically has to read it twice
         // although the second time is reading from memory so maybe its not that bad?
+        // its a bit awkward to use hashreader to read the extensions because we don't
+        // know how long the extensions are
         let mut buf = vec![];
         r.read_to_end(&mut buf)?;
 
@@ -424,7 +426,7 @@ impl Deserialize for BitIndexInner {
         hasher.update(bytes);
         let actual_hash = BitHash::from(hasher.finalize());
         let expected_hash = BitHash::new(hash.try_into().unwrap());
-        assert_eq!(actual_hash, expected_hash);
+        ensure_eq!(actual_hash, expected_hash, "corrupted index (bad hash)");
 
         Ok(bit_index)
     }

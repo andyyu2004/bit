@@ -1,6 +1,7 @@
 use super::FileMode;
 use crate::error::BitResult;
 use crate::hash::BitHash;
+use crate::io::BufReadExt;
 use crate::obj::{BitObj, BitObjType};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, Serialize};
@@ -72,7 +73,7 @@ impl Serialize for Tree {
 }
 
 impl Deserialize for Tree {
-    fn deserialize(r: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(mut r: &mut dyn BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -82,7 +83,7 @@ impl Deserialize for Tree {
         let mut v = vec![];
 
         // slightly weird way of checking if the reader is at EOF
-        while !r.fill_buf()?.is_empty() {
+        while !r.is_at_eof()? {
             let entry = TreeEntry::parse(r)?;
             #[cfg(debug_assertions)]
             v.push(entry.clone());
