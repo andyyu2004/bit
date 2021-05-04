@@ -1,3 +1,4 @@
+#![deny(rust_2018_idioms)]
 #![feature(never_type)]
 #![feature(associated_type_defaults)]
 #![feature(min_type_alias_impl_trait)]
@@ -19,6 +20,9 @@ extern crate quickcheck;
 #[cfg(test)]
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
+
+#[macro_use]
+extern crate maplit;
 
 #[macro_use]
 extern crate scoped_tls;
@@ -43,6 +47,7 @@ pub mod pathspec;
 pub mod repo;
 pub mod status;
 
+mod delta;
 mod diff;
 mod index;
 mod interner;
@@ -50,6 +55,7 @@ mod io_ext;
 mod iter;
 mod lockfile;
 mod odb;
+mod pack;
 mod refs;
 mod serialize;
 mod signature;

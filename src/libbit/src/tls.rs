@@ -18,15 +18,15 @@ pub(crate) fn with_repo<R>(f: impl FnOnce(&BitRepo) -> BitResult<R>) -> BitResul
     REPO.with(f)
 }
 
-pub(crate) fn with_config<R>(f: impl FnOnce(&mut BitConfig) -> BitResult<R>) -> BitResult<R> {
+pub(crate) fn with_config<R>(f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>) -> BitResult<R> {
     REPO.with(|repo| repo.with_local_config(f))
 }
 
 /// convenience functions to access the index without having a localrepo variable handy
-pub(crate) fn with_index<R>(f: impl FnOnce(&BitIndex) -> BitResult<R>) -> BitResult<R> {
+pub(crate) fn with_index<R>(f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
     REPO.with(|repo| repo.with_index(f))
 }
 
-pub(crate) fn with_index_mut<R>(f: impl FnOnce(&mut BitIndex) -> BitResult<R>) -> BitResult<R> {
+pub(crate) fn with_index_mut<R>(f: impl FnOnce(&mut BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
     REPO.with(|repo| repo.with_index_mut(f))
 }

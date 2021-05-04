@@ -136,7 +136,7 @@ impl BitRepo {
         })
     }
 
-    pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
         Lockfile::with_readonly(self.index_path(), |lockfile| {
             // not actually writing anything here, so we rollback
             // the lockfile is just to check that another process

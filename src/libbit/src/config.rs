@@ -36,7 +36,7 @@ impl BitRepo {
     pub fn with_config<R>(
         &self,
         scope: BitConfigScope,
-        f: impl FnOnce(&mut BitConfig) -> BitResult<R>,
+        f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
         match scope {
             BitConfigScope::Global => BitConfig::with_global_config(f),
@@ -82,12 +82,12 @@ impl<'c> BitConfig<'c> {
 
     pub fn with_local<R>(
         path: impl AsRef<Path>,
-        f: impl FnOnce(&mut BitConfig) -> BitResult<R>,
+        f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
         with_config(BitConfigScope::Local, path, f)
     }
 
-    fn with_global_config<R>(f: impl FnOnce(&mut BitConfig) -> BitResult<R>) -> BitResult<R> {
+    fn with_global_config<R>(f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>) -> BitResult<R> {
         with_config(BitConfigScope::Global, GLOBAL_PATH.as_path(), f)
     }
 }
