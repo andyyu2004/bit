@@ -1,11 +1,12 @@
 use crate::error::BitResult;
-use crate::hash::{BitHash, SHA1Hash};
+use crate::hash::{BitHash, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, HashReader, ReadExt};
-use crate::serialize::Deserialize;
-use std::io::BufRead;
+use crate::serialize::{BufReadSeek, Deserialize};
+use std::io::{BufRead, SeekFrom};
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
 const FANOUT_ENTRYC: usize = 256;
+const PACK_IDX_HEADER_SIZE: u64 = 8;
 
 #[derive(Debug)]
 pub struct PackIndex {
@@ -15,6 +16,45 @@ pub struct PackIndex {
     crcs: Vec<u32>,
     offsets: Vec<u32>,
     pack_hash: SHA1Hash,
+}
+
+impl PackIndex {
+    fn find_oid_index(mut r: &mut dyn BufReadSeek, oid: BitHash) -> BitResult<usize> {
+        r.seek(SeekFrom::Start(PACK_IDX_HEADER_SIZE))?;
+        let fanout = r.read_array::<u32, FANOUT_ENTRYC>()?;
+        // fanout has 256 elements
+        // example
+        // [
+        //     2,
+        //     4,
+        //     5,
+        //     7,
+        //     11,
+        //     18
+        //     ...
+        //     n
+        // ]
+        // sorted list of n hashes
+        //     00....
+        //     00....
+        //     01....
+        //     01....
+        //     02....
+        //     03....
+        //     03....
+        //
+        let prefix = oid[0] as usize;
+        // low..high (inclusive lower bound, exclusive upper bound)
+        let low = if prefix == 0 { 0 } else { fanout[prefix - 1] } as i64;
+        let high = fanout[prefix] as i64;
+
+        r.seek(SeekFrom::Current(low * BIT_HASH_SIZE as i64))?;
+        let oids = r.read_vec((high - low) as usize)?;
+        match oids.binary_search(&oid) {
+            Ok(idx) => Ok(low as usize + idx),
+            Err(..) => Err(anyhow!("oid `{}` not found in packindex", oid)),
+        }
+    }
 }
 
 impl Deserialize for PackIndex {
