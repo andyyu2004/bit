@@ -3,6 +3,7 @@ use crate::hash::{BitHash, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, HashReader, ReadExt};
 use crate::serialize::{BufReadSeek, Deserialize};
 use std::io::{BufRead, SeekFrom};
+use std::ops::{Deref, DerefMut};
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
 const FANOUT_ENTRYC: usize = 256;
@@ -18,10 +19,48 @@ pub struct PackIndex {
     pack_hash: SHA1Hash,
 }
 
-impl PackIndex {
-    fn find_oid_index(mut r: &mut dyn BufReadSeek, oid: BitHash) -> BitResult<usize> {
-        r.seek(SeekFrom::Start(PACK_IDX_HEADER_SIZE))?;
-        let fanout = r.read_array::<u32, FANOUT_ENTRYC>()?;
+pub struct PackIndexReader<'r, R> {
+    reader: &'r mut R,
+    fanout: [u32; FANOUT_ENTRYC],
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+enum Layer {
+    Fan,
+    Oid,
+    Crc,
+    Ofs,
+    Ext,
+}
+
+impl<'r, R: BufReadSeek> PackIndexReader<'r, R> {
+    pub fn new(reader: &'r mut R) -> BitResult<Self> {
+        let header = PackIndex::parse_header(reader);
+        let fanout = reader.read_array::<u32, FANOUT_ENTRYC>()?;
+        Ok(Self { reader, fanout })
+    }
+}
+
+impl<'r, R: BufReadSeek> PackIndexReader<'r, R> {
+    fn offset_of(&mut self, layer: Layer) -> u64 {
+        match layer {
+            Layer::Fan => PACK_IDX_HEADER_SIZE,
+            Layer::Oid => PACK_IDX_HEADER_SIZE,
+            Layer::Crc => todo!(),
+            Layer::Ofs => todo!(),
+            Layer::Ext => todo!(),
+        }
+    }
+
+    fn find_oid_offset(&mut self, oid: BitHash) -> BitResult<usize> {
+        todo!()
+    }
+
+    fn read_from<T: Deserialize>(&mut self, layer: Layer) -> BitResult<T> {
+        todo!()
+    }
+
+    fn find_oid_index(&mut self, oid: BitHash) -> BitResult<usize> {
         // fanout has 256 elements
         // example
         // [
@@ -45,15 +84,29 @@ impl PackIndex {
         //
         let prefix = oid[0] as usize;
         // low..high (inclusive lower bound, exclusive upper bound)
-        let low = if prefix == 0 { 0 } else { fanout[prefix - 1] } as i64;
-        let high = fanout[prefix] as i64;
+        let low = if prefix == 0 { 0 } else { self.fanout[prefix - 1] } as i64;
+        let high = self.fanout[prefix] as i64;
 
-        r.seek(SeekFrom::Current(low * BIT_HASH_SIZE as i64))?;
-        let oids = r.read_vec((high - low) as usize)?;
+        self.seek(SeekFrom::Current(low * BIT_HASH_SIZE as i64))?;
+        let oids = self.reader.read_vec((high - low) as usize)?;
         match oids.binary_search(&oid) {
             Ok(idx) => Ok(low as usize + idx),
             Err(..) => Err(anyhow!("oid `{}` not found in packindex", oid)),
         }
+    }
+}
+
+impl<'r, R> Deref for PackIndexReader<'r, R> {
+    type Target = R;
+
+    fn deref(&self) -> &Self::Target {
+        &self.reader
+    }
+}
+
+impl<'r, R> DerefMut for PackIndexReader<'r, R> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.reader
     }
 }
 

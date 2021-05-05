@@ -15,8 +15,7 @@ fn test_deserialize_pack_idx_is_ok() -> BitResult<()> {
 #[test]
 fn test_pack_idx_find_oid_start() -> BitResult<()> {
     let mut cursor = Cursor::new(include_bytes!("../../tests/files/pack.idx"));
-    let pack_idx = PackIndex::find_oid_index(
-        &mut cursor,
+    let pack_idx = PackIndexReader::new(&mut cursor)?.find_oid_index(
         // this hash is the first oid in sorted list
         BitHash::from_str("0004a3cf85dbcbfbef916599145a0c370bb78cf5").unwrap(),
     )?;
@@ -26,8 +25,7 @@ fn test_pack_idx_find_oid_start() -> BitResult<()> {
 #[test]
 fn test_pack_idx_find_oid_end() -> BitResult<()> {
     let mut cursor = Cursor::new(include_bytes!("../../tests/files/pack.idx"));
-    let pack_idx = PackIndex::find_oid_index(
-        &mut cursor,
+    let pack_idx = PackIndexReader::new(&mut cursor)?.find_oid_index(
         // this hash is the last oid in sorted list
         BitHash::from_str("fffc6e8cf5f6798732a6031ebf24d2f6aaa60e47").unwrap(),
     )?;
