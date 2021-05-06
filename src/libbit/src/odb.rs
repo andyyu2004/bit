@@ -1,7 +1,8 @@
-use crate::error::{BitError, BitResult};
+use crate::error::{BitError, BitErrorExt, BitResult};
 use crate::hash::{self, BitHash};
 use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
+use crate::pack;
 use crate::path::BitPath;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
@@ -26,30 +27,37 @@ impl BitObjDb {
     }
 }
 
+macro_rules! backend_method {
+    ($f:ident: $arg_ty:ty => $ret_ty:ty) => {
+        fn $f(&self, arg: $arg_ty) -> BitResult<$ret_ty> {
+            //? does it make sense to return the last non_fatal error? or any particular error?
+            // probably doesn't really matter
+            let mut last_err = None;
+            for backend in &self.backends {
+                match backend.$f(arg) {
+                    Ok(obj) => return Ok(obj),
+                    Err(err) if err.is_fatal() => return Err(err),
+                    Err(err) => {
+                        last_err = Some(err);
+                        continue;
+                    }
+                }
+            }
+            Err(last_err.unwrap_or_else(|| {
+                anyhow!("all backends failed to execute method `{}`", stringify!($f))
+            }))
+        }
+    };
+}
+
 impl BitObjDbBackend for BitObjDb {
-    // can't just pass in trait pointer
-    fn read(&self, id: BitId) -> BitResult<BitObjKind> {
-        // TODO should only delegate to the packeddb if the error is not found,
-        // could do this by returning Result<Option<T>>
-        // but that seems a bit painful? or check for existence first
-        // before reading the file?
-        self.backends[0].read(id)
-        // .or_else(|_| self.packed.read(id))
-    }
+    backend_method!(read: BitId => BitObjKind);
 
-    fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
-        self.backends[0].read_header(id)
-        // .or_else(|_| self.packed.read_header(id))
-    }
+    backend_method!(read_header: BitId => BitObjHeader);
 
-    fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash> {
-        // when to write to packed?
-        self.backends[0].write(obj)
-    }
+    backend_method!(exists: BitId => bool);
 
-    fn exists(&self, id: BitId) -> BitResult<bool> {
-        self.backends[0].exists(id)
-    }
+    backend_method!(write: &dyn BitObj => BitHash);
 }
 
 pub trait BitObjDbBackend {
@@ -77,16 +85,17 @@ impl BitLooseObjDb {
         Ok(hash)
     }
 
-    fn obj_path(&self, hash: BitHash) -> BitResult<BitPath> {
+    // this should be infallible as it is used by write
+    // in particular, this should *not* check for the existence of the path
+    fn obj_path(&self, hash: BitHash) -> BitPath {
         let (dir, file) = hash.split();
-        let path = self.objects_path.join(dir).join(file);
-        // ensure!(path.exists(), "invalid object hash `{}`, loose object file does not exist", hash);
-        Ok(path)
+        self.objects_path.join(dir).join(file)
     }
 
     fn locate_obj(&self, id: BitId) -> BitResult<BitPath> {
         let hash = self.expand_id(id)?;
-        Ok(self.obj_path(hash)?)
+        let path = self.obj_path(hash);
+        if path.exists() { Ok(path) } else { Err(anyhow!(BitError::ObjectNotFound(hash.into()))) }
     }
 
     fn read_stream(&self, id: BitId) -> BitResult<impl BufRead> {
@@ -109,9 +118,10 @@ impl BitObjDbBackend for BitLooseObjDb {
     fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash> {
         let bytes = obj.serialize_with_headers()?;
         let hash = hash::hash_bytes(&bytes);
-        let path = self.obj_path(hash)?;
+        let path = self.obj_path(hash);
+
+        #[cfg(debug_assertions)]
         if path.as_path().exists() {
-            #[cfg(debug_assertions)]
             {
                 let mut buf = vec![];
                 ZlibDecoder::new(File::open(path)?).read_to_end(&mut buf)?;
@@ -128,10 +138,7 @@ impl BitObjDbBackend for BitLooseObjDb {
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
-        // TODO this isn't entirely accurate
-        // we will need to check the actual error
-        // to differentiate between nonexistence and an actual error
-        Ok(self.locate_obj(id).is_ok())
+        Ok(self.locate_obj(id).is_not_found_err())
     }
 }
 

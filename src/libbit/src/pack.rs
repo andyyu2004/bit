@@ -1,9 +1,9 @@
 use crate::error::BitResult;
 use crate::hash::{BitHash, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, HashReader, ReadExt};
+use crate::obj::{BitId, BitObjKind};
 use crate::serialize::{BufReadSeek, Deserialize};
 use num_traits::ToPrimitive;
-use std::f32::MAX;
 use std::io::{BufRead, SeekFrom};
 use std::ops::{Deref, DerefMut};
 

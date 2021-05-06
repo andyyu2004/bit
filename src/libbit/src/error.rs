@@ -1,12 +1,54 @@
 use crate::obj::BitId;
 use std::fmt::{self, Display, Formatter};
 
-pub type BitResult<T> = anyhow::Result<T>;
+pub type BitResult<T> = Result<T, BitGenericError>;
 pub type BitGenericError = anyhow::Error;
 
 #[derive(Debug)]
 pub enum BitError {
     ObjectNotFound(BitId),
+}
+
+pub trait BitErrorExt {
+    fn is_not_found_err(&self) -> bool;
+    fn is_fatal(&self) -> bool;
+}
+
+macro_rules! error_ext_method {
+    ($method:ident) => {
+        fn $method(&self) -> bool {
+            match self {
+                Ok(..) => false,
+                Err(err) => err.$method(),
+            }
+        }
+    };
+}
+
+impl<T> BitErrorExt for BitResult<T> {
+    error_ext_method!(is_not_found_err);
+
+    error_ext_method!(is_fatal);
+}
+
+impl BitErrorExt for BitGenericError {
+    fn is_not_found_err(&self) -> bool {
+        match self.downcast_ref::<BitError>() {
+            Some(err) => match err {
+                BitError::ObjectNotFound(..) => true,
+            },
+            None => false,
+        }
+    }
+
+    fn is_fatal(&self) -> bool {
+        match self.downcast_ref::<BitError>() {
+            Some(err) => match err {
+                BitError::ObjectNotFound(..) => false,
+            },
+            None => true,
+        }
+    }
 }
 
 impl Display for BitError {
