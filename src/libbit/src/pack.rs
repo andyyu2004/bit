@@ -2,12 +2,20 @@ use crate::error::BitResult;
 use crate::hash::{BitHash, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, HashReader, ReadExt};
 use crate::serialize::{BufReadSeek, Deserialize};
+use num_traits::ToPrimitive;
+use std::f32::MAX;
 use std::io::{BufRead, SeekFrom};
 use std::ops::{Deref, DerefMut};
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
 const FANOUT_ENTRYC: usize = 256;
+const FANOUT_ENTRY_SIZE: u64 = 4;
+const FANOUT_SIZE: u64 = FANOUT_ENTRYC as u64 * FANOUT_ENTRY_SIZE;
 const PACK_IDX_HEADER_SIZE: u64 = 8;
+const CRC_SIZE: u64 = 4;
+const OFFSET_SIZE: u64 = 4;
+/// maximum 31 bit number (highest bit represents it uses a large offset in the EXT layer)
+const MAX_OFFSET: u32 = 0x7fffffff;
 
 #[derive(Debug)]
 pub struct PackIndex {
@@ -22,45 +30,58 @@ pub struct PackIndex {
 pub struct PackIndexReader<'r, R> {
     reader: &'r mut R,
     fanout: [u32; FANOUT_ENTRYC],
+    /// number of oids
+    n: u64,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-enum Layer {
-    Fan,
-    Oid,
-    Crc,
-    Ofs,
-    Ext,
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, FromPrimitive, ToPrimitive)]
+pub enum Layer {
+    Oid = 0,
+    Crc = 1,
+    Ofs = 2,
+    Ext = 3,
 }
 
 impl<'r, R: BufReadSeek> PackIndexReader<'r, R> {
     pub fn new(reader: &'r mut R) -> BitResult<Self> {
-        let header = PackIndex::parse_header(reader);
+        PackIndex::parse_header(reader)?;
         let fanout = reader.read_array::<u32, FANOUT_ENTRYC>()?;
-        Ok(Self { reader, fanout })
+        let n = fanout[FANOUT_ENTRYC - 1] as u64;
+        Ok(Self { reader, fanout, n })
     }
 }
 
 impl<'r, R: BufReadSeek> PackIndexReader<'r, R> {
-    fn offset_of(&mut self, layer: Layer) -> u64 {
-        match layer {
-            Layer::Fan => PACK_IDX_HEADER_SIZE,
-            Layer::Oid => PACK_IDX_HEADER_SIZE,
-            Layer::Crc => todo!(),
-            Layer::Ofs => todo!(),
-            Layer::Ext => todo!(),
-        }
+    /// returns the offset of the object with oid `oid` in the packfile
+    pub fn find_oid_offset(&mut self, oid: BitHash) -> BitResult<u32> {
+        let index = self.find_oid_index(oid)?;
+        debug_assert_eq!(oid, self.read_from(Layer::Oid, index)?);
+        // let crc = self.read_from::<u32>(1, index)?;
+        let offset = self.read_from::<u32>(Layer::Ofs, index)?;
+        assert!(offset < MAX_OFFSET, "todo ext");
+        Ok(offset)
     }
 
-    fn find_oid_offset(&mut self, oid: BitHash) -> BitResult<usize> {
-        todo!()
+    /// returns the offset of the start of the layer relative to the start of
+    /// the pack index in bytes
+    pub fn offset_of(&mut self, layer: Layer, index: u64) -> u64 {
+        debug_assert!(layer < Layer::Ext);
+        const SIZE: [u64; 3] = [20, 4, 4];
+        let layer = layer.to_usize().unwrap();
+        let base = PACK_IDX_HEADER_SIZE
+            + FANOUT_SIZE
+            + (0..layer).map(|layer| SIZE[layer] * self.n).sum::<u64>();
+        base + index * SIZE[layer]
     }
 
-    fn read_from<T: Deserialize>(&mut self, layer: Layer) -> BitResult<T> {
-        todo!()
+    pub fn read_from<T: Deserialize>(&mut self, layer: Layer, index: u64) -> BitResult<T> {
+        let offset = self.offset_of(layer, index);
+        self.seek(SeekFrom::Start(offset))?;
+        self.read_type()
     }
 
-    fn find_oid_index(&mut self, oid: BitHash) -> BitResult<usize> {
+    /// return the index of `oid` in the Oid layer of the packindex (unit is sizeof::<BitHash>)
+    fn find_oid_index(&mut self, oid: BitHash) -> BitResult<u64> {
         // fanout has 256 elements
         // example
         // [
@@ -84,13 +105,13 @@ impl<'r, R: BufReadSeek> PackIndexReader<'r, R> {
         //
         let prefix = oid[0] as usize;
         // low..high (inclusive lower bound, exclusive upper bound)
-        let low = if prefix == 0 { 0 } else { self.fanout[prefix - 1] } as i64;
-        let high = self.fanout[prefix] as i64;
+        let low = if prefix == 0 { 0 } else { self.fanout[prefix - 1] } as u64;
+        let high = self.fanout[prefix] as u64;
 
-        self.seek(SeekFrom::Current(low * BIT_HASH_SIZE as i64))?;
+        self.seek(SeekFrom::Current(low as i64 * BIT_HASH_SIZE as i64))?;
         let oids = self.reader.read_vec((high - low) as usize)?;
         match oids.binary_search(&oid) {
-            Ok(idx) => Ok(low as usize + idx),
+            Ok(idx) => Ok(low + idx as u64),
             Err(..) => Err(anyhow!("oid `{}` not found in packindex", oid)),
         }
     }

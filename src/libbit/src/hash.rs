@@ -135,6 +135,12 @@ impl Display for BitHash {
     }
 }
 
+pub fn crc_of(bytes: impl AsRef<[u8]>) -> u32 {
+    let mut crc = flate2::Crc::new();
+    crc.update(bytes.as_ref());
+    crc.sum()
+}
+
 pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> BitHash {
     // use sha1 to be more compatible with current git
     let mut hasher = Sha1::new();

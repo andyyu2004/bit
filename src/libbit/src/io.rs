@@ -48,6 +48,15 @@ pub(crate) trait ReadExt: Read {
 impl<R: Read + ?Sized> ReadExt for R {
 }
 
+impl Deserialize for u64 {
+    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Ok(reader.read_u64()?)
+    }
+}
+
 impl Deserialize for u32 {
     fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
     where
@@ -83,6 +92,10 @@ pub trait BufReadExt: BufRead + Sized {
 
     fn is_at_eof(&mut self) -> io::Result<bool> {
         Ok(self.fill_buf()?.is_empty())
+    }
+
+    fn read_type<T: Deserialize>(&mut self) -> BitResult<T> {
+        T::deserialize(self)
     }
 
     fn read_vec<T: Deserialize>(&mut self, n: usize) -> BitResult<Vec<T>> {
