@@ -1,3 +1,4 @@
+use crate::hash::BitHash;
 use crate::obj::BitId;
 use std::fmt::{self, Display, Formatter};
 
@@ -7,6 +8,8 @@ pub type BitGenericError = anyhow::Error;
 #[derive(Debug)]
 pub enum BitError {
     ObjectNotFound(BitId),
+    /// object `{0}` not found in pack index but could be inserted at `{1}`
+    ObjectNotFoundInPackIndex(BitHash, usize),
 }
 
 pub trait BitErrorExt {
@@ -36,6 +39,7 @@ impl BitErrorExt for BitGenericError {
         match self.downcast_ref::<BitError>() {
             Some(err) => match err {
                 BitError::ObjectNotFound(..) => true,
+                BitError::ObjectNotFoundInPackIndex(..) => true,
             },
             None => false,
         }
@@ -45,6 +49,7 @@ impl BitErrorExt for BitGenericError {
         match self.downcast_ref::<BitError>() {
             Some(err) => match err {
                 BitError::ObjectNotFound(..) => false,
+                BitError::ObjectNotFoundInPackIndex(..) => false,
             },
             None => true,
         }
@@ -55,6 +60,7 @@ impl Display for BitError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             BitError::ObjectNotFound(id) => write!(f, "bit object with hash `{}` not found", id),
+            BitError::ObjectNotFoundInPackIndex(..) => unreachable!("not a user facing error"),
         }
     }
 }

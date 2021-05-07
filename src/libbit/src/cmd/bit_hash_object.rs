@@ -25,10 +25,12 @@ impl BitRepo {
         let path = opts.path.canonicalize()?;
         let reader = &mut BufReader::new(File::open(&path)?);
         let object = match opts.objtype {
-            obj::BitObjType::Tree => todo!(),
-            obj::BitObjType::Tag => todo!(),
-            obj::BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(reader)?),
-            obj::BitObjType::Blob => BitObjKind::Blob(Blob::from_reader(reader)?),
+            BitObjType::Tree => todo!(),
+            BitObjType::Tag => todo!(),
+            BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(reader)?),
+            BitObjType::Blob => BitObjKind::Blob(Blob::from_reader(reader)?),
+            BitObjType::OfsDelta => todo!(),
+            BitObjType::RefDelta => todo!(),
         };
 
         if opts.do_write { self.write_obj(&object) } else { hash::hash_obj(&object) }

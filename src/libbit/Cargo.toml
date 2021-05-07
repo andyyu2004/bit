@@ -39,6 +39,7 @@ fallible-iterator = "0.2.0"
 colored = "2.0.0"
 maplit = "1"
 gitignore = "1.0.7"
+rayon = "1.5"
 
 [dev-dependencies]
 quickcheck = "1"

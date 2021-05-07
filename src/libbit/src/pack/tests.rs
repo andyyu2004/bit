@@ -36,7 +36,7 @@ fn test_pack_idx_find_oid_end() -> BitResult<()> {
 #[test]
 fn test_pack_idx_find_oid_offset_end() -> BitResult<()> {
     let mut cursor = Cursor::new(include_bytes!("../../tests/files/pack.idx"));
-    let pack_idx = PackIndexReader::new(&mut cursor)?.find_oid_offset(
+    let (_crc, pack_idx) = PackIndexReader::new(&mut cursor)?.find_oid_crc_offset(
         // this hash is the last oid in sorted list
         BitHash::from_str("fffc6e8cf5f6798732a6031ebf24d2f6aaa60e47").unwrap(),
     )?;

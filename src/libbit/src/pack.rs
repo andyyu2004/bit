@@ -1,9 +1,9 @@
-use crate::error::BitResult;
+use crate::error::{BitError, BitResult};
 use crate::hash::{BitHash, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, HashReader, ReadExt};
-use crate::obj::{BitId, BitObjKind};
+use crate::obj::{BitObj, BitObjKind, BitObjType};
 use crate::serialize::{BufReadSeek, Deserialize};
-use num_traits::ToPrimitive;
+use num_traits::{FromPrimitive, ToPrimitive};
 use std::io::{BufRead, SeekFrom};
 use std::ops::{Deref, DerefMut};
 
@@ -27,8 +27,8 @@ pub struct PackIndex {
     pack_hash: SHA1Hash,
 }
 
-pub struct PackIndexReader<'r, R> {
-    reader: &'r mut R,
+pub struct PackIndexReader<R> {
+    reader: R,
     fanout: [u32; FANOUT_ENTRYC],
     /// number of oids
     n: u64,
@@ -42,24 +42,24 @@ pub enum Layer {
     Ext = 3,
 }
 
-impl<'r, R: BufReadSeek> PackIndexReader<'r, R> {
-    pub fn new(reader: &'r mut R) -> BitResult<Self> {
-        PackIndex::parse_header(reader)?;
+impl<R: BufReadSeek> PackIndexReader<R> {
+    pub fn new(mut reader: R) -> BitResult<Self> {
+        PackIndex::parse_header(&mut reader)?;
         let fanout = reader.read_array::<u32, FANOUT_ENTRYC>()?;
         let n = fanout[FANOUT_ENTRYC - 1] as u64;
         Ok(Self { reader, fanout, n })
     }
 }
 
-impl<'r, R: BufReadSeek> PackIndexReader<'r, R> {
+impl<R: BufReadSeek> PackIndexReader<R> {
     /// returns the offset of the object with oid `oid` in the packfile
-    pub fn find_oid_offset(&mut self, oid: BitHash) -> BitResult<u32> {
+    pub fn find_oid_crc_offset(&mut self, oid: BitHash) -> BitResult<(u32, u64)> {
         let index = self.find_oid_index(oid)?;
         debug_assert_eq!(oid, self.read_from(Layer::Oid, index)?);
-        // let crc = self.read_from::<u32>(1, index)?;
+        let crc = self.read_from::<u32>(Layer::Crc, index)?;
         let offset = self.read_from::<u32>(Layer::Ofs, index)?;
         assert!(offset < MAX_OFFSET, "todo ext");
-        Ok(offset)
+        Ok((crc, offset as u64))
     }
 
     /// returns the offset of the start of the layer relative to the start of
@@ -112,12 +112,12 @@ impl<'r, R: BufReadSeek> PackIndexReader<'r, R> {
         let oids = self.reader.read_vec((high - low) as usize)?;
         match oids.binary_search(&oid) {
             Ok(idx) => Ok(low + idx as u64),
-            Err(..) => Err(anyhow!("oid `{}` not found in packindex", oid)),
+            Err(idx) => Err(anyhow!(BitError::ObjectNotFoundInPackIndex(oid, idx))),
         }
     }
 }
 
-impl<'r, R> Deref for PackIndexReader<'r, R> {
+impl<R> Deref for PackIndexReader<R> {
     type Target = R;
 
     fn deref(&self) -> &Self::Target {
@@ -125,7 +125,7 @@ impl<'r, R> Deref for PackIndexReader<'r, R> {
     }
 }
 
-impl<'r, R> DerefMut for PackIndexReader<'r, R> {
+impl<R> DerefMut for PackIndexReader<R> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.reader
     }
@@ -160,6 +160,8 @@ impl Deserialize for PackIndex {
     }
 }
 
+pub struct Packfile {}
+
 impl PackIndex {
     fn parse_header(reader: &mut dyn BufRead) -> BitResult<()> {
         let magic = reader.read_u32()?;
@@ -167,6 +169,57 @@ impl PackIndex {
         let version = reader.read_u32()?;
         ensure_eq!(version, 2);
         Ok(())
+    }
+}
+
+pub struct PackfileReader<R> {
+    reader: R,
+    n: u32,
+}
+
+impl Packfile {
+    fn parse_header(reader: &mut impl BufRead) -> BitResult<u32> {
+        let sig = reader.read_array::<u8, 4>()?;
+        ensure_eq!(&sig, b"PACK", "invalid packfile header");
+        let version = reader.read_u32()?;
+        ensure_eq!(version, 2, "invalid packfile version `{}`", version);
+        Ok(reader.read_u32()?)
+    }
+}
+
+impl<R: BufReadSeek> PackfileReader<R> {
+    pub fn new(mut reader: R) -> BitResult<Self> {
+        let n = Packfile::parse_header(&mut reader)?;
+        Ok(Self { reader, n })
+    }
+
+    // 3 bits object type
+    // MSB is 1 then read next byte
+    pub fn read_pack_obj_header(&mut self) -> BitResult<(BitObjType, u64)> {
+        let n = self.read_le_varint()?;
+        let ty = BitObjType::from_u64(n & 0b111).expect("invalid bit object type");
+        let size = n >> 3;
+        Ok((ty, size))
+    }
+
+    pub fn read_obj(&mut self, offset: u64) -> BitResult<BitObjKind> {
+        self.seek(SeekFrom::Start(offset))?;
+        let (ty, size) = self.read_pack_obj_header()?;
+        todo!()
+    }
+}
+
+impl<R> Deref for PackfileReader<R> {
+    type Target = R;
+
+    fn deref(&self) -> &Self::Target {
+        &self.reader
+    }
+}
+
+impl<R> DerefMut for PackfileReader<R> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.reader
     }
 }
 

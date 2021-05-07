@@ -62,18 +62,18 @@ impl BitRepo {
         tls::enter_repo(&repo, f)
     }
 
-    fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> Self {
+    fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> BitResult<Self> {
         let workdir = BitPath::intern(workdir);
         let bitdir = BitPath::intern(bitdir);
         let config_filepath = BitPath::intern(config_filepath);
-        Self {
+        Ok(Self {
             config_filepath,
             workdir,
             bitdir,
             index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
-            odb: BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH)),
-        }
+            odb: BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH))?,
+        })
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {
@@ -166,7 +166,7 @@ impl BitRepo {
         let bitdir = worktree.join(bitdir);
         assert!(bitdir.exists());
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
-        let this = Self::new(worktree, bitdir, config_filepath);
+        let this = Self::new(worktree, bitdir, config_filepath)?;
 
         this.with_local_config(|config| {
             let version = config
@@ -203,7 +203,7 @@ impl BitRepo {
 
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
 
-        let this = Self::new(worktree, bitdir, config_filepath);
+        let this = Self::new(worktree, bitdir, config_filepath)?;
         this.mk_bitdir("objects")?;
         this.mk_bitdir("refs/tags")?;
         this.mk_bitdir("refs/heads")?;
@@ -228,8 +228,8 @@ impl BitRepo {
     /// todo only works with full hash
     pub fn get_full_object_hash(&self, id: BitId) -> BitResult<BitHash> {
         match id {
-            BitId::FullHash(hash) => Ok(hash),
-            BitId::PartialHash(_partial) => todo!(),
+            BitId::Full(hash) => Ok(hash),
+            BitId::Partial(_partial) => todo!(),
         }
     }
 

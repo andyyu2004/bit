@@ -213,12 +213,14 @@ pub trait BitObj: Serialize + Deserialize + Debug + Display {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum BitObjType {
-    Commit,
-    Tree,
-    Tag,
-    Blob,
+    Commit   = 1,
+    Tree     = 2,
+    Blob     = 3,
+    Tag      = 4,
+    OfsDelta = 6,
+    RefDelta = 7,
 }
 
 impl Display for BitObjType {
@@ -228,6 +230,8 @@ impl Display for BitObjType {
             BitObjType::Tree => "tree",
             BitObjType::Tag => "tag",
             BitObjType::Blob => "blob",
+            BitObjType::OfsDelta => "ofs-delta",
+            BitObjType::RefDelta => "ref-delta",
         };
         write!(f, "{}", s)
     }
@@ -248,12 +252,12 @@ impl FromStr for BitObjType {
 }
 
 pub(crate) fn read_obj_header(reader: &mut dyn BufRead) -> BitResult<BitObjHeader> {
-    let obj_type = read_obj_type(reader)?;
+    let obj_type = read_obj_type_str(reader)?;
     let size = read_obj_size(reader)?;
     Ok(BitObjHeader { obj_type, size })
 }
 
-fn read_obj_type(reader: &mut dyn BufRead) -> BitResult<BitObjType> {
+fn read_obj_type_str(reader: &mut dyn BufRead) -> BitResult<BitObjType> {
     let mut buf = vec![];
     let i = reader.read_until(0x20, &mut buf)?;
     Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
@@ -285,6 +289,8 @@ pub(crate) fn read_obj(reader: &mut dyn BufRead) -> BitResult<BitObjKind> {
         BitObjType::Tree => BitObjKind::Tree(Tree::deserialize(contents)?),
         BitObjType::Blob => BitObjKind::Blob(Blob::deserialize(contents)?),
         BitObjType::Tag => todo!(),
+        BitObjType::OfsDelta => todo!(),
+        BitObjType::RefDelta => todo!(),
     })
 }
 

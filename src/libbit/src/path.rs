@@ -1,10 +1,12 @@
 use crate::error::BitResult;
 use crate::interner::{with_path_interner, with_path_interner_mut};
 use crate::io::ReadExt;
+use crate::serialize::BufReadSeek;
 use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
+use std::io::{BufRead, BufReader, Seek};
 use std::ops::{Deref, Index};
 use std::path::{Component, Path, PathBuf};
 use std::slice::SliceIndex;
@@ -31,6 +33,16 @@ impl BitPath {
 
     pub fn index(self) -> u32 {
         self.0
+    }
+
+    pub fn stream(self) -> BitResult<impl BufReadSeek> {
+        let file = File::open(self)
+            .with_context(|| anyhow!("BitPath::stream: failed to open file `{}`", self))?;
+        Ok(BufReader::new(file))
+    }
+
+    pub fn with_extension(self, ext: impl AsRef<OsStr>) -> Self {
+        Self::intern(self.as_path().with_extension(ext))
     }
 
     pub fn join(self, path: impl AsRef<Path>) -> Self {
@@ -215,6 +227,7 @@ where
     }
 }
 
+use anyhow::Context;
 use colored::*;
 impl Colorize for BitPath {
     fn color<S: Into<Color>>(self, color: S) -> ColoredString {

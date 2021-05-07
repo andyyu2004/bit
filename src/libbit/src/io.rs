@@ -8,6 +8,29 @@ use std::mem::MaybeUninit;
 
 // all big-endian
 pub(crate) trait ReadExt: Read {
+    fn read_u8(&mut self) -> io::Result<u8> {
+        let mut i = 0u8;
+        self.read_exact(&mut std::slice::from_mut(&mut i))?;
+        Ok(i)
+    }
+
+    // variable length little-endian integer encoding
+    // read next byte if MSB is 1
+    fn read_le_varint(&mut self) -> io::Result<u64> {
+        let mut n = 0;
+        let mut shift = 0;
+        loop {
+            let byte = self.read_u8()? as u64;
+            n |= (byte & 0x7f) << shift;
+            shift += 7;
+            if byte < 0x80 {
+                break;
+            }
+        }
+        debug_assert!(n <= u64::MAX);
+        Ok(n)
+    }
+
     fn read_u16(&mut self) -> io::Result<u16> {
         let mut buf = [0u8; 2];
         self.read_exact(&mut buf)?;
@@ -54,6 +77,15 @@ impl Deserialize for u64 {
         Self: Sized,
     {
         Ok(reader.read_u64()?)
+    }
+}
+
+impl Deserialize for u8 {
+    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Ok(reader.read_u8()?)
     }
 }
 
