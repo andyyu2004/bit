@@ -4,13 +4,24 @@ use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
 use crate::pack::{self, PackIndex, PackIndexReader, PackfileReader};
 use crate::path::BitPath;
-use crate::serialize::BufReadSeek;
+use crate::serialize::{BufReadSeek, Deserialize, Serialize};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::File;
 use std::io::{prelude::*, BufReader, SeekFrom};
+
+//? questionable name, questionable macro is there a better way to express this pattern
+macro_rules! process {
+    ($expr:expr) => {
+        match $expr {
+            Ok(obj) => return Ok(obj),
+            Err(err) if err.is_fatal() => return Err(err),
+            Err(..) => continue,
+        }
+    };
+}
 
 pub struct BitObjDb {
     // backends will be searched in order
@@ -37,7 +48,7 @@ macro_rules! backend_method {
             let mut last_err = None;
             for backend in &self.backends {
                 match backend.$f(arg) {
-                    Ok(obj) => return Ok(obj),
+                    Ok(ret) => return Ok(ret),
                     Err(err) if err.is_fatal() => return Err(err),
                     Err(err) => {
                         last_err = Some(err);
@@ -57,11 +68,13 @@ impl BitObjDbBackend for BitObjDb {
 
     backend_method!(read_header: BitId => BitObjHeader);
 
-    backend_method!(exists: BitId => bool);
-
     backend_method!(write: &dyn BitObj => BitHash);
 
     backend_method!(expand_id: BitId => BitHash);
+
+    fn exists(&self, id: BitId) -> BitResult<bool> {
+        Ok(self.backends.iter().any(|backend| backend.exists(id).unwrap_or_default()))
+    }
 }
 
 pub trait BitObjDbBackend {
@@ -143,7 +156,11 @@ impl BitObjDbBackend for BitLooseObjDb {
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
-        Ok(self.locate_obj(id).is_not_found_err())
+        match self.locate_obj(id) {
+            Ok(..) => Ok(true),
+            Err(err) if err.is_not_found_err() => Ok(false),
+            Err(err) => Err(err),
+        }
     }
 }
 
@@ -166,7 +183,7 @@ impl Pack {
     }
 
     fn index_reader(&self) -> BitResult<PackIndexReader<impl BufReadSeek>> {
-        self.pack.stream().and_then(PackIndexReader::new)
+        self.idx.stream().and_then(PackIndexReader::new)
     }
 
     fn obj_offset(&self, oid: BitHash) -> BitResult<(u32, u64)> {
@@ -177,6 +194,7 @@ impl Pack {
         // TODO this pattern is a little unpleasant
         // do something about it if it pops up any more
         // maybe some magic with a different error type could work
+        dbg!("something");
         match self.obj_offset(oid) {
             Ok(..) => Ok(true),
             Err(err) if err.is_not_found_err() => Ok(false),
@@ -195,8 +213,14 @@ impl Pack {
             | BitObjKind::Tag(..) => raw_obj,
             BitObjKind::OfsDelta(ofs_delta) => todo!(),
             BitObjKind::RefDelta(ref_delta) => {
+                // TODO rewrite this so we don't have to deserialize and then reserialize and then expand and deserialize again :D
+                // probably have a `read_obj_raw` which just returns bytes
                 let base = self.read_obj(ref_delta.base_oid)?;
-                todo!();
+                let mut raw = vec![];
+                base.serialize(&mut raw)?;
+                let expanded = ref_delta.delta.expand(raw)?;
+                // TODO does expanded actually contain the object header?
+                BitObjKind::deserialize(&mut std::io::Cursor::new(expanded))?
             }
         };
         // ensure!(crc_of(obj), crc);
@@ -227,17 +251,6 @@ impl BitPackedObjDb {
 
         Ok(Self { objects_path, packs })
     }
-}
-
-//? questionable
-macro_rules! process {
-    ($expr:expr) => {
-        match $expr {
-            Ok(obj) => return Ok(obj),
-            Err(err) if err.is_fatal() => return Err(err),
-            Err(..) => continue,
-        }
-    };
 }
 
 impl BitObjDbBackend for BitPackedObjDb {
