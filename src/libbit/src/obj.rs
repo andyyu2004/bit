@@ -155,7 +155,8 @@ pub enum BitObjKind {
 }
 
 impl BitObjKind {
-    /// deserialize into a `BitObjKind` given an object type
+    /// deserialize into a `BitObjKind` given an object type and "size"
+    /// (this is similar to [crate::serialize::DeserializeSized])
     pub fn deserialize_as_kind(
         contents: &mut dyn BufRead,
         obj_ty: BitObjType,

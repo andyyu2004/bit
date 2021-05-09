@@ -3,7 +3,7 @@ use crate::hash::{BitHash, SHA1Hash};
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use sha1::{digest::Output, Digest};
-use std::io::{self, prelude::*};
+use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
 
 // all big-endian
@@ -107,7 +107,9 @@ impl Deserialize for BitHash {
     }
 }
 
-pub trait BufReadExt: BufRead + Sized {
+// this trait exists as we passing `self` to `T::deserialize` which takes a `dyn mut BufRead`
+// requires `Self: Sized`. Not entirely sure why atm.
+pub trait BufReadExtSized: BufRead + Sized {
     fn read_array<T: Deserialize, const N: usize>(&mut self) -> BitResult<[T; N]> {
         // SAFETY? not sure
         // let mut xs: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
@@ -122,10 +124,6 @@ pub trait BufReadExt: BufRead + Sized {
         Ok(unsafe { std::mem::transmute_copy(&xs) })
     }
 
-    fn is_at_eof(&mut self) -> io::Result<bool> {
-        Ok(self.fill_buf()?.is_empty())
-    }
-
     fn read_type<T: Deserialize>(&mut self) -> BitResult<T> {
         T::deserialize(self)
     }
@@ -135,7 +133,20 @@ pub trait BufReadExt: BufRead + Sized {
     }
 }
 
-impl<R: BufRead> BufReadExt for R {
+impl<R: BufRead> BufReadExtSized for R {
+}
+
+pub trait BufReadExt: BufRead {
+    fn into_zlib_decode_stream(&mut self) -> BufReader<flate2::bufread::ZlibDecoder<&mut Self>> {
+        BufReader::new(flate2::bufread::ZlibDecoder::new(self))
+    }
+
+    fn is_at_eof(&mut self) -> io::Result<bool> {
+        Ok(self.fill_buf()?.is_empty())
+    }
+}
+
+impl<R: BufRead + ?Sized> BufReadExt for R {
 }
 
 pub trait WriteExt: Write {

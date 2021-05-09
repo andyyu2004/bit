@@ -1,7 +1,7 @@
 use super::FileMode;
 use crate::error::BitResult;
 use crate::hash::BitHash;
-use crate::io::BufReadExt;
+use crate::io::{BufReadExt, BufReadExtSized};
 use crate::obj::{BitObj, BitObjType};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
@@ -73,14 +73,13 @@ impl Serialize for Tree {
 }
 
 impl DeserializeSized for Tree {
-    fn deserialize_sized(mut r: &mut dyn BufRead, size: u64) -> BitResult<Self>
+    fn deserialize_sized(r: &mut dyn BufRead, size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {
+        let r = &mut r.take(size);
+
         let mut tree = Self::default();
-
-        let mut r = &mut r.take(size);
-
         #[cfg(debug_assertions)]
         let mut v = vec![];
 

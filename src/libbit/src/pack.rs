@@ -1,8 +1,8 @@
 use crate::error::{BitError, BitResult};
 use crate::hash::{BitHash, SHA1Hash, BIT_HASH_SIZE};
-use crate::io::{BufReadExt, HashReader, ReadExt};
+use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::obj::*;
-use crate::serialize::{BufReadSeek, Deserialize};
+use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::io::{BufRead, BufReader, SeekFrom};
 use std::ops::{Deref, DerefMut};
@@ -210,14 +210,13 @@ impl<R: BufReadSeek> PackfileReader<R> {
     pub fn read_obj_from_offset(&mut self, offset: u64) -> BitResult<BitObjKind> {
         self.seek(SeekFrom::Start(offset))?;
         let (obj_ty, size) = self.read_pack_obj_header()?;
+        // the delta types have only the delta compressed but the size/baseoid is not
+        // we so we have to treat thme a bit differently
         match obj_ty {
             BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
                 self.read_compressed_obj_data(obj_ty, size),
-            BitObjType::OfsDelta => todo!(),
-            BitObjType::RefDelta => {
-                let base = self.read_bit_hash()?;
-                todo!()
-            }
+            BitObjType::OfsDelta | BitObjType::RefDelta =>
+                BitObjKind::deserialize_as_kind(&mut self.reader, obj_ty, size),
         }
     }
 }
