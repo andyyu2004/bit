@@ -1,5 +1,5 @@
 use crate::error::{BitError, BitErrorExt, BitResult};
-use crate::hash::{self, BitHash};
+use crate::hash::{self, crc_of, BitHash};
 use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
 use crate::pack::{self, PackIndex, PackIndexReader, PackfileReader};
@@ -187,8 +187,20 @@ impl Pack {
     fn read_obj(&self, oid: BitHash) -> BitResult<BitObjKind> {
         let (crc, offset) = self.obj_offset(oid)?;
         let mut reader = self.pack_reader()?;
-        let obj = reader.read_obj_from_offset(offset)?;
-        todo!()
+        let raw_obj = reader.read_obj_from_offset(offset)?;
+        let obj = match raw_obj {
+            BitObjKind::Blob(..)
+            | BitObjKind::Commit(..)
+            | BitObjKind::Tree(..)
+            | BitObjKind::Tag(..) => raw_obj,
+            BitObjKind::OfsDelta(ofs_delta) => todo!(),
+            BitObjKind::RefDelta(ref_delta) => {
+                let base = self.read_obj(ref_delta.base_oid)?;
+                todo!();
+            }
+        };
+        // ensure!(crc_of(obj), crc);
+        Ok(obj)
     }
 }
 

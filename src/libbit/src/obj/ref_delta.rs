@@ -8,8 +8,8 @@ use std::io::prelude::*;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct RefDelta {
-    base_oid: BitHash,
-    delta: Delta,
+    pub base_oid: BitHash,
+    pub delta: Delta,
 }
 
 impl Serialize for RefDelta {
@@ -19,7 +19,7 @@ impl Serialize for RefDelta {
 }
 
 impl DeserializeSized for RefDelta {
-    fn deserialize_sized(mut reader: &mut dyn BufRead, delta_size: u64) -> BitResult<Self>
+    fn deserialize_sized(reader: &mut dyn BufRead, delta_size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {

@@ -45,3 +45,19 @@ fn test_read_le_varint() -> io::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_read_le_packed_int() -> io::Result<()> {
+    let header = 0b11010010;
+    let mut bytes = &[0x35, 0x15, 0x82][..];
+    assert_eq!(bytes.read_le_packed(header)?, 0x82001500003500);
+    Ok(())
+}
+
+#[test]
+fn test_read_le_packed_header_only() -> io::Result<()> {
+    let header = 0b10000000;
+    let mut bytes = &[][..];
+    assert_eq!(bytes.read_le_packed(header)?, 0);
+    Ok(())
+}

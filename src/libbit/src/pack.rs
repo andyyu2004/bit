@@ -210,8 +210,9 @@ impl<R: BufReadSeek> PackfileReader<R> {
     pub fn read_obj_from_offset(&mut self, offset: u64) -> BitResult<BitObjKind> {
         self.seek(SeekFrom::Start(offset))?;
         let (obj_ty, size) = self.read_pack_obj_header()?;
-        // the delta types have only the delta compressed but the size/baseoid is not
-        // we so we have to treat thme a bit differently
+        // the delta types have only the delta compressed but the size/baseoid is not,
+        // the 4 base object types have all their data compressed
+        // we so we have to treat them a bit differently
         match obj_ty {
             BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
                 self.read_compressed_obj_data(obj_ty, size),

@@ -23,6 +23,29 @@ fn test_build_delta_index_non_divisor_should_ignore_partial_chunk() {
     assert_eq!(delta_index.indices, expected);
 }
 
+#[test]
+fn test_parse_delta_insert_op() -> BitResult<()> {
+    let op = DeltaOp::deserialize(&mut &[0x3, 0xa, 0xb, 0xc][..])?;
+    assert_eq!(op, DeltaOp::Insert(vec![0xa, 0xb, 0xc]));
+    Ok(())
+}
+
+#[test]
+fn test_parse_delta_copy_op() -> BitResult<()> {
+    let op =
+        DeltaOp::deserialize(&mut &[0b11111111, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd][..])?;
+    // little endian encoding
+    assert_eq!(op, DeltaOp::Copy(0x67452301, 0xcdab89));
+    Ok(())
+}
+
+#[test]
+fn test_parse_delta_zero_size() -> BitResult<()> {
+    let op = DeltaOp::deserialize(&mut &[0x80][..])?;
+    assert_eq!(op, DeltaOp::Copy(0, 16));
+    Ok(())
+}
+
 // #[test]
 // fn test_delta_compress_simple_outputs_correct_operations() {
 //     let source = b"the quick brown fox jumps over the slow lazy dog";

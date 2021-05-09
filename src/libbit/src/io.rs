@@ -16,6 +16,7 @@ pub(crate) trait ReadExt: Read {
 
     // variable length little-endian integer encoding
     // read next byte if MSB is 1
+    // referred to as "size encoding" in git docs
     fn read_le_varint(&mut self) -> io::Result<u64> {
         let mut n = 0;
         let mut shift = 0;
@@ -29,6 +30,29 @@ pub(crate) trait ReadExt: Read {
         }
         debug_assert!(n <= u64::MAX);
         Ok(n)
+    }
+
+    /// format used for encoding delta copy operaion
+    /// header must have the MSB set (otherwise we shouldn't be reading this format)
+    /// format on disk (in `self`) is as follows
+    /// +----------+---------+---------+---------+---------+-------+-------+-------+
+    /// | 1xxxxxxx | offset1 | offset2 | offset3 | offset4 | size1 | size2 | size3 |
+    /// +----------+---------+---------+---------+---------+-------+-------+-------+
+    /// if bit zero(lsb) is set, then offset1 is present etc..
+    // we choose to read all 7 bits in little endian so be wary when extracting
+    // size and offset!
+    fn read_le_packed(&mut self, header: u8) -> io::Result<u64> {
+        debug_assert!(header & 1 << 7 != 0);
+        let mut value = 0;
+        for i in 0..7 {
+            if header & 1 << i == 0 {
+                continue;
+            }
+
+            let byte = self.read_u8()? as u64;
+            value |= byte << (i * 8)
+        }
+        Ok(value)
     }
 
     fn read_u16(&mut self) -> io::Result<u16> {

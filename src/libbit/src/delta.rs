@@ -1,4 +1,5 @@
 use crate::error::BitResult;
+use crate::io::{BufReadExtSized, ReadExt};
 use crate::serialize::{Deserialize, DeserializeSized};
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -9,7 +10,47 @@ use std::ops::Deref;
 const CHUNK_SIZE: usize = 16;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct Delta {}
+pub struct Delta {
+    ops: Vec<DeltaOp>,
+}
+
+impl Delta {
+    pub fn apply_to(&self, bytes: &mut Vec<u8>) -> BitResult<()> {
+        todo!()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum DeltaOp {
+    /// copy (offset, size)
+    Copy(u64, u64),
+    Insert(Vec<u8>),
+}
+
+impl Deserialize for DeltaOp {
+    fn deserialize(mut reader: &mut dyn BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        // the MSB of the first byte tells us whether it is a
+        // `Copy` or `Insert` instruction
+        let byte = reader.read_u8()?;
+        if byte & 0x80 != 0 {
+            let n = reader.read_le_packed(byte)?;
+            println!("{:#x}", n);
+            // assert highest byte is zero
+            debug_assert_eq!(n & 0xFF << 56, 0);
+            let (offset, mut size) = (n & 0xFFFFFFFF, n >> 32);
+            // 16 is default value for size
+            if size == 0 {
+                size = 16
+            }
+            Ok(Self::Copy(offset, size))
+        } else {
+            reader.read_vec::<u8>(byte as usize & 0x7f).map(Self::Insert)
+        }
+    }
+}
 
 impl DeserializeSized for Delta {
     fn deserialize_sized(reader: &mut dyn BufRead, size: u64) -> BitResult<Self>
@@ -39,9 +80,10 @@ impl<'s> Debug for DeltaIndex<'s> {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum DeltaOp<'s> {
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum DeltaOpSlice<'s> {
     /// copy (offset, length)
+    // TODO match the types with the nonslice DeltaOp
     Copy(usize, usize),
     Insert(&'s [u8]),
 }
@@ -56,7 +98,7 @@ impl<'s> DeltaIndex<'s> {
         Self { source, indices }
     }
 
-    pub fn compress(&self, target: &'s [u8]) -> Vec<DeltaOp<'s>> {
+    pub fn compress(&self, target: &'s [u8]) -> Vec<DeltaOpSlice<'s>> {
         DeltaIndexCompressor::new(self, target).compress()
     }
 }
@@ -69,7 +111,7 @@ struct DeltaIndexCompressor<'a, 's> {
     insert: &'s [u8],
     /// current index into target slice
     target_idx: usize,
-    ops: Vec<DeltaOp<'s>>,
+    ops: Vec<DeltaOpSlice<'s>>,
 }
 
 impl<'a, 's> DeltaIndexCompressor<'a, 's> {
@@ -110,14 +152,14 @@ impl<'a, 's> DeltaIndexCompressor<'a, 's> {
     }
 
     // everything here is wrong (including anything it calls transitively)
-    fn compress(mut self) -> Vec<DeltaOp<'s>> {
+    fn compress(mut self) -> Vec<DeltaOpSlice<'s>> {
         loop {
             let slice = self.slice();
             dbg!(unsafe { std::str::from_utf8_unchecked(slice) });
             if let Some(&source_idx) = self.indices.get(slice) {
                 let (start, end) = self.expand_match(source_idx, self.target_idx);
-                self.ops.push(DeltaOp::Insert(std::mem::take(&mut self.insert)));
-                self.ops.push(DeltaOp::Copy(start, end - start));
+                self.ops.push(DeltaOpSlice::Insert(std::mem::take(&mut self.insert)));
+                self.ops.push(DeltaOpSlice::Copy(start, end - start));
                 self.target_idx = end;
             } else {
                 self.insert = slice;
