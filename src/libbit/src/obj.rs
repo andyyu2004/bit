@@ -1,6 +1,9 @@
 mod blob;
 mod commit;
 mod obj_id;
+mod ofs_delta;
+mod ref_delta;
+mod tag;
 mod tree;
 
 pub use blob::Blob;
@@ -17,6 +20,10 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
 
+use self::ofs_delta::OfsDelta;
+use self::ref_delta::RefDelta;
+use self::tag::Tag;
+
 impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // we can't write the following as `write!(f, "{}", x)
@@ -25,6 +32,9 @@ impl Display for BitObjKind {
             BitObjKind::Blob(blob) => Display::fmt(&blob, f),
             BitObjKind::Commit(commit) => Display::fmt(&commit, f),
             BitObjKind::Tree(tree) => Display::fmt(&tree, f),
+            BitObjKind::Tag(_) => todo!(),
+            BitObjKind::OfsDelta(_) => todo!(),
+            BitObjKind::RefDelta(_) => todo!(),
         }
     }
 }
@@ -139,6 +149,9 @@ pub enum BitObjKind {
     Blob(Blob),
     Commit(Commit),
     Tree(Tree),
+    Tag(Tag),
+    OfsDelta(OfsDelta),
+    RefDelta(RefDelta),
 }
 
 impl BitObjKind {
@@ -170,6 +183,9 @@ impl Serialize for BitObjKind {
             BitObjKind::Blob(blob) => blob.serialize(writer),
             BitObjKind::Commit(commit) => commit.serialize(writer),
             BitObjKind::Tree(tree) => tree.serialize(writer),
+            BitObjKind::Tag(tag) => tag.serialize(writer),
+            BitObjKind::OfsDelta(ofs_delta) => ofs_delta.serialize(writer),
+            BitObjKind::RefDelta(ref_delta) => ref_delta.serialize(writer),
         }
     }
 }
@@ -189,6 +205,9 @@ impl BitObj for BitObjKind {
             BitObjKind::Blob(blob) => blob.obj_ty(),
             BitObjKind::Commit(commit) => commit.obj_ty(),
             BitObjKind::Tree(tree) => tree.obj_ty(),
+            BitObjKind::Tag(tag) => tag.obj_ty(),
+            BitObjKind::OfsDelta(ofs_delta) => ofs_delta.obj_ty(),
+            BitObjKind::RefDelta(ref_delta) => ref_delta.obj_ty(),
         }
     }
 }
@@ -198,7 +217,7 @@ impl BitObj for BitObjKind {
 // print user facing content that may not be pretty
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
-pub trait BitObj: Serialize + Deserialize + Debug + Display {
+pub trait BitObj: Serialize + Deserialize + Debug {
     fn obj_ty(&self) -> BitObjType;
 
     /// serialize objects append on the header of `type len`
