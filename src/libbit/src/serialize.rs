@@ -31,6 +31,9 @@ pub trait Deserialize {
 /// deserialize trait where the size to read is required to be known
 /// confusingly, the size given is not necessarily the exact number of bytes that will be
 /// read from the reader.
+/// therefore, we unfortunately cannot combine this trait with `Deserialize` where
+/// `deserialize_unbuffered(reader, size) is defined as `deserialize(reader.take(size))`
+/// as it is not general enough for all our purposes
 /// For example, in [crate::obj::RefDelta] and [crate::obj::OfsDelta], the size parameter is interpreted
 /// as the size of the delta not not including the offset/baseoid.
 pub trait DeserializeSized {

@@ -11,12 +11,42 @@ const CHUNK_SIZE: usize = 16;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Delta {
+    source_size: u64,
+    target_size: u64,
     ops: Vec<DeltaOp>,
 }
 
 impl Delta {
-    pub fn apply_to(&self, bytes: &mut Vec<u8>) -> BitResult<()> {
-        todo!()
+    pub fn expand(&self, bytes: impl AsRef<[u8]>) -> BitResult<Vec<u8>> {
+        let bytes = bytes.as_ref();
+        ensure_eq!(
+            self.source_size as usize,
+            bytes.len(),
+            "expected source size to be `{}`, but given source with size `{}`",
+            self.source_size,
+            bytes.len()
+        );
+
+        let mut expanded = Vec::with_capacity(self.target_size as usize);
+        for op in &self.ops {
+            match op {
+                &DeltaOp::Copy(offset, size) => {
+                    let (offset, size) = (offset as usize, size as usize);
+                    expanded.extend_from_slice(&bytes[offset..offset + size])
+                }
+                DeltaOp::Insert(insert) => expanded.extend_from_slice(insert),
+            }
+        }
+
+        ensure_eq!(
+            self.target_size as usize,
+            expanded.len(),
+            "expected target size to be `{}`, but got expanded target with size `{}`",
+            self.target_size,
+            expanded.len()
+        );
+
+        Ok(expanded)
     }
 }
 
@@ -28,7 +58,7 @@ pub enum DeltaOp {
 }
 
 impl Deserialize for DeltaOp {
-    fn deserialize(mut reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -57,6 +87,8 @@ impl DeserializeSized for Delta {
     where
         Self: Sized,
     {
+        let source_size = r.read_le_varint()?;
+        let target_size = r.read_le_varint()?;
         let r = &mut r.take(size);
         //? size is definitely an overestimate but maybe its fine
         let mut ops = Vec::with_capacity(size as usize);
@@ -65,7 +97,7 @@ impl DeserializeSized for Delta {
             ops.push(DeltaOp::deserialize(r)?);
         }
 
-        Ok(Self { ops })
+        Ok(Self { source_size, target_size, ops })
     }
 }
 
