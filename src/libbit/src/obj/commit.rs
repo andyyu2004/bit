@@ -99,7 +99,7 @@ impl Serialize for Commit {
 }
 
 impl Deserialize for Commit {
-    fn deserialize(r: &mut dyn BufRead) -> BitResult<Self> {
+    fn deserialize(r: &mut impl BufRead) -> BitResult<Self> {
         let mut lines = r.lines();
         let mut attrs = HashMap::new();
 

@@ -16,7 +16,7 @@ impl Serialize for OfsDelta {
 }
 
 impl DeserializeSized for OfsDelta {
-    fn deserialize_sized(reader: &mut dyn BufRead, delta_size: u64) -> BitResult<Self>
+    fn deserialize_sized(reader: &mut impl BufRead, delta_size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {

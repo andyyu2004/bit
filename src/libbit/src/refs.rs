@@ -42,7 +42,7 @@ impl Serialize for BitRef {
 }
 
 impl Deserialize for BitRef {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

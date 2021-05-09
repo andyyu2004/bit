@@ -73,7 +73,7 @@ impl Serialize for Tree {
 }
 
 impl DeserializeSized for Tree {
-    fn deserialize_sized(r: &mut dyn BufRead, size: u64) -> BitResult<Self>
+    fn deserialize_sized(r: &mut impl BufRead, size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -134,7 +134,7 @@ impl TreeEntry {
         if self.mode == FileMode::DIR { self.path.join("=") } else { self.path }
     }
 
-    pub fn parse(r: &mut dyn BufRead) -> BitResult<Self> {
+    pub fn parse(r: &mut impl BufRead) -> BitResult<Self> {
         let mut buf = vec![];
         let i = r.read_until(0x20, &mut buf)?;
         let mode =

@@ -328,7 +328,7 @@ impl Display for MergeStage {
 }
 
 impl BitIndexInner {
-    fn parse_header(r: &mut dyn BufRead) -> BitResult<BitIndexHeader> {
+    fn parse_header(r: &mut impl BufRead) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];
         r.read_exact(&mut signature)?;
         assert_eq!(&signature, BIT_INDEX_HEADER_SIG);
@@ -397,7 +397,7 @@ impl Serialize for BitIndexInner {
 }
 
 impl Deserialize for BitIndexInner {
-    fn deserialize(r: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(r: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

@@ -56,7 +56,7 @@ impl Serialize for BitIndexEntry {
 }
 
 impl Deserialize for BitIndexEntry {
-    fn deserialize(r: &mut dyn BufRead) -> BitResult<BitIndexEntry> {
+    fn deserialize(r: &mut impl BufRead) -> BitResult<BitIndexEntry> {
         let ctime = r.read_timespec()?;
         let mtime = r.read_timespec()?;
         let device = r.read_u32()?;

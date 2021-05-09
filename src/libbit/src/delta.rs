@@ -1,10 +1,10 @@
 use crate::error::BitResult;
-use crate::io::{BufReadExtSized, ReadExt};
+use crate::io::{BufReadExt, BufReadExtSized, ReadExt};
 use crate::serialize::{Deserialize, DeserializeSized};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Formatter};
-use std::io::BufRead;
+use std::io::{BufRead, Read};
 use std::ops::Deref;
 
 const CHUNK_SIZE: usize = 16;
@@ -28,7 +28,7 @@ pub enum DeltaOp {
 }
 
 impl Deserialize for DeltaOp {
-    fn deserialize(mut reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -53,11 +53,19 @@ impl Deserialize for DeltaOp {
 }
 
 impl DeserializeSized for Delta {
-    fn deserialize_sized(reader: &mut dyn BufRead, size: u64) -> BitResult<Self>
+    fn deserialize_sized(r: &mut impl BufRead, size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {
-        todo!()
+        let r = &mut r.take(size);
+        //? size is definitely an overestimate but maybe its fine
+        let mut ops = Vec::with_capacity(size as usize);
+
+        while !r.is_at_eof()? {
+            ops.push(DeltaOp::deserialize(r)?);
+        }
+
+        Ok(Self { ops })
     }
 }
 

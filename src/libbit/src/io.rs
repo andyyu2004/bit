@@ -96,7 +96,7 @@ impl<R: Read + ?Sized> ReadExt for R {
 }
 
 impl Deserialize for u64 {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -105,7 +105,7 @@ impl Deserialize for u64 {
 }
 
 impl Deserialize for u8 {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -114,7 +114,7 @@ impl Deserialize for u8 {
 }
 
 impl Deserialize for u32 {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -123,7 +123,7 @@ impl Deserialize for u32 {
 }
 
 impl Deserialize for BitHash {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

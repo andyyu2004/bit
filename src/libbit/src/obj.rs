@@ -158,7 +158,7 @@ impl BitObjKind {
     /// deserialize into a `BitObjKind` given an object type and "size"
     /// (this is similar to [crate::serialize::DeserializeSized])
     pub fn deserialize_as_kind(
-        contents: &mut dyn BufRead,
+        contents: &mut impl BufRead,
         obj_ty: BitObjType,
         size: u64,
     ) -> BitResult<Self> {
@@ -209,7 +209,7 @@ impl Serialize for BitObjKind {
 
 // NOTE! this includes reading the object header
 impl Deserialize for BitObjKind {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self> {
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self> {
         self::read_obj(reader)
     }
 }
@@ -288,20 +288,20 @@ impl FromStr for BitObjType {
     }
 }
 
-pub(crate) fn read_obj_header(reader: &mut dyn BufRead) -> BitResult<BitObjHeader> {
+pub(crate) fn read_obj_header(reader: &mut impl BufRead) -> BitResult<BitObjHeader> {
     let obj_type = read_obj_type_str(reader)?;
     let size = read_obj_size(reader)?;
     Ok(BitObjHeader { obj_type, size })
 }
 
-fn read_obj_type_str(reader: &mut dyn BufRead) -> BitResult<BitObjType> {
+fn read_obj_type_str(reader: &mut impl BufRead) -> BitResult<BitObjType> {
     let mut buf = vec![];
     let i = reader.read_until(0x20, &mut buf)?;
     Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
 }
 
 /// assumes <type> has been read already
-fn read_obj_size(reader: &mut dyn BufRead) -> BitResult<usize> {
+fn read_obj_size(reader: &mut impl BufRead) -> BitResult<usize> {
     let mut buf = vec![];
     let i = reader.read_until(0x00, &mut buf)?;
     let size = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
@@ -314,7 +314,7 @@ pub(crate) fn read_obj_unbuffered(reader: impl std::io::Read) -> BitResult<BitOb
 }
 
 /// format: <type>0x20<size>0x00<content>
-pub(crate) fn read_obj(reader: &mut dyn BufRead) -> BitResult<BitObjKind> {
+pub(crate) fn read_obj(reader: &mut impl BufRead) -> BitResult<BitObjKind> {
     let header = read_obj_header(reader)?;
     let buf = reader.read_to_vec()?;
     let contents = buf.as_slice();

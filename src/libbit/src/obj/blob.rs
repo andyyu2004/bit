@@ -38,7 +38,7 @@ impl Serialize for Blob {
 }
 
 impl Deserialize for Blob {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self> {
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self> {
         let mut bytes = vec![];
         reader.read_to_end(&mut bytes)?;
         Ok(Self { bytes })

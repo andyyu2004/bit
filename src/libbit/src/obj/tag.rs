@@ -13,7 +13,7 @@ impl Serialize for Tag {
 }
 
 impl Deserialize for Tag {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

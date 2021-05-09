@@ -132,7 +132,7 @@ impl<R> DerefMut for PackIndexReader<R> {
 }
 
 impl Deserialize for PackIndex {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -163,7 +163,7 @@ impl Deserialize for PackIndex {
 pub struct Packfile {}
 
 impl PackIndex {
-    fn parse_header(reader: &mut dyn BufRead) -> BitResult<()> {
+    fn parse_header(reader: &mut impl BufRead) -> BitResult<()> {
         let magic = reader.read_u32()?;
         ensure_eq!(magic, PACK_IDX_MAGIC, "invalid pack index signature");
         let version = reader.read_u32()?;
