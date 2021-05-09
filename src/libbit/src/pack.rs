@@ -1,10 +1,10 @@
 use crate::error::{BitError, BitResult};
 use crate::hash::{BitHash, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, HashReader, ReadExt};
-use crate::obj::{BitObj, BitObjKind, BitObjType};
+use crate::obj::*;
 use crate::serialize::{BufReadSeek, Deserialize};
 use num_traits::{FromPrimitive, ToPrimitive};
-use std::io::{BufRead, SeekFrom};
+use std::io::{BufRead, BufReader, SeekFrom};
 use std::ops::{Deref, DerefMut};
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
@@ -202,10 +202,23 @@ impl<R: BufReadSeek> PackfileReader<R> {
         Ok((ty, size))
     }
 
-    pub fn read_obj(&mut self, offset: u64) -> BitResult<BitObjKind> {
+    fn read_compressed_obj_data(&mut self, obj_ty: BitObjType, size: u64) -> BitResult<BitObjKind> {
+        let mut reader = BufReader::new(flate2::bufread::ZlibDecoder::new(&mut self.reader));
+        BitObjKind::deserialize_as_kind(&mut reader, obj_ty, size)
+    }
+
+    pub fn read_obj_from_offset(&mut self, offset: u64) -> BitResult<BitObjKind> {
         self.seek(SeekFrom::Start(offset))?;
-        let (ty, size) = self.read_pack_obj_header()?;
-        todo!()
+        let (obj_ty, size) = self.read_pack_obj_header()?;
+        match obj_ty {
+            BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
+                self.read_compressed_obj_data(obj_ty, size),
+            BitObjType::OfsDelta => todo!(),
+            BitObjType::RefDelta => {
+                let base = self.read_bit_hash()?;
+                todo!()
+            }
+        }
     }
 }
 

@@ -187,6 +187,7 @@ impl Pack {
     fn read_obj(&self, oid: BitHash) -> BitResult<BitObjKind> {
         let (crc, offset) = self.obj_offset(oid)?;
         let mut reader = self.pack_reader()?;
+        let obj = reader.read_obj_from_offset(offset)?;
         todo!()
     }
 }

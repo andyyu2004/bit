@@ -1,13 +1,16 @@
+use crate::delta::Delta;
 use crate::error::BitResult;
-use crate::serialize::{Deserialize, Serialize};
+use crate::hash::BitHash;
+use crate::io::ReadExt;
+use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::io::prelude::*;
 
 use super::{BitObj, BitObjType};
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct RefDelta {
-    base_oid: u64,
-    delta: (),
+    base_oid: BitHash,
+    delta: Delta,
 }
 
 impl Serialize for RefDelta {
@@ -16,12 +19,14 @@ impl Serialize for RefDelta {
     }
 }
 
-impl Deserialize for RefDelta {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+impl DeserializeSized for RefDelta {
+    fn deserialize_sized(reader: &mut dyn BufRead, delta_size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {
-        todo!()
+        let base_oid = reader.read_bit_hash()?;
+        let delta = Delta::deserialize_sized(reader, delta_size)?;
+        Ok(Self { base_oid, delta })
     }
 }
 

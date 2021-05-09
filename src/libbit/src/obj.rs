@@ -13,7 +13,7 @@ pub use tree::{Tree, TreeEntry};
 
 use crate::error::{BitGenericError, BitResult};
 use crate::io::ReadExt;
-use crate::serialize::{Deserialize, Serialize};
+use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
 use std::io::{BufRead, BufReader, Write};
@@ -155,6 +155,22 @@ pub enum BitObjKind {
 }
 
 impl BitObjKind {
+    /// deserialize into a `BitObjKind` given an object type
+    pub fn deserialize_as_kind(
+        contents: &mut dyn BufRead,
+        obj_ty: BitObjType,
+        size: u64,
+    ) -> BitResult<Self> {
+        match obj_ty {
+            BitObjType::Commit => Commit::deserialize(contents).map(Self::Commit),
+            BitObjType::Tree => Tree::deserialize_sized(contents, size).map(Self::Tree),
+            BitObjType::Blob => Blob::deserialize(contents).map(Self::Blob),
+            BitObjType::Tag => Tag::deserialize(contents).map(Self::Tag),
+            BitObjType::OfsDelta => OfsDelta::deserialize_sized(contents, size).map(Self::OfsDelta),
+            BitObjType::RefDelta => RefDelta::deserialize_sized(contents, size).map(Self::RefDelta),
+        }
+    }
+
     pub fn into_tree(self) -> Tree {
         match self {
             Self::Tree(tree) => tree,
@@ -190,6 +206,7 @@ impl Serialize for BitObjKind {
     }
 }
 
+// NOTE! this includes reading the object header
 impl Deserialize for BitObjKind {
     fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self> {
         self::read_obj(reader)
@@ -217,7 +234,7 @@ impl BitObj for BitObjKind {
 // print user facing content that may not be pretty
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
-pub trait BitObj: Serialize + Deserialize + Debug {
+pub trait BitObj: Serialize + DeserializeSized + Debug {
     fn obj_ty(&self) -> BitObjType;
 
     /// serialize objects append on the header of `type len`
@@ -305,7 +322,8 @@ pub(crate) fn read_obj(reader: &mut dyn BufRead) -> BitResult<BitObjKind> {
 
     Ok(match header.obj_type {
         BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(contents)?),
-        BitObjType::Tree => BitObjKind::Tree(Tree::deserialize(contents)?),
+        BitObjType::Tree =>
+            BitObjKind::Tree(Tree::deserialize_sized(contents, header.size as u64)?),
         BitObjType::Blob => BitObjKind::Blob(Blob::deserialize(contents)?),
         BitObjType::Tag => todo!(),
         BitObjType::OfsDelta => todo!(),

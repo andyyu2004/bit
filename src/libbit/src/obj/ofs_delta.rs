@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::serialize::{Deserialize, Serialize};
+use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::io::prelude::*;
 
 use super::{BitObj, BitObjType};
@@ -15,8 +15,8 @@ impl Serialize for OfsDelta {
     }
 }
 
-impl Deserialize for OfsDelta {
-    fn deserialize(reader: &mut dyn BufRead) -> BitResult<Self>
+impl DeserializeSized for OfsDelta {
+    fn deserialize_sized(reader: &mut dyn BufRead, delta_size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {

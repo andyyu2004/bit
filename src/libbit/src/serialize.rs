@@ -27,3 +27,30 @@ pub trait Deserialize {
         Self::deserialize(&mut BufReader::new(reader))
     }
 }
+
+/// deserialize trait where the size to read is required to be known
+/// confusingly, the size given is not necessarily the exact number of bytes that will be
+/// read from the reader.
+/// For example, in [crate::obj::RefDelta] and [crate::obj::OfsDelta], the size parameter is interpreted
+/// as the size of the delta not not including the offset/baseoid.
+pub trait DeserializeSized {
+    fn deserialize_sized(reader: &mut dyn BufRead, size: u64) -> BitResult<Self>
+    where
+        Self: Sized;
+
+    fn deserialize_sized_unbuffered(reader: impl Read, size: u64) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Self::deserialize_sized(&mut BufReader::new(reader), size)
+    }
+}
+
+impl<D: Deserialize> DeserializeSized for D {
+    fn deserialize_sized(reader: &mut dyn BufRead, _size: u64) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Self::deserialize(reader)
+    }
+}
