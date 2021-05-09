@@ -43,7 +43,7 @@ impl FromStr for BitId {
         } else if s.len() < 40 {
             Ok(Self::Partial(BitPartialHash::from_str(s).unwrap()))
         } else {
-            panic!("invalid bit object id: `{}`", s)
+            bail!("invalid bit object id: `{}`", s)
         }
     }
 }

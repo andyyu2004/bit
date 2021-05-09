@@ -29,13 +29,14 @@ impl Delta {
 
         let mut expanded = Vec::with_capacity(self.target_size as usize);
         for op in &self.ops {
-            match op {
+            let slice = match op {
                 &DeltaOp::Copy(offset, size) => {
                     let (offset, size) = (offset as usize, size as usize);
-                    expanded.extend_from_slice(&bytes[offset..offset + size])
+                    &bytes[offset..offset + size]
                 }
-                DeltaOp::Insert(insert) => expanded.extend_from_slice(insert),
-            }
+                DeltaOp::Insert(slice) => slice,
+            };
+            expanded.extend_from_slice(slice)
         }
 
         ensure_eq!(

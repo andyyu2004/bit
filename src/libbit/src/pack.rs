@@ -1,8 +1,9 @@
-use crate::error::{BitError, BitResult};
-use crate::hash::{BitHash, SHA1Hash, BIT_HASH_SIZE};
+use crate::error::{BitError, BitErrorExt, BitResult};
+use crate::hash::{crc_of, BitHash, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::obj::*;
-use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
+use crate::path::BitPath;
+use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized, Serialize};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::io::{BufRead, BufReader, SeekFrom};
 use std::ops::{Deref, DerefMut};
@@ -16,6 +17,62 @@ const CRC_SIZE: u64 = 4;
 const OFFSET_SIZE: u64 = 4;
 /// maximum 31 bit number (highest bit represents it uses a large offset in the EXT layer)
 const MAX_OFFSET: u32 = 0x7fffffff;
+
+#[derive(Debug, Copy, Clone)]
+pub struct Pack {
+    pub pack: BitPath,
+    pub idx: BitPath,
+}
+
+impl Pack {
+    pub fn pack_reader(&self) -> BitResult<PackfileReader<impl BufReadSeek>> {
+        self.pack.stream().and_then(PackfileReader::new)
+    }
+
+    pub fn index_reader(&self) -> BitResult<PackIndexReader<impl BufReadSeek>> {
+        self.idx.stream().and_then(PackIndexReader::new)
+    }
+
+    pub fn obj_offset(&self, oid: BitHash) -> BitResult<(u32, u64)> {
+        self.index_reader()?.find_oid_crc_offset(oid)
+    }
+
+    pub fn obj_exists(&self, oid: BitHash) -> BitResult<bool> {
+        // TODO this pattern is a little unpleasant
+        // do something about it if it pops up any more
+        // maybe some magic with a different error type could work
+        match self.obj_offset(oid) {
+            Ok(..) => Ok(true),
+            Err(err) if err.is_not_found_err() => Ok(false),
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn read_obj(&self, oid: BitHash) -> BitResult<BitObjKind> {
+        let (crc, offset) = self.obj_offset(oid)?;
+        let mut reader = self.pack_reader()?;
+        let raw_obj = reader.read_obj_from_offset(offset)?;
+        let obj = match raw_obj {
+            BitObjKind::Blob(..)
+            | BitObjKind::Commit(..)
+            | BitObjKind::Tree(..)
+            | BitObjKind::Tag(..) => raw_obj,
+            BitObjKind::OfsDelta(ofs_delta) => todo!(),
+            BitObjKind::RefDelta(ref_delta) => {
+                // TODO rewrite this so we don't have to deserialize and then reserialize and then expand and deserialize again :D
+                // probably have a `read_obj_raw` which just returns bytes
+                let base = self.read_obj(ref_delta.base_oid)?;
+                let mut raw = vec![];
+                base.serialize(&mut raw)?;
+                let expanded = ref_delta.delta.expand(raw)?;
+                // TODO does expanded actually contain the object header?
+                BitObjKind::deserialize(&mut std::io::Cursor::new(expanded))?
+            }
+        };
+        // ensure!(crc_of(obj), crc);
+        Ok(obj)
+    }
+}
 
 #[derive(Debug)]
 pub struct PackIndex {
@@ -74,6 +131,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         base + index * SIZE[layer]
     }
 
+    /// read for layer at index (index is not the same as byte offset)
     pub fn read_from<T: Deserialize>(&mut self, layer: Layer, index: u64) -> BitResult<T> {
         let offset = self.offset_of(layer, index);
         self.seek(SeekFrom::Start(offset))?;
@@ -195,10 +253,11 @@ impl<R: BufReadSeek> PackfileReader<R> {
 
     // 3 bits object type
     // MSB is 1 then read next byte
+    // the `size` here is the size shown in `git verify-pack` (not the size-in-packfile)
+    // https://git-scm.com/docs/git-verify-pack
     pub fn read_pack_obj_header(&mut self) -> BitResult<(BitObjType, u64)> {
-        let n = self.read_le_varint()?;
-        let ty = BitObjType::from_u64(n & 0b111).expect("invalid bit object type");
-        let size = n >> 3;
+        let (ty, size) = self.read_le_varint_with_shift(3)?;
+        let ty = BitObjType::from_u8(ty).expect("invalid bit object type");
         Ok((ty, size))
     }
 
@@ -207,9 +266,14 @@ impl<R: BufReadSeek> PackfileReader<R> {
         BitObjKind::deserialize_as_kind(&mut reader, obj_ty, size)
     }
 
-    pub fn read_obj_from_offset(&mut self, offset: u64) -> BitResult<BitObjKind> {
+    /// seek to `offset` and read pack object header
+    pub fn read_header_from_offset(&mut self, offset: u64) -> BitResult<(BitObjType, u64)> {
         self.seek(SeekFrom::Start(offset))?;
-        let (obj_ty, size) = self.read_pack_obj_header()?;
+        self.read_pack_obj_header()
+    }
+
+    pub fn read_obj_from_offset(&mut self, offset: u64) -> BitResult<BitObjKind> {
+        let (obj_ty, size) = self.read_header_from_offset(offset)?;
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
         // we so we have to treat them a bit differently

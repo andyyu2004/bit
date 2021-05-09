@@ -18,18 +18,44 @@ pub(crate) trait ReadExt: Read {
     // read next byte if MSB is 1
     // referred to as "size encoding" in git docs
     fn read_le_varint(&mut self) -> io::Result<u64> {
+        self.read_le_varint_with_shift(0).map(|x| x.1)
+    }
+
+    // shift is useful for if there is another number encoded in the first few bits
+    fn read_le_varint_with_shift(&mut self, init_shift: u64) -> io::Result<(u8, u64)> {
+        // cannot shift more than 7 as the MSB is reserved
+        assert!(init_shift < 8);
+        // example with shift = 3
+        // 0x11010010
+        //    ^^^  these are the leading bits we want to extract separately
+        // we use `k_mask` below to do this
+        // the first time in the loop we need to mask out the remaining bits
+        // in the remaining loops we reset the mask to 0x7f which is everyting except MSB
+
         let mut n = 0;
-        let mut shift = 0;
-        loop {
-            let byte = self.read_u8()? as u64;
-            n |= (byte & 0x7f) << shift;
-            shift += 7;
-            if byte < 0x80 {
-                break;
+        let byte = self.read_u8()?;
+        let anti_shift = 7 - init_shift;
+        let k_mask = ((1 << init_shift) - 1) << anti_shift;
+        let k = (byte & k_mask as u8) >> anti_shift;
+
+        // process the remaining few bits of the first byte
+        let mask = (1 << anti_shift) - 1;
+        n |= (byte & mask) as u64;
+
+        // only continue if the first bits MSB is 1
+        if byte & 0x80 != 0 {
+            let mut shift = 7 - init_shift;
+            loop {
+                let byte = self.read_u8()? as u64;
+                n |= (byte & 0x7f) << shift;
+                shift += 7;
+                if byte < 0x80 {
+                    break;
+                }
             }
         }
-        debug_assert!(n <= u64::MAX);
-        Ok(n)
+
+        Ok((k, n))
     }
 
     /// format used for encoding delta copy operaion

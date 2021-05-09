@@ -2,7 +2,7 @@ use crate::error::{BitError, BitErrorExt, BitResult};
 use crate::hash::{self, crc_of, BitHash};
 use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
-use crate::pack::{self, PackIndex, PackIndexReader, PackfileReader};
+use crate::pack::{self, Pack, PackIndex, PackIndexReader, PackfileReader};
 use crate::path::BitPath;
 use crate::serialize::{BufReadSeek, Deserialize, Serialize};
 use flate2::read::ZlibDecoder;
@@ -169,63 +169,6 @@ struct BitPackedObjDb {
     objects_path: BitPath,
     /// [(packfile, idxfile)]
     packs: Vec<Pack>,
-}
-
-#[derive(Debug, Copy, Clone)]
-struct Pack {
-    pack: BitPath,
-    idx: BitPath,
-}
-
-impl Pack {
-    fn pack_reader(&self) -> BitResult<PackfileReader<impl BufReadSeek>> {
-        self.pack.stream().and_then(PackfileReader::new)
-    }
-
-    fn index_reader(&self) -> BitResult<PackIndexReader<impl BufReadSeek>> {
-        self.idx.stream().and_then(PackIndexReader::new)
-    }
-
-    fn obj_offset(&self, oid: BitHash) -> BitResult<(u32, u64)> {
-        self.index_reader()?.find_oid_crc_offset(oid)
-    }
-
-    fn obj_exists(&self, oid: BitHash) -> BitResult<bool> {
-        // TODO this pattern is a little unpleasant
-        // do something about it if it pops up any more
-        // maybe some magic with a different error type could work
-        dbg!("something");
-        match self.obj_offset(oid) {
-            Ok(..) => Ok(true),
-            Err(err) if err.is_not_found_err() => Ok(false),
-            Err(err) => Err(err),
-        }
-    }
-
-    fn read_obj(&self, oid: BitHash) -> BitResult<BitObjKind> {
-        let (crc, offset) = self.obj_offset(oid)?;
-        let mut reader = self.pack_reader()?;
-        let raw_obj = reader.read_obj_from_offset(offset)?;
-        let obj = match raw_obj {
-            BitObjKind::Blob(..)
-            | BitObjKind::Commit(..)
-            | BitObjKind::Tree(..)
-            | BitObjKind::Tag(..) => raw_obj,
-            BitObjKind::OfsDelta(ofs_delta) => todo!(),
-            BitObjKind::RefDelta(ref_delta) => {
-                // TODO rewrite this so we don't have to deserialize and then reserialize and then expand and deserialize again :D
-                // probably have a `read_obj_raw` which just returns bytes
-                let base = self.read_obj(ref_delta.base_oid)?;
-                let mut raw = vec![];
-                base.serialize(&mut raw)?;
-                let expanded = ref_delta.delta.expand(raw)?;
-                // TODO does expanded actually contain the object header?
-                BitObjKind::deserialize(&mut std::io::Cursor::new(expanded))?
-            }
-        };
-        // ensure!(crc_of(obj), crc);
-        Ok(obj)
-    }
 }
 
 impl BitPackedObjDb {

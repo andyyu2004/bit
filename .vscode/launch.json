@@ -16,7 +16,8 @@
         }
       },
       // "sourceLanguages": ["rust"],
-      "cwd": "${workspaceFolder}/examples/test3",
+      // "cwd": "${workspaceFolder}/examples/test3",
+      "cwd": "/home/andy/dev/c/git",
       "args": ["status"]
     }
     // {
