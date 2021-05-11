@@ -2,7 +2,7 @@ use crate::error::BitResult;
 use crate::hash::{self, BitHash};
 use crate::obj::{self, BitObjKind, BitObjType, Blob, Commit};
 use crate::repo::BitRepo;
-use crate::serialize::Deserialize;
+use crate::serialize::{Deserialize, DeserializeSized};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ impl BitRepo {
         let object = match opts.objtype {
             BitObjType::Tree => todo!(),
             BitObjType::Tag => todo!(),
-            BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(reader)?),
+            BitObjType::Commit => BitObjKind::Commit(Commit::deserialize_to_end(reader)?),
             BitObjType::Blob => BitObjKind::Blob(Blob::from_reader(reader)?),
             BitObjType::OfsDelta => todo!(),
             BitObjType::RefDelta => todo!(),

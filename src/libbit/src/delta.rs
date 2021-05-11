@@ -68,7 +68,6 @@ impl Deserialize for DeltaOp {
         let byte = reader.read_u8()?;
         if byte & 0x80 != 0 {
             let n = reader.read_le_packed(byte)?;
-            println!("{:#x}", n);
             // assert highest byte is zero
             debug_assert_eq!(n & 0xFF << 56, 0);
             let (offset, mut size) = (n & 0xFFFFFFFF, n >> 32);

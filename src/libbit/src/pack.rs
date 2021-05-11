@@ -1,3 +1,4 @@
+use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitResult};
 use crate::hash::{crc_of, BitHash, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
@@ -5,7 +6,8 @@ use crate::obj::*;
 use crate::path::BitPath;
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized, Serialize};
 use num_traits::{FromPrimitive, ToPrimitive};
-use std::io::{BufRead, BufReader, SeekFrom};
+use std::fmt::{self, Debug, Formatter};
+use std::io::{BufRead, BufReader, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
@@ -22,6 +24,35 @@ const MAX_OFFSET: u32 = 0x7fffffff;
 pub struct Pack {
     pub pack: BitPath,
     pub idx: BitPath,
+}
+
+#[derive(PartialEq)]
+pub struct BitObjRaw {
+    obj_ty: BitObjType,
+    bytes: Vec<u8>,
+}
+
+impl Debug for BitObjRaw {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.obj_ty)
+    }
+}
+
+#[derive(PartialEq)]
+pub enum BitObjRawKind {
+    Raw(BitObjRaw),
+    Ofs(u64, Vec<u8>),
+    Ref(BitHash, Vec<u8>),
+}
+
+impl Debug for BitObjRawKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Raw(raw) => write!(f, "BitObjRawKind::Raw({:?})", raw),
+            Self::Ofs(offset, _) => write!(f, "BitObjRawKind::Ofs({}, ..)", offset),
+            Self::Ref(oid, _) => write!(f, "BitObjRawKind::Ref({}, ..)", oid),
+        }
+    }
 }
 
 impl Pack {
@@ -48,29 +79,82 @@ impl Pack {
         }
     }
 
+    pub fn expand_raw_obj(
+        &self,
+        raw_kind: BitObjRawKind,
+        base_offset: u64,
+    ) -> BitResult<BitObjRaw> {
+        trace!("expand_raw_obj(raw_kind: {:?}, base_offset: {})", raw_kind, base_offset);
+        let (base, delta_bytes) = match raw_kind {
+            BitObjRawKind::Raw(raw) => return Ok(raw),
+            BitObjRawKind::Ofs(offset, delta) =>
+                (self.read_obj_raw_at(base_offset - offset)?, delta),
+            BitObjRawKind::Ref(base_oid, delta) => (self.read_obj_raw(base_oid)?, delta),
+        };
+
+        trace!("expand_raw_obj:base = base={:?}", base);
+        let BitObjRaw { obj_ty, bytes } = base;
+        let delta = Delta::deserialize_to_end_unbuffered(&delta_bytes[..])?;
+        Ok(BitObjRaw { obj_ty, bytes: delta.expand(&bytes)? })
+    }
+
+    /// returns fully expanded raw object at offset
+    pub fn read_obj_raw_at(&self, offset: u64) -> BitResult<BitObjRaw> {
+        trace!("read_obj_raw_at(offset: {})", offset);
+        let mut reader = self.pack_reader()?;
+        let raw = reader.read_obj_from_offset_raw(offset)?;
+        self.expand_raw_obj(raw, offset)
+    }
+
+    /// returns fully expanded raw object with oid
+    pub fn read_obj_raw(&self, oid: BitHash) -> BitResult<BitObjRaw> {
+        trace!("read_obj_raw(oid: {})", oid);
+        let (crc, offset) = self.obj_offset(oid)?;
+        self.read_obj_raw_at(offset)
+    }
+
     pub fn read_obj(&self, oid: BitHash) -> BitResult<BitObjKind> {
         let (crc, offset) = self.obj_offset(oid)?;
+        trace!("read_obj(oid: {}); crc={}; offset={}", oid, crc, offset);
         let mut reader = self.pack_reader()?;
-        let raw_obj = reader.read_obj_from_offset(offset)?;
-        let obj = match raw_obj {
+        let obj = reader.read_obj_from_offset(offset)?;
+        let obj = match obj {
             BitObjKind::Blob(..)
             | BitObjKind::Commit(..)
             | BitObjKind::Tree(..)
-            | BitObjKind::Tag(..) => raw_obj,
-            BitObjKind::OfsDelta(ofs_delta) => todo!(),
+            | BitObjKind::Tag(..) => obj,
+            BitObjKind::OfsDelta(ofs_delta) => {
+                let base_offset = offset - ofs_delta.offset;
+                trace!(
+                    "read_obj:ofs_delta {{ raw_offset={}; offset={} }}",
+                    ofs_delta.offset,
+                    base_offset
+                );
+                let raw = self.read_obj_raw_at(base_offset)?;
+                BitObjKind::from_raw(raw)?
+            }
             BitObjKind::RefDelta(ref_delta) => {
-                // TODO rewrite this so we don't have to deserialize and then reserialize and then expand and deserialize again :D
-                // probably have a `read_obj_raw` which just returns bytes
-                let base = self.read_obj(ref_delta.base_oid)?;
-                let mut raw = vec![];
-                base.serialize(&mut raw)?;
-                let expanded = ref_delta.delta.expand(raw)?;
-                // TODO does expanded actually contain the object header?
-                BitObjKind::deserialize(&mut std::io::Cursor::new(expanded))?
+                let raw = self.read_obj_raw(ref_delta.base_oid)?;
+                BitObjKind::from_raw(raw)?
             }
         };
+        // TODO does crc include the extra bytes of ofs and delta?
         // ensure!(crc_of(obj), crc);
         Ok(obj)
+    }
+}
+
+impl BitObjKind {
+    pub fn from_raw(raw: BitObjRaw) -> BitResult<Self> {
+        match raw.obj_ty {
+            BitObjType::Commit =>
+                Commit::deserialize_to_end_unbuffered(&raw.bytes[..]).map(Self::Commit),
+            BitObjType::Tree => Tree::deserialize_to_end_unbuffered(&raw.bytes[..]).map(Self::Tree),
+            BitObjType::Blob => Blob::deserialize_to_end_unbuffered(&raw.bytes[..]).map(Self::Blob),
+            BitObjType::Tag => Tag::deserialize_to_end_unbuffered(&raw.bytes[..]).map(Self::Tag),
+            BitObjType::OfsDelta | BitObjType::RefDelta =>
+                unreachable!("found unexpanded raw object"),
+        }
     }
 }
 
@@ -208,9 +292,9 @@ impl Deserialize for PackIndex {
 
         // TODO 8-byte offsets for large packfiles
         // let big_offsets = todo!();
-        let pack_hash = r.read_bit_hash()?;
+        let pack_hash = r.read_oid()?;
         let hash = r.finalize_sha1_hash();
-        let idx_hash = r.read_bit_hash()?;
+        let idx_hash = r.read_oid()?;
 
         ensure_eq!(idx_hash, hash);
         assert!(r.is_at_eof()?, "todo parse level 5 fanout for large indexes");
@@ -253,7 +337,8 @@ impl<R: BufReadSeek> PackfileReader<R> {
 
     // 3 bits object type
     // MSB is 1 then read next byte
-    // the `size` here is the size shown in `git verify-pack` (not the size-in-packfile)
+    // the `size` here is the `size` shown in `git verify-pack` (not the `size-in-packfile`)
+    // so the uncompressed size (i.e. we can call `take` on the zlib (decompressed) stream, rather than the compressed stream)
     // https://git-scm.com/docs/git-verify-pack
     pub fn read_pack_obj_header(&mut self) -> BitResult<(BitObjType, u64)> {
         let (ty, size) = self.read_le_varint_with_shift(3)?;
@@ -263,13 +348,36 @@ impl<R: BufReadSeek> PackfileReader<R> {
 
     fn read_compressed_obj_data(&mut self, obj_ty: BitObjType, size: u64) -> BitResult<BitObjKind> {
         let mut reader = BufReader::new(flate2::bufread::ZlibDecoder::new(&mut self.reader));
-        BitObjKind::deserialize_as_kind(&mut reader, obj_ty, size)
+        BitObjKind::deserialize_as(&mut reader, obj_ty, size)
     }
 
     /// seek to `offset` and read pack object header
     pub fn read_header_from_offset(&mut self, offset: u64) -> BitResult<(BitObjType, u64)> {
         self.seek(SeekFrom::Start(offset))?;
         self.read_pack_obj_header()
+    }
+
+    pub fn read_obj_from_offset_raw(&mut self, offset: u64) -> BitResult<BitObjRawKind> {
+        trace!("read_obj_from_offset_raw(offset: {})", offset);
+        let (obj_ty, size) = self.read_header_from_offset(offset)?;
+        // the delta types have only the delta compressed but the size/baseoid is not,
+        // the 4 base object types have all their data compressed
+        // we so we have to treat them a bit differently
+        match obj_ty {
+            BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
+                Ok(BitObjRawKind::Raw(BitObjRaw {
+                    obj_ty,
+                    bytes: self.into_zlib_decode_stream().take(size).read_to_vec()?,
+                })),
+            BitObjType::OfsDelta => Ok(BitObjRawKind::Ofs(
+                self.read_offset()?,
+                self.into_zlib_decode_stream().take(size).read_to_vec()?,
+            )),
+            BitObjType::RefDelta => Ok(BitObjRawKind::Ref(
+                self.read_oid()?,
+                self.into_zlib_decode_stream().take(size).read_to_vec()?,
+            )),
+        }
     }
 
     pub fn read_obj_from_offset(&mut self, offset: u64) -> BitResult<BitObjKind> {
@@ -281,7 +389,7 @@ impl<R: BufReadSeek> PackfileReader<R> {
             BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
                 self.read_compressed_obj_data(obj_ty, size),
             BitObjType::OfsDelta | BitObjType::RefDelta =>
-                BitObjKind::deserialize_as_kind(&mut self.reader, obj_ty, size),
+                BitObjKind::deserialize_as(&mut self.reader, obj_ty, size),
         }
     }
 }

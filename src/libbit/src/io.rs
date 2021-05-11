@@ -14,6 +14,21 @@ pub(crate) trait ReadExt: Read {
         Ok(i)
     }
 
+    /// read offset encoding used for [crate::obj::BitObjKind::OfsDelta]
+    // pretty weird encoding
+    // https://medium.com/@concertdaw/sneaky-git-number-encoding-ddcc5db5329f
+    // https://github.com/git/git/blob/26e47e261e969491ad4e3b6c298450c061749c9e/builtin/pack-objects.c#L1443-L1473
+    fn read_offset(&mut self) -> io::Result<u64> {
+        let mut byte = self.read_u8()? as u64;
+        let mut offset = byte & 0x7f;
+        while byte & 0x80 != 0 {
+            offset += 1;
+            byte = self.read_u8()? as u64;
+            offset = (offset << 7) | (byte & 0x7f);
+        }
+        Ok(offset)
+    }
+
     // variable length little-endian integer encoding
     // read next byte if MSB is 1
     // referred to as "size encoding" in git docs
@@ -105,7 +120,7 @@ pub(crate) trait ReadExt: Read {
         Ok(u64::from_be_bytes(buf))
     }
 
-    fn read_bit_hash(&mut self) -> io::Result<BitHash> {
+    fn read_oid(&mut self) -> io::Result<BitHash> {
         let mut buf = [0u8; 20];
         self.read_exact(&mut buf)?;
         Ok(BitHash::new(buf))
@@ -153,7 +168,7 @@ impl Deserialize for BitHash {
     where
         Self: Sized,
     {
-        Ok(reader.read_bit_hash()?)
+        Ok(reader.read_oid()?)
     }
 }
 

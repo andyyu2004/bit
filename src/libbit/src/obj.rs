@@ -9,20 +9,19 @@ mod tree;
 pub use blob::Blob;
 pub use commit::Commit;
 pub use obj_id::BitId;
+pub use tag::Tag;
 pub use tree::{Tree, TreeEntry};
 
+use self::ofs_delta::OfsDelta;
+use self::ref_delta::RefDelta;
 use crate::error::{BitGenericError, BitResult};
 use crate::io::ReadExt;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
-
-use self::ofs_delta::OfsDelta;
-use self::ref_delta::RefDelta;
-use self::tag::Tag;
 
 impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -157,15 +156,15 @@ pub enum BitObjKind {
 impl BitObjKind {
     /// deserialize into a `BitObjKind` given an object type and "size"
     /// (this is similar to [crate::serialize::DeserializeSized])
-    pub fn deserialize_as_kind(
+    pub fn deserialize_as(
         contents: &mut impl BufRead,
         obj_ty: BitObjType,
         size: u64,
     ) -> BitResult<Self> {
         match obj_ty {
-            BitObjType::Commit => Commit::deserialize(contents).map(Self::Commit),
+            BitObjType::Commit => Commit::deserialize_sized(contents, size).map(Self::Commit),
             BitObjType::Tree => Tree::deserialize_sized(contents, size).map(Self::Tree),
-            BitObjType::Blob => Blob::deserialize(contents).map(Self::Blob),
+            BitObjType::Blob => Blob::deserialize_sized(contents, size).map(Self::Blob),
             BitObjType::Tag => Tag::deserialize(contents).map(Self::Tag),
             BitObjType::OfsDelta => OfsDelta::deserialize_sized(contents, size).map(Self::OfsDelta),
             BitObjType::RefDelta => RefDelta::deserialize_sized(contents, size).map(Self::RefDelta),
@@ -320,12 +319,12 @@ pub(crate) fn read_obj(reader: &mut impl BufRead) -> BitResult<BitObjKind> {
     let contents = buf.as_slice();
     assert_eq!(contents.len(), header.size);
     let contents = &mut BufReader::new(contents);
+    let size = header.size as u64;
 
     Ok(match header.obj_type {
-        BitObjType::Commit => BitObjKind::Commit(Commit::deserialize(contents)?),
-        BitObjType::Tree =>
-            BitObjKind::Tree(Tree::deserialize_sized(contents, header.size as u64)?),
-        BitObjType::Blob => BitObjKind::Blob(Blob::deserialize(contents)?),
+        BitObjType::Commit => BitObjKind::Commit(Commit::deserialize_sized(contents, size)?),
+        BitObjType::Tree => BitObjKind::Tree(Tree::deserialize_sized(contents, size)?),
+        BitObjType::Blob => BitObjKind::Blob(Blob::deserialize_sized(contents, size)?),
         BitObjType::Tag => todo!(),
         BitObjType::OfsDelta => todo!(),
         BitObjType::RefDelta => todo!(),

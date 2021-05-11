@@ -65,7 +65,7 @@ impl Deserialize for BitIndexEntry {
         let uid = r.read_u32()?;
         let gid = r.read_u32()?;
         let filesize = r.read_u32()?;
-        let hash = r.read_bit_hash()?;
+        let hash = r.read_oid()?;
         let flags = BitIndexEntryFlags::new(r.read_u16()?);
 
         // read filepath until null terminator (inclusive)

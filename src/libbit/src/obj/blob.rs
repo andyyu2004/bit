@@ -1,6 +1,7 @@
 use super::{BitObj, BitObjType};
 use crate::error::BitResult;
-use crate::serialize::{Deserialize, Serialize};
+use crate::io::ReadExt;
+use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 
@@ -37,10 +38,9 @@ impl Serialize for Blob {
     }
 }
 
-impl Deserialize for Blob {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self> {
-        let mut bytes = vec![];
-        reader.read_to_end(&mut bytes)?;
+impl DeserializeSized for Blob {
+    fn deserialize_sized(reader: &mut impl BufRead, size: u64) -> BitResult<Self> {
+        let bytes = reader.take(size).read_to_vec()?;
         Ok(Self { bytes })
     }
 }

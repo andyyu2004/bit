@@ -41,6 +41,31 @@ pub trait DeserializeSized {
     where
         Self: Sized;
 
+    // this is a reasonable default implementation but will need to be overriden for the cases where size has alternative semantics
+    fn deserialize_sized_raw(reader: &mut impl BufRead, size: u64) -> BitResult<Vec<u8>>
+    where
+        Self: Sized,
+    {
+        let mut buf = vec![];
+        reader.take(size).read_to_end(&mut buf)?;
+        Ok(buf)
+    }
+
+    fn deserialize_to_end(reader: &mut impl BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        // limit reads at most `size` bytes, so we just ignore the limit and read until EOF
+        Self::deserialize_sized(reader, u64::MAX)
+    }
+
+    fn deserialize_to_end_unbuffered(reader: impl Read) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Self::deserialize_sized_unbuffered(reader, u64::MAX)
+    }
+
     fn deserialize_sized_unbuffered(reader: impl Read, size: u64) -> BitResult<Self>
     where
         Self: Sized,

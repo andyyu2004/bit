@@ -37,7 +37,7 @@ impl BitHash {
     }
 
     #[inline]
-    pub fn as_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8; 20] {
         &self.0
     }
 

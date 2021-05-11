@@ -2,7 +2,7 @@ use crate::error::BitResult;
 use crate::hash::BitHash;
 use crate::obj::{BitObj, BitObjType};
 use crate::repo::BitRepo;
-use crate::serialize::{Deserialize, Serialize};
+use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::signature::BitSignature;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
@@ -98,9 +98,9 @@ impl Serialize for Commit {
     }
 }
 
-impl Deserialize for Commit {
-    fn deserialize(r: &mut impl BufRead) -> BitResult<Self> {
-        let mut lines = r.lines();
+impl DeserializeSized for Commit {
+    fn deserialize_sized(r: &mut impl BufRead, size: u64) -> BitResult<Self> {
+        let mut lines = r.take(size).lines();
         let mut attrs = HashMap::new();
 
         let mut key: Option<String> = None;

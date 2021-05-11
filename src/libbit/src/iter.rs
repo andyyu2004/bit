@@ -113,6 +113,7 @@ impl BitRepo {
     }
 
     pub fn head_iter(&self) -> BitResult<impl BitIterator + '_> {
+        trace!("head_iter()");
         let tree = self.head_tree()?;
         Ok(HeadIter::new(self, tree))
     }
