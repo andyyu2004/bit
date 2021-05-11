@@ -18,6 +18,11 @@ pub struct Delta {
 
 impl Delta {
     pub fn expand(&self, bytes: impl AsRef<[u8]>) -> BitResult<Vec<u8>> {
+        trace!(
+            "Delta::expand(bytes: ...) (source_size: {} -> target_size: {})",
+            self.source_size,
+            self.target_size
+        );
         let bytes = bytes.as_ref();
         ensure_eq!(
             self.source_size as usize,
@@ -87,8 +92,14 @@ impl DeserializeSized for Delta {
     where
         Self: Sized,
     {
-        let source_size = r.read_le_varint()?;
-        let target_size = r.read_le_varint()?;
+        let source_size = r.read_size()?;
+        let target_size = r.read_size()?;
+        trace!(
+            "Delta::deserialize_sized(size: {}); source_size: {}; target_size: {}",
+            size,
+            source_size,
+            target_size
+        );
         let r = &mut r.take(size);
         //? size is definitely an overestimate but maybe its fine
         let mut ops = Vec::with_capacity(size as usize);

@@ -51,19 +51,11 @@ pub trait DeserializeSized {
         Ok(buf)
     }
 
-    fn deserialize_to_end(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize_from_slice(slice: &[u8]) -> BitResult<Self>
     where
         Self: Sized,
     {
-        // limit reads at most `size` bytes, so we just ignore the limit and read until EOF
-        Self::deserialize_sized(reader, u64::MAX)
-    }
-
-    fn deserialize_to_end_unbuffered(reader: impl Read) -> BitResult<Self>
-    where
-        Self: Sized,
-    {
-        Self::deserialize_sized_unbuffered(reader, u64::MAX)
+        Self::deserialize_sized_unbuffered(slice, slice.len() as u64)
     }
 
     fn deserialize_sized_unbuffered(reader: impl Read, size: u64) -> BitResult<Self>

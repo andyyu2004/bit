@@ -90,7 +90,9 @@ impl<'r> FallibleIterator for HeadIter<'r> {
                         entry.path = base.join(entry.path);
                         return Ok(Some(BitIndexEntry::from(entry)));
                     }
-                    _ => unreachable!(),
+                    // ignore submodules for now
+                    FileMode::GITLINK => continue,
+                    _ => unreachable!("found unknown filemode `{}`", entry.mode),
                 },
                 None => return Ok(None),
             }

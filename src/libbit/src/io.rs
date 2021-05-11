@@ -29,6 +29,10 @@ pub(crate) trait ReadExt: Read {
         Ok(offset)
     }
 
+    fn read_size(&mut self) -> io::Result<u64> {
+        self.read_le_varint()
+    }
+
     // variable length little-endian integer encoding
     // read next byte if MSB is 1
     // referred to as "size encoding" in git docs

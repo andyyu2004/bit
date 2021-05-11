@@ -99,6 +99,13 @@ impl<'r> BitIndex<'r> {
         if old.hash == new.hash {
             debug!("{} unchanged: hashes match {} {}", old.filepath, old.hash, new.hash);
             return Ok(Changed::No);
+        } else if new.hash.is_known() {
+            // asserted old.hash.is_known() in outer function
+            debug!(
+                "{} changed: two known hashes don't match {} {}",
+                old.filepath, old.hash, new.hash
+            );
+            return Ok(Changed::Yes);
         }
 
         if old.mtime == new.mtime {

@@ -21,9 +21,7 @@ impl Display for Blob {
 
 impl Blob {
     pub fn from_reader<R: Read>(mut reader: R) -> BitResult<Self> {
-        let mut bytes = vec![];
-        reader.read_to_end(&mut bytes)?;
-        Ok(Self::new(bytes))
+        Ok(Self::new(reader.read_to_vec()?))
     }
 
     pub fn new(bytes: Vec<u8>) -> Self {

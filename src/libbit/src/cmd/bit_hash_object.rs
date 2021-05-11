@@ -27,7 +27,8 @@ impl BitRepo {
         let object = match opts.objtype {
             BitObjType::Tree => todo!(),
             BitObjType::Tag => todo!(),
-            BitObjType::Commit => BitObjKind::Commit(Commit::deserialize_to_end(reader)?),
+            BitObjType::Commit => todo!(),
+            //BitObjKind::Commit(Commit::deserialize_to_end(reader)?),
             BitObjType::Blob => BitObjKind::Blob(Blob::from_reader(reader)?),
             BitObjType::OfsDelta => todo!(),
             BitObjType::RefDelta => todo!(),

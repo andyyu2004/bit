@@ -59,6 +59,7 @@ impl Debug for FileMode {
 impl FileMode {
     pub const DIR: Self = Self(Self::IFDIR);
     pub const EXEC: Self = Self(Self::IFEXEC);
+    pub const GITLINK: Self = Self(Self::IFGITLINK);
     /* Directory.  */
     pub const IFDIR: u32 = 0o40000;
     /* Executable file.  */
@@ -66,6 +67,8 @@ impl FileMode {
     pub const IFEXEC: u32 = 0o100755;
     /* These bits determine file type.  */
     const IFFMT: u32 = 0o170000;
+    // submodules?
+    pub const IFGITLINK: u32 = 0o160000;
     /* Symbolic link.  */
     pub const IFLNK: u32 = 0o120000;
     /* Regular file.  */

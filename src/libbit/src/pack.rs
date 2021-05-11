@@ -92,9 +92,9 @@ impl Pack {
             BitObjRawKind::Ref(base_oid, delta) => (self.read_obj_raw(base_oid)?, delta),
         };
 
-        trace!("expand_raw_obj:base = base={:?}", base);
+        trace!("expand_raw_obj:base = base={:?}; delta_len={}", base, delta_bytes.len());
         let BitObjRaw { obj_ty, bytes } = base;
-        let delta = Delta::deserialize_to_end_unbuffered(&delta_bytes[..])?;
+        let delta = Delta::deserialize_from_slice(&delta_bytes[..])?;
         Ok(BitObjRaw { obj_ty, bytes: delta.expand(&bytes)? })
     }
 
@@ -147,11 +147,10 @@ impl Pack {
 impl BitObjKind {
     pub fn from_raw(raw: BitObjRaw) -> BitResult<Self> {
         match raw.obj_ty {
-            BitObjType::Commit =>
-                Commit::deserialize_to_end_unbuffered(&raw.bytes[..]).map(Self::Commit),
-            BitObjType::Tree => Tree::deserialize_to_end_unbuffered(&raw.bytes[..]).map(Self::Tree),
-            BitObjType::Blob => Blob::deserialize_to_end_unbuffered(&raw.bytes[..]).map(Self::Blob),
-            BitObjType::Tag => Tag::deserialize_to_end_unbuffered(&raw.bytes[..]).map(Self::Tag),
+            BitObjType::Commit => Commit::deserialize_from_slice(&raw.bytes[..]).map(Self::Commit),
+            BitObjType::Tree => Tree::deserialize_from_slice(&raw.bytes[..]).map(Self::Tree),
+            BitObjType::Blob => Blob::deserialize_from_slice(&raw.bytes[..]).map(Self::Blob),
+            BitObjType::Tag => Tag::deserialize_from_slice(&raw.bytes[..]).map(Self::Tag),
             BitObjType::OfsDelta | BitObjType::RefDelta =>
                 unreachable!("found unexpanded raw object"),
         }
