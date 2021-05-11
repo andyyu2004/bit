@@ -1,16 +1,15 @@
 use crate::error::{BitError, BitErrorExt, BitResult};
-use crate::hash::{self, crc_of, BitHash};
+use crate::hash::{self, BitHash};
 use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
-use crate::pack::{self, Pack, PackIndex, PackIndexReader, PackfileReader};
+use crate::pack::Pack;
 use crate::path::BitPath;
-use crate::serialize::{BufReadSeek, Deserialize, Serialize};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::File;
-use std::io::{prelude::*, BufReader, SeekFrom};
+use std::io::{prelude::*, BufReader};
 
 //? questionable name, questionable macro is there a better way to express this pattern
 macro_rules! process {

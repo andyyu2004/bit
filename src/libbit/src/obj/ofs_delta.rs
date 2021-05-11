@@ -1,10 +1,9 @@
+use super::{BitObj, BitObjType};
 use crate::delta::Delta;
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt};
 use crate::serialize::{DeserializeSized, Serialize};
 use std::io::prelude::*;
-
-use super::{BitObj, BitObjType};
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct OfsDelta {

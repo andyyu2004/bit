@@ -45,10 +45,13 @@ fn pack() -> Pack {
 }
 
 lazy_static! {
+    // these commits are from the packfile in the `l-lang` repository
     // oid of the HEAD commit at the time (undeltified)
     static ref HEAD_OID: BitHash = "1806658f16f76480a3f40461db577a02d1e01591".parse().unwrap();
     // oid of the tree of the HEAD commit at the time (3 levels deltified)
     static ref TREE_OID: BitHash = "2a09245f13365a5d812a9d463595d815062b7d42".parse().unwrap();
+    // oid of the tree of the `src` folder at some point in time
+    static ref SRC_TREE_OID: BitHash = "223ee1fdad64a152c8e88a5472233dbc2e0119aa".parse().unwrap();
 }
 
 #[test]
@@ -108,6 +111,7 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
 fn test_read_pack_deltified_oid() -> BitResult<()> {
     let pack = pack();
     let obj = pack.read_obj(*TREE_OID)?;
+    // TODO this is missing .cargo directory (maybe something wrong with gitignore?)
     let tree = Tree {
         entries: vec![
             TreeEntry {
@@ -170,6 +174,160 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
         .collect(),
     };
     assert_eq!(obj.into_tree(), tree);
+    Ok(())
+}
+
+#[test]
+fn test_read_pack_deltified_oid2() -> BitResult<()> {
+    let tree = Tree {
+        entries: vec![
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("arena"),
+                hash: "375844f48ff48ab9bc6bab5b441f29acbff5b80a".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("ast"),
+                hash: "7192fb06e4e2db31258a8ec461acce577d460356".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("astlowering"),
+                hash: "24bf5671df647540e490e6049bf8d3a65ce3ae0f".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("cli"),
+                hash: "a65fa960b6f821951c6a36a4410dac40782b0ac3".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("codegen"),
+                hash: "59f2a4d8ae1ebc793dd1d51e127ef02bc3ad5d74".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("ds"),
+                hash: "e6b79e424081bad73e8b297a1a066aab237e5716".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("error"),
+                hash: "cf3d15fcc1bb27d7254b4cf54b58b5f943d9009d".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("gc"),
+                hash: "c0d2f358f61cd73328fc7ac15715a1a409eba620".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("index"),
+                hash: "bbfdaf6b02326087049e3cd018f13876bcf1ea83".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("infer"),
+                hash: "b903e5200f895007aae3e4413061a160ca722066".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("ir"),
+                hash: "68fea9956a2f1e305c55fa0860d54bc5cf95d34f".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("l"),
+                hash: "8e3bca80858f6e3fff0601dc78ce64c12e89af5a".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("lcore"),
+                hash: "8eff649207b007eb50f01497b5f50a9043e8187b".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("ldriver"),
+                hash: "1eb21ddfead6f028cd282db2ef8e7aefb85594d0".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("lex"),
+                hash: "27ff5d729b99f6dd6f39920afb6ef3ecf79dc859".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("lutil"),
+                hash: "e9c1db4e930d81d613d664c1bea3db82f4577bdb".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("macros"),
+                hash: "82b1be89f9f296eaf3b7e553efc3efd9d8a87115".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("meta"),
+                hash: "11830c74dc18117d5da55ba51071bd47ca71ab0e".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("mir"),
+                hash: "ddb92fba7f54afe3d63dbb4228a1aad637436871".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("mirgen"),
+                hash: "01ba8f48e66141d019bb789569a771c2d2aad221".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("parse"),
+                hash: "31ca59b332d9597028802c9abc447da529afbfc4".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("queries"),
+                hash: "3dd2c938bb887c53afad510b80ce871c76b3adbd".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("resolve"),
+                hash: "e5a99cffdfccfc91fb5b3c3b8cec1291983434e6".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("session"),
+                hash: "24ddc0d72640a9ae7d842c996f0bdab37a9b5870".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("span"),
+                hash: "3d78ddf36de06157490cb57ad723f5c1982d4b73".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("tir"),
+                hash: "ff4e4dedbe5c871db188fb01579e73858bd39c3f".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("traits"),
+                hash: "2f6f26cf4496b25ef0405e8b8c52b1daac13694e".into(),
+            },
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern("typeck"),
+                hash: "c9c1fb75f43cfba892134f96796d1c18eaaba70e".into(),
+            },
+        ]
+        .into_iter()
+        .collect(),
+    };
+    let pack = pack();
+    let obj = pack.read_obj(*SRC_TREE_OID)?;
+    assert_eq!(tree, obj.into_tree());
     Ok(())
 }
 
