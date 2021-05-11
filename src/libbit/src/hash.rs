@@ -24,6 +24,14 @@ impl From<Output<Sha1>> for SHA1Hash {
     }
 }
 
+// purely for convenience
+#[cfg(test)]
+impl<'a> From<&'a str> for SHA1Hash {
+    fn from(s: &'a str) -> Self {
+        Self::from_str(s).unwrap()
+    }
+}
+
 impl BitHash {
     /// this represents an unknown hash
     // didn't find anywhere that SHA1 can't return 0

@@ -33,14 +33,26 @@ impl BitRepo {
 #[derive(PartialEq, Clone, Debug, Hash, Ord, PartialOrd, Eq, Copy)]
 pub struct BitEpochTime(i64);
 
+impl BitEpochTime {
+    pub fn new(i: i64) -> Self {
+        Self(i)
+    }
+}
+
 #[derive(PartialEq, Clone, Debug, Hash, Ord, PartialOrd, Eq, Copy)]
 /// timezone offset in minutes
 pub struct BitTimeZoneOffset(i32);
 
+impl BitTimeZoneOffset {
+    pub fn new(offset: i32) -> Self {
+        Self(offset)
+    }
+}
+
 #[derive(PartialEq, Clone, Debug, PartialOrd, Eq, Ord, Hash)]
 pub struct BitTime {
-    time: BitEpochTime,
-    offset: BitTimeZoneOffset,
+    pub(crate) time: BitEpochTime,
+    pub(crate) offset: BitTimeZoneOffset,
 }
 
 impl BitTime {
@@ -54,9 +66,9 @@ impl BitTime {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct BitSignature {
-    name: String,
-    email: String,
-    time: BitTime,
+    pub name: String,
+    pub email: String,
+    pub time: BitTime,
 }
 
 impl FromStr for BitTimeZoneOffset {

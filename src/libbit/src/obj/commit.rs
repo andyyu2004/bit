@@ -12,12 +12,12 @@ use std::process::Command;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
-    tree: BitHash,
-    author: BitSignature,
-    committer: BitSignature,
-    message: String,
-    parent: Option<BitHash>,
-    gpgsig: Option<String>,
+    pub(crate) tree: BitHash,
+    pub(crate) author: BitSignature,
+    pub(crate) committer: BitSignature,
+    pub(crate) message: String,
+    pub(crate) parent: Option<BitHash>,
+    pub(crate) gpgsig: Option<String>,
 }
 
 impl Commit {
