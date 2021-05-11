@@ -205,7 +205,11 @@ impl BitObjDbBackend for BitPackedObjDb {
     }
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
-        todo!()
+        let oid = self.expand_id(id)?;
+        for &pack in &self.packs {
+            process!(pack.read_obj_header(oid));
+        }
+        bail!(BitError::ObjectNotFound(id))
     }
 
     fn write(&self, _obj: &dyn BitObj) -> BitResult<BitHash> {

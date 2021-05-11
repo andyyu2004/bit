@@ -143,7 +143,7 @@ impl FromStr for FileMode {
 #[derive(PartialEq, Debug)]
 pub struct BitObjHeader {
     pub obj_type: BitObjType,
-    pub size: usize,
+    pub size: u64,
 }
 
 #[derive(PartialEq, Debug)]
@@ -303,7 +303,7 @@ fn read_obj_type_str(reader: &mut impl BufRead) -> BitResult<BitObjType> {
 }
 
 /// assumes <type> has been read already
-fn read_obj_size(reader: &mut impl BufRead) -> BitResult<usize> {
+fn read_obj_size(reader: &mut impl BufRead) -> BitResult<u64> {
     let mut buf = vec![];
     let i = reader.read_until(0x00, &mut buf)?;
     let size = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
@@ -320,7 +320,7 @@ pub(crate) fn read_obj(reader: &mut impl BufRead) -> BitResult<BitObjKind> {
     let header = read_obj_header(reader)?;
     let buf = reader.read_to_vec()?;
     let contents = buf.as_slice();
-    assert_eq!(contents.len(), header.size);
+    assert_eq!(contents.len() as u64, header.size);
     let contents = &mut BufReader::new(contents);
     let size = header.size as u64;
 

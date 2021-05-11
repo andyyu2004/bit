@@ -28,21 +28,21 @@ pub struct Pack {
 
 #[derive(PartialEq)]
 pub struct BitObjRaw {
-    obj_ty: BitObjType,
+    obj_type: BitObjType,
     bytes: Vec<u8>,
 }
 
 impl BitObjRaw {
     pub fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
         //? is it guaranteed that the (expanded) base of a delta is of the same type?
-        let &Self { obj_ty, ref bytes } = self;
-        Ok(Self { obj_ty, bytes: delta.expand(bytes)? })
+        let &Self { obj_type, ref bytes } = self;
+        Ok(Self { obj_type, bytes: delta.expand(bytes)? })
     }
 }
 
 impl Debug for BitObjRaw {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.obj_ty)
+        write!(f, "{:?}", self.obj_type)
     }
 }
 
@@ -122,6 +122,13 @@ impl Pack {
         Ok(raw)
     }
 
+    pub fn read_obj_header(&self, oid: BitHash) -> BitResult<BitObjHeader> {
+        let (crc, offset) = self.obj_offset(oid)?;
+        trace!("read_obj_header(oid: {}); crc={}; offset={}", oid, crc, offset);
+        let mut reader = self.pack_reader()?;
+        reader.read_header_from_offset(offset)
+    }
+
     pub fn read_obj(&self, oid: BitHash) -> BitResult<BitObjKind> {
         let (crc, offset) = self.obj_offset(oid)?;
         trace!("read_obj(oid: {}); crc={}; offset={}", oid, crc, offset);
@@ -155,7 +162,7 @@ impl Pack {
 
 impl BitObjKind {
     pub fn from_raw(raw: BitObjRaw) -> BitResult<Self> {
-        match raw.obj_ty {
+        match raw.obj_type {
             BitObjType::Commit => Commit::deserialize_from_slice(&raw.bytes[..]).map(Self::Commit),
             BitObjType::Tree => Tree::deserialize_from_slice(&raw.bytes[..]).map(Self::Tree),
             BitObjType::Blob => Blob::deserialize_from_slice(&raw.bytes[..]).map(Self::Blob),
@@ -348,10 +355,10 @@ impl<R: BufReadSeek> PackfileReader<R> {
     // the `size` here is the `size` shown in `git verify-pack` (not the `size-in-packfile`)
     // so the uncompressed size (i.e. we can call `take` on the zlib (decompressed) stream, rather than the compressed stream)
     // https://git-scm.com/docs/git-verify-pack
-    pub fn read_pack_obj_header(&mut self) -> BitResult<(BitObjType, u64)> {
+    pub fn read_pack_obj_header(&mut self) -> BitResult<BitObjHeader> {
         let (ty, size) = self.read_le_varint_with_shift(3)?;
-        let ty = BitObjType::from_u8(ty).expect("invalid bit object type");
-        Ok((ty, size))
+        let obj_type = BitObjType::from_u8(ty).expect("invalid bit object type");
+        Ok(BitObjHeader { obj_type, size })
     }
 
     fn read_compressed_obj_data(&mut self, obj_ty: BitObjType, size: u64) -> BitResult<BitObjKind> {
@@ -360,21 +367,21 @@ impl<R: BufReadSeek> PackfileReader<R> {
     }
 
     /// seek to `offset` and read pack object header
-    pub fn read_header_from_offset(&mut self, offset: u64) -> BitResult<(BitObjType, u64)> {
+    pub fn read_header_from_offset(&mut self, offset: u64) -> BitResult<BitObjHeader> {
         self.seek(SeekFrom::Start(offset))?;
         self.read_pack_obj_header()
     }
 
     pub fn read_obj_from_offset_raw(&mut self, offset: u64) -> BitResult<BitObjRawKind> {
         trace!("read_obj_from_offset_raw(offset: {})", offset);
-        let (obj_ty, size) = self.read_header_from_offset(offset)?;
+        let BitObjHeader { obj_type, size } = self.read_header_from_offset(offset)?;
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
         // we so we have to treat them a bit differently
-        match obj_ty {
+        match obj_type {
             BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
                 Ok(BitObjRawKind::Raw(BitObjRaw {
-                    obj_ty,
+                    obj_type,
                     bytes: self.into_zlib_decode_stream().take(size).read_to_vec()?,
                 })),
             BitObjType::OfsDelta => Ok(BitObjRawKind::Ofs(
@@ -389,15 +396,15 @@ impl<R: BufReadSeek> PackfileReader<R> {
     }
 
     pub fn read_obj_from_offset(&mut self, offset: u64) -> BitResult<BitObjKind> {
-        let (obj_ty, size) = self.read_header_from_offset(offset)?;
+        let BitObjHeader { obj_type, size } = self.read_header_from_offset(offset)?;
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
         // we so we have to treat them a bit differently
-        match obj_ty {
+        match obj_type {
             BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
-                self.read_compressed_obj_data(obj_ty, size),
+                self.read_compressed_obj_data(obj_type, size),
             BitObjType::OfsDelta | BitObjType::RefDelta =>
-                BitObjKind::deserialize_as(&mut self.reader, obj_ty, size),
+                BitObjKind::deserialize_as(&mut self.reader, obj_type, size),
         }
     }
 }

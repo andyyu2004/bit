@@ -71,9 +71,9 @@ fn test_find_offset_in_pack() -> BitResult<()> {
 fn test_read_type_and_size_from_offset_in_pack() -> BitResult<()> {
     let pack = pack();
     let (_crc, offset) = pack.index_reader()?.find_oid_crc_offset(*HEAD_OID)?;
-    let (obj_ty, size) = pack.pack_reader()?.read_header_from_offset(offset)?;
-    assert_eq!(obj_ty, BitObjType::Commit);
-    assert_eq!(size, 215);
+    let header = pack.pack_reader()?.read_header_from_offset(offset)?;
+    assert_eq!(header.obj_type, BitObjType::Commit);
+    assert_eq!(header.size, 215);
     Ok(())
 }
 
@@ -111,9 +111,13 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
 fn test_read_pack_deltified_oid() -> BitResult<()> {
     let pack = pack();
     let obj = pack.read_obj(*TREE_OID)?;
-    // TODO this is missing .cargo directory (maybe something wrong with gitignore?)
     let tree = Tree {
         entries: vec![
+            TreeEntry {
+                mode: FileMode::new(0o040000),
+                path: BitPath::intern(".cargo"),
+                hash: "1e5a588e1aa62fffff318db5fb046c5cdfdd91d3".into(),
+            },
             TreeEntry {
                 mode: FileMode::new(0o100644),
                 path: BitPath::intern(".gitignore"),
