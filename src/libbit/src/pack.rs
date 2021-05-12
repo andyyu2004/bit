@@ -32,6 +32,14 @@ pub struct BitObjRaw {
     bytes: Vec<u8>,
 }
 
+impl BitObjRaw {
+    pub fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
+        //? is it guaranteed that the (expanded) base of a delta is of the same type?
+        let &Self { obj_ty, ref bytes } = self;
+        Ok(Self { obj_ty, bytes: delta.expand(bytes)? })
+    }
+}
+
 impl Debug for BitObjRaw {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.obj_ty)
@@ -93,9 +101,8 @@ impl Pack {
         };
 
         trace!("expand_raw_obj:base = base={:?}; delta_len={}", base, delta_bytes.len());
-        let BitObjRaw { obj_ty, bytes } = base;
         let delta = Delta::deserialize_from_slice(&delta_bytes[..])?;
-        Ok(BitObjRaw { obj_ty, bytes: delta.expand(&bytes)? })
+        base.expand_with_delta(&delta)
     }
 
     /// returns fully expanded raw object at offset
@@ -108,9 +115,11 @@ impl Pack {
 
     /// returns fully expanded raw object with oid
     pub fn read_obj_raw(&self, oid: BitHash) -> BitResult<BitObjRaw> {
-        trace!("read_obj_raw(oid: {})", oid);
         let (crc, offset) = self.obj_offset(oid)?;
-        self.read_obj_raw_at(offset)
+        let raw = self.read_obj_raw_at(offset)?;
+        // TODO crc not checked for ofs_deltas as it doesn't use this function
+        ensure_eq!(crc_of(&raw.bytes), crc, "crc doesn't match");
+        Ok(raw)
     }
 
     pub fn read_obj(&self, oid: BitHash) -> BitResult<BitObjKind> {
@@ -131,11 +140,11 @@ impl Pack {
                     base_offset
                 );
                 let raw = self.read_obj_raw_at(base_offset)?;
-                BitObjKind::from_raw(raw)?
+                raw.expand_with_delta(&ofs_delta.delta).and_then(BitObjKind::from_raw)?
             }
             BitObjKind::RefDelta(ref_delta) => {
                 let raw = self.read_obj_raw(ref_delta.base_oid)?;
-                BitObjKind::from_raw(raw)?
+                raw.expand_with_delta(&ref_delta.delta).and_then(BitObjKind::from_raw)?
             }
         };
         // TODO does crc include the extra bytes of ofs and delta?
