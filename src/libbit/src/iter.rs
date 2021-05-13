@@ -83,12 +83,15 @@ impl<'r> FallibleIterator for HeadIter<'r> {
                     FileMode::DIR => {
                         let tree = self.repo.read_obj(entry.hash)?.into_tree();
                         let path = base.join(entry.path);
+                        debug!("HeadIter::next: read directory `{:?}` `{}`", path, entry.hash);
                         self.entry_stack
                             .extend(tree.entries.into_iter().rev().map(|entry| (path, entry)))
                     }
                     FileMode::REG | FileMode::LINK | FileMode::EXEC => {
                         entry.path = base.join(entry.path);
-                        return Ok(Some(BitIndexEntry::from(entry)));
+                        debug!("HeadIter::next: entry: {:?}", entry);
+                        let index_entry = BitIndexEntry::from(entry);
+                        return Ok(Some(index_entry));
                     }
                     // ignore submodules for now
                     FileMode::GITLINK => continue,

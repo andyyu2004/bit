@@ -111,6 +111,8 @@ impl BitRef {
                     hash,
                     sym
                 );
+
+                debug!("BitRef::resolve: resolved ref `{:?}` to commit `{}`", sym, hash);
                 Ok(Some(hash))
             }
         }

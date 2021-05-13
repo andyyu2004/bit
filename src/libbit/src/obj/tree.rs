@@ -84,7 +84,7 @@ impl DeserializeSized for Tree {
         let mut v = vec![];
 
         while !r.is_at_eof()? {
-            let entry = TreeEntry::parse(r)?;
+            let entry = TreeEntry::deserialize(r)?;
             #[cfg(debug_assertions)]
             v.push(entry.clone());
             tree.entries.insert(entry);
@@ -133,8 +133,10 @@ impl TreeEntry {
     fn sort_path(&self) -> BitPath {
         if self.mode == FileMode::DIR { self.path.join("=") } else { self.path }
     }
+}
 
-    pub fn parse(r: &mut impl BufRead) -> BitResult<Self> {
+impl Deserialize for TreeEntry {
+    fn deserialize(r: &mut impl BufRead) -> BitResult<Self> {
         let mut buf = vec![];
         let i = r.read_until(0x20, &mut buf)?;
         let mode =
@@ -147,11 +149,12 @@ impl TreeEntry {
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;
         let hash = BitHash::new(hash_bytes);
-        // assert_eq!(r.read_until(0x00, &mut buf)?, 1);
         Ok(Self { mode, path, hash })
     }
+}
 
-    pub fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+impl Serialize for TreeEntry {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         // use alternate display impl to not pad an extra 0
         write!(writer, "{:#}", self.mode)?;
         writer.write_all(b" ")?;

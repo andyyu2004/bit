@@ -127,8 +127,8 @@ pub struct BitIndexEntry {
 
 impl From<TreeEntry> for BitIndexEntry {
     fn from(entry: TreeEntry) -> Self {
-        // its fine to zero most of these fields as we know the hash, and that is what we
-        // use to determine whether something has changed or not
+        // its fine to zero most of these fields as we know the hash, and that is the only thing we
+        // need to use to determine whether anything has changed
         Self {
             ctime: Timespec::zero(),
             mtime: Timespec::zero(),

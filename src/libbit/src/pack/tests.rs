@@ -129,9 +129,9 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
                 hash: "a9c351760ad80fc76d477a49f2d3950f6e0a80c9".into(),
             },
             TreeEntry {
-                mode: FileMode::new(0o40000),
+                mode: FileMode::new(0o040000),
                 path: BitPath::intern(".vscode"),
-                hash: "bd956bb951e5cdd695ea59b629f2e504d58df12d".into(),
+                hash: "cecb72a56ee2fb43a2e13bc05924f7cbc30859be".into(),
             },
             TreeEntry {
                 mode: FileMode::new(0o100644),
@@ -141,7 +141,7 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
             TreeEntry {
                 mode: FileMode::new(0o100644),
                 path: BitPath::intern("Cargo.toml"),
-                hash: "9c71a109c23bba0678a98ea37e07af7ee25ca322".into(),
+                hash: "c1c7c27c2c8dddc367baaa9af95c81c4942bbb3c".into(),
             },
             TreeEntry {
                 mode: FileMode::new(0o100644),
@@ -149,9 +149,9 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
                 hash: "9771b9be0344bc413747a9d1e124d95298c6a116".into(),
             },
             TreeEntry {
-                mode: FileMode::new(0o40000),
+                mode: FileMode::new(0o040000),
                 path: BitPath::intern("examples"),
-                hash: "090f714f0b99d6c422b80613ca45e8fb36908deb".into(),
+                hash: "111475360a14e05ff2476471a174e3b94b6bfbc9".into(),
             },
             TreeEntry {
                 mode: FileMode::new(0o100755),
@@ -164,12 +164,12 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
                 hash: "e6d13c9311011cbb74eed646e1f9c45af4d9b59d".into(),
             },
             TreeEntry {
-                mode: FileMode::new(0o40000),
+                mode: FileMode::new(0o040000),
                 path: BitPath::intern("src"),
-                hash: "f81995cdfd381ad571814e6c94809ff2251259e0".into(),
+                hash: "b9e61d6ae21c00ac6b3cd276371df6dc97abccfe".into(),
             },
             TreeEntry {
-                mode: FileMode::new(0o40000),
+                mode: FileMode::new(0o040000),
                 path: BitPath::intern("tests"),
                 hash: "8abe5eabdddd1aa98cbbd834cb8583f4959a6843".into(),
             },
@@ -177,12 +177,15 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
         .into_iter()
         .collect(),
     };
-    assert_eq!(obj.into_tree(), tree);
+
+    assert_eq!(tree, obj.into_tree());
     Ok(())
 }
 
 #[test]
 fn test_read_pack_deltified_oid2() -> BitResult<()> {
+    let pack = pack();
+    let obj = pack.read_obj(*SRC_TREE_OID)?;
     let tree = Tree {
         entries: vec![
             TreeEntry {
@@ -203,12 +206,12 @@ fn test_read_pack_deltified_oid2() -> BitResult<()> {
             TreeEntry {
                 mode: FileMode::new(0o040000),
                 path: BitPath::intern("cli"),
-                hash: "a65fa960b6f821951c6a36a4410dac40782b0ac3".into(),
+                hash: "b4c9aa7462315271d0bb157e464faf6bb8361228".into(),
             },
             TreeEntry {
                 mode: FileMode::new(0o040000),
                 path: BitPath::intern("codegen"),
-                hash: "59f2a4d8ae1ebc793dd1d51e127ef02bc3ad5d74".into(),
+                hash: "e15c7d98d4114b767beff2819ce4e56ad6f876c8".into(),
             },
             TreeEntry {
                 mode: FileMode::new(0o040000),
@@ -243,12 +246,12 @@ fn test_read_pack_deltified_oid2() -> BitResult<()> {
             TreeEntry {
                 mode: FileMode::new(0o040000),
                 path: BitPath::intern("l"),
-                hash: "8e3bca80858f6e3fff0601dc78ce64c12e89af5a".into(),
+                hash: "d261d4556349799b9d55ee357983ba1f5a91fafd".into(),
             },
             TreeEntry {
                 mode: FileMode::new(0o040000),
                 path: BitPath::intern("lcore"),
-                hash: "8eff649207b007eb50f01497b5f50a9043e8187b".into(),
+                hash: "301436c693236bda4565c11c0ac91806861bbae6".into(),
             },
             TreeEntry {
                 mode: FileMode::new(0o040000),
@@ -323,14 +326,12 @@ fn test_read_pack_deltified_oid2() -> BitResult<()> {
             TreeEntry {
                 mode: FileMode::new(0o040000),
                 path: BitPath::intern("typeck"),
-                hash: "c9c1fb75f43cfba892134f96796d1c18eaaba70e".into(),
+                hash: "e9f679681a631d595fb63614b2bcbec292e428d3".into(),
             },
         ]
         .into_iter()
         .collect(),
     };
-    let pack = pack();
-    let obj = pack.read_obj(*SRC_TREE_OID)?;
     assert_eq!(tree, obj.into_tree());
     Ok(())
 }

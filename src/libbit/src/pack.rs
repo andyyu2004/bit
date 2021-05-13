@@ -115,6 +115,7 @@ impl Pack {
 
     /// returns fully expanded raw object with oid
     pub fn read_obj_raw(&self, oid: BitHash) -> BitResult<BitObjRaw> {
+        trace!("read_obj_raw(oid: {})", oid);
         let (crc, offset) = self.obj_offset(oid)?;
         let raw = self.read_obj_raw_at(offset)?;
         // TODO crc not checked for ofs_deltas as it doesn't use this function
@@ -146,12 +147,27 @@ impl Pack {
                     ofs_delta.offset,
                     base_offset
                 );
-                let raw = self.read_obj_raw_at(base_offset)?;
-                raw.expand_with_delta(&ofs_delta.delta).and_then(BitObjKind::from_raw)?
+                let raw = self.read_obj_raw_at(base_offset)?.expand_with_delta(&ofs_delta.delta)?;
+                // ensure_eq!(
+                //     crc,
+                //     crc_of(&raw.bytes),
+                //     "invalid crc (ofs-delta); expected `{}`, got `{}`",
+                //     crc,
+                //     crc_of(&raw.bytes)
+                // );
+                BitObjKind::from_raw(raw)?
             }
             BitObjKind::RefDelta(ref_delta) => {
-                let raw = self.read_obj_raw(ref_delta.base_oid)?;
-                raw.expand_with_delta(&ref_delta.delta).and_then(BitObjKind::from_raw)?
+                let raw =
+                    self.read_obj_raw(ref_delta.base_oid)?.expand_with_delta(&ref_delta.delta)?;
+                // ensure_eq!(
+                //     crc,
+                //     crc_of(&raw.bytes),
+                //     "invalid crc (ofs-delta); expected `{}`, got `{}`",
+                //     crc,
+                //     crc_of(&raw.bytes)
+                // );
+                BitObjKind::from_raw(raw)?
             }
         };
         // TODO does crc include the extra bytes of ofs and delta?
