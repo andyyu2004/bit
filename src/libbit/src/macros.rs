@@ -6,3 +6,10 @@ macro_rules! ensure_eq {
         ensure!($a == $b, $($arg)*)
     };
 }
+
+macro_rules! bug {
+    ($($arg:tt)*) => {
+        eprintln!("BUG!");
+        unreachable!($($arg)*)
+    };
+}

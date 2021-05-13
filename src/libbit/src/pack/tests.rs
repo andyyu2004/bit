@@ -1,8 +1,6 @@
-use lazy_static::lazy_static;
-
-use crate::signature::{BitEpochTime, BitSignature, BitTime, BitTimeZoneOffset};
-
 use super::*;
+use crate::signature::{BitEpochTime, BitSignature, BitTime, BitTimeZoneOffset};
+use lazy_static::lazy_static;
 use std::io::Cursor;
 use std::str::FromStr;
 

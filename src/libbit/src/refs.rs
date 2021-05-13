@@ -1,7 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::hash::BitHash;
 use crate::lockfile::Lockfile;
-use crate::obj::BitObjKind;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -82,8 +81,8 @@ impl FromStr for SymbolicRef {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // symbolic ref is of the form `ref: <ref>`
         const PREFIX: &str = "ref: ";
-        let (prefix, r) = s.split_at(PREFIX.len());
-        ensure!(prefix == PREFIX, "malformed symbolic reference `{}`", s);
+        let r = if s.starts_with(PREFIX) { s.split_at(PREFIX.len()).1 } else { s };
+        // TODO validation on r
         Ok(Self { path: BitPath::intern(r.trim_end()) })
     }
 }

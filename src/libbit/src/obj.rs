@@ -19,7 +19,7 @@ use crate::io::ReadExt;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
 

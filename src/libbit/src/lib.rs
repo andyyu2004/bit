@@ -64,6 +64,7 @@ mod lockfile;
 mod odb;
 mod pack;
 mod refs;
+mod rev;
 mod serialize;
 mod signature;
 mod time;
