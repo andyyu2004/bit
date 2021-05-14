@@ -1,10 +1,10 @@
 use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitResult};
-use crate::hash::{crc_of, BitHash, SHA1Hash, BIT_HASH_SIZE};
+use crate::hash::{crc_of, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::obj::*;
 use crate::path::BitPath;
-use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized, Serialize};
+use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::fmt::{self, Debug, Formatter};
 use std::io::{BufRead, BufReader, Read, SeekFrom};
@@ -50,7 +50,7 @@ impl Debug for BitObjRaw {
 pub enum BitObjRawKind {
     Raw(BitObjRaw),
     Ofs(u64, Vec<u8>),
-    Ref(BitHash, Vec<u8>),
+    Ref(Oid, Vec<u8>),
 }
 
 impl Debug for BitObjRawKind {
@@ -72,11 +72,11 @@ impl Pack {
         self.idx.stream().and_then(PackIndexReader::new)
     }
 
-    pub fn obj_offset(&self, oid: BitHash) -> BitResult<(u32, u64)> {
+    pub fn obj_offset(&self, oid: Oid) -> BitResult<(u32, u64)> {
         self.index_reader()?.find_oid_crc_offset(oid)
     }
 
-    pub fn obj_exists(&self, oid: BitHash) -> BitResult<bool> {
+    pub fn obj_exists(&self, oid: Oid) -> BitResult<bool> {
         // TODO this pattern is a little unpleasant
         // do something about it if it pops up any more
         // maybe some magic with a different error type could work
@@ -114,7 +114,7 @@ impl Pack {
     }
 
     /// returns fully expanded raw object with oid
-    pub fn read_obj_raw(&self, oid: BitHash) -> BitResult<BitObjRaw> {
+    pub fn read_obj_raw(&self, oid: Oid) -> BitResult<BitObjRaw> {
         trace!("read_obj_raw(oid: {})", oid);
         let (crc, offset) = self.obj_offset(oid)?;
         let raw = self.read_obj_raw_at(offset)?;
@@ -123,14 +123,14 @@ impl Pack {
         Ok(raw)
     }
 
-    pub fn read_obj_header(&self, oid: BitHash) -> BitResult<BitObjHeader> {
+    pub fn read_obj_header(&self, oid: Oid) -> BitResult<BitObjHeader> {
         let (crc, offset) = self.obj_offset(oid)?;
         trace!("read_obj_header(oid: {}); crc={}; offset={}", oid, crc, offset);
         let mut reader = self.pack_reader()?;
         reader.read_header_from_offset(offset)
     }
 
-    pub fn read_obj(&self, oid: BitHash) -> BitResult<BitObjKind> {
+    pub fn read_obj(&self, oid: Oid) -> BitResult<BitObjKind> {
         let (crc, offset) = self.obj_offset(oid)?;
         trace!("read_obj(oid: {}); crc={}; offset={}", oid, crc, offset);
         let mut reader = self.pack_reader()?;
@@ -193,7 +193,7 @@ impl BitObjKind {
 pub struct PackIndex {
     /// layer 1 of the fanout table
     fanout: [u32; FANOUT_ENTRYC],
-    hashes: Vec<BitHash>,
+    hashes: Vec<Oid>,
     crcs: Vec<u32>,
     offsets: Vec<u32>,
     pack_hash: SHA1Hash,
@@ -225,7 +225,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
 
 impl<R: BufReadSeek> PackIndexReader<R> {
     /// returns the offset of the object with oid `oid` in the packfile
-    pub fn find_oid_crc_offset(&mut self, oid: BitHash) -> BitResult<(u32, u64)> {
+    pub fn find_oid_crc_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
         let index = self.find_oid_index(oid)?;
         debug_assert_eq!(oid, self.read_from(Layer::Oid, index)?);
         let crc = self.read_from::<u32>(Layer::Crc, index)?;
@@ -253,8 +253,8 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         self.read_type()
     }
 
-    /// return the index of `oid` in the Oid layer of the packindex (unit is sizeof::<BitHash>)
-    fn find_oid_index(&mut self, oid: BitHash) -> BitResult<u64> {
+    /// return the index of `oid` in the Oid layer of the packindex (unit is sizeof::<Oid>)
+    fn find_oid_index(&mut self, oid: Oid) -> BitResult<u64> {
         // fanout has 256 elements
         // example
         // [

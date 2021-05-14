@@ -1,8 +1,7 @@
 use crate::error::BitResult;
-use crate::hash::BitHash;
-use crate::obj::{BitObj, BitObjType};
+use crate::obj::{BitObj, BitObjType, Oid};
 use crate::repo::BitRepo;
-use crate::serialize::{Deserialize, DeserializeSized, Serialize};
+use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
@@ -12,28 +11,23 @@ use std::process::Command;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
-    pub(crate) tree: BitHash,
+    pub(crate) tree: Oid,
     pub(crate) author: BitSignature,
     pub(crate) committer: BitSignature,
     pub(crate) message: String,
-    pub(crate) parent: Option<BitHash>,
+    pub(crate) parent: Option<Oid>,
     pub(crate) gpgsig: Option<String>,
 }
 
 impl Commit {
     /// Get a reference to the commit's tree.
-    pub fn tree(&self) -> BitHash {
+    pub fn tree(&self) -> Oid {
         self.tree
     }
 }
 
 impl BitRepo {
-    pub fn mk_commit(
-        &self,
-        tree: BitHash,
-        message: String,
-        parent: Option<BitHash>,
-    ) -> BitResult<Commit> {
+    pub fn mk_commit(&self, tree: Oid, message: String, parent: Option<Oid>) -> BitResult<Commit> {
         // TODO validate hashes of parent and tree
         let author = self.user_signature()?;
         let committer = author.clone();

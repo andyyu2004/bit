@@ -1,14 +1,13 @@
-use super::{BitObj, BitObjType};
+use super::{BitObj, BitObjType, Oid};
 use crate::delta::Delta;
 use crate::error::BitResult;
-use crate::hash::BitHash;
 use crate::io::{BufReadExt, ReadExt};
 use crate::serialize::{DeserializeSized, Serialize};
 use std::io::prelude::*;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct RefDelta {
-    pub base_oid: BitHash,
+    pub base_oid: Oid,
     pub delta: Delta,
 }
 

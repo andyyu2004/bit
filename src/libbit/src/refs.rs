@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
-use crate::hash::BitHash;
 use crate::lockfile::Lockfile;
+use crate::obj::{BitId, Oid};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use std::str::FromStr;
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum BitRef {
     /// refers directly to an object
-    Direct(BitHash),
+    Direct(BitId),
     /// contains the path of another reference
     /// if the ref is `ref: refs/remote/origin/master`
     /// then the `BitPath` contains `refs/remote/origin/master`
@@ -19,9 +19,9 @@ pub enum BitRef {
     Symbolic(SymbolicRef),
 }
 
-impl From<BitHash> for BitRef {
-    fn from(hash: BitHash) -> Self {
-        Self::Direct(hash)
+impl From<BitId> for BitRef {
+    fn from(id: BitId) -> Self {
+        Self::Direct(id)
     }
 }
 
@@ -56,8 +56,8 @@ impl FromStr for BitRef {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // probably fair to assume that a valid hash is not an indirect path
-        if let Ok(hash) = BitHash::from_str(s) {
-            return Ok(Self::Direct(hash));
+        if let Ok(id) = BitId::from_str(s) {
+            return Ok(Self::Direct(id));
         }
         // TODO validation of indirect?
         SymbolicRef::from_str(s).map(Self::Symbolic)
@@ -88,9 +88,14 @@ impl FromStr for SymbolicRef {
 }
 
 impl BitRef {
-    pub fn resolve(&self, repo: &BitRepo) -> BitResult<Option<BitHash>> {
+    /// resolves the reference to a oid
+    /// returns None iff a symbolic ref points at a non-existing branch
+    pub fn resolve(&self, repo: &BitRepo) -> BitResult<Option<Oid>> {
         match self {
-            BitRef::Direct(hash) => Ok(Some(*hash)),
+            BitRef::Direct(id) => match *id {
+                BitId::Full(oid) => Ok(Some(oid)),
+                BitId::Partial(partial) => todo!(),
+            },
             BitRef::Symbolic(sym) => {
                 // TODO do we have to create the ref file if it doesn't exist yet?
                 // i.e. HEAD points to refs/heads/master on initialization even when master doesn't exist
@@ -99,27 +104,27 @@ impl BitRef {
                 if !ref_path.exists() {
                     return Ok(None);
                 }
-                let hash = Lockfile::with_readonly(ref_path, |_| {
+                let oid = Lockfile::with_readonly(ref_path, |_| {
                     let contents = std::fs::read_to_string(ref_path)?;
-                    BitHash::from_str(contents.trim_end())
+                    Oid::from_str(contents.trim_end())
                 })?;
                 ensure!(
-                    repo.obj_exists(hash)?,
+                    repo.obj_exists(oid)?,
                     "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
                     ref_path,
-                    hash,
+                    oid,
                     sym
                 );
 
-                debug!("BitRef::resolve: resolved ref `{:?}` to commit `{}`", sym, hash);
-                Ok(Some(hash))
+                debug!("BitRef::resolve: resolved ref `{:?}` to commit `{}`", sym, oid);
+                Ok(Some(oid.into()))
             }
         }
     }
 }
 
 impl BitRepo {
-    pub fn resolve_ref(&self, r: BitRef) -> BitResult<Option<BitHash>> {
+    pub fn resolve_ref(&self, r: BitRef) -> BitResult<Option<Oid>> {
         r.resolve(self)
     }
 }

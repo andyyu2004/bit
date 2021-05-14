@@ -1,7 +1,7 @@
 use crate::error::{BitError, BitErrorExt, BitResult};
-use crate::hash::{self, BitHash};
+use crate::hash;
 use crate::lockfile::Lockfile;
-use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind};
+use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, Oid};
 use crate::pack::Pack;
 use crate::path::BitPath;
 use flate2::read::ZlibDecoder;
@@ -67,9 +67,9 @@ impl BitObjDbBackend for BitObjDb {
 
     backend_method!(read_header: BitId => BitObjHeader);
 
-    backend_method!(write: &dyn BitObj => BitHash);
+    backend_method!(write: &dyn BitObj => Oid);
 
-    backend_method!(expand_id: BitId => BitHash);
+    backend_method!(expand_id: BitId => Oid);
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
         Ok(self.backends.iter().any(|backend| backend.exists(id).unwrap_or_default()))
@@ -79,9 +79,9 @@ impl BitObjDbBackend for BitObjDb {
 pub trait BitObjDbBackend {
     fn read(&self, id: BitId) -> BitResult<BitObjKind>;
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader>;
-    fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash>;
+    fn write(&self, obj: &dyn BitObj) -> BitResult<Oid>;
     fn exists(&self, id: BitId) -> BitResult<bool>;
-    fn expand_id(&self, id: BitId) -> BitResult<BitHash>;
+    fn expand_id(&self, id: BitId) -> BitResult<Oid>;
 }
 
 struct BitLooseObjDb {
@@ -96,7 +96,7 @@ impl BitLooseObjDb {
 
     // this should be infallible as it is used by write
     // in particular, this should *not* check for the existence of the path
-    fn obj_path(&self, hash: BitHash) -> BitPath {
+    fn obj_path(&self, hash: Oid) -> BitPath {
         let (dir, file) = hash.split();
         self.objects_path.join(dir).join(file)
     }
@@ -124,7 +124,7 @@ impl BitObjDbBackend for BitLooseObjDb {
         obj::read_obj_header(&mut stream)
     }
 
-    fn expand_id(&self, id: BitId) -> BitResult<BitHash> {
+    fn expand_id(&self, id: BitId) -> BitResult<Oid> {
         let hash = match id {
             BitId::Full(hash) => hash,
             BitId::Partial(_) => todo!(),
@@ -132,7 +132,7 @@ impl BitObjDbBackend for BitLooseObjDb {
         Ok(hash)
     }
 
-    fn write(&self, obj: &dyn BitObj) -> BitResult<BitHash> {
+    fn write(&self, obj: &dyn BitObj) -> BitResult<Oid> {
         let bytes = obj.serialize_with_headers()?;
         let hash = hash::hash_bytes(&bytes);
         let path = self.obj_path(hash);
@@ -212,11 +212,11 @@ impl BitObjDbBackend for BitPackedObjDb {
         bail!(BitError::ObjectNotFound(id))
     }
 
-    fn write(&self, _obj: &dyn BitObj) -> BitResult<BitHash> {
+    fn write(&self, _obj: &dyn BitObj) -> BitResult<Oid> {
         todo!()
     }
 
-    fn expand_id(&self, id: BitId) -> BitResult<BitHash> {
+    fn expand_id(&self, id: BitId) -> BitResult<Oid> {
         let hash = match id {
             BitId::Full(hash) => hash,
             BitId::Partial(_) => todo!(),

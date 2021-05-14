@@ -19,7 +19,7 @@ fn test_pack_idx_find_oid_start() -> BitResult<()> {
     let mut cursor = Cursor::new(include_bytes!("../../tests/files/pack.idx"));
     let index = PackIndexReader::new(&mut cursor)?.find_oid_index(
         // this hash is the first oid in sorted list
-        BitHash::from_str("0004a3cf85dbcbfbef916599145a0c370bb78cf5").unwrap(),
+        Oid::from_str("0004a3cf85dbcbfbef916599145a0c370bb78cf5").unwrap(),
     )?;
     assert_eq!(index, 0);
     Ok(())
@@ -29,7 +29,7 @@ fn test_pack_idx_find_oid_end() -> BitResult<()> {
     let mut cursor = Cursor::new(include_bytes!("../../tests/files/pack.idx"));
     let index = PackIndexReader::new(&mut cursor)?.find_oid_index(
         // this hash is the last oid in sorted list
-        BitHash::from_str("fffc6e8cf5f6798732a6031ebf24d2f6aaa60e47").unwrap(),
+        Oid::from_str("fffc6e8cf5f6798732a6031ebf24d2f6aaa60e47").unwrap(),
     )?;
     assert_eq!(index, PACK_LEN - 1);
     Ok(())
@@ -45,11 +45,11 @@ fn pack() -> Pack {
 lazy_static! {
     // these commits are from the packfile in the `l-lang` repository
     // oid of the HEAD commit at the time (undeltified)
-    static ref HEAD_OID: BitHash = "1806658f16f76480a3f40461db577a02d1e01591".parse().unwrap();
+    static ref HEAD_OID: Oid = "1806658f16f76480a3f40461db577a02d1e01591".parse().unwrap();
     // oid of the tree of the HEAD commit at the time (3 levels deltified)
-    static ref TREE_OID: BitHash = "2a09245f13365a5d812a9d463595d815062b7d42".parse().unwrap();
+    static ref TREE_OID: Oid = "2a09245f13365a5d812a9d463595d815062b7d42".parse().unwrap();
     // oid of the tree of the `src` folder at some point in time
-    static ref SRC_TREE_OID: BitHash = "223ee1fdad64a152c8e88a5472233dbc2e0119aa".parse().unwrap();
+    static ref SRC_TREE_OID: Oid = "223ee1fdad64a152c8e88a5472233dbc2e0119aa".parse().unwrap();
 }
 
 #[test]
@@ -339,7 +339,7 @@ fn test_pack_idx_find_oid_offset_end() -> BitResult<()> {
     let mut cursor = Cursor::new(include_bytes!("../../tests/files/pack.idx"));
     let (_crc, pack_idx) = PackIndexReader::new(&mut cursor)?.find_oid_crc_offset(
         // this hash is the last oid in sorted list
-        BitHash::from_str("fffc6e8cf5f6798732a6031ebf24d2f6aaa60e47").unwrap(),
+        Oid::from_str("fffc6e8cf5f6798732a6031ebf24d2f6aaa60e47").unwrap(),
     )?;
     // `git verify-pack src/libbit/tests/files/pack.pack -v | rg fffc6e8cf5f6798732a6031ebf24d2f6aaa60e47`
     assert_eq!(pack_idx, 2151306);

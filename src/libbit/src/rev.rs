@@ -1,7 +1,9 @@
 mod tests;
 
 use crate::error::{BitGenericError, BitResult};
+use crate::obj::Oid;
 use crate::refs::BitRef;
+use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -14,6 +16,25 @@ pub enum Revspec {
     Ref(BitRef),
     Parent(Box<Revspec>),
     Ancestor(Box<Revspec>, u32),
+}
+
+impl BitRepo {
+    /// resolves revision specification to the commit oid
+    pub fn resolve_rev(&self, rev: &Revspec) -> BitResult<Oid> {
+        match rev {
+            // TODO check ref resolves ta a commit
+            Revspec::Ref(r) => self.resolve_ref(*r)?.ok_or_else(|| todo!()),
+            Revspec::Parent(inner) => {
+                let oid = self.resolve_rev(inner)?;
+                let commit = self.read_obj(oid)?.into_commit();
+                match commit.parent {
+                    Some(parent) => Ok(parent),
+                    None => todo!(),
+                }
+            }
+            Revspec::Ancestor(_, _) => todo!(),
+        }
+    }
 }
 
 impl FromStr for Revspec {

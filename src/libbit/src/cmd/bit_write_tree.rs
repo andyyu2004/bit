@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::hash::BitHash;
+use crate::obj::Oid;
 use crate::repo::BitRepo;
 
 impl BitRepo {
@@ -10,7 +10,7 @@ impl BitRepo {
     }
 
     /// builds a tree object from the index and writes it to the object store
-    pub fn write_tree(&self) -> BitResult<BitHash> {
+    pub fn write_tree(&self) -> BitResult<Oid> {
         let tree = self.with_index(|index| index.build_tree())?;
         let hash = self.write_obj(&tree)?;
         Ok(hash)

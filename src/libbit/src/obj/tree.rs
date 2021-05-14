@@ -1,8 +1,7 @@
 use super::FileMode;
 use crate::error::BitResult;
-use crate::hash::BitHash;
 use crate::io::{BufReadExt, BufReadExtSized};
-use crate::obj::{BitObj, BitObjType};
+use crate::obj::{BitObj, BitObjType, Oid};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::tls;
@@ -108,7 +107,7 @@ impl BitObj for Tree {
 pub struct TreeEntry {
     pub mode: FileMode,
     pub path: BitPath,
-    pub hash: BitHash,
+    pub hash: Oid,
 }
 
 impl PartialOrd for TreeEntry {
@@ -148,7 +147,7 @@ impl Deserialize for TreeEntry {
 
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;
-        let hash = BitHash::new(hash_bytes);
+        let hash = Oid::new(hash_bytes);
         Ok(Self { mode, path, hash })
     }
 }

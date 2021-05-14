@@ -272,7 +272,7 @@ fn parse_small_index() -> BitResult<()> {
             flags: BitIndexEntryFlags::new(12),
             filepath: BitPath::intern("dir/test.txt"),
             mode: FileMode::REG,
-            hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
+            hash: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
         },
         BitIndexEntry {
             ctime: Timespec::new(1613643244, 672563537),
@@ -285,7 +285,7 @@ fn parse_small_index() -> BitResult<()> {
             flags: BitIndexEntryFlags::new(8),
             filepath: BitPath::intern("test.txt"),
             mode: FileMode::REG,
-            hash: BitHash::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
+            hash: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
         },
     ]
     .into();

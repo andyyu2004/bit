@@ -1,5 +1,6 @@
 use crate::error::BitResult;
-use crate::hash::{BitHash, SHA1Hash};
+use crate::hash::SHA1Hash;
+use crate::obj::Oid;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use sha1::{digest::Output, Digest};
@@ -124,10 +125,10 @@ pub(crate) trait ReadExt: Read {
         Ok(u64::from_be_bytes(buf))
     }
 
-    fn read_oid(&mut self) -> io::Result<BitHash> {
+    fn read_oid(&mut self) -> io::Result<Oid> {
         let mut buf = [0u8; 20];
         self.read_exact(&mut buf)?;
-        Ok(BitHash::new(buf))
+        Ok(Oid::new(buf))
     }
 
     fn read_to_vec(&mut self) -> io::Result<Vec<u8>> {
@@ -167,7 +168,7 @@ impl Deserialize for u32 {
     }
 }
 
-impl Deserialize for BitHash {
+impl Deserialize for Oid {
     fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
@@ -236,7 +237,7 @@ pub trait WriteExt: Write {
         self.write_all(&u.to_be_bytes())
     }
 
-    fn write_bit_hash(&mut self, hash: &BitHash) -> io::Result<()> {
+    fn write_bit_hash(&mut self, hash: &Oid) -> io::Result<()> {
         self.write_all(hash.as_bytes())
     }
 }

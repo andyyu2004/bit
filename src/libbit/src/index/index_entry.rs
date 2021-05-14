@@ -119,7 +119,7 @@ pub struct BitIndexEntry {
     pub gid: u32,
     pub filesize: u32,
     /// may be zero if left uncalculated (for efficiency)
-    pub hash: BitHash,
+    pub hash: Oid,
     pub flags: BitIndexEntryFlags,
     //? is it necessary for this path to be relative to the repository workdir?
     pub filepath: BitPath,
@@ -188,7 +188,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             uid: metadata.st_uid(),
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,
-            hash: BitHash::ZERO,
+            hash: Oid::ZERO,
             flags: BitIndexEntryFlags::with_path_len(relative.len()),
         })
     }

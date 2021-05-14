@@ -1,5 +1,4 @@
-use crate::hash::BitHash;
-use crate::obj::BitId;
+use crate::obj::{BitId, Oid};
 use std::fmt::{self, Display, Formatter};
 
 pub type BitResult<T> = Result<T, BitGenericError>;
@@ -9,7 +8,7 @@ pub type BitGenericError = anyhow::Error;
 pub enum BitError {
     ObjectNotFound(BitId),
     /// object `{0}` not found in pack index but could be inserted at `{1}`
-    ObjectNotFoundInPackIndex(BitHash, usize),
+    ObjectNotFoundInPackIndex(Oid, usize),
 }
 
 pub trait BitErrorExt {

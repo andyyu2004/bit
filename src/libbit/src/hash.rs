@@ -1,5 +1,5 @@
 use crate::error::{BitGenericError, BitResult};
-use crate::obj::BitObj;
+use crate::obj::{BitObj, Oid};
 use crate::path::BitPath;
 use sha1::digest::Output;
 use sha1::{Digest, Sha1};
@@ -10,9 +10,7 @@ use std::ops::Index;
 use std::slice::SliceIndex;
 use std::str::FromStr;
 
-pub const BIT_HASH_SIZE: usize = std::mem::size_of::<BitHash>();
-
-pub type BitHash = SHA1Hash;
+pub const BIT_HASH_SIZE: usize = std::mem::size_of::<Oid>();
 
 #[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd, Copy)]
 #[repr(transparent)]
@@ -32,7 +30,7 @@ impl<'a> From<&'a str> for SHA1Hash {
     }
 }
 
-impl BitHash {
+impl SHA1Hash {
     /// this represents an unknown hash
     // didn't find anywhere that SHA1 can't return 0
     // but libgit2 also uses this special value
@@ -51,12 +49,12 @@ impl BitHash {
 
     #[inline]
     pub fn is_unknown(self) -> bool {
-        self == BitHash::ZERO
+        self == Self::ZERO
     }
 
     #[inline]
     pub fn is_known(self) -> bool {
-        self != BitHash::ZERO
+        self != Self::ZERO
     }
 
     /// split hash into the first two hex digits (hence first byte)
@@ -67,14 +65,14 @@ impl BitHash {
 }
 
 #[cfg(test)]
-impl quickcheck::Arbitrary for BitHash {
+impl quickcheck::Arbitrary for SHA1Hash {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
         Self((0..20).map(|_| u8::arbitrary(g)).collect::<Vec<_>>().try_into().unwrap())
     }
 }
 
-// basically the same type as BitHash just with different (fewer) invariants
-// this is 40 bytes long instead of 20 like `BitHash`
+// basically the same type as Oid just with different (fewer) invariants
+// this is 40 bytes long instead of 20 like `Oid`
 // as otherwise its a bit difficult to handle odd length input strings
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Ord, PartialOrd, Copy)]
 pub struct BitPartialHash([u8; 40]);
@@ -103,7 +101,7 @@ mod tests {
     }
 }
 
-impl FromStr for BitHash {
+impl FromStr for SHA1Hash {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -114,13 +112,13 @@ impl FromStr for BitHash {
     }
 }
 
-impl AsRef<[u8]> for BitHash {
+impl AsRef<[u8]> for SHA1Hash {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl<I> Index<I> for BitHash
+impl<I> Index<I> for SHA1Hash
 where
     I: SliceIndex<[u8]>,
 {
@@ -131,13 +129,13 @@ where
     }
 }
 
-impl Debug for BitHash {
+impl Debug for SHA1Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-impl Display for BitHash {
+impl Display for SHA1Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(self))
     }
@@ -149,14 +147,14 @@ pub fn crc_of(bytes: impl AsRef<[u8]>) -> u32 {
     crc.sum()
 }
 
-pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> BitHash {
+pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> SHA1Hash {
     // use sha1 to be more compatible with current git
     let mut hasher = Sha1::new();
     hasher.update(bytes);
-    BitHash::new(hasher.finalize().into())
+    SHA1Hash::new(hasher.finalize().into())
 }
 
-pub fn hash_obj(obj: &impl BitObj) -> BitResult<BitHash> {
+pub fn hash_obj(obj: &impl BitObj) -> BitResult<SHA1Hash> {
     let bytes = obj.serialize_with_headers()?;
     Ok(hash_bytes(bytes.as_slice()))
 }

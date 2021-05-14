@@ -1,8 +1,8 @@
 use crate::error::BitResult;
-use crate::hash::{self, BitHash};
+use crate::hash;
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
-use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Tree};
+use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, Tree};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
 use crate::refs::BitRef;
@@ -119,7 +119,7 @@ impl BitRepo {
     }
 
     /// returns the resolved hash of the HEAD symref
-    pub fn resolved_head(&self) -> BitResult<Option<BitHash>> {
+    pub fn resolved_head(&self) -> BitResult<Option<Oid>> {
         self.read_head()?.and_then(|r| r.resolve(self).transpose()).transpose()
     }
 
@@ -226,7 +226,7 @@ impl BitRepo {
     }
 
     /// todo only works with full hash
-    pub fn get_full_object_hash(&self, id: BitId) -> BitResult<BitHash> {
+    pub fn get_full_object_hash(&self, id: BitId) -> BitResult<Oid> {
         match id {
             BitId::Full(hash) => Ok(hash),
             BitId::Partial(_partial) => todo!(),
@@ -234,7 +234,7 @@ impl BitRepo {
     }
 
     /// writes `obj` into the object store returning its full hash
-    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<BitHash> {
+    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<Oid> {
         self.odb.write(obj)
     }
 
@@ -250,7 +250,7 @@ impl BitRepo {
         self.odb.read_header(id.into())
     }
 
-    pub fn hash_blob(&self, path: BitPath) -> BitResult<BitHash> {
+    pub fn hash_blob(&self, path: BitPath) -> BitResult<Oid> {
         let path = self.normalize(path)?;
         let bytes = path.read_to_vec()?;
         let blob = Blob::new(bytes);

@@ -2,18 +2,17 @@ mod index_entry;
 
 use crate::diff::*;
 use crate::error::BitResult;
-use crate::hash::{BitHash, BIT_HASH_SIZE};
-use crate::io::{HashReader, HashWriter, ReadExt, WriteExt};
+use crate::hash::BIT_HASH_SIZE;
+use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::BitIterator;
 use crate::lockfile::Lockfile;
-use crate::obj::{FileMode, Tree, TreeEntry};
+use crate::obj::{FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::time::Timespec;
 use crate::util;
-use fallible_iterator::FallibleIterator;
 pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
@@ -424,8 +423,8 @@ impl Deserialize for BitIndexInner {
         let (bytes, hash) = buf.split_at(buf.len() - BIT_HASH_SIZE);
         let mut hasher = sha1::Sha1::new();
         hasher.update(bytes);
-        let actual_hash = BitHash::from(hasher.finalize());
-        let expected_hash = BitHash::new(hash.try_into().unwrap());
+        let actual_hash = Oid::from(hasher.finalize());
+        let expected_hash = Oid::new(hash.try_into().unwrap());
         ensure_eq!(actual_hash, expected_hash, "corrupted index (bad hash)");
 
         Ok(bit_index)

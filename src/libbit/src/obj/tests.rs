@@ -1,7 +1,6 @@
-use std::collections::BTreeSet;
-
-use crate::hash::BitHash;
+use crate::obj::Oid;
 use crate::path::BitPath;
+use std::collections::BTreeSet;
 
 use super::*;
 use quickcheck_macros::quickcheck;
@@ -9,9 +8,8 @@ use quickcheck_macros::quickcheck;
 #[test]
 fn test_tree_entry_ordering() {
     let mut entries = BTreeSet::new();
-    let dir = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar"), hash: BitHash::ZERO };
-    let file =
-        TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), hash: BitHash::ZERO };
+    let dir = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar"), hash: Oid::ZERO };
+    let file = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), hash: Oid::ZERO };
     entries.insert(dir);
     entries.insert(file);
     // files come first

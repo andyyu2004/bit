@@ -1,6 +1,5 @@
 use crate::error::BitResult;
-use crate::hash::BitHash;
-use crate::obj::FileMode;
+use crate::obj::{FileMode, Oid};
 use crate::repo::BitRepo;
 
 #[derive(Debug)]
@@ -12,7 +11,7 @@ pub struct BitUpdateIndexOpts {
 #[derive(Debug)]
 pub struct CacheInfo {
     pub mode: FileMode,
-    pub hash: BitHash,
+    pub hash: Oid,
     pub path: String,
 }
 

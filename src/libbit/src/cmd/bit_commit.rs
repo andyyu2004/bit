@@ -12,8 +12,8 @@ impl BitRepo {
     pub fn commit(&self, message: Option<String>) -> BitResult<BitRef> {
         let parent = self.resolved_head()?;
         let tree = self.write_tree()?;
-        let hash = self.commit_tree(parent, message, tree)?;
-        let bitref = BitRef::Direct(hash);
+        let oid = self.commit_tree(parent, message, tree)?;
+        let bitref = BitRef::Direct(oid.into());
         self.update_head(bitref)?;
         Ok(bitref)
     }
