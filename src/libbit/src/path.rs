@@ -10,6 +10,7 @@ use std::io::{BufRead, BufReader, Seek};
 use std::ops::{Deref, Index};
 use std::path::{Component, Path, PathBuf};
 use std::slice::SliceIndex;
+use std::str::pattern::Pattern;
 
 /// interned path (where path is just a string)
 // interning paths is likely not worth it, but its nice to have it as a copy type
@@ -60,10 +61,17 @@ impl BitPath {
         }
     }
 
+    pub fn intern_str(s: impl AsRef<str>) -> Self {
+        let s = s.as_ref();
+        with_path_interner_mut(|interner| interner.intern_path(s))
+    }
+
     pub fn intern(path: impl AsRef<Path>) -> Self {
         // this must be outside the `interner` closure as the `as_ref` impl may use the interner
         // leading to refcell panics
         let path = path.as_ref();
+        // quite questionable turning paths into strings and then bytes
+        // probably not very platform agnostic
         with_path_interner_mut(|interner| interner.intern_path(path.to_str().unwrap()))
     }
 
@@ -179,6 +187,14 @@ impl PartialEq<str> for BitPath {
 impl PartialEq<&str> for BitPath {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+impl<'a> Pattern<'a> for BitPath {
+    type Searcher = <&'a str as Pattern<'a>>::Searcher;
+
+    fn into_searcher(self, haystack: &'a str) -> Self::Searcher {
+        self.as_str().into_searcher(haystack)
     }
 }
 

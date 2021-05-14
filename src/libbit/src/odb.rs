@@ -1,12 +1,15 @@
 use crate::error::{BitError, BitErrorExt, BitResult};
 use crate::hash;
+use crate::iter::DirIter;
 use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, Oid, PartialOid};
 use crate::pack::Pack;
 use crate::path::BitPath;
+use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
+use itertools::Itertools;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -103,8 +106,8 @@ impl BitLooseObjDb {
 
     // this should be infallible as it is used by write
     // in particular, this should *not* check for the existence of the path
-    fn obj_path(&self, hash: Oid) -> BitPath {
-        let (dir, file) = hash.split();
+    fn obj_path(&self, oid: Oid) -> BitPath {
+        let (dir, file) = oid.split();
         self.objects_path.join(dir).join(file)
     }
 
@@ -132,6 +135,10 @@ impl BitObjDbBackend for BitLooseObjDb {
     }
 
     fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
+        let (dir, file) = prefix.split();
+        let dir = self.objects_path.join(dir);
+        DirIter::new(dir).filter(|entry| Ok(entry.file_name().to_str().unwrap().starts_with(file)));
+        // .collect::<Result<Vec<_>, _>>()?;
         todo!()
     }
 

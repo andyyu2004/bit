@@ -8,6 +8,29 @@ use ignore::{Walk, WalkBuilder};
 use std::convert::TryFrom;
 use std::path::Path;
 
+pub struct DirIter {
+    walk: Walk,
+}
+
+impl DirIter {
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        Self { walk: Walk::new(path) }
+    }
+}
+
+impl FallibleIterator for DirIter {
+    type Error = BitGenericError;
+    type Item = ignore::DirEntry;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        let entry = self.walk.next().transpose()?;
+        match entry {
+            Some(entry) => Ok(Some(entry)),
+            None => Ok(None),
+        }
+    }
+}
+
 struct WorktreeIter<'r> {
     repo: &'r BitRepo,
     walk: Walk,

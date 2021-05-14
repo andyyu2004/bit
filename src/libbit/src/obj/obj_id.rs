@@ -1,5 +1,6 @@
 use crate::error::BitGenericError;
 use crate::hash::SHA1Hash;
+use crate::path::BitPath;
 use std::fmt::{self, Display, Formatter};
 use std::io::Write;
 use std::ops::Index;
@@ -71,7 +72,22 @@ impl FromStr for BitId {
 // as otherwise its a bit difficult to handle odd length input strings
 // because we'd have to deal with half bytes
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Ord, PartialOrd, Copy)]
-pub struct PartialOid([u8; 40]);
+pub struct PartialOid {
+    bytes: [u8; 40],
+    len: usize,
+}
+
+impl PartialOid {
+    pub fn split(&self) -> (BitPath, BitPath) {
+        let (dir, file) = unsafe {
+            (
+                std::str::from_utf8_unchecked(&self[0..2]),
+                std::str::from_utf8_unchecked(&self[2..self.len]),
+            )
+        };
+        (BitPath::intern(dir), BitPath::intern(file))
+    }
+}
 
 impl FromStr for PartialOid {
     type Err = BitGenericError;
@@ -79,9 +95,9 @@ impl FromStr for PartialOid {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ensure!(s.len() < 40, "creating partial hash with an invalid hex string (too long)");
         ensure!(s.len() >= 4, "bit hash prefix must be at least 4 hex characters");
-        let mut buf = [0u8; 40];
-        buf.as_mut().write_all(s.as_bytes())?;
-        Ok(Self(buf))
+        let mut bytes = [0u8; 40];
+        bytes.as_mut().write_all(s.as_bytes())?;
+        Ok(Self { bytes, len: s.len() })
     }
 }
 
@@ -92,6 +108,6 @@ where
     type Output = I::Output;
 
     fn index(&self, index: I) -> &Self::Output {
-        &self.0[index]
+        &self.bytes[index]
     }
 }
