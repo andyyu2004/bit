@@ -345,3 +345,14 @@ fn test_pack_idx_find_oid_offset_end() -> BitResult<()> {
     assert_eq!(pack_idx, 2151306);
     Ok(())
 }
+
+// this is actually a delta (ofs) of a tree, check that the type is expanded to the actual type
+// and the size remains the type of the expanded tree
+#[test]
+fn test_packed_header_is_expanded() -> BitResult<()> {
+    let pack = pack();
+    let header = pack.read_obj_header("2a09245f13365a5d812a9d463595d815062b7d42".into())?;
+    assert_eq!(header.obj_type, BitObjType::Tree);
+    assert_eq!(header.size, 138);
+    Ok(())
+}

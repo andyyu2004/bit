@@ -262,6 +262,15 @@ pub enum BitObjType {
     RefDelta = 7,
 }
 
+impl BitObjType {
+    pub fn is_delta(self) -> bool {
+        match self {
+            BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag => false,
+            BitObjType::OfsDelta | BitObjType::RefDelta => true,
+        }
+    }
+}
+
 impl Display for BitObjType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let s = match self {

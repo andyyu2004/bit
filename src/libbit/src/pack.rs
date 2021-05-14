@@ -64,6 +64,7 @@ impl Debug for BitObjRawKind {
 }
 
 impl Pack {
+    // todo don't create multiple of these (refactor read methods, maybe move them onto packfilereader struct)
     pub fn pack_reader(&self) -> BitResult<PackfileReader<impl BufReadSeek>> {
         self.pack.stream().and_then(PackfileReader::new)
     }
@@ -126,8 +127,23 @@ impl Pack {
     pub fn read_obj_header(&self, oid: Oid) -> BitResult<BitObjHeader> {
         let (crc, offset) = self.obj_offset(oid)?;
         trace!("read_obj_header(oid: {}); crc={}; offset={}", oid, crc, offset);
+        let header = self.read_obj_header_at(offset)?;
+        assert!(!header.obj_type.is_delta());
+        Ok(header)
+    }
+
+    fn read_obj_header_at(&self, offset: u64) -> BitResult<BitObjHeader> {
+        trace!("read_obj_header_at(offset: {})", offset);
         let mut reader = self.pack_reader()?;
-        reader.read_header_from_offset(offset)
+        let header = reader.read_header_from_offset(offset)?;
+        // can assume base_header has same type
+        let base_header = match header.obj_type {
+            BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
+                return Ok(header),
+            BitObjType::OfsDelta => self.read_obj_header_at(offset - reader.read_offset()?),
+            BitObjType::RefDelta => self.read_obj_header(reader.read_oid()?),
+        }?;
+        Ok(BitObjHeader { size: header.size, obj_type: base_header.obj_type })
     }
 
     pub fn read_obj(&self, oid: Oid) -> BitResult<BitObjKind> {

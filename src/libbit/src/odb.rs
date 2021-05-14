@@ -137,7 +137,10 @@ impl BitObjDbBackend for BitLooseObjDb {
     fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
         let (dir, file) = prefix.split();
         let dir = self.objects_path.join(dir);
-        DirIter::new(dir).filter(|entry| Ok(entry.file_name().to_str().unwrap().starts_with(file)));
+        let candidates = DirIter::new(dir)
+            .filter(|entry| Ok(entry.file_name().to_str().unwrap().starts_with(file)))
+            .collect::<Vec<_>>()?;
+        dbg!(candidates);
         // .collect::<Result<Vec<_>, _>>()?;
         todo!()
     }
