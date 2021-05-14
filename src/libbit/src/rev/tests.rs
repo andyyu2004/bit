@@ -14,12 +14,6 @@ macro_rules! parse {
     };
 }
 
-macro_rules! symbolic_ref {
-    ($sym:expr) => {
-        BitRef::Symbolic(SymbolicRef::from_str($sym).unwrap())
-    };
-}
-
 #[test]
 fn test_lex_simple_revspec() {
     let tokens = lex!("HEAD^");

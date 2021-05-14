@@ -19,6 +19,12 @@ pub enum BitRef {
     Symbolic(SymbolicRef),
 }
 
+impl BitRepo {
+    pub fn resolve_ref(&self, r: BitRef) -> BitResult<Option<Oid>> {
+        r.resolve(self)
+    }
+}
+
 impl From<BitId> for BitRef {
     fn from(id: BitId) -> Self {
         Self::Direct(id)
@@ -104,10 +110,12 @@ impl BitRef {
                 if !ref_path.exists() {
                     return Ok(None);
                 }
+
                 let oid = Lockfile::with_readonly(ref_path, |_| {
                     let contents = std::fs::read_to_string(ref_path)?;
                     Oid::from_str(contents.trim_end())
                 })?;
+
                 ensure!(
                     repo.obj_exists(oid)?,
                     "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
@@ -123,8 +131,5 @@ impl BitRef {
     }
 }
 
-impl BitRepo {
-    pub fn resolve_ref(&self, r: BitRef) -> BitResult<Option<Oid>> {
-        r.resolve(self)
-    }
-}
+#[cfg(test)]
+mod tests;

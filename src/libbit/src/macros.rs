@@ -13,3 +13,11 @@ macro_rules! bug {
         unreachable!($($arg)*)
     };
 }
+
+macro_rules! symbolic_ref {
+    ($sym:expr) => {{
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        crate::refs::BitRef::Symbolic(crate::refs::SymbolicRef::from_str($sym).unwrap())
+    }};
+}
