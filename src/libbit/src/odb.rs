@@ -1,7 +1,7 @@
 use crate::error::{BitError, BitErrorExt, BitResult};
 use crate::hash;
 use crate::lockfile::Lockfile;
-use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, Oid};
+use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, Oid, PartialOid};
 use crate::pack::Pack;
 use crate::path::BitPath;
 use flate2::read::ZlibDecoder;
@@ -69,7 +69,7 @@ impl BitObjDbBackend for BitObjDb {
 
     backend_method!(write: &dyn BitObj => Oid);
 
-    backend_method!(expand_id: BitId => Oid);
+    backend_method!(expand_prefix: PartialOid => Oid);
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
         Ok(self.backends.iter().any(|backend| backend.exists(id).unwrap_or_default()))
@@ -81,7 +81,14 @@ pub trait BitObjDbBackend {
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader>;
     fn write(&self, obj: &dyn BitObj) -> BitResult<Oid>;
     fn exists(&self, id: BitId) -> BitResult<bool>;
-    fn expand_id(&self, id: BitId) -> BitResult<Oid>;
+    fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid>;
+
+    fn expand_id(&self, id: BitId) -> BitResult<Oid> {
+        match id {
+            BitId::Full(oid) => Ok(oid),
+            BitId::Partial(partial) => self.expand_prefix(partial),
+        }
+    }
 }
 
 struct BitLooseObjDb {
@@ -124,12 +131,8 @@ impl BitObjDbBackend for BitLooseObjDb {
         obj::read_obj_header(&mut stream)
     }
 
-    fn expand_id(&self, id: BitId) -> BitResult<Oid> {
-        let hash = match id {
-            BitId::Full(hash) => hash,
-            BitId::Partial(_) => todo!(),
-        };
-        Ok(hash)
+    fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
+        todo!()
     }
 
     fn write(&self, obj: &dyn BitObj) -> BitResult<Oid> {
@@ -216,12 +219,8 @@ impl BitObjDbBackend for BitPackedObjDb {
         todo!()
     }
 
-    fn expand_id(&self, id: BitId) -> BitResult<Oid> {
-        let hash = match id {
-            BitId::Full(hash) => hash,
-            BitId::Partial(_) => todo!(),
-        };
-        Ok(hash)
+    fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
+        todo!()
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {

@@ -2,7 +2,7 @@ use crate::error::BitResult;
 use crate::hash;
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
-use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, Tree};
+use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
 use crate::refs::BitRef;
@@ -240,6 +240,10 @@ impl BitRepo {
 
     pub fn read_obj(&self, id: impl Into<BitId>) -> BitResult<BitObjKind> {
         self.odb.read(id.into())
+    }
+
+    pub fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
+        self.odb.expand_prefix(prefix)
     }
 
     pub fn obj_exists(&self, id: impl Into<BitId>) -> BitResult<bool> {

@@ -8,14 +8,13 @@ mod tree;
 
 pub use blob::Blob;
 pub use commit::Commit;
-pub use obj_id::BitId;
+pub use obj_id::*;
 pub use tag::Tag;
 pub use tree::{Tree, TreeEntry};
 
 use self::ofs_delta::OfsDelta;
 use self::ref_delta::RefDelta;
 use crate::error::{BitGenericError, BitResult};
-use crate::hash::SHA1Hash;
 use crate::io::ReadExt;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
@@ -38,8 +37,6 @@ impl Display for BitObjKind {
         }
     }
 }
-
-pub type Oid = SHA1Hash;
 
 // 100644 normal
 // 100755 executable

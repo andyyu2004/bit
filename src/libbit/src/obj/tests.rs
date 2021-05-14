@@ -65,3 +65,11 @@ fn read_write_blob_obj_preserves_bytes(bytes: Vec<u8>) -> BitResult<()> {
     assert_eq!(bit_obj, parsed_bit_obj);
     Ok(())
 }
+
+#[test]
+fn construct_partial_hash() -> BitResult<()> {
+    let hash = PartialOid::from_str("8e37a")?;
+    assert_eq!(&hash[0..5], b"8e37a");
+    assert_eq!(hash[5..], [0u8; 35]);
+    Ok(())
+}

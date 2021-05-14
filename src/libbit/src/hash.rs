@@ -5,7 +5,6 @@ use sha1::digest::Output;
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Display, Formatter};
-use std::io::prelude::*;
 use std::ops::Index;
 use std::slice::SliceIndex;
 use std::str::FromStr;
@@ -68,36 +67,6 @@ impl SHA1Hash {
 impl quickcheck::Arbitrary for SHA1Hash {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
         Self((0..20).map(|_| u8::arbitrary(g)).collect::<Vec<_>>().try_into().unwrap())
-    }
-}
-
-// basically the same type as Oid just with different (fewer) invariants
-// this is 40 bytes long instead of 20 like `Oid`
-// as otherwise its a bit difficult to handle odd length input strings
-#[derive(PartialEq, Eq, Debug, Hash, Clone, Ord, PartialOrd, Copy)]
-pub struct BitPartialHash([u8; 40]);
-
-impl FromStr for BitPartialHash {
-    type Err = BitGenericError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ensure!(s.len() < 40, "creating partial hash with an invalid hex string (too long)");
-        let mut buf = [0u8; 40];
-        buf.as_mut().write_all(s.as_bytes())?;
-        Ok(Self(buf))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn construct_partial_hash() -> BitResult<()> {
-        let hash = BitPartialHash::from_str("8e3")?;
-        assert_eq!(&hash.0[0..3], b"8e3");
-        assert_eq!(hash.0[3..], [0u8; 37]);
-        Ok(())
     }
 }
 

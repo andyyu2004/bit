@@ -100,7 +100,7 @@ impl BitRef {
         match self {
             BitRef::Direct(id) => match *id {
                 BitId::Full(oid) => Ok(Some(oid)),
-                BitId::Partial(partial) => todo!(),
+                BitId::Partial(partial) => repo.expand_prefix(partial).map(Some),
             },
             BitRef::Symbolic(sym) => {
                 // TODO do we have to create the ref file if it doesn't exist yet?
