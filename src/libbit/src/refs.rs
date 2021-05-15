@@ -20,7 +20,11 @@ pub enum BitRef {
 }
 
 impl BitRepo {
-    pub fn resolve_ref(&self, r: BitRef) -> BitResult<Option<Oid>> {
+    pub fn resolve_ref(&self, r: BitRef) -> BitResult<Oid> {
+        r.resolve(self)?.ok_or_else(|| anyhow!("failed to resolve ref `{}`", r))
+    }
+
+    pub fn resolve_ref_opt(&self, r: BitRef) -> BitResult<Option<Oid>> {
         r.resolve(self)
     }
 }

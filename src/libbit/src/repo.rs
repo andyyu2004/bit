@@ -121,7 +121,7 @@ impl BitRepo {
     /// returns the resolved hash of the HEAD symref
     pub fn resolved_head(&self) -> BitResult<Option<Oid>> {
         match self.read_head()? {
-            Some(head) => self.resolve_ref(head),
+            Some(head) => self.resolve_ref_opt(head),
             None => Ok(None),
         }
     }

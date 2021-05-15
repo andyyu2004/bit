@@ -30,9 +30,7 @@ impl BitRepo {
 
         match rev {
             Revspec::Ref(r) => {
-                let oid = self
-                    .resolve_ref(*r)?
-                    .ok_or_else(|| anyhow!("failed to resolve ref `{}` in revision", r))?;
+                let oid = self.resolve_ref(*r)?;
                 let obj_type = self.read_obj_header(oid)?.obj_type;
                 ensure_eq!(
                     obj_type,

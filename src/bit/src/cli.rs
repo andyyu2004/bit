@@ -22,7 +22,8 @@ use cli_update_index::BitUpdateIndexCliOpts;
 use clap::{AppSettings, Clap};
 use libbit::cmd::*;
 use libbit::error::BitResult;
-use libbit::obj::{BitId, BitObjType};
+use libbit::obj::BitObjType;
+use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
 use std::path::PathBuf;
 
@@ -142,7 +143,7 @@ pub struct BitCatFileCliOpts {
     #[clap(required_unless_present_any(&["pp", "ty", "size", "exit"]))]
     pub objtype: Option<BitObjType>,
     #[clap(required = true)]
-    pub object: BitId,
+    pub object: BitRef,
 }
 
 impl Into<BitCatFileOpts> for BitCatFileCliOpts {

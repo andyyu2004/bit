@@ -91,6 +91,11 @@ fn test_resolve_complex_revspec() -> BitResult<()> {
         Ok(())
     })
 }
+#[test]
+fn test_resolve_non_commit_ref() -> BitResult<()> {
+    Ok(())
+    // BitRepo::init_load("path", |repo| Ok(()))
+}
 
 #[test]
 fn test_resolve_revspec_non_existent_ancestor() -> BitResult<()> {

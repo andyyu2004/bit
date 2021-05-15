@@ -1,10 +1,11 @@
 use crate::error::BitResult;
-use crate::obj::{BitId, BitObjType};
+use crate::obj::BitObjType;
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
 
 #[derive(Debug)]
 pub struct BitCatFileOpts {
-    pub object: BitId,
+    pub object: BitRef,
     pub op: BitCatFileOperation,
 }
 
@@ -19,7 +20,7 @@ pub enum BitCatFileOperation {
 
 impl BitRepo {
     pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<()> {
-        let id = opts.object;
+        let id = self.resolve_ref(opts.object)?;
         match opts.op {
             // TODO not really a correct implementation currently
             // just prints it in an alternate format

@@ -1,0 +1,35 @@
+version: "3.9"
+services:
+  ribble-chat-server:
+    build: .
+    container_name: "ribble-chat-server"
+    depends_on:
+      - ribble-chat-db
+      - ribble-scylla
+      - ribble-redis
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+  ribble-chat-db:
+    image: "postgres:13.1"
+    container_name: "ribble-chat-db"
+    environment:
+      POSTGRES_USER: "ribble-chat-server"
+      POSTGRES_PASSWORD: "password"
+      POSTGRES_DB: "ribble-chat-server"
+    ports:
+      - "5432:5432"
+  ribble-scylla:
+    image: "scylladb/scylla"
+    container_name: "ribble-scylla"
+    ports:
+      - "7000:7000"
+      - "7001:7001"
+      - "7199:7199"
+      - "9042:9042"
+      - "9160:9160"
+  ribble-redis:
+    image: "redis"
+    container_name: "ribble-redis"
+    ports:
+      - "6379:6379"
