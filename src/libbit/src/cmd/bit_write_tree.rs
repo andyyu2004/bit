@@ -12,7 +12,7 @@ impl BitRepo {
     /// builds a tree object from the index and writes it to the object store
     pub fn write_tree(&self) -> BitResult<Oid> {
         let tree = self.with_index(|index| index.build_tree())?;
-        let hash = self.write_obj(&tree)?;
-        Ok(hash)
+        let oid = self.write_obj(&tree)?;
+        Ok(oid)
     }
 }

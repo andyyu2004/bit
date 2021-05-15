@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::refs::BitRef;
+use crate::obj::Oid;
 use crate::repo::BitRepo;
 
 impl BitRepo {
@@ -9,12 +9,11 @@ impl BitRepo {
         Ok(())
     }
 
-    pub fn commit(&self, message: Option<String>) -> BitResult<BitRef> {
+    pub fn commit(&self, message: Option<String>) -> BitResult<Oid> {
         let parent = self.resolved_head()?;
         let tree = self.write_tree()?;
         let oid = self.commit_tree(parent, message, tree)?;
-        let bitref = BitRef::Direct(oid.into());
-        self.update_head(bitref)?;
-        Ok(bitref)
+        self.update_head(oid)?;
+        Ok(oid)
     }
 }

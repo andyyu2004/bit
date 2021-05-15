@@ -1,7 +1,45 @@
 use super::*;
 use crate::cmd::BitHashObjectOpts;
-use crate::hash::{hash_bytes, hash_obj};
 use crate::obj;
+
+impl BitRepo {
+    /// be careful when deleting `rm foo` as the symlink points at it
+    pub fn with_sample_repo<R>(f: impl FnOnce(&Self) -> BitResult<R>) -> BitResult<R> {
+        Self::with_test_repo(|repo| {
+            touch!(repo: "foo");
+            touch!(repo: "bar");
+            mkdir!(repo: "dir");
+            mkdir!(repo: "dir/bar");
+            touch!(repo: "dir/baz");
+            touch!(repo: "dir/bar.l");
+            touch!(repo: "dir/bar/qux");
+            symlink!(repo: "bar" <- "dir/link");
+
+            bit_add_all!(repo);
+            bit_commit!(repo);
+            f(repo)
+        })
+    }
+
+    // sample repository with a series of commits
+    // can't precompute commit hashes as the time is always changing
+    pub fn with_sample_repo_commits<R>(
+        f: impl FnOnce(&Self, Vec<Oid>) -> BitResult<R>,
+    ) -> BitResult<R> {
+        let strs = ["a", "b", "c", "d", "e"];
+        let mut commit_oids = Vec::with_capacity(strs.len());
+        Self::with_test_repo(|repo| {
+            touch!(repo: "foo");
+            for s in &strs {
+                modify!(repo: "foo" << s);
+                bit_add!(repo: "foo");
+                commit_oids.push(bit_commit!(repo));
+            }
+
+            f(repo, commit_oids)
+        })
+    }
+}
 
 #[test]
 fn repo_init_creates_correct_initial_local_config() -> BitResult<()> {

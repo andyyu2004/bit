@@ -4,26 +4,6 @@ use crate::error::BitResult;
 use crate::obj::FileMode;
 use crate::repo::BitRepo;
 
-impl BitRepo {
-    /// be careful when deleting `rm foo` as the symlink points at it
-    pub fn with_sample_repo<R>(f: impl FnOnce(&Self) -> BitResult<R>) -> BitResult<R> {
-        Self::with_test_repo(|repo| {
-            touch!(repo: "foo");
-            touch!(repo: "bar");
-            mkdir!(repo: "dir");
-            mkdir!(repo: "dir/bar");
-            touch!(repo: "dir/baz");
-            touch!(repo: "dir/bar.l");
-            touch!(repo: "dir/bar/qux");
-            symlink!(repo: "bar" <- "dir/link");
-
-            bit_add_all!(repo);
-            bit_commit!(repo);
-            f(repo)
-        })
-    }
-}
-
 macro_rules! check_entry {
     ($next:expr => $path:literal:$mode:expr) => {
         let entry = $next?.unwrap();

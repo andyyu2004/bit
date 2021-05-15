@@ -1,12 +1,11 @@
-mod tests;
-
 use crate::error::{BitGenericError, BitResult};
-use crate::obj::Oid;
+use crate::obj::{BitObjType, Oid};
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 //
@@ -21,18 +20,42 @@ pub enum Revspec {
 impl BitRepo {
     /// resolves revision specification to the commit oid
     pub fn resolve_rev(&self, rev: &Revspec) -> BitResult<Oid> {
-        match rev {
-            // TODO check ref resolves ta a commit
-            Revspec::Ref(r) => self.resolve_ref(*r)?.ok_or_else(|| todo!()),
-            Revspec::Parent(inner) => {
-                let oid = self.resolve_rev(inner)?;
-                let commit = self.read_obj(oid)?.into_commit();
-                match commit.parent {
-                    Some(parent) => Ok(parent),
-                    None => todo!(),
-                }
+        let get_parent = |oid: Oid| -> BitResult<Oid> {
+            let commit = self.read_obj(oid)?.into_commit();
+            match commit.parent {
+                Some(parent) => Ok(parent),
+                None => bail!("revision `{}` refers to the parent of an initial commit", rev),
             }
-            Revspec::Ancestor(_, _) => todo!(),
+        };
+
+        match rev {
+            Revspec::Ref(r) => {
+                let oid = self
+                    .resolve_ref(*r)?
+                    .ok_or_else(|| anyhow!("failed to resolve ref `{}` in revision", r))?;
+                let obj_type = self.read_obj_header(oid)?.obj_type;
+                ensure_eq!(
+                    obj_type,
+                    BitObjType::Commit,
+                    "object `{}` is a `{}`, not a commit",
+                    oid,
+                    obj_type
+                );
+                Ok(oid)
+            }
+            Revspec::Parent(inner) => self.resolve_rev(inner).and_then(|oid| get_parent(oid)),
+            Revspec::Ancestor(rev, n) =>
+                (0..*n).try_fold(self.resolve_rev(rev)?, |oid, _| get_parent(oid)),
+        }
+    }
+}
+
+impl Display for Revspec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Revspec::Ref(r) => write!(f, "{}", r),
+            Revspec::Parent(rev) => write!(f, "{}^", rev),
+            Revspec::Ancestor(rev, n) => write!(f, "{}~{}", rev, n),
         }
     }
 }
@@ -81,7 +104,6 @@ impl<'a> FallibleIterator for RevspecLexer<'a> {
             return Ok(None);
         } else if let Some(capture) = REF_REGEX.captures_read(&mut ref_capture_locations, self.src)
         {
-            dbg!(capture);
             let s = capture.as_str();
             self.src = &self.src[s.len()..];
             return BitRef::from_str(s).map(Token::Ref).map(Some);
@@ -146,3 +168,6 @@ impl<'a> RevspecParser<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

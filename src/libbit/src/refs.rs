@@ -25,6 +25,12 @@ impl BitRepo {
     }
 }
 
+impl From<Oid> for BitRef {
+    fn from(oid: Oid) -> Self {
+        Self::Direct(BitId::from(oid))
+    }
+}
+
 impl From<BitId> for BitRef {
     fn from(id: BitId) -> Self {
         Self::Direct(id)
@@ -70,6 +76,9 @@ impl FromStr for BitRef {
     }
 }
 
+// symbolic ref is of the form `ref: <ref>`
+const SYMBOLIC_REF_PREFIX: &str = "ref: ";
+
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct SymbolicRef {
     path: BitPath,
@@ -85,9 +94,13 @@ impl FromStr for SymbolicRef {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // symbolic ref is of the form `ref: <ref>`
-        const PREFIX: &str = "ref: ";
-        let r = if s.starts_with(PREFIX) { s.split_at(PREFIX.len()).1 } else { s };
+        let r = if s.starts_with(SYMBOLIC_REF_PREFIX) {
+            s.split_at(SYMBOLIC_REF_PREFIX.len()).1
+        } else {
+            // support parsing symbolic_ref without the prefix for use in revs
+            // maybe a better way
+            s
+        };
         // TODO validation on r
         Ok(Self { path: BitPath::intern(r.trim_end()) })
     }

@@ -110,17 +110,20 @@ impl BitRepo {
 
     /// the tree belonging to the `HEAD` reference, or an empty tree if HEAD doesn't exist
     pub fn head_tree(&self) -> BitResult<Tree> {
-        let hash = match self.resolved_head()? {
-            Some(hash) => hash,
+        let oid = match self.resolved_head()? {
+            Some(oid) => oid,
             None => return Ok(Tree::default()),
         };
-        let commit = self.read_obj(hash)?.into_commit();
+        let commit = self.read_obj(oid)?.into_commit();
         Ok(self.read_obj(commit.tree())?.into_tree())
     }
 
     /// returns the resolved hash of the HEAD symref
     pub fn resolved_head(&self) -> BitResult<Option<Oid>> {
-        self.read_head()?.and_then(|r| r.resolve(self).transpose()).transpose()
+        match self.read_head()? {
+            Some(head) => self.resolve_ref(head),
+            None => Ok(None),
+        }
     }
 
     pub fn read_head(&self) -> BitResult<Option<BitRef>> {
@@ -183,19 +186,19 @@ impl BitRepo {
 
     // returns unit as we don't want anyone accessing the repo directly like this
     pub fn init(path: impl AsRef<Path>) -> BitResult<()> {
-        let worktree = path.as_ref().canonicalize()?;
+        let workdir = path.as_ref().canonicalize()?;
 
-        if worktree.is_file() {
-            bail!("`{}` is not a directory", worktree.display())
+        if workdir.is_file() {
+            bail!("`{}` is not a directory", workdir.display())
         }
 
         // `.git` directory not `.bit` as this should be fully compatible with git
         // although, bit will recognize a `.bit` folder if explicitly renamed
-        let bitdir = worktree.join(".git");
+        let bitdir = workdir.join(".git");
 
         if bitdir.exists() {
             // reinitializing doesn't really do anything currently
-            println!("reinitialized existing bit repository in `{}`", bitdir.display());
+            println!("reinitialized existing bit repository in `{}`", workdir.display());
             return Ok(());
         }
 
@@ -203,7 +206,7 @@ impl BitRepo {
 
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
 
-        let this = Self::new(worktree, bitdir, config_filepath)?;
+        let this = Self::new(workdir, bitdir, config_filepath)?;
         this.mk_bitdir("objects")?;
         this.mk_bitdir("refs/tags")?;
         this.mk_bitdir("refs/heads")?;
@@ -221,7 +224,7 @@ impl BitRepo {
             Ok(())
         })?;
 
-        println!("initialized empty bit repository in `{}`", this.bitdir.display());
+        println!("initialized empty bit repository in `{}`", this.workdir.display());
         Ok(())
     }
 
