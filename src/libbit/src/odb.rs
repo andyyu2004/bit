@@ -9,7 +9,7 @@ use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::str::FromStr;
@@ -192,13 +192,13 @@ struct BitPackedObjDb {
     /// path to .git/objects
     objects_path: BitPath,
     /// [(packfile, idxfile)]
-    packs: Vec<Pack>,
+    packs: RefCell<Vec<Pack>>,
 }
 
 impl BitPackedObjDb {
     pub fn new(objects_path: BitPath) -> BitResult<Self> {
         let pack_dir = objects_path.join("pack");
-        let mut packs = vec![];
+        let packs = RefCell::new(vec![]);
 
         if !pack_dir.exists() {
             return Ok(Self { objects_path, packs });
@@ -213,7 +213,7 @@ impl BitPackedObjDb {
 
             let idx = pack.with_extension("idx");
             ensure!(idx.exists(), "packfile `{}` is missing a corresponding index file", pack);
-            packs.push(Pack { pack, idx });
+            packs.borrow_mut().push(Pack::new(pack, idx)?);
         }
 
         Ok(Self { objects_path, packs })
@@ -223,7 +223,7 @@ impl BitPackedObjDb {
 impl BitObjDbBackend for BitPackedObjDb {
     fn read(&self, id: BitId) -> BitResult<BitObjKind> {
         let oid = self.expand_id(id)?;
-        for &pack in &self.packs {
+        for pack in self.packs.borrow_mut().iter_mut() {
             process!(pack.read_obj(oid));
         }
         bail!(BitError::ObjectNotFound(id))
@@ -231,7 +231,7 @@ impl BitObjDbBackend for BitPackedObjDb {
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
         let oid = self.expand_id(id)?;
-        for &pack in &self.packs {
+        for pack in self.packs.borrow_mut().iter_mut() {
             process!(pack.read_obj_header(oid));
         }
         bail!(BitError::ObjectNotFound(id))
@@ -247,6 +247,6 @@ impl BitObjDbBackend for BitPackedObjDb {
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
         let oid = self.expand_id(id)?;
-        Ok(self.packs.par_iter().any(|pack| pack.obj_exists(oid).unwrap_or_default()))
+        Ok(self.packs.borrow_mut().iter_mut().any(|pack| pack.obj_exists(oid).unwrap_or_default()))
     }
 }

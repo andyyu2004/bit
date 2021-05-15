@@ -35,11 +35,8 @@ fn test_pack_idx_find_oid_end() -> BitResult<()> {
     Ok(())
 }
 
-fn pack() -> Pack {
-    Pack {
-        pack: BitPath::intern("tests/files/pack.pack"),
-        idx: BitPath::intern("tests/files/pack.idx"),
-    }
+fn pack() -> BitResult<Pack> {
+    Pack::new(BitPath::intern("tests/files/pack.pack"), BitPath::intern("tests/files/pack.idx"))
 }
 
 lazy_static! {
@@ -54,22 +51,22 @@ lazy_static! {
 
 #[test]
 fn test_check_oid_exists_in_pack() -> BitResult<()> {
-    assert!(pack().obj_exists(*HEAD_OID)?);
+    assert!(pack()?.obj_exists(*HEAD_OID)?);
     Ok(())
 }
 
 #[test]
 fn test_find_offset_in_pack() -> BitResult<()> {
-    let (_crc, offset) = pack().index_reader()?.find_oid_crc_offset(*HEAD_OID)?;
+    let (_crc, offset) = pack()?.idx_reader().find_oid_crc_offset(*HEAD_OID)?;
     assert_eq!(offset, 2247656);
     Ok(())
 }
 
 #[test]
 fn test_read_type_and_size_from_offset_in_pack() -> BitResult<()> {
-    let pack = pack();
-    let (_crc, offset) = pack.index_reader()?.find_oid_crc_offset(*HEAD_OID)?;
-    let header = pack.pack_reader()?.read_header_from_offset(offset)?;
+    let mut pack = pack()?;
+    let (_crc, offset) = pack.idx_reader().find_oid_crc_offset(*HEAD_OID)?;
+    let header = pack.pack_reader().read_header_from_offset(offset)?;
     assert_eq!(header.obj_type, BitObjType::Commit);
     assert_eq!(header.size, 215);
     Ok(())
@@ -77,7 +74,7 @@ fn test_read_type_and_size_from_offset_in_pack() -> BitResult<()> {
 
 #[test]
 fn test_read_pack_undeltified_oid() -> BitResult<()> {
-    let pack = pack();
+    let mut pack = pack()?;
     let obj = pack.read_obj(*HEAD_OID)?;
     let commit = Commit {
         tree: "2a09245f13365a5d812a9d463595d815062b7d42".into(),
@@ -107,7 +104,7 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
 
 #[test]
 fn test_read_pack_deltified_oid() -> BitResult<()> {
-    let pack = pack();
+    let mut pack = pack()?;
     let obj = pack.read_obj(*TREE_OID)?;
     let tree = Tree {
         entries: vec![
@@ -182,7 +179,7 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
 
 #[test]
 fn test_read_pack_deltified_oid2() -> BitResult<()> {
-    let pack = pack();
+    let mut pack = pack()?;
     let obj = pack.read_obj(*SRC_TREE_OID)?;
     let tree = Tree {
         entries: vec![
@@ -350,7 +347,7 @@ fn test_pack_idx_find_oid_offset_end() -> BitResult<()> {
 // and the size remains the type of the expanded tree
 #[test]
 fn test_packed_header_is_expanded() -> BitResult<()> {
-    let pack = pack();
+    let mut pack = pack()?;
     let header = pack.read_obj_header("2a09245f13365a5d812a9d463595d815062b7d42".into())?;
     assert_eq!(header.obj_type, BitObjType::Tree);
     assert_eq!(header.size, 138);

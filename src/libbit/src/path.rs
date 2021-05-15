@@ -6,7 +6,7 @@ use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
-use std::io::{BufRead, BufReader, Seek};
+use std::io::BufReader;
 use std::ops::{Deref, Index};
 use std::path::{Component, Path, PathBuf};
 use std::slice::SliceIndex;
@@ -18,6 +18,8 @@ use std::str::pattern::Pattern;
 // its now just an integer compare
 #[derive(Eq, PartialEq, Clone, Copy, Hash)]
 pub struct BitPath(u32);
+
+pub type BitFileStream = impl BufReadSeek;
 
 impl BitPath {
     pub(crate) fn new(u: u32) -> Self {
@@ -36,7 +38,7 @@ impl BitPath {
         self.0
     }
 
-    pub fn stream(self) -> BitResult<impl BufReadSeek> {
+    pub fn stream(self) -> BitResult<BitFileStream> {
         let file = File::open(self)
             .with_context(|| anyhow!("BitPath::stream: failed to open file `{}`", self))?;
         Ok(BufReader::new(file))

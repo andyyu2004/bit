@@ -3,11 +3,14 @@ use crate::error::{BitError, BitErrorExt, BitResult};
 use crate::hash::{crc_of, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::obj::*;
-use crate::path::BitPath;
+use crate::path::{BitFileStream, BitPath};
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use num_traits::{FromPrimitive, ToPrimitive};
+use sha1::digest::generic_array::typenum::Bit;
 use std::fmt::{self, Debug, Formatter};
+use std::fs::File;
 use std::io::{BufRead, BufReader, Read, SeekFrom};
+use std::lazy::OnceCell;
 use std::ops::{Deref, DerefMut};
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
@@ -19,12 +22,6 @@ const CRC_SIZE: u64 = 4;
 const OFFSET_SIZE: u64 = 4;
 /// maximum 31 bit number (highest bit represents it uses a large offset in the EXT layer)
 const MAX_OFFSET: u32 = 0x7fffffff;
-
-#[derive(Debug, Copy, Clone)]
-pub struct Pack {
-    pub pack: BitPath,
-    pub idx: BitPath,
-}
 
 #[derive(PartialEq)]
 pub struct BitObjRaw {
@@ -63,21 +60,33 @@ impl Debug for BitObjRawKind {
     }
 }
 
+pub struct Pack {
+    pack_reader: PackfileReader<BitFileStream>,
+    idx_reader: PackIndexReader<BitFileStream>,
+}
+
 impl Pack {
-    // todo don't create multiple of these (refactor read methods, maybe move them onto packfilereader struct)
-    pub fn pack_reader(&self) -> BitResult<PackfileReader<impl BufReadSeek>> {
-        self.pack.stream().and_then(PackfileReader::new)
+    pub fn new(pack: BitPath, idx: BitPath) -> BitResult<Self> {
+        let pack_reader = pack.stream().and_then(PackfileReader::new)?;
+        let idx_reader = idx.stream().and_then(PackIndexReader::new)?;
+        Ok(Self { pack_reader, idx_reader })
     }
 
-    pub fn index_reader(&self) -> BitResult<PackIndexReader<impl BufReadSeek>> {
-        self.idx.stream().and_then(PackIndexReader::new)
+    #[inline]
+    pub fn pack_reader(&mut self) -> &mut PackfileReader<BitFileStream> {
+        &mut self.pack_reader
     }
 
-    pub fn obj_offset(&self, oid: Oid) -> BitResult<(u32, u64)> {
-        self.index_reader()?.find_oid_crc_offset(oid)
+    #[inline]
+    pub fn idx_reader(&mut self) -> &mut PackIndexReader<BitFileStream> {
+        &mut self.idx_reader
     }
 
-    pub fn obj_exists(&self, oid: Oid) -> BitResult<bool> {
+    pub fn obj_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
+        self.idx_reader().find_oid_crc_offset(oid)
+    }
+
+    pub fn obj_exists(&mut self, oid: Oid) -> BitResult<bool> {
         // TODO this pattern is a little unpleasant
         // do something about it if it pops up any more
         // maybe some magic with a different error type could work
@@ -89,7 +98,7 @@ impl Pack {
     }
 
     pub fn expand_raw_obj(
-        &self,
+        &mut self,
         raw_kind: BitObjRawKind,
         base_offset: u64,
     ) -> BitResult<BitObjRaw> {
@@ -107,15 +116,14 @@ impl Pack {
     }
 
     /// returns fully expanded raw object at offset
-    pub fn read_obj_raw_at(&self, offset: u64) -> BitResult<BitObjRaw> {
+    pub fn read_obj_raw_at(&mut self, offset: u64) -> BitResult<BitObjRaw> {
         trace!("read_obj_raw_at(offset: {})", offset);
-        let mut reader = self.pack_reader()?;
-        let raw = reader.read_obj_from_offset_raw(offset)?;
+        let raw = self.pack_reader().read_obj_from_offset_raw(offset)?;
         self.expand_raw_obj(raw, offset)
     }
 
     /// returns fully expanded raw object with oid
-    pub fn read_obj_raw(&self, oid: Oid) -> BitResult<BitObjRaw> {
+    pub fn read_obj_raw(&mut self, oid: Oid) -> BitResult<BitObjRaw> {
         trace!("read_obj_raw(oid: {})", oid);
         let (crc, offset) = self.obj_offset(oid)?;
         let raw = self.read_obj_raw_at(offset)?;
@@ -124,7 +132,7 @@ impl Pack {
         Ok(raw)
     }
 
-    pub fn read_obj_header(&self, oid: Oid) -> BitResult<BitObjHeader> {
+    pub fn read_obj_header(&mut self, oid: Oid) -> BitResult<BitObjHeader> {
         let (crc, offset) = self.obj_offset(oid)?;
         trace!("read_obj_header(oid: {}); crc={}; offset={}", oid, crc, offset);
         let header = self.read_obj_header_at(offset)?;
@@ -132,25 +140,30 @@ impl Pack {
         Ok(header)
     }
 
-    fn read_obj_header_at(&self, offset: u64) -> BitResult<BitObjHeader> {
+    fn read_obj_header_at(&mut self, offset: u64) -> BitResult<BitObjHeader> {
         trace!("read_obj_header_at(offset: {})", offset);
-        let mut reader = self.pack_reader()?;
+        let reader = self.pack_reader();
         let header = reader.read_header_from_offset(offset)?;
         // can assume base_header has same type
         let base_header = match header.obj_type {
             BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
                 return Ok(header),
-            BitObjType::OfsDelta => self.read_obj_header_at(offset - reader.read_offset()?),
-            BitObjType::RefDelta => self.read_obj_header(reader.read_oid()?),
+            BitObjType::OfsDelta => {
+                let ofs = reader.read_offset()?;
+                self.read_obj_header_at(offset - ofs)
+            }
+            BitObjType::RefDelta => {
+                let oid = self.pack_reader().read_oid()?;
+                self.read_obj_header(oid)
+            }
         }?;
         Ok(BitObjHeader { size: header.size, obj_type: base_header.obj_type })
     }
 
-    pub fn read_obj(&self, oid: Oid) -> BitResult<BitObjKind> {
+    pub fn read_obj(&mut self, oid: Oid) -> BitResult<BitObjKind> {
         let (crc, offset) = self.obj_offset(oid)?;
         trace!("read_obj(oid: {}); crc={}; offset={}", oid, crc, offset);
-        let mut reader = self.pack_reader()?;
-        let obj = reader.read_obj_from_offset(offset)?;
+        let obj = self.pack_reader().read_obj_from_offset(offset)?;
         let obj = match obj {
             BitObjKind::Blob(..)
             | BitObjKind::Commit(..)
