@@ -1,11 +1,5 @@
 use super::*;
 
-macro_rules! lex {
-    ($rev:expr) => {
-        RevspecLexer::new($rev).collect::<Vec<_>>().expect("failed to lex revspec")
-    };
-}
-
 macro_rules! parse_rev {
     ($rev:expr) => {
         Revspec::from_str($rev).expect("failed to parse revspec")
@@ -13,21 +7,9 @@ macro_rules! parse_rev {
 }
 
 #[test]
-fn test_lex_simple_revspec() {
-    let tokens = lex!("HEAD^");
-    assert_eq!(tokens, vec![Token::Ref(symbolic_ref!("HEAD")), Token::Caret]);
-}
-
-#[test]
 fn test_parse_revspec_parent() {
     let rev = parse_rev!("HEAD^");
     assert_eq!(rev, Revspec::Parent(Box::new(Revspec::Ref(symbolic_ref!("HEAD")))))
-}
-
-#[test]
-fn test_lex_revspec_with_symref_ancestor() {
-    let tokens = lex!("HEAD~5");
-    assert_eq!(tokens, vec![Token::Ref(symbolic_ref!("HEAD")), Token::Tilde, Token::Num(5)]);
 }
 
 #[test]
@@ -91,10 +73,15 @@ fn test_resolve_complex_revspec() -> BitResult<()> {
         Ok(())
     })
 }
+
 #[test]
 fn test_resolve_non_commit_ref() -> BitResult<()> {
-    Ok(())
-    // BitRepo::init_load("path", |repo| Ok(()))
+    BitRepo::find("tests/repos/ribble", |repo| {
+        let rev = parse_rev!("9fd6fa21a285cf44e5a3f0469992e4ec6bb9a845");
+        let err = repo.resolve_rev(&rev).unwrap_err();
+        assert_eq!(err.to_string(), format!("object `{}` is a tree, not a commit", rev),);
+        Ok(())
+    })
 }
 
 #[test]

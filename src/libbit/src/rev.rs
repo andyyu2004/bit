@@ -5,7 +5,9 @@ use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
+use std::iter::FromIterator;
 use std::str::FromStr;
 
 //
@@ -35,7 +37,7 @@ impl BitRepo {
                 ensure_eq!(
                     obj_type,
                     BitObjType::Commit,
-                    "object `{}` is a `{}`, not a commit",
+                    "object `{}` is a {}, not a commit",
                     oid,
                     obj_type
                 );
@@ -74,96 +76,47 @@ enum Token {
     Tilde,
 }
 
-lazy_static! {
-    /// a ref is either a hash (partial?) or a symbolic ref
-    // TODO this regex is pretty rough
-    static ref REF_REGEX: Regex = Regex::new("^([a-zA-Z][a-zA-Z0-9]+)").unwrap();
-    static ref NUM_REGEX: Regex = Regex::new(r#"^(\d+)"#).unwrap();
-}
-
-struct RevspecLexer<'a> {
-    src: &'a str,
-}
-
-impl<'a> RevspecLexer<'a> {
-    pub fn new(src: &'a str) -> Self {
-        Self { src }
-    }
-}
-
-impl<'a> FallibleIterator for RevspecLexer<'a> {
-    type Error = BitGenericError;
-    type Item = Token;
-
-    fn next(&mut self) -> BitResult<Option<Token>> {
-        let mut ref_capture_locations = REF_REGEX.capture_locations();
-        let mut num_capture_locations = NUM_REGEX.capture_locations();
-        if self.src.is_empty() {
-            return Ok(None);
-        } else if let Some(capture) = REF_REGEX.captures_read(&mut ref_capture_locations, self.src)
-        {
-            let s = capture.as_str();
-            self.src = &self.src[s.len()..];
-            return BitRef::from_str(s).map(Token::Ref).map(Some);
-        } else if let Some(capture) = NUM_REGEX.captures_read(&mut num_capture_locations, self.src)
-        {
-            let s = capture.as_str();
-            self.src = &self.src[s.len()..];
-            let n = s.parse::<u32>().expect("failed to parse valid number");
-            return Ok(Some(Token::Num(n)));
-        }
-
-        let (x, xs) = self.src.split_at(1);
-        self.src = xs;
-        match x {
-            "^" => Ok(Some(Token::Caret)),
-            "~" => Ok(Some(Token::Tilde)),
-            x => (bail!("invalid token `{}` found in  revspec", x)),
-        }
-    }
-}
-
 struct RevspecParser<'a> {
-    lexer: RevspecLexer<'a>,
+    src: &'a str,
+    seps: HashSet<char>,
 }
 
 impl<'a> RevspecParser<'a> {
     pub fn new(src: &'a str) -> Self {
-        Self { lexer: RevspecLexer::new(src) }
+        Self { src, seps: HashSet::from_iter(std::array::IntoIter::new(['@', '~', '^'])) }
+    }
+
+    // moves src to the index of separator and returns the str before the separator
+    fn next(&mut self) -> BitResult<&str> {
+        let i = self.src.find(|c| self.seps.contains(&c)).unwrap_or_else(|| self.src.len());
+        let s = &self.src[..i];
+        self.src = &self.src[i..];
+        Ok(s)
     }
 
     fn expect_ref(&mut self) -> BitResult<BitRef> {
-        match self.lexer.next()? {
-            Some(Token::Ref(r)) => Ok(r),
-            Some(token) => bail!("expected ref, found `{:?}`", token),
-            None => bail!("expected ref, found eof"),
-        }
+        Ok(BitRef::from_str(self.next()?)?)
     }
 
     fn expect_num(&mut self) -> BitResult<u32> {
-        match self.lexer.next()? {
-            Some(Token::Num(n)) => Ok(n),
-            Some(token) => bail!("expected num, found `{:?}`", token),
-            None => bail!("expected num, found eof"),
-        }
+        Ok(u32::from_str(self.next()?)?)
     }
 
     pub fn parse(mut self) -> BitResult<Revspec> {
         let mut rev = Revspec::Ref(self.expect_ref()?);
-        loop {
-            match self.lexer.next()? {
-                Some(token) => match token {
-                    Token::Caret => rev = Revspec::Parent(Box::new(rev)),
-                    Token::Tilde => {
-                        let n = self.expect_num()?;
-                        rev = Revspec::Ancestor(Box::new(rev), n);
-                    }
-                    Token::Num(..) => bail!("expected `^` or `~` but found number"),
-                    Token::Ref(..) => bail!("expected `^` or `~` but found another ref"),
-                },
-                None => return Ok(rev),
+        while !self.src.is_empty() {
+            let (c, cs) = self.src.split_at(1);
+            self.src = cs;
+            match c {
+                "^" => rev = Revspec::Parent(Box::new(rev)),
+                "~" => {
+                    let n = self.expect_num()?;
+                    rev = Revspec::Ancestor(Box::new(rev), n);
+                }
+                _ => bail!("unexpected token `{}`, while parsing revspec", c),
             }
         }
+        Ok(rev)
     }
 }
 
