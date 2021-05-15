@@ -21,3 +21,11 @@ macro_rules! symbolic_ref {
         crate::refs::BitRef::Symbolic(crate::refs::SymbolicRef::from_str($sym).unwrap())
     }};
 }
+
+macro_rules! HEAD {
+    () => {{
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        crate::refs::BitRef::Symbolic(crate::refs::SymbolicRef::from_str("HEAD").unwrap())
+    }};
+}

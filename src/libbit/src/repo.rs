@@ -165,7 +165,10 @@ impl BitRepo {
     }
 
     fn load_with_bitdir(path: impl AsRef<Path>, bitdir: impl AsRef<Path>) -> BitResult<Self> {
-        let worktree = path.as_ref().canonicalize()?;
+        let worktree = path
+            .as_ref()
+            .canonicalize()
+            .with_context(|| anyhow!("failed to load bit in non-existent directory"))?;
         let bitdir = worktree.join(bitdir);
         assert!(bitdir.exists());
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);

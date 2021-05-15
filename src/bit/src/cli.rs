@@ -62,7 +62,7 @@ pub fn run() -> BitResult<()> {
     })
 }
 
-#[derive(Clap)]
+#[derive(Clap, Debug)]
 #[clap(author = "Andy Yu <andyyu2004@gmail.com>")]
 pub struct BitCliOpts {
     #[clap(subcommand)]
@@ -71,7 +71,7 @@ pub struct BitCliOpts {
     pub root_path: PathBuf,
 }
 
-#[derive(Clap)]
+#[derive(Clap, Debug)]
 pub enum BitSubCmd {
     Add(BitAddCliOpts),
     CatFile(BitCatFileCliOpts),
@@ -87,7 +87,7 @@ pub enum BitSubCmd {
     WriteTree,
 }
 
-#[derive(Clap)]
+#[derive(Clap, Debug)]
 pub struct BitInitCliOpts {
     #[clap(default_value = ".")]
     pub path: PathBuf,
@@ -100,7 +100,7 @@ impl Into<BitInitOpts> for BitInitCliOpts {
     }
 }
 
-#[derive(Clap)]
+#[derive(Clap, Debug)]
 pub struct BitLogCliOpts {
     #[clap(default_value = ".")]
     pub commit: PathBuf,

@@ -1,7 +1,7 @@
 use clap::Clap;
 use libbit::pathspec::Pathspec;
 
-#[derive(Clap)]
+#[derive(Clap, Debug)]
 pub struct BitAddCliOpts {
     #[clap(multiple = true, required_unless_present("all"))]
     pub pathspecs: Vec<Pathspec>,

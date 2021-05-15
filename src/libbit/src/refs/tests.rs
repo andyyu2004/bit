@@ -10,3 +10,11 @@ fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_resolve_head_symref() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        assert_eq!(repo.resolve_ref_opt(HEAD!())?, None);
+        Ok(())
+    })
+}

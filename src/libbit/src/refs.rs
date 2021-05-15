@@ -71,7 +71,7 @@ impl FromStr for BitRef {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // probably fair to assume that a valid hash is not an indirect path
+        // probably fair to assume that a valid bitid(i.e. partial/full hash) is not an indirect path?
         if let Ok(id) = BitId::from_str(s) {
             return Ok(Self::Direct(id));
         }
@@ -120,9 +120,6 @@ impl BitRef {
                 BitId::Partial(partial) => repo.expand_prefix(partial).map(Some),
             },
             BitRef::Symbolic(sym) => {
-                // TODO do we have to create the ref file if it doesn't exist yet?
-                // i.e. HEAD points to refs/heads/master on initialization even when master doesn't exist
-                // as there are no commits yet
                 let ref_path = repo.relative_path(sym.path);
                 if !ref_path.exists() {
                     return Ok(None);
@@ -130,19 +127,26 @@ impl BitRef {
 
                 let oid = Lockfile::with_readonly(ref_path, |_| {
                     let contents = std::fs::read_to_string(ref_path)?;
-                    Oid::from_str(contents.trim_end())
+                    // symbolic references can be recursive
+                    // i.e. HEAD -> refs/heads/master -> <oid>
+                    BitRef::from_str(contents.trim_end())?.resolve(repo)
                 })?;
 
-                ensure!(
-                    repo.obj_exists(oid)?,
-                    "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
-                    ref_path,
-                    oid,
-                    sym
-                );
+                match oid {
+                    Some(oid) => {
+                        ensure!(
+                            repo.obj_exists(oid)?,
+                            "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
+                            ref_path,
+                            oid,
+                            sym
+                        );
 
-                debug!("BitRef::resolve: resolved ref `{:?}` to commit `{}`", sym, oid);
-                Ok(Some(oid.into()))
+                        debug!("BitRef::resolve: resolved ref `{:?}` to commit `{}`", sym, oid);
+                        Ok(Some(oid.into()))
+                    }
+                    None => Ok(None),
+                }
             }
         }
     }
