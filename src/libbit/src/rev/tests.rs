@@ -77,7 +77,7 @@ fn test_resolve_complex_revspec() -> BitResult<()> {
 #[test]
 fn test_resolve_non_commit_ref() -> BitResult<()> {
     BitRepo::find("tests/repos/ribble", |repo| {
-        let rev = parse_rev!("9fd6fa21a285cf44e5a3f0469992e4ec6bb9a845");
+        let rev = parse_rev!("ebc3780a093cbda629d531c1c0d530a82063ee6f");
         let err = repo.resolve_rev(&rev).unwrap_err();
         assert_eq!(err.to_string(), format!("object `{}` is a tree, not a commit", rev),);
         Ok(())
