@@ -1,14 +1,17 @@
-use crate::obj::{BitId, Oid};
+use crate::obj::{BitId, Oid, PartialOid};
+use colored::*;
 use std::fmt::{self, Display, Formatter};
 
 pub type BitResult<T> = Result<T, BitGenericError>;
 pub type BitGenericError = anyhow::Error;
 
+// usually we can just use anyhow for errors, but sometimes its nice to have a "rust" representation we can test or match against
 #[derive(Debug)]
 pub enum BitError {
     ObjectNotFound(BitId),
     /// object `{0}` not found in pack index but could be inserted at `{1}`
     ObjectNotFoundInPackIndex(Oid, usize),
+    AmbiguousPrefix(PartialOid, Vec<Oid>),
 }
 
 pub trait BitErrorExt {
@@ -39,6 +42,7 @@ impl BitErrorExt for BitGenericError {
             Some(err) => match err {
                 BitError::ObjectNotFound(..) => true,
                 BitError::ObjectNotFoundInPackIndex(..) => true,
+                _ => false,
             },
             None => false,
         }
@@ -49,10 +53,18 @@ impl BitErrorExt for BitGenericError {
             Some(err) => match err {
                 BitError::ObjectNotFound(..) => false,
                 BitError::ObjectNotFoundInPackIndex(..) => false,
+                _ => true,
             },
             None => true,
         }
     }
+}
+
+macro_rules! write_hint {
+    ($f:expr, $($args:tt)*) => {{
+        write!($f, "{}: ", "hint".yellow())?;
+        writeln!($f, $($args)*)?
+    }};
 }
 
 impl Display for BitError {
@@ -60,6 +72,14 @@ impl Display for BitError {
         match self {
             BitError::ObjectNotFound(id) => write!(f, "bit object with hash `{}` not found", id),
             BitError::ObjectNotFoundInPackIndex(..) => unreachable!("not a user facing error"),
+            BitError::AmbiguousPrefix(prefix, candidates) => {
+                writeln!(f, "prefix oid `{}` is ambiguous", prefix)?;
+                write_hint!(f, "the candidates are:");
+                for candidate in candidates {
+                    write_hint!(f, "  {}", candidate);
+                }
+                Ok(())
+            }
         }
     }
 }

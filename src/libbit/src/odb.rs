@@ -9,10 +9,10 @@ use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
-use itertools::Itertools;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
+use std::str::FromStr;
 
 //? questionable name, questionable macro is there a better way to express this pattern
 macro_rules! process {
@@ -137,12 +137,24 @@ impl BitObjDbBackend for BitLooseObjDb {
     fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
         let (dir, file) = prefix.split();
         let dir = self.objects_path.join(dir);
+        if !dir.exists() {
+            return Err(anyhow!(BitError::ObjectNotFound(prefix.into())));
+        }
+
         let candidates = DirIter::new(dir)
             .filter(|entry| Ok(entry.file_name().to_str().unwrap().starts_with(file)))
             .collect::<Vec<_>>()?;
-        dbg!(candidates);
-        // .collect::<Result<Vec<_>, _>>()?;
-        todo!()
+        match candidates.len() {
+            0 => Err(anyhow!(BitError::ObjectNotFound(prefix.into()))),
+            1 => Oid::from_str(dir.join(candidates[0].path()).as_str()),
+            _ => Err(anyhow!(BitError::AmbiguousPrefix(
+                prefix,
+                candidates
+                    .into_iter()
+                    .map(|entry| Oid::from_str(dir.join(entry.path()).as_str()))
+                    .collect::<Result<_, _>>()?
+            ))),
+        }
     }
 
     fn write(&self, obj: &dyn BitObj) -> BitResult<Oid> {

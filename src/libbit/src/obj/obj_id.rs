@@ -43,9 +43,16 @@ impl From<Oid> for BitId {
 impl Display for BitId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            BitId::Full(hash) => write!(f, "{}", hash),
-            BitId::Partial(_) => todo!(),
+            BitId::Full(oid) => write!(f, "{}", oid),
+            BitId::Partial(partial) => write!(f, "{}", partial),
         }
+    }
+}
+
+impl Display for PartialOid {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // SAFETY refer to [crate::obj::PartialOid]
+        write!(f, "{}", unsafe { std::str::from_utf8_unchecked(&self.bytes[..self.len]) })
     }
 }
 
@@ -73,6 +80,8 @@ impl FromStr for BitId {
 // because we'd have to deal with half bytes
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Ord, PartialOrd, Copy)]
 pub struct PartialOid {
+    // guaranteed to be a valid str
+    // we store this as bytes as there's no good way to store fixed length string on stack
     bytes: [u8; 40],
     len: usize,
 }
