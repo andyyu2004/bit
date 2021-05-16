@@ -219,7 +219,7 @@ impl BitRepo {
     /// HEAD does not exist, or is not fully resolvable
     pub fn head_tree(&self) -> BitResult<Tree> {
         let oid = match self.resolve_head()? {
-            ResolvedRef::Full(oid) => oid,
+            ResolvedRef::Resolved(oid) => oid,
             _ => return Ok(Tree::default()),
         };
         let commit = self.read_obj(oid)?.into_commit();

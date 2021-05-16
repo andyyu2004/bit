@@ -45,16 +45,16 @@ impl BitRepo {
     // which is not quite right
     pub fn try_fully_resolve_ref(&self, r: impl Into<BitRef>) -> BitResult<Option<Oid>> {
         match r.into().resolve(self)? {
-            ResolvedRef::Full(oid) => Ok(Some(oid)),
-            ResolvedRef::Partial(_) => Ok(None),
+            ResolvedRef::Resolved(oid) => Ok(Some(oid)),
+            ResolvedRef::NonExistent(_) => Ok(None),
         }
     }
 
     pub fn fully_resolve_ref(&self, r: impl Into<BitRef>) -> BitResult<Oid> {
         let r = r.into();
         match r.resolve(self)? {
-            ResolvedRef::Full(oid) => Ok(oid),
-            ResolvedRef::Partial(sym) =>
+            ResolvedRef::Resolved(oid) => Ok(oid),
+            ResolvedRef::NonExistent(sym) =>
                 bail!("failed to fully resolve ref `{}`: references nonexistent file `{}`", r, sym),
         }
     }
@@ -165,15 +165,17 @@ impl FromStr for SymbolicRef {
 // slightly more constrained version of `BitRef` (no partial oids)
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ResolvedRef {
-    Full(Oid),
-    Partial(SymbolicRef),
+    /// fully resolved commit oid
+    Resolved(Oid),
+    /// the branch pointed to by the symref doesn't exist yet
+    NonExistent(SymbolicRef),
 }
 
 impl ResolvedRef {
     pub fn try_into_oid(self) -> BitResult<Oid> {
         match self {
-            ResolvedRef::Full(oid) => Ok(oid),
-            ResolvedRef::Partial(sym) =>
+            ResolvedRef::Resolved(oid) => Ok(oid),
+            ResolvedRef::NonExistent(sym) =>
                 bail!("branch `{}` does not exist. Try creating a commit on the branch first", sym),
         }
     }
@@ -184,10 +186,10 @@ impl BitRef {
     pub fn partially_resolve(&self, repo: &BitRepo) -> BitResult<ResolvedRef> {
         match self {
             BitRef::Direct(id) => match *id {
-                BitId::Full(oid) => Ok(ResolvedRef::Full(oid)),
-                BitId::Partial(partial) => repo.expand_prefix(partial).map(ResolvedRef::Full),
+                BitId::Full(oid) => Ok(ResolvedRef::Resolved(oid)),
+                BitId::Partial(partial) => repo.expand_prefix(partial).map(ResolvedRef::Resolved),
             },
-            BitRef::Symbolic(sym) => Ok(ResolvedRef::Partial(*sym)),
+            BitRef::Symbolic(sym) => Ok(ResolvedRef::NonExistent(*sym)),
         }
     }
 
@@ -197,11 +199,11 @@ impl BitRef {
     /// returns iff a symbolic ref points at a non-existing branch
     pub fn resolve(&self, repo: &BitRepo) -> BitResult<ResolvedRef> {
         match self.partially_resolve(repo)? {
-            ResolvedRef::Full(oid) => Ok(ResolvedRef::Full(oid)),
-            ResolvedRef::Partial(sym) => {
+            ResolvedRef::Resolved(oid) => Ok(ResolvedRef::Resolved(oid)),
+            ResolvedRef::NonExistent(sym) => {
                 let ref_path = repo.relative_path(sym.path);
                 if !ref_path.exists() {
-                    return Ok(ResolvedRef::Partial(sym));
+                    return Ok(ResolvedRef::NonExistent(sym));
                 }
 
                 let resolved_ref = Lockfile::with_readonly(ref_path, |_| {
@@ -211,7 +213,7 @@ impl BitRef {
                     BitRef::from_str(contents.trim_end())?.resolve(repo)
                 })?;
 
-                if let ResolvedRef::Full(oid) = resolved_ref {
+                if let ResolvedRef::Resolved(oid) = resolved_ref {
                     ensure!(
                         repo.obj_exists(oid)?,
                         "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",

@@ -13,7 +13,7 @@ impl BitRepo {
     pub fn commit(&self, message: Option<String>) -> BitResult<Oid> {
         let head = self.partially_resolve_head()?;
         let sym = match head {
-            ResolvedRef::Full(_oid) =>
+            ResolvedRef::Resolved(_oid) =>
                 todo!("todo head is pointing to a commit not a branch (detached head state)"),
             ResolvedRef::Partial(sym) => sym,
         };
