@@ -5,8 +5,8 @@ use crate::lockfile::Lockfile;
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
-use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, ResolvedRef, SymbolicRef};
-use crate::serialize::{Deserialize, Serialize};
+use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, SymbolicRef};
+use crate::serialize::Serialize;
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
@@ -219,7 +219,7 @@ impl BitRepo {
     /// HEAD does not exist, or is not fully resolvable
     pub fn head_tree(&self) -> BitResult<Tree> {
         let oid = match self.resolve_head()? {
-            ResolvedRef::Resolved(oid) => oid,
+            BitRef::Direct(oid) => oid,
             _ => return Ok(Tree::default()),
         };
         let commit = self.read_obj(oid)?.into_commit();
@@ -227,15 +227,18 @@ impl BitRepo {
     }
 
     /// returns the resolved hash of the HEAD symref
-    pub fn resolve_head(&self) -> BitResult<ResolvedRef> {
+    pub fn resolve_head(&self) -> BitResult<BitRef> {
         let head = self.read_head()?;
         self.resolve_ref(head)
     }
 
-    pub fn partially_resolve_head(&self) -> BitResult<ResolvedRef> {
+    pub fn partially_resolve_head(&self) -> BitResult<BitRef> {
         self.read_head()?.partially_resolve(self)
     }
 
+    /// reads the contents of `HEAD`
+    /// e.g. if `HEAD` -> `ref: refs/heads/master`
+    /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
     pub fn read_head(&self) -> BitResult<BitRef> {
         self.refdb.read(self.head_ref())
     }

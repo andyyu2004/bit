@@ -32,8 +32,7 @@ impl BitRepo {
             touch!(repo: "foo");
             for s in &strs {
                 modify!(repo: "foo" << s);
-                bit_add!(repo: "foo");
-                commit_oids.push(bit_commit!(repo));
+                commit_oids.push(bit_commit_all!(repo));
             }
 
             f(repo, commit_oids)

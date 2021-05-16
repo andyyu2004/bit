@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::obj::Oid;
-use crate::refs::ResolvedRef;
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
 
 impl BitRepo {
@@ -11,15 +11,17 @@ impl BitRepo {
     }
 
     pub fn commit(&self, message: Option<String>) -> BitResult<Oid> {
-        let head = self.partially_resolve_head()?;
+        let head = self.read_head()?;
         let sym = match head {
-            ResolvedRef::Resolved(_oid) =>
+            BitRef::Direct(_oid) =>
                 todo!("todo head is pointing to a commit not a branch (detached head state)"),
-            ResolvedRef::Partial(sym) => sym,
+            BitRef::Symbolic(sym) => sym,
         };
         let parent = self.try_fully_resolve_ref(sym)?;
         let tree = self.write_tree()?;
         let oid = self.commit_tree(parent, message, tree)?;
+        dbg!(sym);
+        dbg!(oid);
         self.update_ref(sym, oid)?;
         Ok(oid)
     }
