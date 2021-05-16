@@ -1,12 +1,11 @@
-use lazy_static::lazy_static;
-use regex::Regex;
-
 use crate::error::{BitGenericError, BitResult};
 use crate::lockfile::Lockfile;
 use crate::obj::{BitId, Oid};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::str::FromStr;
@@ -14,13 +13,12 @@ use std::str::FromStr;
 lazy_static! {
     /// defines what is an invalid reference name (anything else is valid)
     // a reference name is invalid if any of the following conditions are true
-    // - any path component begins with `.`
+    // - any path component begins with `.` (i.e. `^.`, or `/.`)
     // - contains `..`
     // - contains any of the following `*` `:` `?` `[` `\` `^` `~` <space> <tab>
     // - ends with `/` or `.lock`
     // - contains `@{`
-
-    static ref INVALID_REF_REGEX: Regex = Regex::new(r#"^\.|\.\.|\*|:|\?|\[|\\|^|~| |\t|/$|\.lock$|@\{"#).unwrap();
+    static ref INVALID_REF_REGEX: Regex = Regex::new(r#"^\.|/\.|\.\.|\*|:|\?|\[|\\|\^|~| |\t|/$|\.lock$|@\{"#).unwrap();
 }
 
 pub fn is_valid_name(s: &str) -> bool {
@@ -46,7 +44,7 @@ impl BitRepo {
     pub fn try_fully_resolve_ref(&self, r: impl Into<BitRef>) -> BitResult<Option<Oid>> {
         match r.into().resolve(self)? {
             ResolvedRef::Resolved(oid) => Ok(Some(oid)),
-            ResolvedRef::NonExistent(_) => Ok(None),
+            ResolvedRef::Partial(_) => Ok(None),
         }
     }
 
@@ -54,7 +52,7 @@ impl BitRepo {
         let r = r.into();
         match r.resolve(self)? {
             ResolvedRef::Resolved(oid) => Ok(oid),
-            ResolvedRef::NonExistent(sym) =>
+            ResolvedRef::Partial(sym) =>
                 bail!("failed to fully resolve ref `{}`: references nonexistent file `{}`", r, sym),
         }
     }
@@ -130,13 +128,17 @@ pub struct SymbolicRef {
 }
 
 lazy_static! {
-    static ref SYM_REF_REGEX: Regex = Regex::new(r#"\.(b|g)it/(HEAD$|refs/heads/)"#).unwrap();
+    static ref SYM_REF_REGEX: Regex = Regex::new(r#"HEAD$|refs/heads/"#).unwrap();
 }
 
 impl SymbolicRef {
     pub fn new(path: BitPath) -> Self {
         debug_assert!(SYM_REF_REGEX.is_match(path.as_str()), "invalid symref `{}`", path);
         Self { path }
+    }
+
+    pub fn branch(name: &str) -> Self {
+        Self::new(BitPath::intern(format!("refs/heads/{}", name)))
     }
 }
 
@@ -163,19 +165,35 @@ impl FromStr for SymbolicRef {
 }
 
 // slightly more constrained version of `BitRef` (no partial oids)
+// sort of dumb that we have both, perhaps ref should have oid rather than partialid and partial_id's would have to be expanded before being allowed to be a ref
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ResolvedRef {
     /// fully resolved commit oid
     Resolved(Oid),
     /// the branch pointed to by the symref doesn't exist yet
-    NonExistent(SymbolicRef),
+    Partial(SymbolicRef),
+}
+
+impl Serialize for ResolvedRef {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        Ok(write!(writer, "{}", self)?)
+    }
+}
+
+impl Display for ResolvedRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ResolvedRef::Resolved(oid) => write!(f, "{}", oid),
+            ResolvedRef::Partial(sym) => write!(f, "{}", sym),
+        }
+    }
 }
 
 impl ResolvedRef {
     pub fn try_into_oid(self) -> BitResult<Oid> {
         match self {
             ResolvedRef::Resolved(oid) => Ok(oid),
-            ResolvedRef::NonExistent(sym) =>
+            ResolvedRef::Partial(sym) =>
                 bail!("branch `{}` does not exist. Try creating a commit on the branch first", sym),
         }
     }
@@ -189,7 +207,8 @@ impl BitRef {
                 BitId::Full(oid) => Ok(ResolvedRef::Resolved(oid)),
                 BitId::Partial(partial) => repo.expand_prefix(partial).map(ResolvedRef::Resolved),
             },
-            BitRef::Symbolic(sym) => Ok(ResolvedRef::NonExistent(*sym)),
+            // TODO this case doesn't seem right.. should probably at least try read the symref?
+            BitRef::Symbolic(sym) => Ok(ResolvedRef::Partial(*sym)),
         }
     }
 
@@ -200,34 +219,67 @@ impl BitRef {
     pub fn resolve(&self, repo: &BitRepo) -> BitResult<ResolvedRef> {
         match self.partially_resolve(repo)? {
             ResolvedRef::Resolved(oid) => Ok(ResolvedRef::Resolved(oid)),
-            ResolvedRef::NonExistent(sym) => {
-                let ref_path = repo.relative_path(sym.path);
-                if !ref_path.exists() {
-                    return Ok(ResolvedRef::NonExistent(sym));
-                }
-
-                let resolved_ref = Lockfile::with_readonly(ref_path, |_| {
-                    let contents = std::fs::read_to_string(ref_path)?;
-                    // symbolic references can be recursive
-                    // i.e. HEAD -> refs/heads/master -> <oid>
-                    BitRef::from_str(contents.trim_end())?.resolve(repo)
-                })?;
-
-                if let ResolvedRef::Resolved(oid) = resolved_ref {
-                    ensure!(
-                        repo.obj_exists(oid)?,
-                        "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
-                        ref_path,
-                        oid,
-                        sym
-                    );
-                }
-
-                debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, resolved_ref);
-
-                Ok(resolved_ref)
-            }
+            ResolvedRef::Partial(sym) => sym.resolve(repo),
         }
+    }
+}
+
+impl SymbolicRef {
+    /// dereference one layer
+    pub fn partially_resolve(self, repo: &BitRepo) -> BitResult<BitRef> {
+        let ref_path = repo.relative_path(self.path);
+        if !ref_path.exists() {
+            return Ok(BitRef::Symbolic(self));
+        }
+
+        let r = Lockfile::with_readonly(ref_path, |_| {
+            let contents = std::fs::read_to_string(ref_path)?;
+            // symbolic references can be recursive
+            // i.e. HEAD -> refs/heads/master -> <oid>
+            BitRef::from_str(contents.trim_end())
+        })?;
+
+        if let BitRef::Direct(BitId::Full(oid)) = r {
+            ensure!(
+                repo.obj_exists(oid)?,
+                "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
+                ref_path,
+                oid,
+                self
+            );
+        }
+
+        debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", self, r);
+
+        Ok(r)
+    }
+
+    pub fn resolve(self, repo: &BitRepo) -> BitResult<ResolvedRef> {
+        let ref_path = repo.relative_path(self.path);
+        if !ref_path.exists() {
+            return Ok(ResolvedRef::Partial(self));
+        }
+
+        let resolved_ref = Lockfile::with_readonly(ref_path, |_| {
+            let contents = std::fs::read_to_string(ref_path)?;
+            // symbolic references can be recursive
+            // i.e. HEAD -> refs/heads/master -> <oid>
+            BitRef::from_str(contents.trim_end())?.resolve(repo)
+        })?;
+
+        if let ResolvedRef::Resolved(oid) = resolved_ref {
+            ensure!(
+                repo.obj_exists(oid)?,
+                "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
+                ref_path,
+                oid,
+                self
+            );
+        }
+
+        debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", self, resolved_ref);
+
+        Ok(resolved_ref)
     }
 }
 
@@ -239,12 +291,15 @@ impl BitRefDb {
     pub fn new(bitdir: BitPath) -> Self {
         Self { bitdir }
     }
+
+    pub fn join(&self, path: BitPath) -> BitPath {
+        self.bitdir.join(path)
+    }
 }
 
 pub trait BitRefDbBackend {
-    fn create(&self, sym: SymbolicRef) -> BitResult<BitRef>;
+    fn create(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()>;
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef>;
-    fn resolve(&self, sym: SymbolicRef) -> BitResult<BitRef>;
     // may implicitly create the ref
     fn update(&self, sym: SymbolicRef, to: BitRef) -> BitResult<()>;
     fn delete(&self, sym: SymbolicRef) -> BitResult<()>;
@@ -252,24 +307,25 @@ pub trait BitRefDbBackend {
 }
 
 impl BitRefDbBackend for BitRefDb {
-    fn create(&self, sym: SymbolicRef) -> BitResult<BitRef> {
-        todo!()
+    fn create(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
+        if self.exists(sym)? {
+            // todo improve error message by only leaving the branch name in a reliable manner somehow
+            // how do we differentiate something that lives in refs/heads vs HEAD
+            bail!("a reference `{}` already exists", sym);
+        }
+        self.update(sym, self.read(from)?)
     }
 
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
-        Lockfile::with_readonly(self.bitdir.join(sym.path), |lockfile| {
+        Lockfile::with_readonly(self.join(sym.path), |lockfile| {
             let head_file =
                 lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
             BitRef::deserialize_unbuffered(head_file)
         })
     }
 
-    fn resolve(&self, sym: SymbolicRef) -> BitResult<BitRef> {
-        todo!()
-    }
-
     fn update(&self, sym: SymbolicRef, to: BitRef) -> BitResult<()> {
-        Lockfile::with_mut(self.bitdir.join(sym.path), |lockfile| to.serialize(lockfile))
+        Lockfile::with_mut(self.join(sym.path), |lockfile| to.serialize(lockfile))
     }
 
     fn delete(&self, sym: SymbolicRef) -> BitResult<()> {
@@ -277,7 +333,7 @@ impl BitRefDbBackend for BitRefDb {
     }
 
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool> {
-        Ok(self.bitdir.join(sym.path).exists())
+        Ok(self.join(sym.path).exists())
     }
 }
 

@@ -244,6 +244,10 @@ impl BitRepo {
         self.update_ref(self.head_ref(), bitref.into())
     }
 
+    pub fn create_ref(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
+        self.refdb.create(sym, from)
+    }
+
     pub fn update_ref(&self, sym: SymbolicRef, to: impl Into<BitRef>) -> BitResult<()> {
         self.refdb.update(sym, to.into())
     }

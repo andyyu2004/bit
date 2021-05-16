@@ -31,6 +31,13 @@ macro_rules! bit_commit {
     };
 }
 
+macro_rules! bit_commit_all {
+    ($repo:expr) => {{
+        bit_add_all!($repo);
+        bit_commit!($repo);
+    }};
+}
+
 macro_rules! bit_add_all {
     ($repo:expr) => {
         $repo.bit_add_all()?

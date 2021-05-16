@@ -1,4 +1,5 @@
 use super::*;
+use crate::refs::{BitRef, SymbolicRef};
 use crate::test_utils::*;
 use quickcheck::{Arbitrary, Gen};
 
@@ -13,6 +14,21 @@ impl Arbitrary for Commit {
             message: generate_sane_string(1..300),
         }
     }
+}
+
+#[test]
+fn test_new_commit_moves_branch_not_head() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "somefile");
+        bit_commit_all!(repo);
+
+        // check HEAD has not moved
+        assert_eq!(
+            repo.head_ref().partially_resolve(repo)?,
+            BitRef::Symbolic(SymbolicRef::branch("master"))
+        );
+        Ok(())
+    })
 }
 
 #[test]
