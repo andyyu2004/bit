@@ -107,6 +107,7 @@ pub trait BitObjDbBackend {
             _ => Err(anyhow!(BitError::AmbiguousPrefix(prefix, candidates))),
         }
     }
+
     fn expand_id(&self, id: BitId) -> BitResult<Oid> {
         match id {
             BitId::Full(oid) => Ok(oid),
@@ -146,6 +147,7 @@ impl BitLooseObjDb {
 
 impl BitObjDbBackend for BitLooseObjDb {
     fn read(&self, id: BitId) -> BitResult<BitObjKind> {
+        trace!("BitLooseObjDb::read(id: {})", id);
         let mut stream = self.read_stream(id)?;
         obj::read_obj(&mut stream)
     }
@@ -186,15 +188,23 @@ impl BitObjDbBackend for BitLooseObjDb {
     }
 
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
-        let (dir, file) = prefix.split();
-        let dir = self.objects_path.join(dir);
-        if !dir.exists() {
+        let (dir, file_prefix) = prefix.split();
+        let full_dir = self.objects_path.join(dir);
+        if !full_dir.exists() {
             return Err(anyhow!(BitError::ObjectNotFound(prefix.into())));
         }
 
-        DirIter::new(dir)
-            .filter(|entry| Ok(entry.file_name().to_str().unwrap().starts_with(file)))
-            .map(|entry| Oid::from_str(dir.join(entry.path()).as_str()))
+        // looks into the relevant folder (determined by the two hash digit prefix)
+        // create oids by concatenating dir and the filename
+        DirIter::new(full_dir)
+            // it includes the "base" directory so we just explicitly filter that out for now
+            // is that intentional behaviour?
+            .filter(|entry| Ok(entry.path().is_file()))
+            .map(|entry| {
+                let filename = entry.file_name().to_str().unwrap();
+                Oid::from_str(&format!("{}{}", dir, filename))
+            })
+            .filter(|oid| oid.has_prefix(prefix))
             .collect::<Vec<_>>()
     }
 }
@@ -233,6 +243,7 @@ impl BitPackedObjDb {
 
 impl BitObjDbBackend for BitPackedObjDb {
     fn read(&self, id: BitId) -> BitResult<BitObjKind> {
+        trace!("BitPackedObjDb::read(id: {})", id);
         let oid = self.expand_id(id)?;
         for pack in self.packs.borrow_mut().iter_mut() {
             process!(pack.read_obj(oid));
@@ -269,3 +280,6 @@ impl BitObjDbBackend for BitPackedObjDb {
             .collect())
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -17,6 +17,7 @@ pub enum BitId {
     Partial(PartialOid),
 }
 
+#[cfg(test)]
 impl<'a> From<&'a str> for BitId {
     fn from(s: &'a str) -> Self {
         Self::from_str(s).unwrap()
@@ -113,6 +114,13 @@ impl PartialOid {
             )
         };
         (BitPath::intern(dir), BitPath::intern(file))
+    }
+}
+
+#[cfg(test)]
+impl<'s> From<&'s str> for PartialOid {
+    fn from(s: &'s str) -> Self {
+        Self::from_str(s).unwrap()
     }
 }
 
