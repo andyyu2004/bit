@@ -4,7 +4,7 @@ use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
-use crate::iter::BitIterator;
+use crate::iter::BitEntryIterator;
 use crate::lockfile::Lockfile;
 use crate::obj::{FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
@@ -172,7 +172,7 @@ impl BitIndexInner {
         self.entries.values().cloned().collect_vec().into_iter()
     }
 
-    pub fn iter(&self) -> impl BitIterator {
+    pub fn iter(&self) -> impl BitEntryIterator {
         fallible_iterator::convert(self.std_iter().map(Ok))
     }
 

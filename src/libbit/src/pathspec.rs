@@ -1,5 +1,5 @@
 use crate::error::{BitGenericError, BitResult};
-use crate::iter::BitIterator;
+use crate::iter::BitEntryIterator;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
@@ -32,7 +32,10 @@ impl Display for Pathspec {
 }
 
 impl BitRepo {
-    pub fn match_worktree_with(&self, pathspec: &Pathspec) -> BitResult<impl BitIterator + '_> {
+    pub fn match_worktree_with(
+        &self,
+        pathspec: &Pathspec,
+    ) -> BitResult<impl BitEntryIterator + '_> {
         pathspec.match_worktree(self)
     }
 }
@@ -49,11 +52,11 @@ impl Pathspec {
         None
     }
 
-    pub fn match_worktree<'r>(self, repo: &'r BitRepo) -> BitResult<impl BitIterator + 'r> {
+    pub fn match_worktree<'r>(self, repo: &'r BitRepo) -> BitResult<impl BitEntryIterator + 'r> {
         self.match_iterator(repo.worktree_iter()?)
     }
 
-    pub fn match_index(self) -> BitResult<impl BitIterator> {
+    pub fn match_index(self) -> BitResult<impl BitEntryIterator> {
         tls::with_index(|index| self.match_iterator(index.iter()))
     }
 
@@ -68,7 +71,7 @@ impl Pathspec {
         path.as_ref().starts_with(self.prefix)
     }
 
-    fn match_iterator(self, iterator: impl BitIterator) -> BitResult<impl BitIterator> {
+    fn match_iterator(self, iterator: impl BitEntryIterator) -> BitResult<impl BitEntryIterator> {
         Ok(iterator.filter(move |entry| Ok(self.matches_path(entry.filepath))))
     }
 

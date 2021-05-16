@@ -126,10 +126,11 @@ impl<'r> FallibleIterator for HeadIter<'r> {
     }
 }
 
-pub trait BitIterator = FallibleIterator<Item = BitIndexEntry, Error = BitGenericError>;
+pub trait BitEntryIterator = BitIterator<BitIndexEntry>;
+pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 
 impl BitRepo {
-    pub fn worktree_iter(&self) -> BitResult<impl BitIterator + '_> {
+    pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + '_> {
         let mut entries: Vec<_> = WorktreeIter::new(self)?.collect()?;
         // TODO worktree iterator does not return in the correct order
         // the comparator function on works per directory
@@ -140,16 +141,16 @@ impl BitRepo {
         Ok(fallible_iterator::convert(entries.into_iter().map(Ok)))
     }
 
-    pub fn head_iter(&self) -> BitResult<impl BitIterator + '_> {
+    pub fn head_iter(&self) -> BitResult<impl BitEntryIterator + '_> {
         trace!("head_iter()");
         let tree = self.head_tree()?;
         Ok(HeadIter::new(self, tree))
     }
 }
 
-trait BitIteratorExt: BitIterator {}
+trait BitIteratorExt: BitEntryIterator {}
 
-impl<I: BitIterator> BitIteratorExt for I {
+impl<I: BitEntryIterator> BitIteratorExt for I {
 }
 
 #[cfg(test)]

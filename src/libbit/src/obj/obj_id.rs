@@ -1,5 +1,6 @@
-use crate::error::BitGenericError;
+use crate::error::{BitGenericError, BitResult};
 use crate::hash::SHA1Hash;
+use crate::io::ReadExt;
 use crate::path::BitPath;
 use std::fmt::{self, Display, Formatter};
 use std::io::Write;
@@ -19,6 +20,18 @@ pub enum BitId {
 impl<'a> From<&'a str> for BitId {
     fn from(s: &'a str) -> Self {
         Self::from_str(s).unwrap()
+    }
+}
+
+impl Oid {
+    pub fn has_prefix(&self, prefix: PartialOid) -> BitResult<bool> {
+        let prefix_bytes = prefix.into_oid()?;
+        let n = prefix.len / 2;
+        // if prefix has odd length then we mask the next 4 bits and compare those too
+        let mask = if prefix.len & 1 == 0 { 0x00 } else { 0xf0 };
+        let oid_bytes = self.as_bytes();
+        Ok(prefix_bytes[..n] == oid_bytes[..n]
+            && prefix_bytes[n + 1] & mask == oid_bytes[n + 1] & mask)
     }
 }
 
@@ -87,6 +100,11 @@ pub struct PartialOid {
 }
 
 impl PartialOid {
+    // converts `PartialOid` into `Oid` by extending the missing bits with 0x00
+    pub fn into_oid(&self) -> BitResult<Oid> {
+        Ok(hex::decode(&self.bytes)?.as_slice().read_oid()?)
+    }
+
     pub fn split(&self) -> (BitPath, BitPath) {
         let (dir, file) = unsafe {
             (
@@ -104,7 +122,8 @@ impl FromStr for PartialOid {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ensure!(s.len() < 40, "creating partial hash with an invalid hex string (too long)");
         ensure!(s.len() >= 4, "bit hash prefix must be at least 4 hex characters");
-        let mut bytes = [0u8; 40];
+        // initializing every byte to "0" so we can easily convert this string format into a binary `Oid`
+        let mut bytes = [b"0"[0]; 40];
         bytes.as_mut().write_all(s.as_bytes())?;
         Ok(Self { bytes, len: s.len() })
     }

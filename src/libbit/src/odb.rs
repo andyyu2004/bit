@@ -1,4 +1,4 @@
-use crate::error::{BitError, BitErrorExt, BitResult};
+use crate::error::{BitError, BitResult, BitResultExt};
 use crate::hash;
 use crate::iter::DirIter;
 use crate::lockfile::Lockfile;
@@ -74,6 +74,18 @@ impl BitObjDbBackend for BitObjDb {
 
     backend_method!(expand_prefix: PartialOid => Oid);
 
+    fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
+        //? better way to write this?
+        Ok(self
+            .backends
+            .iter()
+            .map(|backend| backend.prefix_candidates(prefix))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect())
+    }
+
     fn exists(&self, id: BitId) -> BitResult<bool> {
         Ok(self.backends.iter().any(|backend| backend.exists(id).unwrap_or_default()))
     }
@@ -84,8 +96,17 @@ pub trait BitObjDbBackend {
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader>;
     fn write(&self, obj: &dyn BitObj) -> BitResult<Oid>;
     fn exists(&self, id: BitId) -> BitResult<bool>;
-    fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid>;
+    /// return a vector of oids that have a matching prefix
+    fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>>;
 
+    fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
+        let candidates = self.prefix_candidates(prefix)?;
+        match candidates.len() {
+            0 => Err(anyhow!(BitError::ObjectNotFound(prefix.into()))),
+            1 => Ok(candidates[0]),
+            _ => Err(anyhow!(BitError::AmbiguousPrefix(prefix, candidates))),
+        }
+    }
     fn expand_id(&self, id: BitId) -> BitResult<Oid> {
         match id {
             BitId::Full(oid) => Ok(oid),
@@ -134,29 +155,6 @@ impl BitObjDbBackend for BitLooseObjDb {
         obj::read_obj_header(&mut stream)
     }
 
-    fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
-        let (dir, file) = prefix.split();
-        let dir = self.objects_path.join(dir);
-        if !dir.exists() {
-            return Err(anyhow!(BitError::ObjectNotFound(prefix.into())));
-        }
-
-        let candidates = DirIter::new(dir)
-            .filter(|entry| Ok(entry.file_name().to_str().unwrap().starts_with(file)))
-            .collect::<Vec<_>>()?;
-        match candidates.len() {
-            0 => Err(anyhow!(BitError::ObjectNotFound(prefix.into()))),
-            1 => Oid::from_str(dir.join(candidates[0].path()).as_str()),
-            _ => Err(anyhow!(BitError::AmbiguousPrefix(
-                prefix,
-                candidates
-                    .into_iter()
-                    .map(|entry| Oid::from_str(dir.join(entry.path()).as_str()))
-                    .collect::<Result<_, _>>()?
-            ))),
-        }
-    }
-
     fn write(&self, obj: &dyn BitObj) -> BitResult<Oid> {
         let bytes = obj.serialize_with_headers()?;
         let hash = hash::hash_bytes(&bytes);
@@ -185,6 +183,19 @@ impl BitObjDbBackend for BitLooseObjDb {
             Err(err) if err.is_not_found_err() => Ok(false),
             Err(err) => Err(err),
         }
+    }
+
+    fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
+        let (dir, file) = prefix.split();
+        let dir = self.objects_path.join(dir);
+        if !dir.exists() {
+            return Err(anyhow!(BitError::ObjectNotFound(prefix.into())));
+        }
+
+        DirIter::new(dir)
+            .filter(|entry| Ok(entry.file_name().to_str().unwrap().starts_with(file)))
+            .map(|entry| Oid::from_str(dir.join(entry.path()).as_str()))
+            .collect::<Vec<_>>()
     }
 }
 
@@ -238,15 +249,23 @@ impl BitObjDbBackend for BitPackedObjDb {
     }
 
     fn write(&self, _obj: &dyn BitObj) -> BitResult<Oid> {
-        todo!()
-    }
-
-    fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
-        todo!()
+        panic!("writing directly to pack backend")
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
         let oid = self.expand_id(id)?;
         Ok(self.packs.borrow_mut().iter_mut().any(|pack| pack.obj_exists(oid).unwrap_or_default()))
+    }
+
+    fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
+        Ok(self
+            .packs
+            .borrow_mut()
+            .iter_mut()
+            .map(|pack| pack.prefix_matches(prefix))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect())
     }
 }

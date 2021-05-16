@@ -145,17 +145,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "colored"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3616f750b84d8f0de8a58bda93e08e2a81ad3f523089b05f1dffecab48c6cbd"
-dependencies = [
- "atty",
- "lazy_static",
- "winapi",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -455,7 +444,6 @@ dependencies = [
  "anyhow",
  "bumpalo",
  "chrono",
- "colored",
  "dirs",
  "fallible-iterator",
  "flate2",
@@ -472,6 +460,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
+ "owo-colors",
  "pathdiff",
  "quickcheck",
  "quickcheck_derive",
@@ -626,6 +615,12 @@ name = "os_str_bytes"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afb2e1c3ee07430c2cf76151675e583e0f19985fa6efae47d6848a3e2c824f85"
+
+[[package]]
+name = "owo-colors"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2fe43bf372b08cc9ccee5144715db59c79ab00168bbe4cf0d274dc0d5f64d7f"
 
 [[package]]
 name = "pathdiff"

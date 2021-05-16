@@ -70,6 +70,40 @@ fn read_write_blob_obj_preserves_bytes(bytes: Vec<u8>) -> BitResult<()> {
 fn construct_partial_hash() -> BitResult<()> {
     let hash = PartialOid::from_str("8e37a")?;
     assert_eq!(&hash[0..5], b"8e37a");
-    assert_eq!(hash[5..], [0u8; 35]);
+    // 0x30 is utf-8 for "0"
+    assert_eq!(hash[5..], [0x30; 35]);
+    Ok(())
+}
+
+#[test]
+fn test_convert_partial_oid_to_oid() -> BitResult<()> {
+    let partial = PartialOid::from_str("abcde")?;
+    let oid = partial.into_oid()?;
+    let mut expected = [0; 20];
+    expected[0] = 0xab;
+    expected[1] = 0xcd;
+    expected[2] = 0xe0;
+    assert_eq!(oid.as_bytes(), &expected);
+    Ok(())
+}
+
+#[test]
+fn test_match_oid_prefix() -> BitResult<()> {
+    let partial = PartialOid::from_str("abcde")?;
+    let mut bytes = [0; 20];
+    bytes[0] = 0xab;
+    bytes[1] = 0xcd;
+    bytes[2] = 0xe0;
+
+    let oid = Oid::new(bytes);
+    assert!(oid.has_prefix(partial)?);
+
+    // check it still works even tho only half the byte matches
+    bytes[2] = 0xe8;
+    let oid = Oid::new(bytes);
+    assert!(oid.has_prefix(partial)?);
+
+    let partial = PartialOid::from_str("abcded")?;
+    assert!(!oid.has_prefix(partial)?);
     Ok(())
 }

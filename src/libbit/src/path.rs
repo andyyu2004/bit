@@ -2,6 +2,7 @@ use crate::error::BitResult;
 use crate::interner::{with_path_interner, with_path_interner_mut};
 use crate::io::ReadExt;
 use crate::serialize::BufReadSeek;
+use anyhow::Context;
 use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -242,62 +243,6 @@ where
 
     fn index(&self, index: I) -> &Self::Output {
         &self.as_str()[index]
-    }
-}
-
-use anyhow::Context;
-use colored::*;
-impl Colorize for BitPath {
-    fn color<S: Into<Color>>(self, color: S) -> ColoredString {
-        self.as_str().color(color)
-    }
-
-    fn on_color<S: Into<Color>>(self, color: S) -> ColoredString {
-        self.as_str().on_color(color)
-    }
-
-    fn clear(self) -> ColoredString {
-        self.as_str().clear()
-    }
-
-    fn normal(self) -> ColoredString {
-        self.as_str().normal()
-    }
-
-    fn bold(self) -> ColoredString {
-        self.as_str().bold()
-    }
-
-    fn dimmed(self) -> ColoredString {
-        self.as_str().dimmed()
-    }
-
-    fn italic(self) -> ColoredString {
-        self.as_str().italic()
-    }
-
-    fn underline(self) -> ColoredString {
-        self.as_str().underline()
-    }
-
-    fn blink(self) -> ColoredString {
-        self.as_str().blink()
-    }
-
-    fn reverse(self) -> ColoredString {
-        self.as_str().reverse()
-    }
-
-    fn reversed(self) -> ColoredString {
-        self.as_str().reversed()
-    }
-
-    fn hidden(self) -> ColoredString {
-        self.as_str().hidden()
-    }
-
-    fn strikethrough(self) -> ColoredString {
-        self.as_str().strikethrough()
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
-use crate::iter::BitIterator;
+use crate::iter::BitEntryIterator;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
@@ -27,8 +27,8 @@ pub trait DiffBuilder<'r>: Differ<'r> {
 pub struct GenericDiffer<'d, 'r, D, I, J>
 where
     D: DiffBuilder<'r>,
-    I: BitIterator,
-    J: BitIterator,
+    I: BitEntryIterator,
+    J: BitEntryIterator,
 {
     differ: &'d mut D,
     old_iter: Peekable<Fuse<I>>,
@@ -144,8 +144,8 @@ impl<'r> BitIndex<'r> {
 impl<'d, 'r, D, I, J> Differ<'r> for GenericDiffer<'d, 'r, D, I, J>
 where
     D: DiffBuilder<'r>,
-    I: BitIterator,
-    J: BitIterator,
+    I: BitEntryIterator,
+    J: BitEntryIterator,
 {
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
         self.old_iter.next()?;
@@ -172,8 +172,8 @@ where
 impl<'d, 'r, D, I, J> GenericDiffer<'d, 'r, D, I, J>
 where
     D: DiffBuilder<'r>,
-    I: BitIterator,
-    J: BitIterator,
+    I: BitEntryIterator,
+    J: BitEntryIterator,
 {
     fn new(differ: &'d mut D, old_iter: I, new_iter: J) -> Self {
         Self {

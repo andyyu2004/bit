@@ -1,5 +1,5 @@
 use crate::obj::{BitId, Oid, PartialOid};
-use colored::*;
+use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
 
 pub type BitResult<T> = Result<T, BitGenericError>;
@@ -10,16 +10,33 @@ pub type BitGenericError = anyhow::Error;
 pub enum BitError {
     ObjectNotFound(BitId),
     /// object `{0}` not found in pack index but could be inserted at `{1}`
-    ObjectNotFoundInPackIndex(Oid, usize),
+    ObjectNotFoundInPackIndex(Oid, u64),
     AmbiguousPrefix(PartialOid, Vec<Oid>),
 }
 
 pub trait BitErrorExt {
+    fn into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)>;
+}
+
+impl BitErrorExt for BitGenericError {
+    /// tries to convert generic error into specific error and just returns previous error on failure
+    // this pattern feels pretty shit, not sure of a better way atm
+    // usually don't have to catch errors that often so its not too bad (yet?)
+    fn into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)> {
+        match self.downcast::<BitError>() {
+            Ok(BitError::ObjectNotFoundInPackIndex(oid, idx)) => Ok((oid, idx)),
+            Ok(err) => Err(anyhow!(err)),
+            Err(err) => Err(err),
+        }
+    }
+}
+
+pub trait BitResultExt {
     fn is_not_found_err(&self) -> bool;
     fn is_fatal(&self) -> bool;
 }
 
-macro_rules! error_ext_method {
+macro_rules! error_ext_is_method {
     ($method:ident) => {
         fn $method(&self) -> bool {
             match self {
@@ -30,13 +47,13 @@ macro_rules! error_ext_method {
     };
 }
 
-impl<T> BitErrorExt for BitResult<T> {
-    error_ext_method!(is_not_found_err);
+impl<T> BitResultExt for BitResult<T> {
+    error_ext_is_method!(is_not_found_err);
 
-    error_ext_method!(is_fatal);
+    error_ext_is_method!(is_fatal);
 }
 
-impl BitErrorExt for BitGenericError {
+impl BitResultExt for BitGenericError {
     fn is_not_found_err(&self) -> bool {
         match self.downcast_ref::<BitError>() {
             Some(err) => match err {
@@ -76,7 +93,7 @@ impl Display for BitError {
                 writeln!(f, "prefix oid `{}` is ambiguous", prefix)?;
                 write_hint!(f, "the candidates are:");
                 for candidate in candidates {
-                    write_hint!(f, "  {}", candidate);
+                    write_hint!(f, "  {}", candidate.yellow());
                 }
                 Ok(())
             }

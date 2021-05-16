@@ -1,10 +1,12 @@
 use crate::delta::Delta;
-use crate::error::{BitError, BitErrorExt, BitResult};
+use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::hash::{crc_of, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
+use crate::iter::{BitEntryIterator, BitIterator};
 use crate::obj::*;
 use crate::path::{BitFileStream, BitPath};
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
+use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
 use sha1::digest::generic_array::typenum::Bit;
 use std::fmt::{self, Debug, Formatter};
@@ -84,6 +86,26 @@ impl Pack {
 
     pub fn obj_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
         self.idx_reader().find_oid_crc_offset(oid)
+    }
+
+    /// returns a list of oids that start with `prefix`
+    pub fn prefix_matches(&mut self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
+        trace!("prefix_matches(prefix: {})", prefix);
+        let extended = prefix.into_oid()?;
+        let r = match self.obj_offset(extended) {
+            // in the unlikely event that extending the prefix with zeroes
+            // resulted in a valid oid then we can just return that as the only candidate
+            Ok(..) => Ok(vec![extended]),
+            Err(err) => {
+                // we know `idx` is the index of the very first oid that has prefix `prefix`
+                // as we extended prefix by using only zeroes
+                // so we just start scanning from `idx` until the prefixes change
+                let (_, idx) = err.into_obj_not_found_in_pack_index_err()?;
+                self.idx_reader().oid_iter(idx).take_while(|oid| oid.has_prefix(prefix)).collect()
+            }
+        };
+        trace!("prefix_matches(..) -> {:?}", r);
+        r
     }
 
     pub fn obj_exists(&mut self, oid: Oid) -> BitResult<bool> {
@@ -177,25 +199,11 @@ impl Pack {
                     base_offset
                 );
                 let raw = self.read_obj_raw_at(base_offset)?.expand_with_delta(&ofs_delta.delta)?;
-                // ensure_eq!(
-                //     crc,
-                //     crc_of(&raw.bytes),
-                //     "invalid crc (ofs-delta); expected `{}`, got `{}`",
-                //     crc,
-                //     crc_of(&raw.bytes)
-                // );
                 BitObjKind::from_raw(raw)?
             }
             BitObjKind::RefDelta(ref_delta) => {
                 let raw =
                     self.read_obj_raw(ref_delta.base_oid)?.expand_with_delta(&ref_delta.delta)?;
-                // ensure_eq!(
-                //     crc,
-                //     crc_of(&raw.bytes),
-                //     "invalid crc (ofs-delta); expected `{}`, got `{}`",
-                //     crc,
-                //     crc_of(&raw.bytes)
-                // );
                 BitObjKind::from_raw(raw)?
             }
         };
@@ -275,11 +283,38 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         base + index * SIZE[layer]
     }
 
-    /// read for layer at index (index is not the same as byte offset)
+    /// read from layer at index (index is not the same as byte offset)
     pub fn read_from<T: Deserialize>(&mut self, layer: Layer, index: u64) -> BitResult<T> {
         let offset = self.offset_of(layer, index);
         self.seek(SeekFrom::Start(offset))?;
         self.read_type()
+    }
+
+    pub fn read_oid_at(&mut self, index: u64) -> BitResult<Oid> {
+        self.read_from(Layer::Oid, index)
+    }
+
+    pub fn oid_iter(&mut self, start: u64) -> impl BitIterator<Oid> + '_ {
+        struct OidIter<'a, R> {
+            reader: &'a mut PackIndexReader<R>,
+            index: u64,
+        }
+
+        impl<'a, R: BufReadSeek> FallibleIterator for OidIter<'a, R> {
+            type Error = BitGenericError;
+            type Item = Oid;
+
+            fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+                if self.index >= self.reader.n {
+                    return Ok(None);
+                }
+                let r = self.reader.read_oid_at(self.index);
+                self.index += 1;
+                Some(r).transpose()
+            }
+        }
+
+        OidIter { reader: self, index: start }
     }
 
     /// return the index of `oid` in the Oid layer of the packindex (unit is sizeof::<Oid>)
@@ -314,7 +349,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         let oids = self.reader.read_vec((high - low) as usize)?;
         match oids.binary_search(&oid) {
             Ok(idx) => Ok(low + idx as u64),
-            Err(idx) => Err(anyhow!(BitError::ObjectNotFoundInPackIndex(oid, idx))),
+            Err(idx) => Err(anyhow!(BitError::ObjectNotFoundInPackIndex(oid, low + idx as u64))),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::diff::{HeadIndexDiff, IndexWorktreeDiff};
 use crate::error::BitResult;
 use crate::repo::BitRepo;
-use colored::*;
+use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
