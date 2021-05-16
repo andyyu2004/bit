@@ -5,7 +5,7 @@ use crate::lockfile::Lockfile;
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
-use crate::refs::BitRef;
+use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, ResolvedRef, SymbolicRef};
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use crate::tls;
@@ -29,6 +29,7 @@ pub struct BitRepo {
     config_filepath: BitPath,
     index_filepath: BitPath,
     odb: BitObjDb,
+    refdb: BitRefDb,
 }
 
 #[inline]
@@ -73,6 +74,7 @@ impl BitRepo {
             index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
             odb: BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH))?,
+            refdb: BitRefDb::new(bitdir),
         })
     }
 
@@ -94,49 +96,23 @@ impl BitRepo {
     }
 
     #[inline]
-    pub fn config_path(&self) -> &Path {
-        &self.config_filepath
+    pub fn config_path(&self) -> BitPath {
+        self.config_filepath
     }
 
     #[inline]
-    pub fn head_path(&self) -> &Path {
-        &self.head_filepath
+    pub fn head_path(&self) -> BitPath {
+        self.head_filepath
     }
 
     #[inline]
-    pub fn index_path(&self) -> &Path {
-        &self.index_filepath
+    pub fn head_ref(&self) -> SymbolicRef {
+        SymbolicRef::new(self.head_filepath)
     }
 
-    /// the tree belonging to the `HEAD` reference, or an empty tree if HEAD doesn't exist
-    pub fn head_tree(&self) -> BitResult<Tree> {
-        let oid = match self.resolved_head()? {
-            Some(oid) => oid,
-            None => return Ok(Tree::default()),
-        };
-        let commit = self.read_obj(oid)?.into_commit();
-        Ok(self.read_obj(commit.tree())?.into_tree())
-    }
-
-    /// returns the resolved hash of the HEAD symref
-    pub fn resolved_head(&self) -> BitResult<Option<Oid>> {
-        match self.read_head()? {
-            Some(head) => self.resolve_ref_opt(head),
-            None => Ok(None),
-        }
-    }
-
-    pub fn read_head(&self) -> BitResult<Option<BitRef>> {
-        Lockfile::with_readonly(self.head_path(), |lockfile| {
-            lockfile.file().map(BitRef::deserialize_unbuffered).transpose()
-        })
-    }
-
-    pub fn update_head(&self, bitref: impl Into<BitRef>) -> BitResult<()> {
-        Lockfile::with_mut(self.head_path(), |lockfile| {
-            bitref.into().serialize(lockfile)?;
-            Ok(())
-        })
+    #[inline]
+    pub fn index_path(&self) -> BitPath {
+        self.index_filepath
     }
 
     pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
@@ -237,6 +213,39 @@ impl BitRepo {
             BitId::Full(hash) => Ok(hash),
             BitId::Partial(_partial) => todo!(),
         }
+    }
+
+    /// the tree belonging to the `HEAD` reference, or an empty tree if either
+    /// HEAD does not exist, or is not fully resolvable
+    pub fn head_tree(&self) -> BitResult<Tree> {
+        let oid = match self.resolve_head()? {
+            ResolvedRef::Full(oid) => oid,
+            _ => return Ok(Tree::default()),
+        };
+        let commit = self.read_obj(oid)?.into_commit();
+        Ok(self.read_obj(commit.tree())?.into_tree())
+    }
+
+    /// returns the resolved hash of the HEAD symref
+    pub fn resolve_head(&self) -> BitResult<ResolvedRef> {
+        let head = self.read_head()?;
+        self.resolve_ref(head)
+    }
+
+    pub fn partially_resolve_head(&self) -> BitResult<ResolvedRef> {
+        self.read_head()?.partially_resolve(self)
+    }
+
+    pub fn read_head(&self) -> BitResult<BitRef> {
+        self.refdb.read(self.head_ref())
+    }
+
+    pub fn update_head(&self, bitref: impl Into<BitRef>) -> BitResult<()> {
+        self.update_ref(self.head_ref(), bitref.into())
+    }
+
+    pub fn update_ref(&self, sym: SymbolicRef, to: impl Into<BitRef>) -> BitResult<()> {
+        self.refdb.update(sym, to.into())
     }
 
     /// writes `obj` into the object store returning its full hash

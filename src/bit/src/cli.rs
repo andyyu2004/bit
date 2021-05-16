@@ -1,4 +1,5 @@
 mod cli_add;
+mod cli_branch;
 mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
@@ -6,12 +7,13 @@ mod cli_ls_files;
 mod cli_status;
 mod cli_update_index;
 
-use self::cli_add::BitAddCliOpts;
+use cli_add::BitAddCliOpts;
 // the bitopts and bitcliopts are distinct types for a few reasons
 // - the parsed format is often not very convenient for actual usage
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
 // - probably will make it such that libbit doesn't even expose full commands
 //   and be something more like libgit2
+use cli_branch::*;
 use cli_commit::BitCommitCliOpts;
 use cli_commit_tree::BitCommitTreeCliOpts;
 use cli_config::BitConfigCliOpts;
@@ -26,6 +28,14 @@ use libbit::obj::BitObjType;
 use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
 use std::path::PathBuf;
+
+// experiment with changing structure of everything
+// more code should be in the binary
+// to much is in libbit I think
+// see comment above
+pub trait Cmd {
+    fn exec(&self, repo: &BitRepo) -> BitResult<()>;
+}
 
 pub fn run() -> BitResult<()> {
     let opts = BitCliOpts::parse();
@@ -59,6 +69,7 @@ pub fn run() -> BitResult<()> {
         BitSubCmd::Status(_opts) => Ok(print!("{}", repo.status_report()?)),
         BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
         BitSubCmd::Commit(opts) => repo.bit_commit(opts.message),
+        BitSubCmd::Branch(opts) => opts.exec(repo),
     })
 }
 
@@ -74,6 +85,7 @@ pub struct BitCliOpts {
 #[derive(Clap, Debug)]
 pub enum BitSubCmd {
     Add(BitAddCliOpts),
+    Branch(BitBranchCliOpts),
     CatFile(BitCatFileCliOpts),
     CommitTree(BitCommitTreeCliOpts),
     Config(BitConfigCliOpts),

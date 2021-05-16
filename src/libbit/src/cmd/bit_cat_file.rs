@@ -20,7 +20,7 @@ pub enum BitCatFileOperation {
 
 impl BitRepo {
     pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<()> {
-        let id = self.resolve_ref(opts.object)?;
+        let id = self.fully_resolve_ref(opts.object)?;
         match opts.op {
             // TODO not really a correct implementation currently
             // just prints it in an alternate format

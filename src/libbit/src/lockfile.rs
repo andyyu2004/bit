@@ -33,6 +33,7 @@ impl Lockfile {
     /// accepts the path to the file to be locked
     /// this function will create a lockfile with an extension `<path>.lock`
     /// consumers of this api should never have access to the lockfile
+    /// this will create the file if it doesn't exist
     /// directly, instead they should use the `with_` apis
     fn open(path: impl AsRef<Path>) -> BitResult<Self> {
         let path = path.as_ref();

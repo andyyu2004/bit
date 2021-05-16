@@ -1,4 +1,5 @@
 mod bit_add;
+mod bit_branch;
 mod bit_cat_file;
 mod bit_commit;
 mod bit_commit_tree;

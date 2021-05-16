@@ -1,6 +1,5 @@
 use super::*;
 use crate::hash::SHA1Hash;
-use crate::io::*;
 use std::io::BufReader;
 
 // checks that hash reader incrementally hashes correctly without the buffer messing stuff up

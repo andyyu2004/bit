@@ -14,11 +14,19 @@ macro_rules! bug {
     };
 }
 
+macro_rules! symbolic {
+    ($sym:expr) => {{
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        crate::refs::SymbolicRef::from_str($sym).unwrap()
+    }};
+}
+
 macro_rules! symbolic_ref {
     ($sym:expr) => {{
         #[allow(unused_imports)]
         use std::str::FromStr;
-        crate::refs::BitRef::Symbolic(crate::refs::SymbolicRef::from_str($sym).unwrap())
+        crate::refs::BitRef::Symbolic(symbolic!($sym))
     }};
 }
 
