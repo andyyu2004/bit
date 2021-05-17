@@ -54,6 +54,7 @@ pub mod path;
 pub mod pathspec;
 pub mod refs;
 pub mod repo;
+pub mod rev;
 pub mod status;
 
 mod delta;
@@ -65,7 +66,6 @@ mod iter;
 mod lockfile;
 mod odb;
 mod pack;
-mod rev;
 mod serialize;
 mod signature;
 mod time;

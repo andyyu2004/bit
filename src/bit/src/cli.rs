@@ -7,12 +7,15 @@ mod cli_ls_files;
 mod cli_status;
 mod cli_update_index;
 
-use cli_add::BitAddCliOpts;
+// notes
 // the bitopts and bitcliopts are distinct types for a few reasons
 // - the parsed format is often not very convenient for actual usage
 // - feels a bit (punny!) wrong to have cli parsing stuff in the library
 // - probably will make it such that libbit doesn't even expose full commands
 //   and be something more like libgit2
+
+use clap::{AppSettings, Clap};
+use cli_add::BitAddCliOpts;
 use cli_branch::*;
 use cli_commit::BitCommitCliOpts;
 use cli_commit_tree::BitCommitTreeCliOpts;
@@ -20,13 +23,11 @@ use cli_config::BitConfigCliOpts;
 use cli_ls_files::BitLsFilesCliOpts;
 use cli_status::BitStatusCliOpts;
 use cli_update_index::BitUpdateIndexCliOpts;
-
-use clap::{AppSettings, Clap};
 use libbit::cmd::*;
 use libbit::error::BitResult;
 use libbit::obj::BitObjType;
-use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
+use libbit::rev::LazyRevspec;
 use std::path::PathBuf;
 
 // experiment with changing structure of everything
@@ -155,12 +156,12 @@ pub struct BitCatFileCliOpts {
     #[clap(required_unless_present_any(&["pp", "ty", "size", "exit"]))]
     pub objtype: Option<BitObjType>,
     #[clap(required = true)]
-    pub object: BitRef,
+    pub rev: LazyRevspec,
 }
 
 impl Into<BitCatFileOpts> for BitCatFileCliOpts {
     fn into(self) -> BitCatFileOpts {
-        let Self { pp, exit, ty, size, objtype, object } = self;
+        let Self { pp, exit, ty, size, objtype, rev } = self;
         let op = if pp {
             BitCatFileOperation::PrettyPrint
         } else if size {
@@ -172,6 +173,6 @@ impl Into<BitCatFileOpts> for BitCatFileCliOpts {
         } else {
             BitCatFileOperation::PrintAsType(objtype.unwrap())
         };
-        BitCatFileOpts { object, op }
+        BitCatFileOpts { rev, op }
     }
 }

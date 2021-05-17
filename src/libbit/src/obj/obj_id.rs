@@ -74,10 +74,6 @@ impl FromStr for BitId {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !s.chars().all(|c| c.is_ascii_hexdigit()) {
-            bail!("bit hashes should only contain ascii hex digits")
-        }
-
         if s.len() == 40 {
             Ok(Self::Full(Oid::from_str(s).unwrap()))
         } else if s.len() < 40 {
@@ -130,6 +126,10 @@ impl FromStr for PartialOid {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ensure!(s.len() < 40, "creating partial hash with an invalid hex string (too long)");
         ensure!(s.len() >= 4, "bit hash prefix must be at least 4 hex characters");
+        ensure!(
+            s.chars().all(|c| c.is_ascii_hexdigit()),
+            "partial hashes should only contain ascii hex digits"
+        );
         // initializing every byte to "0" so we can easily convert this string format into a binary `Oid`
         let mut bytes = [b"0"[0]; 40];
         bytes.as_mut().write_all(s.as_bytes())?;

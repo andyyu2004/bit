@@ -53,8 +53,11 @@ impl BitRepo {
         let r = r.into();
         match r.resolve(self)? {
             BitRef::Direct(oid) => Ok(oid),
-            BitRef::Symbolic(sym) =>
-                bail!("failed to fully resolve ref `{}`: references nonexistent file `{}`", r, sym),
+            BitRef::Symbolic(sym) => bail!(
+                "failed to fully resolve symbolic ref `{}`: references nonexistent file `{}`",
+                r,
+                sym
+            ),
         }
     }
 

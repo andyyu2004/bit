@@ -75,6 +75,10 @@ impl FromStr for SHA1Hash {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ensure!(s.len() == 40, "creating SHA1 with invalid hex string (incorrect length)");
+        ensure!(
+            s.chars().all(|c| c.is_ascii_hexdigit()),
+            "bit hashes should only contain ascii hex digits"
+        );
         let mut buf = [0u8; 20];
         hex::decode_to_slice(s, &mut buf)?;
         Ok(Self(buf))

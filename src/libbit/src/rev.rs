@@ -1,17 +1,19 @@
 use crate::error::{BitGenericError, BitResult};
-use crate::obj::{BitObjType, Oid};
+use crate::obj::{BitObjType, Oid, PartialOid};
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
+use crate::tls;
+use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
-use std::iter::FromIterator;
+use std::lazy::OnceCell;
 use std::str::FromStr;
 
-//
-// <rev> = <rev>^ | <rev>~<num> | <ref>
+// <rev> ::= <rev>^ | <rev>~<num> | <ref>  | <partial-oid>
 #[derive(Debug, Clone, PartialEq)]
 pub enum Revspec {
     Ref(BitRef),
+    Partial(PartialOid),
     Parent(Box<Revspec>),
     Ancestor(Box<Revspec>, u32),
 }
@@ -40,6 +42,7 @@ impl BitRepo {
                 );
                 Ok(oid)
             }
+            Revspec::Partial(prefix) => self.expand_prefix(*prefix),
             Revspec::Parent(inner) => self.resolve_rev(inner).and_then(|oid| get_parent(oid)),
             Revspec::Ancestor(rev, n) =>
                 (0..*n).try_fold(self.resolve_rev(rev)?, |oid, _| get_parent(oid)),
@@ -51,48 +54,85 @@ impl Display for Revspec {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Revspec::Ref(r) => write!(f, "{}", r),
+            Revspec::Partial(prefix) => write!(f, "{}", prefix),
             Revspec::Parent(rev) => write!(f, "{}^", rev),
             Revspec::Ancestor(rev, n) => write!(f, "{}~{}", rev, n),
         }
     }
 }
 
-impl FromStr for Revspec {
-    type Err = BitGenericError;
+// pretty weird wrapper around revspec
+// problem is revspec requires repo to be properly evaluated (as it requires some context to be parsed properly)
+// but we want FromStr to be implemented so clap can use it
+// this wrapper can lazily evaluated to get a parsed revspec (via `eval`)
+// obviously, this must only be done after tls::REPO is set
+#[derive(Debug)]
+pub struct LazyRevspec {
+    src: String,
+    parsed: OnceCell<Revspec>,
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        RevspecParser::new(s).parse()
+impl LazyRevspec {
+    pub fn eval(&self) -> BitResult<&Revspec> {
+        self.parsed.get_or_try_init(|| RevspecParser::new(&self.src).parse())
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-enum Token {
-    Ref(BitRef),
-    Num(u32),
-    Caret,
-    Tilde,
+impl FromStr for LazyRevspec {
+    type Err = BitGenericError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self { src: s.to_owned(), parsed: Default::default() })
+    }
+}
+
+lazy_static! {
+    static ref REV_SEPS: HashSet<char> = hashset! {
+        '@', '~', '^'
+    };
 }
 
 struct RevspecParser<'a> {
     src: &'a str,
-    seps: HashSet<char>,
 }
 
 impl<'a> RevspecParser<'a> {
     pub fn new(src: &'a str) -> Self {
-        Self { src, seps: HashSet::from_iter(std::array::IntoIter::new(['@', '~', '^'])) }
+        Self { src }
     }
 
     // moves src to the index of separator and returns the str before the separator
     fn next(&mut self) -> BitResult<&str> {
-        let i = self.src.find(|c| self.seps.contains(&c)).unwrap_or_else(|| self.src.len());
+        let i = self.src.find(|c| REV_SEPS.contains(&c)).unwrap_or_else(|| self.src.len());
         let s = &self.src[..i];
         self.src = &self.src[i..];
         Ok(s)
     }
 
-    fn expect_ref(&mut self) -> BitResult<BitRef> {
-        Ok(BitRef::from_str(self.next()?)?)
+    /// either a partialoid or a ref
+    fn parse_base(&mut self) -> BitResult<Revspec> {
+        let s = self.next()?;
+        // try to interpret as a ref first and if it parses, then expand it to see if it resolves to something valid
+        // this is better than doing it as a partialoid first as partialoid might fail either due to being ambiguous or due to not existing
+        // but refs will only fail for not existing
+        // rev's are ambiguous
+        // how can we tell if something is a partial oid or a valid reference (e.g. nothing prevents "abcd" from being both a valid prefix and valid branch name)
+        // (if a branch happens to have the same name as a valid prefix then bad luck I guess? but seems quite unlikely in practice)
+        tls::REPO.with(|repo| {
+            if let Ok(r) = BitRef::from_str(s).and_then(|r| {
+                r.resolve(repo)?;
+                // we don't return the resolved ref as we want the original for better error messages
+                // we are just checking if it is resolvable
+                Ok(r)
+            }) {
+                Ok(Revspec::Ref(r))
+            } else {
+                PartialOid::from_str(s)
+                    .and_then(|prefix| repo.expand_prefix(prefix))
+                    .map(Into::into)
+                    .map(Revspec::Ref)
+            }
+        })
     }
 
     fn expect_num(&mut self) -> BitResult<u32> {
@@ -100,7 +140,7 @@ impl<'a> RevspecParser<'a> {
     }
 
     pub fn parse(mut self) -> BitResult<Revspec> {
-        let mut rev = Revspec::Ref(self.expect_ref()?);
+        let mut rev = self.parse_base()?;
         while !self.src.is_empty() {
             let (c, cs) = self.src.split_at(1);
             self.src = cs;

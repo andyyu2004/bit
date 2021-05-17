@@ -1,11 +1,11 @@
 use crate::error::BitResult;
 use crate::obj::BitObjType;
-use crate::refs::BitRef;
 use crate::repo::BitRepo;
+use crate::rev::LazyRevspec;
 
 #[derive(Debug)]
 pub struct BitCatFileOpts {
-    pub object: BitRef,
+    pub rev: LazyRevspec,
     pub op: BitCatFileOperation,
 }
 
@@ -20,7 +20,7 @@ pub enum BitCatFileOperation {
 
 impl BitRepo {
     pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<()> {
-        let id = self.fully_resolve_ref(opts.object)?;
+        let id = self.resolve_rev(opts.rev.eval()?)?;
         match opts.op {
             // TODO not really a correct implementation currently
             // just prints it in an alternate format
