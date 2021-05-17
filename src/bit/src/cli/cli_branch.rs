@@ -10,7 +10,7 @@ pub struct BitBranchCliOpts {
 
 impl Cmd for BitBranchCliOpts {
     fn exec(&self, repo: &BitRepo) -> BitResult<()> {
-        repo.create_branch(&self.name)?;
+        repo.bit_create_branch(&self.name)?;
         Ok(())
     }
 }

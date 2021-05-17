@@ -1,7 +1,7 @@
-use crate::error::BitResult;
-use crate::repo::BitRepo;
-
 use super::is_valid_name;
+use crate::error::BitResult;
+use crate::refs::BitRef;
+use crate::repo::BitRepo;
 
 #[test]
 fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
@@ -17,9 +17,42 @@ fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
 }
 
 #[test]
-fn test_resolve_head_symref() -> BitResult<()> {
+fn test_resolve_head_symref_in_fresh_repo() -> BitResult<()> {
     BitRepo::with_test_repo(|repo| {
+        // it should only resolve until `refs/heads/master` as the branch file doesn't exist yet
         assert_eq!(repo.resolve_ref(HEAD!())?, symbolic_ref!("refs/heads/master"));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_resolve_head_symref() -> BitResult<()> {
+    BitRepo::find(repos_dir!("ribble"), |repo| {
+        // HEAD -> `refs/heads/master` should exist on a non empty repo, then it should resolve to the oid contained within master
+        assert_eq!(
+            repo.resolve_ref(HEAD!())?,
+            BitRef::Direct("902e59e7eadc1c44586354c9ecb3098fb316c2c4".into())
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn test_create_branch_in_fresh() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        let err = repo.bit_create_branch("new-branch").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "branch `refs/heads/master` does not exist. Try creating a commit on the branch first"
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn test_create_branch() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        repo.bit_create_branch("new-branch")?;
         Ok(())
     })
 }

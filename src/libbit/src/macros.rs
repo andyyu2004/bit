@@ -10,7 +10,7 @@ macro_rules! ensure_eq {
 // absolute path to the tests directory
 macro_rules! tests_dir {
     () => {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
     };
     ($path:expr) => {
         tests_dir!().join($path)

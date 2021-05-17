@@ -171,8 +171,7 @@ impl BitRef {
     pub fn fully_resolve(&self, repo: &BitRepo) -> BitResult<Oid> {
         match self.resolve(repo)? {
             BitRef::Direct(oid) => Ok(oid),
-            BitRef::Symbolic(sym) =>
-                bail!("branch `{}` does not exist. Try creating a commit on the branch first", sym),
+            BitRef::Symbolic(sym) => sym.fully_resolve(repo),
         }
     }
 
@@ -180,7 +179,6 @@ impl BitRef {
     pub fn partially_resolve(&self, repo: &BitRepo) -> BitResult<Self> {
         match self {
             BitRef::Direct(..) => Ok(*self),
-            // TODO this case doesn't seem right.. should probably at least try read the symref?
             BitRef::Symbolic(sym) => sym.partially_resolve(repo),
         }
     }
@@ -216,6 +214,14 @@ impl SymbolicRef {
         Ok(r)
     }
 
+    pub fn fully_resolve(self, repo: &BitRepo) -> BitResult<Oid> {
+        match self.resolve(repo)? {
+            BitRef::Direct(oid) => Ok(oid),
+            BitRef::Symbolic(sym) =>
+                bail!("branch `{}` does not exist. Try creating a commit on the branch first", sym),
+        }
+    }
+
     pub fn resolve(self, repo: &BitRepo) -> BitResult<BitRef> {
         match self.partially_resolve(repo)? {
             BitRef::Direct(oid) => Ok(BitRef::Direct(oid)),
@@ -240,8 +246,10 @@ impl BitRefDb {
     }
 }
 
+// unfortunately, doesn't seem like its easy to support a resolve operation on refdb as it will require reading
+// objects for validation but both refdb and odb are owned by the repo so not sure if this is feasible
 pub trait BitRefDbBackend {
-    fn create(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()>;
+    fn create(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()>;
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef>;
     // may implicitly create the ref
     fn update(&self, sym: SymbolicRef, to: BitRef) -> BitResult<()>;
@@ -250,13 +258,13 @@ pub trait BitRefDbBackend {
 }
 
 impl BitRefDbBackend for BitRefDb {
-    fn create(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
+    fn create(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
         if self.exists(sym)? {
             // todo improve error message by only leaving the branch name in a reliable manner somehow
             // how do we differentiate something that lives in refs/heads vs HEAD
             bail!("a reference `{}` already exists", sym);
         }
-        self.update(sym, self.read(from)?)
+        self.update(sym, from)
     }
 
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
