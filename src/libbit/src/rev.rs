@@ -22,6 +22,14 @@ impl BitRepo {
     /// resolves revision specification to the commit oid
     pub fn resolve_rev(&self, rev: &Revspec) -> BitResult<Oid> {
         let get_parent = |oid: Oid| -> BitResult<Oid> {
+            let obj_type = self.read_obj_header(oid)?.obj_type;
+            ensure_eq!(
+                obj_type,
+                BitObjType::Commit,
+                "object `{}` is a {}, not a commit",
+                oid,
+                obj_type
+            );
             let commit = self.read_obj(oid)?.into_commit();
             match commit.parent {
                 Some(parent) => Ok(parent),
@@ -30,18 +38,7 @@ impl BitRepo {
         };
 
         match rev {
-            Revspec::Ref(r) => {
-                let oid = self.resolve_ref(*r)?.try_into_oid()?;
-                let obj_type = self.read_obj_header(oid)?.obj_type;
-                ensure_eq!(
-                    obj_type,
-                    BitObjType::Commit,
-                    "object `{}` is a {}, not a commit",
-                    oid,
-                    obj_type
-                );
-                Ok(oid)
-            }
+            Revspec::Ref(r) => self.resolve_ref(*r)?.try_into_oid(),
             Revspec::Partial(prefix) => self.expand_prefix(*prefix),
             Revspec::Parent(inner) => self.resolve_rev(inner).and_then(|oid| get_parent(oid)),
             Revspec::Ancestor(rev, n) =>

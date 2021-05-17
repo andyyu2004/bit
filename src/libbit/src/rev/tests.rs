@@ -91,11 +91,24 @@ fn test_resolve_complex_revspec() -> BitResult<()> {
 }
 
 #[test]
+fn test_resolve_parent_of_non_commit_ref() -> BitResult<()> {
+    BitRepo::find("tests/repos/ribble", |repo| {
+        let rev = parse_rev!("ebc3780a093cbda629d531c1c0d530a82063ee6f^");
+        let err = repo.resolve_rev(rev.eval()?).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            format!("object `ebc3780a093cbda629d531c1c0d530a82063ee6f` is a tree, not a commit")
+        );
+        Ok(())
+    })
+}
+
+#[test]
 fn test_resolve_non_commit_ref() -> BitResult<()> {
     BitRepo::find("tests/repos/ribble", |repo| {
         let rev = parse_rev!("ebc3780a093cbda629d531c1c0d530a82063ee6f");
-        let err = repo.resolve_rev(rev.eval()?).unwrap_err();
-        assert_eq!(err.to_string(), format!("object `{}` is a tree, not a commit", rev.eval()?));
+        let oid = repo.resolve_rev(rev.eval()?)?;
+        assert_eq!(oid, "ebc3780a093cbda629d531c1c0d530a82063ee6f".into());
         Ok(())
     })
 }
