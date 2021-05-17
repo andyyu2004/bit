@@ -1,4 +1,4 @@
-use crate::error::{BitGenericError, BitResult};
+use crate::error::{BitError, BitGenericError, BitResult};
 use crate::lockfile::Lockfile;
 use crate::obj::{BitId, Oid};
 use crate::path::BitPath;
@@ -135,7 +135,12 @@ impl SymbolicRef {
 
 impl Display for SymbolicRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.path)
+        // alternate is used to display to the user (cutting off prefix `refs/heads`)
+        if f.alternate() {
+            write!(f, "{}", self.path.as_str().trim_start_matches("refs/heads/"))
+        } else {
+            write!(f, "{}", self.path)
+        }
     }
 }
 
@@ -217,8 +222,7 @@ impl SymbolicRef {
     pub fn fully_resolve(self, repo: &BitRepo) -> BitResult<Oid> {
         match self.resolve(repo)? {
             BitRef::Direct(oid) => Ok(oid),
-            BitRef::Symbolic(sym) =>
-                bail!("branch `{}` does not exist. Try creating a commit on the branch first", sym),
+            BitRef::Symbolic(sym) => bail!(BitError::NonExistentSymRef(sym)),
         }
     }
 

@@ -1,4 +1,5 @@
 use crate::obj::{BitId, Oid, PartialOid};
+use crate::refs::SymbolicRef;
 use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
 
@@ -13,10 +14,12 @@ pub enum BitError {
     /// object `{0}` not found in pack index but could be inserted at `{1}`
     ObjectNotFoundInPackIndex(Oid, u64),
     AmbiguousPrefix(PartialOid, Vec<Oid>),
+    NonExistentSymRef(SymbolicRef),
 }
 
 pub trait BitErrorExt {
     fn into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)>;
+    fn into_nonexistent_symref_err(self) -> BitResult<SymbolicRef>;
     fn into_bit_error(self) -> BitResult<BitError>;
 }
 
@@ -25,10 +28,9 @@ impl BitErrorExt for BitGenericError {
     // this pattern feels pretty shit, not sure of a better way atm
     // usually don't have to catch errors that often so its not too bad (yet?)
     fn into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)> {
-        match self.downcast::<BitError>() {
-            Ok(BitError::ObjectNotFoundInPackIndex(oid, idx)) => Ok((oid, idx)),
-            Ok(err) => Err(anyhow!(err)),
-            Err(err) => Err(err),
+        match self.into_bit_error()? {
+            BitError::ObjectNotFoundInPackIndex(oid, idx) => Ok((oid, idx)),
+            err => Err(anyhow!(err)),
         }
     }
 
@@ -36,6 +38,13 @@ impl BitErrorExt for BitGenericError {
         match self.downcast::<BitError>() {
             Ok(err) => Ok(err),
             Err(err) => Err(err),
+        }
+    }
+
+    fn into_nonexistent_symref_err(self) -> BitResult<SymbolicRef> {
+        match self.into_bit_error()? {
+            BitError::NonExistentSymRef(sym) => Ok(sym),
+            err => Err(anyhow!(err)),
         }
     }
 }
@@ -87,7 +96,7 @@ impl BitResultExt for BitGenericError {
 macro_rules! write_hint {
     ($f:expr, $($args:tt)*) => {{
         write!($f, "{}: ", "hint".yellow())?;
-        writeln!($f, $($args)*)?
+        writeln!($f, $($args)*)
     }};
 }
 
@@ -98,11 +107,15 @@ impl Display for BitError {
             BitError::ObjectNotFoundInPackIndex(..) => unreachable!("not a user facing error"),
             BitError::AmbiguousPrefix(prefix, candidates) => {
                 writeln!(f, "prefix oid `{}` is ambiguous", prefix)?;
-                write_hint!(f, "the candidates are:");
+                write_hint!(f, "the candidates are:")?;
                 for candidate in candidates {
-                    write_hint!(f, "  {}", candidate.yellow());
+                    write_hint!(f, "  {}", candidate.yellow())?;
                 }
                 Ok(())
+            }
+            BitError::NonExistentSymRef(sym) => {
+                writeln!(f, "branch `{:}` does not exist yet", sym)?;
+                write_hint!(f, "try creating a commit on `{:}` first", sym)
             }
         }
     }

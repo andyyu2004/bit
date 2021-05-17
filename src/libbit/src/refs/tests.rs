@@ -1,6 +1,6 @@
 use super::is_valid_name;
-use crate::error::BitResult;
-use crate::refs::BitRef;
+use crate::error::{BitErrorExt, BitResult};
+use crate::refs::{BitRef, SymbolicRef};
 use crate::repo::BitRepo;
 
 #[test]
@@ -41,10 +41,7 @@ fn test_resolve_head_symref() -> BitResult<()> {
 fn test_create_branch_in_fresh() -> BitResult<()> {
     BitRepo::with_test_repo(|repo| {
         let err = repo.bit_create_branch("new-branch").unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "branch `refs/heads/master` does not exist. Try creating a commit on the branch first"
-        );
+        assert_eq!(err.into_nonexistent_symref_err()?, symbolic!("refs/heads/master"));
         Ok(())
     })
 }

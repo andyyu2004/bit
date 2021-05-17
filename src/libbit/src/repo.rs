@@ -249,7 +249,8 @@ impl BitRepo {
 
     pub fn create_branch(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
-        self.refdb.create(sym, from.fully_resolve(self)?.into())
+        let resolved = from.fully_resolve(self)?;
+        self.refdb.create(sym, resolved.into())
     }
 
     pub fn update_ref(&self, sym: SymbolicRef, to: impl Into<BitRef>) -> BitResult<()> {
