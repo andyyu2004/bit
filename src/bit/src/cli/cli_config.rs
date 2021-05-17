@@ -1,4 +1,4 @@
-use clap::lazy_static::{lazy_static};
+use clap::lazy_static::lazy_static;
 use clap::Clap;
 use libbit::config::BitConfigScope;
 use libbit::error::BitResult;
@@ -10,7 +10,11 @@ lazy_static! {
 }
 
 fn validate_name(name: &str) -> Result<String, String> {
-    if REGEX.is_match(name) { Ok(name.to_owned()) } else { Err(format!("invalid value for name")) }
+    if REGEX.is_match(name) {
+        Ok(name.to_owned())
+    } else {
+        Err("invalid value for name".to_owned())
+    }
 }
 
 #[derive(Clap, Debug)]

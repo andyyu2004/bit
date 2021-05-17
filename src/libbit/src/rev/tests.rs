@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use super::*;
 
 macro_rules! parse_rev {
@@ -9,7 +11,7 @@ macro_rules! parse_rev {
 
 #[test]
 fn test_parse_revspec_parent() -> BitResult<()> {
-    BitRepo::with_test_repo(|_repo| {
+    BitRepo::with_sample_repo(|_repo| {
         let rev = parse_rev!("HEAD^");
         assert_eq!(rev.eval()?, &Revspec::Parent(Box::new(Revspec::Ref(symbolic_ref!("HEAD")))));
         Ok(())
@@ -18,7 +20,7 @@ fn test_parse_revspec_parent() -> BitResult<()> {
 
 #[test]
 fn test_parse_revspec_with_symref_ancestor() -> BitResult<()> {
-    BitRepo::with_test_repo(|_repo| {
+    BitRepo::with_sample_repo(|_repo| {
         let rev = parse_rev!("HEAD~5");
         assert_eq!(
             rev.eval()?,
@@ -91,8 +93,8 @@ fn test_resolve_complex_revspec() -> BitResult<()> {
 }
 
 #[test]
-fn test_resolve_parent_of_non_commit_ref() -> BitResult<()> {
-    BitRepo::find("tests/repos/ribble", |repo| {
+fn test_resolve_parent_of_non_commit_revspec() -> BitResult<()> {
+    BitRepo::find(repos_dir!("ribble"), |repo| {
         let rev = parse_rev!("ebc3780a093cbda629d531c1c0d530a82063ee6f^");
         let err = repo.resolve_rev(rev.eval()?).unwrap_err();
         assert_eq!(
@@ -104,9 +106,19 @@ fn test_resolve_parent_of_non_commit_ref() -> BitResult<()> {
 }
 
 #[test]
-fn test_resolve_non_commit_ref() -> BitResult<()> {
-    BitRepo::find("tests/repos/ribble", |repo| {
+fn test_resolve_non_commit_revspec() -> BitResult<()> {
+    BitRepo::find(repos_dir!("ribble"), |repo| {
         let rev = parse_rev!("ebc3780a093cbda629d531c1c0d530a82063ee6f");
+        let oid = repo.resolve_rev(rev.eval()?)?;
+        assert_eq!(oid, "ebc3780a093cbda629d531c1c0d530a82063ee6f".into());
+        Ok(())
+    })
+}
+
+#[test]
+fn test_resolve_partial_revspec() -> BitResult<()> {
+    BitRepo::find(repos_dir!("ribble"), |repo| {
+        let rev = parse_rev!("ebc3780");
         let oid = repo.resolve_rev(rev.eval()?)?;
         assert_eq!(oid, "ebc3780a093cbda629d531c1c0d530a82063ee6f".into());
         Ok(())

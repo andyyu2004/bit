@@ -7,6 +7,25 @@ macro_rules! ensure_eq {
     };
 }
 
+// absolute path to the tests directory
+macro_rules! tests_dir {
+    () => {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
+    };
+    ($path:expr) => {
+        tests_dir!().join($path)
+    };
+}
+
+macro_rules! repos_dir {
+    () => {
+        tests_dir!("repos")
+    };
+    ($path:expr) => {
+        repos_dir!().join($path)
+    };
+}
+
 macro_rules! bug {
     ($($arg:tt)*) => {
         eprintln!("BUG!");

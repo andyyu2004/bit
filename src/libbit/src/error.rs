@@ -65,22 +65,20 @@ impl<T> BitResultExt for BitResult<T> {
 impl BitResultExt for BitGenericError {
     fn is_not_found_err(&self) -> bool {
         match self.downcast_ref::<BitError>() {
-            Some(err) => match err {
-                BitError::ObjectNotFound(..) => true,
-                BitError::ObjectNotFoundInPackIndex(..) => true,
-                _ => false,
-            },
+            Some(err) => matches!(
+                err,
+                BitError::ObjectNotFound(..) | BitError::ObjectNotFoundInPackIndex(..)
+            ),
             None => false,
         }
     }
 
     fn is_fatal(&self) -> bool {
         match self.downcast_ref::<BitError>() {
-            Some(err) => match err {
-                BitError::ObjectNotFound(..) => false,
-                BitError::ObjectNotFoundInPackIndex(..) => false,
-                _ => true,
-            },
+            Some(err) => !matches!(
+                err,
+                BitError::ObjectNotFound(..) | BitError::ObjectNotFoundInPackIndex(..)
+            ),
             None => true,
         }
     }

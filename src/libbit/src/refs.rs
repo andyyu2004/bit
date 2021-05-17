@@ -50,15 +50,8 @@ impl BitRepo {
     }
 
     pub fn fully_resolve_ref(&self, r: impl Into<BitRef>) -> BitResult<Oid> {
-        let r = r.into();
-        match r.resolve(self)? {
-            BitRef::Direct(oid) => Ok(oid),
-            BitRef::Symbolic(sym) => bail!(
-                "failed to fully resolve symbolic ref `{}`: references nonexistent file `{}`",
-                r,
-                sym
-            ),
-        }
+        // just written this way for rust-analyzer, having some trouble resolving `fully_resolve` otherwise
+        Into::<BitRef>::into(r).fully_resolve(self)
     }
 
     pub fn resolve_ref(&self, r: BitRef) -> BitResult<BitRef> {
@@ -163,14 +156,6 @@ impl FromStr for SymbolicRef {
 }
 
 impl BitRef {
-    pub fn try_into_oid(self) -> BitResult<Oid> {
-        match self {
-            BitRef::Direct(oid) => Ok(oid),
-            BitRef::Symbolic(sym) =>
-                bail!("branch `{}` does not exist. Try creating a commit on the branch first", sym),
-        }
-    }
-
     /// resolves the reference as much as possible
     /// if the symref points to a path that doesn't exist, then the value of the symref itself is returned
     /// i.e. if `HEAD` -> `refs/heads/master` which doesn't yet exist, then `refs/heads/master` will be returned
@@ -179,6 +164,15 @@ impl BitRef {
         match self {
             Self::Direct(..) => Ok(*self),
             Self::Symbolic(sym) => sym.resolve(repo),
+        }
+    }
+
+    /// resolves the reference to an oid, failing if a symbolic reference points at a nonexistent path
+    pub fn fully_resolve(&self, repo: &BitRepo) -> BitResult<Oid> {
+        match self.resolve(repo)? {
+            BitRef::Direct(oid) => Ok(oid),
+            BitRef::Symbolic(sym) =>
+                bail!("branch `{}` does not exist. Try creating a commit on the branch first", sym),
         }
     }
 

@@ -8,11 +8,8 @@ use crate::path::{BitFileStream, BitPath};
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
-use sha1::digest::generic_array::typenum::Bit;
 use std::fmt::{self, Debug, Formatter};
-use std::fs::File;
 use std::io::{BufRead, BufReader, Read, SeekFrom};
-use std::lazy::OnceCell;
 use std::ops::{Deref, DerefMut};
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;

@@ -38,7 +38,7 @@ impl BitRepo {
         };
 
         match rev {
-            Revspec::Ref(r) => self.resolve_ref(*r)?.try_into_oid(),
+            Revspec::Ref(r) => self.fully_resolve_ref(*r),
             Revspec::Partial(prefix) => self.expand_prefix(*prefix),
             Revspec::Parent(inner) => self.resolve_rev(inner).and_then(|oid| get_parent(oid)),
             Revspec::Ancestor(rev, n) =>
@@ -117,8 +117,9 @@ impl<'a> RevspecParser<'a> {
         // (if a branch happens to have the same name as a valid prefix then bad luck I guess? but seems quite unlikely in practice)
         tls::REPO.with(|repo| {
             if let Ok(r) = BitRef::from_str(s).and_then(|r| {
-                r.resolve(repo)?;
-                // we don't return the resolved ref as we want the original for better error messages
+                // if the ref is not "fully resolvable" then
+                repo.fully_resolve_ref(r)?;
+                // we don't return the fully resolved ref as we want the original for better error messages
                 // we are just checking if it is resolvable
                 Ok(r)
             }) {
