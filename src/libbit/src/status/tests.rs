@@ -11,9 +11,9 @@ fn test_status_untracked_files() -> BitResult<()> {
 
         let diff = repo.diff_index_worktree()?;
         assert!(diff.modified.is_empty());
-        assert_eq!(diff.untracked.len(), 2);
-        assert_eq!(diff.untracked[0].filepath, "baz");
-        assert_eq!(diff.untracked[1].filepath, "foo");
+        assert_eq!(diff.new.len(), 2);
+        assert_eq!(diff.new[0].filepath, "baz");
+        assert_eq!(diff.new[1].filepath, "foo");
         Ok(())
     })
 }
@@ -28,7 +28,7 @@ fn test_status_add_and_delete_file() -> BitResult<()> {
         let diff = repo.status_report()?;
         assert!(diff.staged.modified.is_empty());
         assert!(diff.staged.deleted.is_empty());
-        assert!(diff.unstaged.untracked.is_empty());
+        assert!(diff.unstaged.new.is_empty());
         assert!(diff.unstaged.modified.is_empty());
 
         assert_eq!(diff.staged.new.len(), 1);
@@ -51,7 +51,7 @@ fn test_status_modified_files() -> BitResult<()> {
         modify!(repo: "foo/bar");
 
         let diff = repo.diff_index_worktree()?;
-        assert!(diff.untracked.is_empty());
+        assert!(diff.new.is_empty());
         assert_eq!(diff.modified.len(), 2);
         let mut modified = diff.modified.into_iter();
         assert_eq!(modified.next().unwrap().1.filepath, "foo.l");
@@ -77,7 +77,7 @@ fn test_status_modified_then_reverted() -> BitResult<()> {
             modify!(repo: "foo/bar" < "original content");
 
             let diff = repo.diff_index_worktree()?;
-            assert!(diff.untracked.is_empty());
+            assert!(diff.new.is_empty());
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
             assert_eq!(modified.next().unwrap().1.filepath, "foo.l");
@@ -122,7 +122,7 @@ fn test_status_on_symlink() -> BitResult<()> {
         bit_commit!(repo);
         let diff = repo.diff_index_worktree()?;
         assert_eq!(diff.modified.len(), 0);
-        assert_eq!(diff.untracked.len(), 0);
+        assert_eq!(diff.new.len(), 0);
         Ok(())
     })
 }

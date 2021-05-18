@@ -1,4 +1,4 @@
-use crate::diff::{HeadIndexDiff, IndexWorktreeDiff};
+use crate::diff::WorkspaceDiff;
 use crate::error::BitResult;
 use crate::repo::BitRepo;
 use owo_colors::OwoColorize;
@@ -6,8 +6,8 @@ use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
 pub struct BitStatusReport {
-    pub staged: HeadIndexDiff,
-    pub unstaged: IndexWorktreeDiff,
+    pub staged: WorkspaceDiff,
+    pub unstaged: WorkspaceDiff,
 }
 
 impl BitRepo {
@@ -51,10 +51,10 @@ impl Display for BitStatusReport {
             writeln!(f)?;
         }
 
-        if !self.unstaged.untracked.is_empty() {
+        if !self.unstaged.new.is_empty() {
             writeln!(f, "Untracked files:")?;
             writeln!(f, "  (use `bit add <file>...` to include in what will be committed)")?;
-            for untracked in &self.unstaged.untracked {
+            for untracked in &self.unstaged.new {
                 writeln!(f, "\t{}", untracked.filepath.red())?;
             }
         }
