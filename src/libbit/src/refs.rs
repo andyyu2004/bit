@@ -136,10 +136,11 @@ impl SymbolicRef {
 impl Display for SymbolicRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // alternate is used to display to the user (cutting off prefix `refs/heads`)
+        let s = self.path.as_str();
         if f.alternate() {
-            write!(f, "{}", self.path.as_str().trim_start_matches("refs/heads/"))
+            write!(f, "{}", s.strip_prefix("refs/heads/").unwrap_or(s))
         } else {
-            write!(f, "{}", self.path)
+            write!(f, "{}", s)
         }
     }
 }

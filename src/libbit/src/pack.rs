@@ -180,8 +180,9 @@ impl Pack {
     }
 
     pub fn read_obj(&mut self, oid: Oid) -> BitResult<BitObjKind> {
+        trace!("read_obj(oid: {}) ", oid);
         let (crc, offset) = self.obj_offset(oid)?;
-        trace!("read_obj(oid: {}); crc={}; offset={}", oid, crc, offset);
+        trace!("read_obj(..); crc={}; offset={}", crc, offset);
         let obj = self.pack_reader().read_obj_from_offset(offset)?;
         let obj = match obj {
             BitObjKind::Blob(..)
@@ -260,6 +261,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
 impl<R: BufReadSeek> PackIndexReader<R> {
     /// returns the offset of the object with oid `oid` in the packfile
     pub fn find_oid_crc_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
+        trace!("find_oid_crc_offset(oid: {})", oid);
         let index = self.find_oid_index(oid)?;
         debug_assert_eq!(oid, self.read_from(Layer::Oid, index)?);
         let crc = self.read_from::<u32>(Layer::Crc, index)?;
@@ -342,7 +344,9 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         let low = if prefix == 0 { 0 } else { self.fanout[prefix - 1] } as u64;
         let high = self.fanout[prefix] as u64;
 
-        self.seek(SeekFrom::Current(low as i64 * BIT_HASH_SIZE as i64))?;
+        self.seek(SeekFrom::Start(
+            PACK_IDX_HEADER_SIZE + FANOUT_SIZE + low * BIT_HASH_SIZE as u64,
+        ))?;
         let oids = self.reader.read_vec((high - low) as usize)?;
         match oids.binary_search(&oid) {
             Ok(idx) => Ok(low + idx as u64),

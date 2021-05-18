@@ -55,7 +55,7 @@ impl Interner {
         debug_assert_eq!(self.intern_path(s), bitpath);
         debug_assert_eq!(self.get_str(bitpath), s);
 
-        trace!("interned path: `{}` <- `{}`", s, bitpath);
+        trace!("interned path: `{}` <- `{}`", s, bitpath.index());
 
         bitpath
     }

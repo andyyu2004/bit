@@ -100,7 +100,9 @@ pub trait BitObjDbBackend {
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>>;
 
     fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
+        trace!("expand_prefix(prefix: {})", prefix);
         let candidates = self.prefix_candidates(prefix)?;
+        trace!("expand_prefix(..) :: candidates = {:?}", candidates);
         match candidates.len() {
             0 => Err(anyhow!(BitError::ObjectNotFound(prefix.into()))),
             1 => Ok(candidates[0]),
@@ -200,11 +202,17 @@ impl BitObjDbBackend for BitLooseObjDb {
             // it includes the "base" directory so we just explicitly filter that out for now
             // is that intentional behaviour?
             .filter(|entry| Ok(entry.path().is_file()))
-            .map(|entry| {
+            .filter_map(|entry| {
                 let filename = entry.file_name().to_str().unwrap();
-                Oid::from_str(&format!("{}{}", dir, filename))
+                if !filename.starts_with(file_prefix) {
+                    Ok(None)
+                } else {
+                    assert_eq!(filename.len(), 38);
+                    let oid = format!("{}{}", dir, filename);
+                    assert_eq!(oid.len(), 40);
+                    Oid::from_str(&oid).map(Some)
+                }
             })
-            .filter(|oid| oid.has_prefix(prefix))
             .collect::<Vec<_>>()
     }
 }

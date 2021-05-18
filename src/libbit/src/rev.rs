@@ -127,7 +127,7 @@ impl<'a> RevspecParser<'a> {
             } else {
                 PartialOid::from_str(s)
                     .and_then(|prefix| repo.expand_prefix(prefix))
-                    .map(Into::into)
+                    .map(BitRef::from)
                     .map(Revspec::Ref)
             }
         })
