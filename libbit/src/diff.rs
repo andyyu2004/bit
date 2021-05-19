@@ -2,7 +2,7 @@
 
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
-use crate::iter::{BitEntryIterator, TreeIter, TreeIterator, TreePeekable};
+use crate::iter::{BitEntryIterator, TreeIter, TreeIterator};
 use crate::obj::{Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -137,21 +137,21 @@ pub struct TreeDiff {
 pub struct TreeDifferImpl<'r> {
     // need an inner type otherwise we can't use `GenericDiffer::new` as it takes self but also needs `a` and `b`
     repo: &'r BitRepo,
-    a: TreePeekable<TreeIter<'r>>,
-    b: TreePeekable<TreeIter<'r>>,
+    a: TreeIter<'r>,
+    b: TreeIter<'r>,
     diff: TreeDiff,
 }
 
 impl<'r> TreeDifferImpl<'r> {
     pub fn new(repo: &'r BitRepo, a: &Tree, b: &Tree) -> Self {
-        let a = repo.tree_iter(a).tree_peekable();
-        let b = repo.tree_iter(b).tree_peekable();
+        let a = repo.tree_iter(a);
+        let b = repo.tree_iter(b);
         Self { repo, a, b, diff: Default::default() }
     }
 }
 
 impl<'r> TreeDifferImpl<'r> {
-    fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
+    fn run_diff(mut self) -> BitResult<TreeDiff> {
         // TODO is identical to GenericDiffer::generic_diff
         // maybe there is a a good way to unify the two
         // the difference is that subtrees can be skipped in TreeDiffer
@@ -160,16 +160,16 @@ impl<'r> TreeDifferImpl<'r> {
         loop {
             match (self.a.peek()?, self.b.peek()?) {
                 (None, None) => break,
-                (None, Some(&new)) => self.on_created(new)?,
-                (Some(&old), None) => self.on_deleted(old)?,
-                (Some(&old), Some(&new)) => match old.cmp(&new) {
+                (None, Some(new)) => self.on_created(new)?,
+                (Some(old), None) => self.on_deleted(old)?,
+                (Some(old), Some(new)) => match old.cmp(&new) {
                     Ordering::Less => self.on_deleted(old)?,
                     Ordering::Equal => self.on_match(old, new)?,
                     Ordering::Greater => self.on_created(new)?,
                 },
             };
         }
-        todo!()
+        Ok(self.diff)
     }
 }
 
@@ -213,7 +213,7 @@ impl BitRepo {
         self.with_index_mut(|index| index.diff_head())
     }
 
-    pub fn diff_tree_to_tree(&self, a: &Tree, b: &Tree) -> BitResult<WorkspaceDiff> {
+    pub fn diff_tree_to_tree(&self, a: &Tree, b: &Tree) -> BitResult<TreeDiff> {
         TreeDifferImpl::new(self, a, b).run_diff()
     }
 }

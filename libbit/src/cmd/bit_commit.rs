@@ -20,8 +20,6 @@ impl BitRepo {
         let parent = self.try_fully_resolve_ref(sym)?;
         let tree = self.write_tree()?;
         let oid = self.commit_tree(parent, message, tree)?;
-        dbg!(sym);
-        dbg!(oid);
         self.update_ref(sym, oid)?;
         Ok(oid)
     }

@@ -45,44 +45,14 @@ impl<'r> TreeIter<'r> {
 pub trait TreeIterator: BitIterator<TreeEntry> {
     fn over(&mut self) -> BitResult<Option<TreeEntry>>;
 
-    fn tree_peekable(self) -> TreePeekable<Self>
-    where
-        Self: Sized,
-    {
-        TreePeekable { iter: self, peeked: None }
-    }
-}
-
-pub struct TreePeekable<I: TreeIterator> {
-    iter: I,
-    peeked: Option<I::Item>,
-}
-
-impl<I: TreeIterator> TreePeekable<I> {
-    pub fn peek(&mut self) -> Result<Option<&I::Item>, I::Error> {
-        if self.peeked.is_none() {
-            self.peeked = self.iter.next()?;
-        }
-
-        Ok(self.peeked.as_ref())
-    }
-}
-
-impl<I: TreeIterator> FallibleIterator for TreePeekable<I> {
-    type Error = I::Error;
-    type Item = I::Item;
-
-    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        if let Some(peeked) = self.peeked.take() { Ok(Some(peeked)) } else { self.iter.next() }
-    }
-}
-
-impl<I: TreeIterator> TreeIterator for TreePeekable<I> {
-    fn over(&mut self) -> BitResult<Option<TreeEntry>> {
-        // we forget the peeked value if we step over
-        self.peeked = None;
-        self.iter.over()
-    }
+    // seems difficult to provide a peek method just via an adaptor
+    // unclear how to implement peek in terms of `over` and `next`
+    // in particular, if `peek` uses `next`, then all the subdirectories would already
+    // be added to the stack and its awkward to implement `over` after `peek`
+    // similar problems arise with implementing `peek` using `over`
+    // probably better to just let the implementor deal with it
+    // especially as the implementation is probably trivial
+    fn peek(&self) -> BitResult<Option<TreeEntry>>;
 }
 
 impl<'r> FallibleIterator for TreeIter<'r> {
@@ -134,6 +104,10 @@ impl<'r> TreeIterator for TreeIter<'r> {
                 None => return Ok(None),
             }
         }
+    }
+
+    fn peek(&self) -> BitResult<Option<TreeEntry>> {
+        Ok(self.entry_stack.last().map(|x| x.1))
     }
 }
 
