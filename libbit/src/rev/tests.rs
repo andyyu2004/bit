@@ -1,13 +1,4 @@
-use std::path::Path;
-
 use super::*;
-
-macro_rules! parse_rev {
-    ($rev:expr) => {
-        // NOTE: `eval` must be called with a repository in scope (tls)
-        LazyRevspec::from_str($rev)?
-    };
-}
 
 #[test]
 fn test_parse_revspec_parent() -> BitResult<()> {

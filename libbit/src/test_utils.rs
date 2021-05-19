@@ -168,3 +168,53 @@ macro_rules! rm {
         std::fs::remove_file($repo.workdir.join($path))?
     };
 }
+
+// absolute path to the tests directory
+macro_rules! tests_dir {
+    () => {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests")
+    };
+    ($path:expr) => {
+        tests_dir!().join($path)
+    };
+}
+
+macro_rules! repos_dir {
+    () => {
+        tests_dir!("repos")
+    };
+    ($path:expr) => {
+        repos_dir!().join($path)
+    };
+}
+
+macro_rules! symbolic {
+    ($sym:expr) => {{
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        crate::refs::SymbolicRef::from_str($sym).unwrap()
+    }};
+}
+
+macro_rules! symbolic_ref {
+    ($sym:expr) => {{
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        crate::refs::BitRef::Symbolic(symbolic!($sym))
+    }};
+}
+
+macro_rules! HEAD {
+    () => {{
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        crate::refs::BitRef::Symbolic(crate::refs::SymbolicRef::from_str("HEAD").unwrap())
+    }};
+}
+
+macro_rules! parse_rev {
+    ($rev:expr) => {
+        // NOTE: `eval` must be called with a repository in scope (tls)
+        LazyRevspec::from_str($rev)?
+    };
+}

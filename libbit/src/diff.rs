@@ -2,8 +2,8 @@
 
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
-use crate::iter::{BitEntryIterator, TreeIter};
-use crate::obj::Tree;
+use crate::iter::{BitEntryIterator, TreeIter, TreeIterator, TreePeekable};
+use crate::obj::{Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
@@ -19,6 +19,15 @@ pub trait Differ<'r> {
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()>;
     fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()>;
+}
+
+pub trait TreeDiffer<'r> {
+    /// unmatched new entry
+    fn on_created(&mut self, new: TreeEntry) -> BitResult<()>;
+    /// called when two entries are matched (could possibly be the same entry)
+    fn on_match(&mut self, old: TreeEntry, new: TreeEntry) -> BitResult<()>;
+    /// unmatched old entry
+    fn on_deleted(&mut self, old: TreeEntry) -> BitResult<()>;
 }
 
 pub trait DiffBuilder<'r>: Differ<'r> {
@@ -118,71 +127,75 @@ where
     }
 }
 
-pub struct TreeDiffer<'a, 'r> {
-    // need an inner type otherwise we can't use `GenericDiffer::new`
-    inner: TreeDifferInner<'a, 'r>,
-    a: Peekable<Fuse<TreeIter<'r>>>,
-    b: Peekable<Fuse<TreeIter<'r>>>,
+#[derive(Debug, Default)]
+pub struct TreeDiff {
+    new: Vec<TreeEntry>,
+    modified: Vec<(TreeEntry, TreeEntry)>,
+    deleted: Vec<TreeEntry>,
 }
 
-pub struct TreeDifferInner<'a, 'r> {
+pub struct TreeDifferImpl<'a, 'r> {
+    // need an inner type otherwise we can't use `GenericDiffer::new` as it takes self but also needs `a` and `b`
+    repo: &'r BitRepo,
     index: &'a mut BitIndex<'r>,
+    a: TreePeekable<TreeIter<'r>>,
+    b: TreePeekable<TreeIter<'r>>,
+    diff: TreeDiff,
 }
 
-impl<'a, 'r> TreeDiffer<'a, 'r> {
+impl<'a, 'r> TreeDifferImpl<'a, 'r> {
     pub fn new(index: &'a mut BitIndex<'r>, a: &Tree, b: &Tree) -> Self {
         let repo = index.repo;
-        let a = repo.tree_iter(a).fuse().peekable();
-        let b = repo.tree_iter(b).fuse().peekable();
-        let inner = TreeDifferInner { index };
-        Self { inner, a, b }
+        let a = repo.tree_iter(a).tree_peekable();
+        let b = repo.tree_iter(b).tree_peekable();
+        Self { repo, index, a, b, diff: Default::default() }
     }
 }
 
-impl<'a, 'r> DiffBuilder<'r> for TreeDiffer<'a, 'r> {
-    type Diff = WorkspaceDiff;
-
-    fn run_diff(mut self) -> BitResult<Self::Diff> {
-        let a = self.a.map(|entry| Ok(BitIndexEntry::from(entry)));
-        let b = self.b.map(|entry| Ok(BitIndexEntry::from(entry)));
-        let differ = GenericDiffer::new(&mut self.inner, a, b);
+impl<'a, 'r> TreeDifferImpl<'a, 'r> {
+    fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
+        // TODO is identical to GenericDiffer::generic_diff
+        // maybe there is a a good way to unify the two
+        // the difference is that subtrees can be skipped in TreeDiffer
+        // but Differ goes through everything as a flat list (as that is the natural representation of the index)
+        // maybe can implement TreeDiffer for IndexIter somehow then everything can use TreeDiffer which would be nice
+        loop {
+            match (self.a.peek()?, self.b.peek()?) {
+                (None, None) => break,
+                (None, Some(&new)) => self.on_created(new)?,
+                (Some(&old), None) => self.on_deleted(old)?,
+                (Some(&old), Some(&new)) => match old.cmp(&new) {
+                    Ordering::Less => self.on_deleted(old)?,
+                    Ordering::Equal => self.on_match(old, new)?,
+                    Ordering::Greater => self.on_created(new)?,
+                },
+            };
+        }
         todo!()
     }
 }
 
-impl<'a, 'r> Differ<'r> for TreeDiffer<'a, 'r> {
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
-        self.inner.index
+impl<'a, 'r> TreeDiffer<'r> for TreeDifferImpl<'a, 'r> {
+    fn on_created(&mut self, new: TreeEntry) -> BitResult<()> {
+        //? no need to recurse at all I think?
+        self.diff.new.push(new);
+        Ok(())
     }
 
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        self.inner.on_created(new)
+    fn on_match(&mut self, old: TreeEntry, new: TreeEntry) -> BitResult<()> {
+        if old.hash != new.hash {
+            self.diff.modified.push((old, new));
+        } else if old.mode.is_dir() && new.mode.is_dir() {
+            // if hashes match and both are directories we can step over them
+            self.a.over()?;
+            self.b.over()?;
+        }
+        Ok(())
     }
 
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        self.inner.on_modified(old, new)
-    }
-
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        self.inner.on_deleted(old)
-    }
-}
-
-impl<'a, 'r> Differ<'r> for TreeDifferInner<'a, 'r> {
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
-        self.index
-    }
-
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        todo!()
-    }
-
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        todo!()
-    }
-
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        todo!()
+    fn on_deleted(&mut self, old: TreeEntry) -> BitResult<()> {
+        self.diff.deleted.push(old);
+        Ok(())
     }
 }
 
@@ -261,8 +274,9 @@ impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct WorkspaceDiff {
+    // could consider making these TreeEntries
     pub new: Vec<BitIndexEntry>,
     pub modified: Vec<(BitIndexEntry, BitIndexEntry)>,
     pub deleted: Vec<BitIndexEntry>,

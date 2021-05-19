@@ -9,14 +9,15 @@ impl BitRepo {
             touch!(repo: "foo");
             touch!(repo: "bar");
             mkdir!(repo: "dir");
+            bit_commit_all!(repo);
+
             mkdir!(repo: "dir/bar");
             touch!(repo: "dir/baz");
             touch!(repo: "dir/bar.l");
             touch!(repo: "dir/bar/qux");
             symlink!(repo: "bar" <- "dir/link");
 
-            bit_add_all!(repo);
-            bit_commit!(repo);
+            bit_commit_all!(repo);
             f(repo)
         })
     }

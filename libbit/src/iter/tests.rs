@@ -43,6 +43,30 @@ fn test_tree_iterator_step_over() -> BitResult<()> {
 }
 
 #[test]
+fn test_tree_iterator_peekable() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let mut iter = repo.head_tree_iter()?.tree_peekable();
+        check_next!(iter.peek() => "bar":FileMode::REG);
+        check_next!(iter.next() => "bar":FileMode::REG);
+        check_next!(iter.over() => "foo": FileMode::REG);
+        assert_eq!(iter.next()?, None);
+        Ok(())
+    })
+}
+
+#[test]
+fn test_tree_iterator_peekable_step_over_forgets_peeked() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let mut iter = repo.head_tree_iter()?.tree_peekable();
+        check_next!(iter.peek() => "bar":FileMode::REG);
+        // step over should step over the next entry dropping the peeked value
+        check_next!(iter.over() => "foo": FileMode::REG);
+        assert_eq!(iter.next()?, None);
+        Ok(())
+    })
+}
+
+#[test]
 fn test_worktree_iterator_reads_symlinks() -> BitResult<()> {
     BitRepo::with_test_repo(|repo| {
         touch!(repo: "foo");

@@ -103,7 +103,7 @@ impl BitObj for Tree {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Eq)]
+#[derive(PartialEq, Debug, Clone, Eq, Copy)]
 pub struct TreeEntry {
     pub mode: FileMode,
     pub path: BitPath,
