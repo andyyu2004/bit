@@ -11,10 +11,10 @@ use std::path::Path;
 impl BitRepo {
     pub fn head_tree_iter(&self) -> BitResult<TreeIter<'_>> {
         let tree = self.head_tree()?;
-        Ok(self.tree_iter(tree))
+        Ok(self.tree_iter(&tree))
     }
 
-    pub fn tree_iter(&self, tree: Tree) -> TreeIter<'_> {
+    pub fn tree_iter(&self, tree: &Tree) -> TreeIter<'_> {
         TreeIter::new(self, tree)
     }
 }
@@ -27,12 +27,13 @@ pub struct TreeIter<'r> {
 }
 
 impl<'r> TreeIter<'r> {
-    pub fn new(repo: &'r BitRepo, tree: Tree) -> Self {
+    pub fn new(repo: &'r BitRepo, tree: &Tree) -> Self {
         Self {
             repo,
             entry_stack: tree
                 .entries
-                .into_iter()
+                .iter()
+                .cloned()
                 .rev()
                 .map(|entry| (BitPath::empty(), entry))
                 .collect(),
@@ -103,7 +104,7 @@ struct HeadIter<'r> {
 }
 
 impl<'r> HeadIter<'r> {
-    pub fn new(repo: &'r BitRepo, root: Tree) -> Self {
+    pub fn new(repo: &'r BitRepo, root: &Tree) -> Self {
         Self { tree_iter: TreeIter::new(repo, root) }
     }
 }
@@ -202,7 +203,7 @@ impl BitRepo {
     pub fn head_iter(&self) -> BitResult<impl BitEntryIterator + '_> {
         trace!("head_iter()");
         let tree = self.head_tree()?;
-        Ok(HeadIter::new(self, tree))
+        Ok(HeadIter::new(self, &tree))
     }
 }
 

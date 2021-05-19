@@ -209,6 +209,24 @@ where
     }
 }
 
+pub struct TreeDiffer<'a, 'r> {
+    index: &'a mut BitIndex<'r>,
+}
+
+impl<'a, 'r> Differ<'r> for TreeDiffer<'a, 'r> {
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        todo!()
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        todo!()
+    }
+
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        todo!()
+    }
+}
+
 impl BitRepo {
     pub fn diff_index_worktree(&self) -> BitResult<WorkspaceDiff> {
         self.with_index_mut(|index| index.diff_worktree())
@@ -218,7 +236,7 @@ impl BitRepo {
         self.with_index_mut(|index| index.diff_head())
     }
 
-    pub fn diff_tree_to_tree(&self, a: &Tree, b: &Tree) -> BitResult<WorkspaceDiff> {
+    pub fn diff_tree_to_tree(&self, a: Tree, b: Tree) -> BitResult<WorkspaceDiff> {
         todo!()
     }
 }

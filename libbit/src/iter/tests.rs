@@ -1,9 +1,8 @@
-use fallible_iterator::FallibleIterator;
-
 use crate::error::BitResult;
 use crate::iter::TreeIterator;
 use crate::obj::FileMode;
 use crate::repo::BitRepo;
+use fallible_iterator::FallibleIterator;
 
 macro_rules! check_next {
     ($next:expr => $path:literal:$mode:expr) => {
