@@ -56,12 +56,12 @@ impl<'r> FallibleIterator for TreeIter<'r> {
                     FileMode::DIR => {
                         let tree = self.repo.read_obj(entry.hash)?.into_tree();
                         let path = base.join(entry.path);
-                        debug!("HeadIter::next: read directory `{:?}` `{}`", path, entry.hash);
+                        debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.hash);
                         self.entry_stack
                             .extend(tree.entries.into_iter().rev().map(|entry| (path, entry)))
                     }
                     FileMode::REG | FileMode::LINK | FileMode::EXEC => {
-                        debug!("HeadIter::next: entry: {:?}", entry);
+                        debug!("TreeIter::next: entry: {:?}", entry);
                         entry.path = base.join(entry.path);
                         return Ok(Some(entry));
                     }
@@ -94,6 +94,26 @@ impl<'r> TreeIterator for TreeIter<'r> {
                 None => return Ok(None),
             }
         }
+    }
+}
+
+#[derive(Debug)]
+struct HeadIter<'r> {
+    tree_iter: TreeIter<'r>,
+}
+
+impl<'r> HeadIter<'r> {
+    pub fn new(repo: &'r BitRepo, root: Tree) -> Self {
+        Self { tree_iter: TreeIter::new(repo, root) }
+    }
+}
+
+impl<'r> FallibleIterator for HeadIter<'r> {
+    type Error = BitGenericError;
+    type Item = BitIndexEntry;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        Ok(self.tree_iter.next()?.map(BitIndexEntry::from))
     }
 }
 
@@ -160,26 +180,6 @@ impl FallibleIterator for WorktreeIter<'_> {
         };
 
         BitIndexEntry::try_from(BitPath::intern(direntry.path())).map(Some)
-    }
-}
-
-#[derive(Debug)]
-struct HeadIter<'r> {
-    tree_iter: TreeIter<'r>,
-}
-
-impl<'r> HeadIter<'r> {
-    pub fn new(repo: &'r BitRepo, root: Tree) -> Self {
-        Self { tree_iter: TreeIter::new(repo, root) }
-    }
-}
-
-impl<'r> FallibleIterator for HeadIter<'r> {
-    type Error = BitGenericError;
-    type Item = BitIndexEntry;
-
-    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        Ok(self.tree_iter.next()?.map(BitIndexEntry::from))
     }
 }
 

@@ -1,10 +1,11 @@
 use fallible_iterator::FallibleIterator;
 
 use crate::error::BitResult;
+use crate::iter::TreeIterator;
 use crate::obj::FileMode;
 use crate::repo::BitRepo;
 
-macro_rules! check_entry {
+macro_rules! check_next {
     ($next:expr => $path:literal:$mode:expr) => {
         let entry = $next?.unwrap();
         assert_eq!(entry.path, $path);
@@ -20,24 +21,24 @@ fn test_head_iterator() -> BitResult<()> {
         assert!(entries.is_sorted());
 
         let mut iter = repo.head_iter()?;
-        check_entry!(iter.next() => "bar":FileMode::REG);
-        check_entry!(iter.next() => "dir/bar.l":FileMode::REG);
-        check_entry!(iter.next() => "dir/bar/qux":FileMode::REG);
-        check_entry!(iter.next() => "dir/baz":FileMode::REG);
-        check_entry!(iter.next() => "dir/link":FileMode::LINK);
+        check_next!(iter.next() => "bar":FileMode::REG);
+        check_next!(iter.next() => "dir/bar.l":FileMode::REG);
+        check_next!(iter.next() => "dir/bar/qux":FileMode::REG);
+        check_next!(iter.next() => "dir/baz":FileMode::REG);
+        check_next!(iter.next() => "dir/link":FileMode::LINK);
+        check_next!(iter.next() => "foo":FileMode::REG);
+        assert_eq!(iter.next()?, None);
         Ok(())
     })
 }
 
 #[test]
 fn test_tree_iterator_step_over() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_sample_repo(|repo| {
         let mut iter = repo.head_tree_iter()?;
-        check_entry!(iter.next() => "bar":FileMode::REG);
-        check_entry!(iter.next() => "dir/bar.l":FileMode::REG);
-        check_entry!(iter.next() => "dir/bar/qux":FileMode::REG);
-        check_entry!(iter.next() => "dir/baz":FileMode::REG);
-        check_entry!(iter.next() => "dir/link":FileMode::LINK);
+        check_next!(iter.next() => "bar":FileMode::REG);
+        check_next!(iter.over() => "foo": FileMode::REG);
+        assert_eq!(iter.next()?, None);
         Ok(())
     })
 }
