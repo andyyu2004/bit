@@ -1,6 +1,6 @@
 use super::FileMode;
 use crate::error::BitResult;
-use crate::io::{BufReadExt, BufReadExtSized};
+use crate::io::BufReadExt;
 use crate::obj::{BitObj, BitObjType, Oid};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
@@ -10,6 +10,16 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
+
+pub trait Treeish {
+    fn into_tree(self) -> BitResult<Tree>;
+}
+
+impl Treeish for Tree {
+    fn into_tree(self) -> BitResult<Self> {
+        Ok(self)
+    }
+}
 
 impl Display for Tree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

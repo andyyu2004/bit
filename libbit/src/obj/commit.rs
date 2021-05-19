@@ -1,8 +1,10 @@
+use super::{Tree, Treeish};
 use crate::error::BitResult;
 use crate::obj::{BitObj, BitObjType, Oid};
 use crate::repo::BitRepo;
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
+use crate::tls;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
@@ -17,6 +19,12 @@ pub struct Commit {
     pub(crate) message: String,
     pub(crate) parent: Option<Oid>,
     pub(crate) gpgsig: Option<String>,
+}
+
+impl Treeish for Commit {
+    fn into_tree(self) -> BitResult<Tree> {
+        tls::REPO.with(|repo| repo.read_obj(self.tree)?.into_tree())
+    }
 }
 
 impl Commit {

@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndexEntry;
-use crate::obj::{FileMode, Tree, TreeEntry};
+use crate::obj::{FileMode, Tree, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
@@ -94,7 +94,7 @@ impl<'r> FallibleIterator for TreeIter<'r> {
             match self.entry_stack.pop() {
                 Some((base, mut entry)) => match entry.mode {
                     FileMode::DIR => {
-                        let tree = self.repo.read_obj(entry.hash)?.into_tree();
+                        let tree = self.repo.read_obj(entry.hash)?.into_tree()?;
                         let path = base.join(entry.path);
                         debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.hash);
                         self.entry_stack

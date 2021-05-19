@@ -213,8 +213,10 @@ macro_rules! HEAD {
 }
 
 macro_rules! parse_rev {
-    ($rev:expr) => {
+    ($rev:expr) => {{
         // NOTE: `eval` must be called with a repository in scope (tls)
-        LazyRevspec::from_str($rev)?
-    };
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        crate::rev::LazyRevspec::from_str($rev)?
+    }};
 }

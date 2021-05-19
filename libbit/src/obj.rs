@@ -10,7 +10,7 @@ pub use blob::Blob;
 pub use commit::Commit;
 pub use obj_id::*;
 pub use tag::Tag;
-pub use tree::{Tree, TreeEntry};
+pub use tree::{Tree, TreeEntry, Treeish};
 
 use self::ofs_delta::OfsDelta;
 use self::ref_delta::RefDelta;
@@ -156,6 +156,16 @@ pub enum BitObjKind {
     RefDelta(RefDelta),
 }
 
+impl Treeish for BitObjKind {
+    fn into_tree(self) -> BitResult<Tree> {
+        match self {
+            Self::Tree(tree) => Ok(tree),
+            // panicking instead of erroring as this should be called only with certainty
+            _ => panic!("expected tree"),
+        }
+    }
+}
+
 impl BitObjKind {
     /// deserialize into a `BitObjKind` given an object type and "size"
     /// (this is similar to [crate::serialize::DeserializeSized])
@@ -171,13 +181,6 @@ impl BitObjKind {
             BitObjType::Tag => Tag::deserialize(contents).map(Self::Tag),
             BitObjType::OfsDelta => OfsDelta::deserialize_sized(contents, size).map(Self::OfsDelta),
             BitObjType::RefDelta => RefDelta::deserialize_sized(contents, size).map(Self::RefDelta),
-        }
-    }
-
-    pub fn into_tree(self) -> Tree {
-        match self {
-            Self::Tree(tree) => tree,
-            _ => panic!("expected tree"),
         }
     }
 

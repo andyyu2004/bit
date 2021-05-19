@@ -2,7 +2,7 @@ use crate::error::BitResult;
 use crate::hash;
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
-use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree};
+use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree, Treeish};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
 use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, SymbolicRef};
@@ -223,7 +223,7 @@ impl BitRepo {
             _ => return Ok(Tree::default()),
         };
         let commit = self.read_obj(oid)?.into_commit();
-        Ok(self.read_obj(commit.tree())?.into_tree())
+        Ok(self.read_obj(commit.tree())?.into_tree()?)
     }
 
     /// returns the resolved hash of the HEAD symref
