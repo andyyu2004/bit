@@ -1,7 +1,7 @@
 [workspace]
 members = [
-    "src/bit",
-    "src/libbit",
+    "bit",
+    "libbit",
 ]
 
 [profile.dev]
