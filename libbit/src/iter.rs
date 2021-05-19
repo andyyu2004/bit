@@ -91,8 +91,8 @@ impl<'r> TreeIterator for TreeIter<'r> {
             // TODO can dry out this code (with above) if it turns out to be what we want
             match self.entry_stack.pop() {
                 Some((base, mut entry)) => match entry.mode {
-                    FileMode::DIR => continue,
-                    FileMode::REG | FileMode::LINK | FileMode::EXEC => {
+                    // step over for directories returns the entry but does not recurse into it
+                    FileMode::DIR | FileMode::REG | FileMode::LINK | FileMode::EXEC => {
                         debug!("HeadIter::over: entry: {:?}", entry);
                         entry.path = base.join(entry.path);
                         return Ok(Some(entry));

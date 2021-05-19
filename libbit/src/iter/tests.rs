@@ -36,6 +36,7 @@ fn test_tree_iterator_step_over() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let mut iter = repo.head_tree_iter()?;
         check_next!(iter.next() => "bar":FileMode::REG);
+        check_next!(iter.over() => "dir":FileMode::DIR);
         check_next!(iter.over() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
         Ok(())
@@ -48,6 +49,7 @@ fn test_tree_iterator_peekable() -> BitResult<()> {
         let mut iter = repo.head_tree_iter()?;
         check_next!(iter.peek() => "bar":FileMode::REG);
         check_next!(iter.next() => "bar":FileMode::REG);
+        check_next!(iter.over() => "dir":FileMode::DIR);
         check_next!(iter.over() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
         Ok(())
@@ -61,6 +63,7 @@ fn test_tree_iterator_peekable_step_over_peeked() -> BitResult<()> {
         check_next!(iter.peek() => "bar":FileMode::REG);
         // remember peeked value
         check_next!(iter.over() => "bar": FileMode::REG);
+        check_next!(iter.over() => "dir":FileMode::DIR);
         check_next!(iter.over() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
         Ok(())

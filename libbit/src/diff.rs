@@ -129,9 +129,9 @@ where
 
 #[derive(Debug, Default)]
 pub struct TreeDiff {
-    new: Vec<TreeEntry>,
-    modified: Vec<(TreeEntry, TreeEntry)>,
-    deleted: Vec<TreeEntry>,
+    pub new: Vec<TreeEntry>,
+    pub modified: Vec<(TreeEntry, TreeEntry)>,
+    pub deleted: Vec<TreeEntry>,
 }
 
 pub struct TreeDifferImpl<'r> {
