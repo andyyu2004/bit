@@ -2,7 +2,7 @@
 
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
-use crate::iter::BitEntryIterator;
+use crate::iter::{BitEntryIterator, TreeIter};
 use crate::obj::Tree;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -15,6 +15,7 @@ use std::collections::HashSet;
 pub struct BitDiff {}
 
 pub trait Differ<'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r>;
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()>;
     fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()>;
@@ -23,13 +24,12 @@ pub trait Differ<'r> {
 pub trait DiffBuilder<'r>: Differ<'r> {
     /// the type of the resulting diff (returned by `Self::run_diff`)
     type Diff;
-    fn index_mut(&mut self) -> &mut BitIndex<'r>;
     fn run_diff(self) -> BitResult<Self::Diff>;
 }
 
 pub struct GenericDiffer<'d, 'r, D, I, J>
 where
-    D: DiffBuilder<'r>,
+    D: Differ<'r>,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
@@ -44,6 +44,307 @@ enum Changed {
     Yes,
     No,
     Maybe,
+}
+
+impl<'d, 'r, D, I, J> Differ<'r> for GenericDiffer<'d, 'r, D, I, J>
+where
+    D: Differ<'r>,
+    I: BitEntryIterator,
+    J: BitEntryIterator,
+{
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.differ.index_mut()
+    }
+
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        self.old_iter.next()?;
+        self.differ.on_deleted(old)
+    }
+
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        self.new_iter.next()?;
+        self.differ.on_created(new)
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        self.old_iter.next()?;
+        self.new_iter.next()?;
+        // if we are here then we know that the path and stage of the entries match
+        // however, that does not mean that the file has not changed
+        if self.differ.index_mut().has_changes(&old, &new)? {
+            self.differ.on_modified(old, new)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'d, 'r, D, I, J> GenericDiffer<'d, 'r, D, I, J>
+where
+    D: Differ<'r>,
+    I: BitEntryIterator,
+    J: BitEntryIterator,
+{
+    fn new(differ: &'d mut D, old_iter: I, new_iter: J) -> Self {
+        Self {
+            old_iter: old_iter.fuse().peekable(),
+            new_iter: new_iter.fuse().peekable(),
+            differ,
+            pd: std::marker::PhantomData,
+        }
+    }
+
+    pub fn diff_generic(&mut self) -> BitResult<()> {
+        loop {
+            match (self.old_iter.peek()?, self.new_iter.peek()?) {
+                (None, None) => break,
+                (None, Some(&new)) => self.on_created(new)?,
+                (Some(&old), None) => self.on_deleted(old)?,
+                (Some(&old), Some(&new)) => {
+                    // there is an old record that no longer has a matching new record
+                    // therefore it has been deleted
+                    match old.cmp(&new) {
+                        Ordering::Less => self.on_deleted(old)?,
+                        Ordering::Equal => self.on_modified(old, new)?,
+                        Ordering::Greater => self.on_created(new)?,
+                    }
+                }
+            };
+        }
+        Ok(())
+    }
+
+    pub fn run(differ: &'d mut D, old_iter: I, new_iter: J) -> BitResult<()> {
+        Self::new(differ, old_iter, new_iter).diff_generic()
+    }
+}
+
+pub struct TreeDiffer<'a, 'r> {
+    // need an inner type otherwise we can't use `GenericDiffer::new`
+    inner: TreeDifferInner<'a, 'r>,
+    a: Peekable<Fuse<TreeIter<'r>>>,
+    b: Peekable<Fuse<TreeIter<'r>>>,
+}
+
+pub struct TreeDifferInner<'a, 'r> {
+    index: &'a mut BitIndex<'r>,
+}
+
+impl<'a, 'r> TreeDiffer<'a, 'r> {
+    pub fn new(index: &'a mut BitIndex<'r>, a: &Tree, b: &Tree) -> Self {
+        let repo = index.repo;
+        let a = repo.tree_iter(a).fuse().peekable();
+        let b = repo.tree_iter(b).fuse().peekable();
+        let inner = TreeDifferInner { index };
+        Self { inner, a, b }
+    }
+}
+
+impl<'a, 'r> DiffBuilder<'r> for TreeDiffer<'a, 'r> {
+    type Diff = WorkspaceDiff;
+
+    fn run_diff(mut self) -> BitResult<Self::Diff> {
+        let a = self.a.map(|entry| Ok(BitIndexEntry::from(entry)));
+        let b = self.b.map(|entry| Ok(BitIndexEntry::from(entry)));
+        let differ = GenericDiffer::new(&mut self.inner, a, b);
+        todo!()
+    }
+}
+
+impl<'a, 'r> Differ<'r> for TreeDiffer<'a, 'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.inner.index
+    }
+
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        self.inner.on_created(new)
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        self.inner.on_modified(old, new)
+    }
+
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        self.inner.on_deleted(old)
+    }
+}
+
+impl<'a, 'r> Differ<'r> for TreeDifferInner<'a, 'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.index
+    }
+
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        todo!()
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        todo!()
+    }
+
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        todo!()
+    }
+}
+
+impl BitRepo {
+    pub fn diff_index_worktree(&self) -> BitResult<WorkspaceDiff> {
+        self.with_index_mut(|index| index.diff_worktree())
+    }
+
+    pub fn diff_head_index(&self) -> BitResult<WorkspaceDiff> {
+        self.with_index_mut(|index| index.diff_head())
+    }
+
+    pub fn diff_tree_to_tree(&self, a: Tree, b: Tree) -> BitResult<WorkspaceDiff> {
+        todo!()
+    }
+}
+
+impl<'r> BitIndex<'r> {
+    pub fn diff_worktree(&mut self) -> BitResult<WorkspaceDiff> {
+        IndexWorktreeDiffer::new(self).run_diff()
+    }
+
+    pub fn diff_head(&mut self) -> BitResult<WorkspaceDiff> {
+        HeadIndexDiffer::new(self).run_diff()
+    }
+}
+
+pub(crate) struct HeadIndexDiffer<'a, 'r> {
+    repo: &'r BitRepo,
+    index: &'a mut BitIndex<'r>,
+    new: Vec<BitIndexEntry>,
+    staged: Vec<(BitIndexEntry, BitIndexEntry)>,
+    deleted: Vec<BitIndexEntry>,
+}
+
+impl<'a, 'r> HeadIndexDiffer<'a, 'r> {
+    pub fn new(index: &'a mut BitIndex<'r>) -> Self {
+        let repo = index.repo;
+        Self {
+            index,
+            repo,
+            new: Default::default(),
+            staged: Default::default(),
+            deleted: Default::default(),
+        }
+    }
+}
+
+impl<'a, 'r> DiffBuilder<'r> for HeadIndexDiffer<'a, 'r> {
+    type Diff = WorkspaceDiff;
+
+    fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
+        let repo = self.repo;
+        let index_iter = self.index.iter();
+        GenericDiffer::run(&mut self, repo.head_iter()?, index_iter)?;
+        Ok(WorkspaceDiff { deleted: self.deleted, modified: self.staged, new: self.new })
+    }
+}
+
+impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.index
+    }
+
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        Ok(self.new.push(new))
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        assert_eq!(old.path, new.path);
+        Ok(self.staged.push((old, new)))
+    }
+
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        Ok(self.deleted.push(old))
+    }
+}
+
+#[derive(Debug)]
+pub struct WorkspaceDiff {
+    pub new: Vec<BitIndexEntry>,
+    pub modified: Vec<(BitIndexEntry, BitIndexEntry)>,
+    pub deleted: Vec<BitIndexEntry>,
+}
+
+impl WorkspaceDiff {
+    pub fn is_empty(&self) -> bool {
+        self.new.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
+    }
+}
+pub trait Diff {
+    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()>;
+}
+
+impl Diff for WorkspaceDiff {
+    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()> {
+        for &deleted in self.deleted.iter() {
+            differ.on_deleted(deleted)?;
+        }
+        for &(old, new) in self.modified.iter() {
+            differ.on_modified(old, new)?;
+        }
+        for &new in self.new.iter() {
+            differ.on_created(new)?;
+        }
+        Ok(())
+    }
+}
+
+pub(crate) struct IndexWorktreeDiffer<'a, 'r> {
+    repo: &'r BitRepo,
+    index: &'a mut BitIndex<'r>,
+    untracked: Vec<BitIndexEntry>,
+    modified: Vec<(BitIndexEntry, BitIndexEntry)>,
+    deleted: Vec<BitIndexEntry>,
+    // directories that only contain untracked files
+    _untracked_dirs: HashSet<BitPath>,
+}
+
+impl<'a, 'r> IndexWorktreeDiffer<'a, 'r> {
+    pub fn new(index: &'a mut BitIndex<'r>) -> Self {
+        let repo = index.repo;
+        Self {
+            index,
+            repo,
+            untracked: Default::default(),
+            modified: Default::default(),
+            deleted: Default::default(),
+            _untracked_dirs: Default::default(),
+        }
+    }
+}
+
+impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
+    type Diff = WorkspaceDiff;
+
+    fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
+        let repo = self.repo;
+        let index_iter = self.index.iter();
+        GenericDiffer::run(&mut self, index_iter, repo.worktree_iter()?)?;
+        Ok(WorkspaceDiff { new: self.untracked, modified: self.modified, deleted: self.deleted })
+    }
+}
+
+impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.index
+    }
+
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        self.untracked.push(new);
+        Ok(())
+    }
+
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+        assert_eq!(old.path, new.path);
+        Ok(self.modified.push((old, new)))
+    }
+
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        Ok(self.deleted.push(old))
+    }
 }
 
 impl<'r> BitIndex<'r> {
@@ -138,253 +439,6 @@ impl<'r> BitIndex<'r> {
         debug!("{} uncertain if changed", old.path);
 
         Ok(Changed::Maybe)
-    }
-}
-
-impl<'d, 'r, D, I, J> Differ<'r> for GenericDiffer<'d, 'r, D, I, J>
-where
-    D: DiffBuilder<'r>,
-    I: BitEntryIterator,
-    J: BitEntryIterator,
-{
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        self.old_iter.next()?;
-        self.differ.on_deleted(old)
-    }
-
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        self.new_iter.next()?;
-        self.differ.on_created(new)
-    }
-
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        self.old_iter.next()?;
-        self.new_iter.next()?;
-        // if we are here then we know that the path and stage of the entries match
-        // however, that does not mean that the file has not changed
-        if self.differ.index_mut().has_changes(&old, &new)? {
-            self.differ.on_modified(old, new)?;
-        }
-        Ok(())
-    }
-}
-
-impl<'d, 'r, D, I, J> GenericDiffer<'d, 'r, D, I, J>
-where
-    D: DiffBuilder<'r>,
-    I: BitEntryIterator,
-    J: BitEntryIterator,
-{
-    fn new(differ: &'d mut D, old_iter: I, new_iter: J) -> Self {
-        Self {
-            old_iter: old_iter.fuse().peekable(),
-            new_iter: new_iter.fuse().peekable(),
-            differ,
-            pd: std::marker::PhantomData,
-        }
-    }
-
-    pub fn diff_generic(&mut self) -> BitResult<()> {
-        loop {
-            match (self.old_iter.peek()?, self.new_iter.peek()?) {
-                (None, None) => break,
-                (None, Some(&new)) => self.on_created(new)?,
-                (Some(&old), None) => self.on_deleted(old)?,
-                (Some(&old), Some(&new)) => {
-                    // there is an old record that no longer has a matching new record
-                    // therefore it has been deleted
-                    match old.cmp(&new) {
-                        Ordering::Less => self.on_deleted(old)?,
-                        Ordering::Equal => self.on_modified(old, new)?,
-                        Ordering::Greater => self.on_created(new)?,
-                    }
-                }
-            };
-        }
-        Ok(())
-    }
-
-    pub fn run(differ: &'d mut D, old_iter: I, new_iter: J) -> BitResult<()> {
-        Self::new(differ, old_iter, new_iter).diff_generic()
-    }
-}
-
-pub struct TreeDiffer<'a, 'r> {
-    index: &'a mut BitIndex<'r>,
-}
-
-impl<'a, 'r> Differ<'r> for TreeDiffer<'a, 'r> {
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        todo!()
-    }
-
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        todo!()
-    }
-
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        todo!()
-    }
-}
-
-impl BitRepo {
-    pub fn diff_index_worktree(&self) -> BitResult<WorkspaceDiff> {
-        self.with_index_mut(|index| index.diff_worktree())
-    }
-
-    pub fn diff_head_index(&self) -> BitResult<WorkspaceDiff> {
-        self.with_index_mut(|index| index.diff_head())
-    }
-
-    pub fn diff_tree_to_tree(&self, a: Tree, b: Tree) -> BitResult<WorkspaceDiff> {
-        todo!()
-    }
-}
-
-impl<'r> BitIndex<'r> {
-    pub fn diff_worktree(&mut self) -> BitResult<WorkspaceDiff> {
-        IndexWorktreeDiffer::new(self).run_diff()
-    }
-
-    pub fn diff_head(&mut self) -> BitResult<WorkspaceDiff> {
-        HeadIndexDiffer::new(self).run_diff()
-    }
-}
-
-pub(crate) struct HeadIndexDiffer<'a, 'r> {
-    repo: &'r BitRepo,
-    index: &'a mut BitIndex<'r>,
-    new: Vec<BitIndexEntry>,
-    staged: Vec<(BitIndexEntry, BitIndexEntry)>,
-    deleted: Vec<BitIndexEntry>,
-}
-
-impl<'a, 'r> HeadIndexDiffer<'a, 'r> {
-    pub fn new(index: &'a mut BitIndex<'r>) -> Self {
-        let repo = index.repo;
-        Self {
-            index,
-            repo,
-            new: Default::default(),
-            staged: Default::default(),
-            deleted: Default::default(),
-        }
-    }
-}
-
-impl<'a, 'r> DiffBuilder<'r> for HeadIndexDiffer<'a, 'r> {
-    type Diff = WorkspaceDiff;
-
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
-        self.index
-    }
-
-    fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
-        let repo = self.repo;
-        let index_iter = self.index.iter();
-        GenericDiffer::run(&mut self, repo.head_iter()?, index_iter)?;
-        Ok(WorkspaceDiff { deleted: self.deleted, modified: self.staged, new: self.new })
-    }
-}
-
-impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        Ok(self.new.push(new))
-    }
-
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        Ok(self.deleted.push(old))
-    }
-
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        assert_eq!(old.path, new.path);
-        Ok(self.staged.push((old, new)))
-    }
-}
-
-#[derive(Debug)]
-pub struct WorkspaceDiff {
-    pub new: Vec<BitIndexEntry>,
-    pub modified: Vec<(BitIndexEntry, BitIndexEntry)>,
-    pub deleted: Vec<BitIndexEntry>,
-}
-
-impl WorkspaceDiff {
-    pub fn is_empty(&self) -> bool {
-        self.new.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
-    }
-}
-pub trait Diff {
-    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()>;
-}
-
-impl Diff for WorkspaceDiff {
-    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()> {
-        for &deleted in self.deleted.iter() {
-            differ.on_deleted(deleted)?;
-        }
-        for &(old, new) in self.modified.iter() {
-            differ.on_modified(old, new)?;
-        }
-        for &new in self.new.iter() {
-            differ.on_created(new)?;
-        }
-        Ok(())
-    }
-}
-
-pub(crate) struct IndexWorktreeDiffer<'a, 'r> {
-    repo: &'r BitRepo,
-    index: &'a mut BitIndex<'r>,
-    untracked: Vec<BitIndexEntry>,
-    modified: Vec<(BitIndexEntry, BitIndexEntry)>,
-    deleted: Vec<BitIndexEntry>,
-    // directories that only contain untracked files
-    _untracked_dirs: HashSet<BitPath>,
-}
-
-impl<'a, 'r> IndexWorktreeDiffer<'a, 'r> {
-    pub fn new(index: &'a mut BitIndex<'r>) -> Self {
-        let repo = index.repo;
-        Self {
-            index,
-            repo,
-            untracked: Default::default(),
-            modified: Default::default(),
-            deleted: Default::default(),
-            _untracked_dirs: Default::default(),
-        }
-    }
-}
-
-impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
-    type Diff = WorkspaceDiff;
-
-    fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
-        let repo = self.repo;
-        let index_iter = self.index.iter();
-        GenericDiffer::run(&mut self, index_iter, repo.worktree_iter()?)?;
-        Ok(WorkspaceDiff { new: self.untracked, modified: self.modified, deleted: self.deleted })
-    }
-
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
-        self.index
-    }
-}
-
-impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        self.untracked.push(new);
-        Ok(())
-    }
-
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        assert_eq!(old.path, new.path);
-        Ok(self.modified.push((old, new)))
-    }
-
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        Ok(self.deleted.push(old))
     }
 }
 

@@ -133,7 +133,12 @@ impl<'r> BitIndex<'r> {
         struct AddAll<'a, 'r> {
             index: &'a mut BitIndex<'r>,
         }
+
         impl<'a, 'r> Differ<'r> for AddAll<'a, 'r> {
+            fn index_mut(&mut self) -> &mut BitIndex<'r> {
+                self.index
+            }
+
             fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
                 self.index.add_entry(new)
             }
