@@ -48,12 +48,12 @@ fn test_add_symlink() -> BitResult<()> {
             let mut iter = index.std_iter();
             let fst = iter.next().unwrap();
             assert_eq!(fst.mode, FileMode::REG);
-            assert_eq!(fst.filepath, "foo");
+            assert_eq!(fst.path, "foo");
             assert_eq!(fst.filesize, 0);
 
             let snd = iter.next().unwrap();
             assert_eq!(snd.mode, FileMode::LINK);
-            assert_eq!(snd.filepath, "link");
+            assert_eq!(snd.path, "link");
             // not entirely sure what the correct length is meant to be
             // its 19 on my system at least
             // assert_eq!(snd.filesize as usize, "foo".len());
@@ -82,9 +82,9 @@ fn test_index_add_directory() -> BitResult<()> {
             index.add_str("dir")?;
             assert_eq!(index.len(), 3);
             let mut iterator = index.entries.values();
-            assert_eq!(iterator.next().unwrap().filepath, "dir/a");
-            assert_eq!(iterator.next().unwrap().filepath, "dir/b");
-            assert_eq!(iterator.next().unwrap().filepath, "dir/c/d");
+            assert_eq!(iterator.next().unwrap().path, "dir/a");
+            assert_eq!(iterator.next().unwrap().path, "dir/b");
+            assert_eq!(iterator.next().unwrap().path, "dir/c/d");
             Ok(())
         })
     })
@@ -116,7 +116,7 @@ fn index_file_directory_collision() -> BitResult<()> {
 
             assert_eq!(index.len(), 1);
             let mut iterator = index.entries.values();
-            assert_eq!(iterator.next().unwrap().filepath, "a/somefile");
+            assert_eq!(iterator.next().unwrap().path, "a/somefile");
             Ok(())
         })
     })
@@ -148,8 +148,8 @@ fn index_nested_file_directory_collision() -> BitResult<()> {
         repo.with_index_mut(|index| {
             assert_eq!(index.len(), 2);
             let mut iterator = index.entries.values();
-            assert_eq!(iterator.next().unwrap().filepath, "bar");
-            assert_eq!(iterator.next().unwrap().filepath, "foo/bar/baz");
+            assert_eq!(iterator.next().unwrap().path, "bar");
+            assert_eq!(iterator.next().unwrap().path, "foo/bar/baz");
             Ok(())
         })
     })
@@ -187,7 +187,7 @@ fn index_directory_file_collision() -> BitResult<()> {
 
             assert_eq!(index.len(), 1);
             let mut iter = index.entries.values();
-            assert_eq!(iter.next().unwrap().filepath, "foo");
+            assert_eq!(iter.next().unwrap().path, "foo");
             Ok(())
         })
     })
@@ -202,7 +202,7 @@ fn test_status_staged_deleted_files() -> BitResult<()> {
         assert!(diff.new.is_empty());
         assert!(diff.modified.is_empty());
         assert_eq!(diff.deleted.len(), 1);
-        assert_eq!(diff.deleted[0].filepath, "foo");
+        assert_eq!(diff.deleted[0].path, "foo");
         Ok(())
     })
 }
@@ -270,7 +270,7 @@ fn parse_small_index() -> BitResult<()> {
             gid: 1000,
             filesize: 6,
             flags: BitIndexEntryFlags::new(12),
-            filepath: BitPath::intern("dir/test.txt"),
+            path: BitPath::intern("dir/test.txt"),
             mode: FileMode::REG,
             hash: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
         },
@@ -283,7 +283,7 @@ fn parse_small_index() -> BitResult<()> {
             gid: 1000,
             filesize: 6,
             flags: BitIndexEntryFlags::new(8),
-            filepath: BitPath::intern("test.txt"),
+            path: BitPath::intern("test.txt"),
             mode: FileMode::REG,
             hash: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
         },

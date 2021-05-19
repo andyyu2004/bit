@@ -13,7 +13,7 @@ impl BitRepo {
                 if opts.stage {
                     print!("{} {} {}\t", entry.mode, entry.hash, entry.stage())
                 }
-                println!("{}", entry.filepath);
+                println!("{}", entry.path);
                 Ok(())
             })
         })

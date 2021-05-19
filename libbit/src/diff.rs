@@ -52,9 +52,9 @@ impl<'r> BitIndex<'r> {
     /// determine's whether `new` is *definitely* different from `old`
     // (preferably without comparing hashes)
     pub fn has_changes(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<bool> {
-        trace!("BitIndex::has_changes({} -> {})?", old.filepath, new.filepath);
+        trace!("BitIndex::has_changes({} -> {})?", old.path, new.path);
         // should only be comparing the same file
-        assert_eq!(old.filepath, new.filepath);
+        assert_eq!(old.path, new.path);
         // the "old" entry should always have a calculated hash
         assert!(old.hash.is_known());
         assert_eq!(old.stage(), MergeStage::None);
@@ -70,12 +70,12 @@ impl<'r> BitIndex<'r> {
                 // a head_entry should never reach this section as it should always have a known hash
                 // (from the TreeEntry). To assert this we just check the filepath to be empty
                 // (as this is the default value given when a tree entry is converted to an index entry)
-                assert!(!old.filepath.is_empty());
+                assert!(!old.path.is_empty());
 
                 // file may have changed, but we are not certain, so check the hash
                 let mut new_hash = new.hash;
                 if new_hash.is_unknown() {
-                    new_hash = self.repo.hash_blob(new.filepath)?;
+                    new_hash = self.repo.hash_blob(new.path)?;
                 }
 
                 let changed = old.hash != new_hash;
@@ -100,23 +100,20 @@ impl<'r> BitIndex<'r> {
         // where most of the fields are zeroed but the hash is known
         // these checks confirm whether entries have definitely NOT changed
         if old.hash == new.hash {
-            debug!("{} unchanged: hashes match {} {}", old.filepath, old.hash, new.hash);
+            debug!("{} unchanged: hashes match {} {}", old.path, old.hash, new.hash);
             return Ok(Changed::No);
         } else if new.hash.is_known() {
             // asserted old.hash.is_known() in outer function
-            debug!(
-                "{} changed: two known hashes don't match {} {}",
-                old.filepath, old.hash, new.hash
-            );
+            debug!("{} changed: two known hashes don't match {} {}", old.path, old.hash, new.hash);
             return Ok(Changed::Yes);
         }
 
         if old.mtime == new.mtime {
             if self.is_racy_entry(old) {
-                debug!("racy entry {}", new.filepath);
+                debug!("racy entry {}", new.path);
                 return Ok(Changed::Maybe);
             }
-            debug!("{} unchanged: non-racy mtime match {} {}", old.filepath, old.mtime, new.mtime);
+            debug!("{} unchanged: non-racy mtime match {} {}", old.path, old.mtime, new.mtime);
             return Ok(Changed::No);
         }
 
@@ -124,21 +121,21 @@ impl<'r> BitIndex<'r> {
         // could probably add in a few of the other fields but not that important?
 
         if old.filesize != new.filesize {
-            debug!("{} changed: filesize {} -> {}", old.filepath, old.filesize, new.filesize);
+            debug!("{} changed: filesize {} -> {}", old.path, old.filesize, new.filesize);
             return Ok(Changed::Yes);
         }
 
         if old.inode != new.inode {
-            debug!("{} changed: inode {} -> {}", old.filepath, old.inode, new.inode);
+            debug!("{} changed: inode {} -> {}", old.path, old.inode, new.inode);
             return Ok(Changed::Yes);
         }
 
         if tls::with_config(|config| config.filemode())? && old.mode != new.mode {
-            debug!("{} changed: filemode {} -> {}", old.filepath, old.mode, new.mode);
+            debug!("{} changed: filemode {} -> {}", old.path, old.mode, new.mode);
             return Ok(Changed::Yes);
         }
 
-        debug!("{} uncertain if changed", old.filepath);
+        debug!("{} uncertain if changed", old.path);
 
         Ok(Changed::Maybe)
     }
@@ -282,7 +279,7 @@ impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
     }
 
     fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        assert_eq!(old.filepath, new.filepath);
+        assert_eq!(old.path, new.path);
         Ok(self.staged.push((old, new)))
     }
 }
@@ -364,7 +361,7 @@ impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
     }
 
     fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        assert_eq!(old.filepath, new.filepath);
+        assert_eq!(old.path, new.path);
         Ok(self.modified.push((old, new)))
     }
 

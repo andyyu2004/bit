@@ -27,18 +27,13 @@ impl DerefMut for BitIndexEntries {
 
 impl From<Vec<BitIndexEntry>> for BitIndexEntries {
     fn from(entries: Vec<BitIndexEntry>) -> Self {
-        Self(
-            entries
-                .into_iter()
-                .map(|entry| ((entry.filepath, entry.flags.stage()), entry))
-                .collect(),
-        )
+        Self(entries.into_iter().map(|entry| ((entry.path, entry.flags.stage()), entry)).collect())
     }
 }
 
 impl Serialize for BitIndexEntry {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
-        assert!(self.filepath.is_relative());
+        assert!(self.path.is_relative());
         writer.write_timespec(self.ctime)?;
         writer.write_timespec(self.mtime)?;
         writer.write_u32(self.device)?;
@@ -49,7 +44,7 @@ impl Serialize for BitIndexEntry {
         writer.write_u32(self.filesize)?;
         writer.write_bit_hash(&self.hash)?;
         writer.write_u16(self.flags.0)?;
-        writer.write_all(self.filepath.as_bytes())?;
+        writer.write_all(self.path.as_bytes())?;
         writer.write_all(&[0u8; 8][..self.padding_len()])?;
         Ok(())
     }
@@ -88,7 +83,7 @@ impl Deserialize for BitIndexEntry {
             filesize,
             hash,
             flags,
-            filepath,
+            path: filepath,
         };
 
         // read padding (to make entrysize multiple of 8)
@@ -121,8 +116,7 @@ pub struct BitIndexEntry {
     /// may be zero if left uncalculated (for efficiency)
     pub hash: Oid,
     pub flags: BitIndexEntryFlags,
-    //? is it necessary for this path to be relative to the repository workdir?
-    pub filepath: BitPath,
+    pub path: BitPath,
 }
 
 impl From<TreeEntry> for BitIndexEntry {
@@ -140,14 +134,14 @@ impl From<TreeEntry> for BitIndexEntry {
             filesize: 0,
             hash: entry.hash,
             flags: BitIndexEntryFlags::new(0),
-            filepath: entry.path,
+            path: entry.path,
         }
     }
 }
 
 impl BitIndexEntry {
     pub fn as_key(&self) -> (BitPath, MergeStage) {
-        (self.filepath, self.stage())
+        (self.path, self.stage())
     }
 }
 
@@ -179,7 +173,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
         // as this is the correct representation for the index entry
         // and otherwise, the pathlen in the flags will be off
         Ok(Self {
-            filepath: relative,
+            path: relative,
             ctime: Timespec::ctime(&metadata),
             mtime: Timespec::mtime(&metadata),
             device: metadata.st_dev() as u32,
@@ -200,7 +194,7 @@ impl BitIndexEntry {
     }
 
     pub(super) fn padding_len(&self) -> usize {
-        Self::padding_len_for_filepath(self.filepath.len())
+        Self::padding_len_for_filepath(self.path.len())
     }
 
     pub(super) fn padding_len_for_filepath(filepath_len: usize) -> usize {
@@ -222,7 +216,7 @@ impl PartialOrd for BitIndexEntry {
 
 impl Ord for BitIndexEntry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.filepath.cmp(&other.filepath).then_with(|| self.stage().cmp(&other.stage()))
+        self.path.cmp(&other.path).then_with(|| self.stage().cmp(&other.stage()))
     }
 }
 

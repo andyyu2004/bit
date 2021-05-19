@@ -27,13 +27,13 @@ impl Display for BitStatusReport {
             writeln!(f, "Changes to be committed")?;
             writeln!(f, "  (use `bit restore --staged <file>...` to unstage) (unimplemented)")?;
             for new in &self.staged.new {
-                writeln!(f, "\t{}:   {}", "new file".green(), new.filepath.green())?;
+                writeln!(f, "\t{}:   {}", "new file".green(), new.path.green())?;
             }
             for (_, modified) in &self.staged.modified {
-                writeln!(f, "\t{}:   {}", "modified".green(), modified.filepath.green())?;
+                writeln!(f, "\t{}:   {}", "modified".green(), modified.path.green())?;
             }
             for deleted in &self.staged.deleted {
-                writeln!(f, "\t{}:   {}", "deleted".green(), deleted.filepath.green())?;
+                writeln!(f, "\t{}:   {}", "deleted".green(), deleted.path.green())?;
             }
             writeln!(f)?;
         }
@@ -43,10 +43,10 @@ impl Display for BitStatusReport {
             writeln!(f, "  (use `bit add <file>...` to update what will be committed)")?;
             writeln!(f, "  (use 'bit restore <file>...' to discard changes in working directory)")?;
             for (_, modified) in &self.unstaged.modified {
-                writeln!(f, "\t{}:   {}", "modified".red(), modified.filepath.red())?;
+                writeln!(f, "\t{}:   {}", "modified".red(), modified.path.red())?;
             }
             for deleted in &self.unstaged.deleted {
-                writeln!(f, "\t{}:   {}", "deleted".red(), deleted.filepath.red())?;
+                writeln!(f, "\t{}:   {}", "deleted".red(), deleted.path.red())?;
             }
             writeln!(f)?;
         }
@@ -55,7 +55,7 @@ impl Display for BitStatusReport {
             writeln!(f, "Untracked files:")?;
             writeln!(f, "  (use `bit add <file>...` to include in what will be committed)")?;
             for untracked in &self.unstaged.new {
-                writeln!(f, "\t{}", untracked.filepath.red())?;
+                writeln!(f, "\t{}", untracked.path.red())?;
             }
         }
         Ok(())

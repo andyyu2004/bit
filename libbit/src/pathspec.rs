@@ -72,7 +72,7 @@ impl Pathspec {
     }
 
     fn match_iterator(self, iterator: impl BitEntryIterator) -> BitResult<impl BitEntryIterator> {
-        Ok(iterator.filter(move |entry| Ok(self.matches_path(entry.filepath))))
+        Ok(iterator.filter(move |entry| Ok(self.matches_path(entry.path))))
     }
 
     fn is_wildcard(c: char) -> bool {

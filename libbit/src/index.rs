@@ -113,7 +113,7 @@ impl<'r> BitIndex<'r> {
     pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
         if entry.hash.is_unknown() {
-            entry.hash = self.repo.hash_blob(entry.filepath)?;
+            entry.hash = self.repo.hash_blob(entry.path)?;
         }
         self.entries.insert(entry.as_key(), entry);
         Ok(())
@@ -184,7 +184,7 @@ impl BitIndexInner {
     /// removes collisions where there was originally a file but was replaced by a directory
     fn remove_file_dir_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
         //? only removing entries with no merge stage (may need changes)
-        for component in entry.filepath.accumulative_components() {
+        for component in entry.path.accumulative_components() {
             self.entries.remove(&(component, MergeStage::None));
         }
         Ok(())
@@ -194,10 +194,10 @@ impl BitIndexInner {
     fn remove_dir_file_collisions(&mut self, index_entry: &BitIndexEntry) -> BitResult<()> {
         //? unsure which implementation is better
         // doesn't seem to be a nice way to remove a range of a btreemap
-        // self.entries.retain(|(path, _), _| !path.starts_with(index_entry.filepath));
+        // self.entries.retain(|(path, _), _| !path.starts_with(index_entry.path));
         let mut to_remove = vec![];
-        for (&(path, stage), _) in self.entries.range((index_entry.filepath, MergeStage::None)..) {
-            if !path.starts_with(index_entry.filepath) {
+        for (&(path, stage), _) in self.entries.range((index_entry.path, MergeStage::None)..) {
+            if !path.starts_with(index_entry.path) {
                 break;
             }
             to_remove.push((path, stage));
@@ -241,7 +241,7 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
         let mut entries = BTreeSet::new();
         let current_index_dir = current_index_dir.as_ref();
         while let Some(next_entry) = self.index_entries.peek() {
-            let &BitIndexEntry { mode, filepath, hash, .. } = next_entry;
+            let &BitIndexEntry { mode, path: filepath, hash, .. } = next_entry;
             // if the depth is greater than the number of components in the filepath
             // then we need to `break` and go out one level
             let (curr_dir, segment) = match filepath.try_split_path_at(depth) {

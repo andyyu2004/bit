@@ -7,7 +7,7 @@ impl BitRepo {
     pub fn bit_add_dryrun(&self, pathspecs: &[Pathspec]) -> BitResult<()> {
         for pathspec in pathspecs {
             self.match_worktree_with(pathspec)?
-                .for_each(|entry| Ok(println!("add `{}`", entry.filepath)))?;
+                .for_each(|entry| Ok(println!("add `{}`", entry.path)))?;
         }
         Ok(())
     }
