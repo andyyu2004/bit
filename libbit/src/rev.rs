@@ -2,7 +2,6 @@ use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, Oid, PartialOid};
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
-use crate::tls;
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
@@ -19,8 +18,12 @@ pub enum Revspec {
 }
 
 impl BitRepo {
+    pub fn resolve_rev(&self, rev: &LazyRevspec) -> BitResult<Oid> {
+        self.resolve_rev_inner(rev.eval(self)?)
+    }
+
     /// resolves revision specification to the commit oid
-    pub fn resolve_rev(&self, rev: &Revspec) -> BitResult<Oid> {
+    fn resolve_rev_inner(&self, rev: &Revspec) -> BitResult<Oid> {
         let get_parent = |oid: Oid| -> BitResult<Oid> {
             let obj_type = self.read_obj_header(oid)?.obj_type;
             ensure_eq!(
@@ -40,9 +43,9 @@ impl BitRepo {
         match rev {
             Revspec::Ref(r) => self.fully_resolve_ref(*r),
             Revspec::Partial(prefix) => self.expand_prefix(*prefix),
-            Revspec::Parent(inner) => self.resolve_rev(inner).and_then(|oid| get_parent(oid)),
+            Revspec::Parent(inner) => self.resolve_rev_inner(inner).and_then(|oid| get_parent(oid)),
             Revspec::Ancestor(rev, n) =>
-                (0..*n).try_fold(self.resolve_rev(rev)?, |oid, _| get_parent(oid)),
+                (0..*n).try_fold(self.resolve_rev_inner(rev)?, |oid, _| get_parent(oid)),
         }
     }
 }
@@ -70,8 +73,8 @@ pub struct LazyRevspec {
 }
 
 impl LazyRevspec {
-    pub fn eval(&self) -> BitResult<&Revspec> {
-        self.parsed.get_or_try_init(|| RevspecParser::new(&self.src).parse())
+    pub fn eval(&self, repo: &BitRepo) -> BitResult<&Revspec> {
+        self.parsed.get_or_try_init(|| RevspecParser::new(repo, &self.src).parse())
     }
 }
 
@@ -89,13 +92,14 @@ lazy_static! {
     };
 }
 
-struct RevspecParser<'a> {
+struct RevspecParser<'a, 'r> {
+    repo: &'r BitRepo,
     src: &'a str,
 }
 
-impl<'a> RevspecParser<'a> {
-    pub fn new(src: &'a str) -> Self {
-        Self { src }
+impl<'a, 'r> RevspecParser<'a, 'r> {
+    pub fn new(repo: &'r BitRepo, src: &'a str) -> Self {
+        Self { repo, src }
     }
 
     // moves src to the index of separator and returns the str before the separator
@@ -108,6 +112,7 @@ impl<'a> RevspecParser<'a> {
 
     /// either a partialoid or a ref
     fn parse_base(&mut self) -> BitResult<Revspec> {
+        let repo = self.repo;
         let s = self.next()?;
         // try to interpret as a ref first and if it parses, then expand it to see if it resolves to something valid
         // this is better than doing it as a partialoid first as partialoid might fail either due to being ambiguous or due to not existing
@@ -115,22 +120,20 @@ impl<'a> RevspecParser<'a> {
         // rev's are ambiguous
         // how can we tell if something is a partial oid or a valid reference (e.g. nothing prevents "abcd" from being both a valid prefix and valid branch name)
         // (if a branch happens to have the same name as a valid prefix then bad luck I guess? but seems quite unlikely in practice)
-        tls::REPO.with(|repo| {
-            if let Ok(r) = BitRef::from_str(s).and_then(|r| {
-                // if the ref is not "fully resolvable" then
-                repo.fully_resolve_ref(r)?;
-                // we don't return the fully resolved ref as we want the original for better error messages
-                // we are just checking if it is resolvable
-                Ok(r)
-            }) {
-                Ok(Revspec::Ref(r))
-            } else {
-                PartialOid::from_str(s)
-                    .and_then(|prefix| repo.expand_prefix(prefix))
-                    .map(BitRef::from)
-                    .map(Revspec::Ref)
-            }
-        })
+        if let Ok(r) = BitRef::from_str(s).and_then(|r| {
+            // if the ref is not "fully resolvable" then
+            repo.fully_resolve_ref(r)?;
+            // we don't return the fully resolved ref as we want the original for better error messages
+            // we are just checking if it is resolvable
+            Ok(r)
+        }) {
+            Ok(Revspec::Ref(r))
+        } else {
+            PartialOid::from_str(s)
+                .and_then(|prefix| repo.expand_prefix(prefix))
+                .map(BitRef::from)
+                .map(Revspec::Ref)
+        }
     }
 
     fn expect_num(&mut self) -> BitResult<u32> {

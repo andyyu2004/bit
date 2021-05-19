@@ -2,19 +2,22 @@ use super::*;
 
 #[test]
 fn test_parse_revspec_parent() -> BitResult<()> {
-    BitRepo::with_sample_repo(|_repo| {
+    BitRepo::with_sample_repo(|repo| {
         let rev = parse_rev!("HEAD^");
-        assert_eq!(rev.eval()?, &Revspec::Parent(Box::new(Revspec::Ref(symbolic_ref!("HEAD")))));
+        assert_eq!(
+            rev.eval(repo)?,
+            &Revspec::Parent(Box::new(Revspec::Ref(symbolic_ref!("HEAD"))))
+        );
         Ok(())
     })
 }
 
 #[test]
 fn test_parse_revspec_with_symref_ancestor() -> BitResult<()> {
-    BitRepo::with_sample_repo(|_repo| {
+    BitRepo::with_sample_repo(|repo| {
         let rev = parse_rev!("HEAD~5");
         assert_eq!(
-            rev.eval()?,
+            rev.eval(repo)?,
             &Revspec::Ancestor(Box::new(Revspec::Ref(symbolic_ref!("HEAD"))), 5)
         );
         Ok(())
@@ -23,10 +26,10 @@ fn test_parse_revspec_with_symref_ancestor() -> BitResult<()> {
 
 #[test]
 fn test_parse_revspec_with_symref() -> BitResult<()> {
-    BitRepo::with_test_repo(|_repo| {
+    BitRepo::with_test_repo(|repo| {
         let rev = parse_rev!("e3eaee01f47f98216f4160658179420ff5e30f50");
         assert_eq!(
-            rev.eval()?,
+            rev.eval(repo)?,
             &Revspec::Ref(BitRef::Direct("e3eaee01f47f98216f4160658179420ff5e30f50".into()))
         );
         Ok(())
@@ -37,7 +40,7 @@ fn test_parse_revspec_with_symref() -> BitResult<()> {
 fn test_resolve_revspec() -> BitResult<()> {
     BitRepo::with_sample_repo_commits(|repo, commits| {
         let rev = parse_rev!("HEAD");
-        let oid = repo.resolve_rev(rev.eval()?)?;
+        let oid = repo.resolve_rev(&rev)?;
         assert_eq!(oid, commits[commits.len() - 1]);
         Ok(())
     })
@@ -47,7 +50,7 @@ fn test_resolve_revspec() -> BitResult<()> {
 fn test_resolve_revspec_parent() -> BitResult<()> {
     BitRepo::with_sample_repo_commits(|repo, commits| {
         let rev = parse_rev!("HEAD^");
-        let oid = repo.resolve_rev(rev.eval()?)?;
+        let oid = repo.resolve_rev(&rev)?;
         assert_eq!(oid, commits[commits.len() - 2]);
         Ok(())
     })
@@ -57,7 +60,7 @@ fn test_resolve_revspec_parent() -> BitResult<()> {
 fn test_resolve_revspec_double_parent() -> BitResult<()> {
     BitRepo::with_sample_repo_commits(|repo, commits| {
         let rev = parse_rev!("HEAD^^");
-        let oid = repo.resolve_rev(rev.eval()?)?;
+        let oid = repo.resolve_rev(&rev)?;
         assert_eq!(oid, commits[commits.len() - 3]);
         Ok(())
     })
@@ -67,7 +70,7 @@ fn test_resolve_revspec_double_parent() -> BitResult<()> {
 fn test_resolve_revspec_ancestor() -> BitResult<()> {
     BitRepo::with_sample_repo_commits(|repo, commits| {
         let rev = parse_rev!("HEAD~4");
-        let oid = repo.resolve_rev(rev.eval()?)?;
+        let oid = repo.resolve_rev(&rev)?;
         assert_eq!(oid, commits[commits.len() - 5]);
         Ok(())
     })
@@ -77,7 +80,7 @@ fn test_resolve_revspec_ancestor() -> BitResult<()> {
 fn test_resolve_complex_revspec() -> BitResult<()> {
     BitRepo::with_sample_repo_commits(|repo, commits| {
         let rev = parse_rev!("HEAD~2^^");
-        let oid = repo.resolve_rev(rev.eval()?)?;
+        let oid = repo.resolve_rev(&rev)?;
         assert_eq!(oid, commits[commits.len() - 5]);
         Ok(())
     })
@@ -87,7 +90,7 @@ fn test_resolve_complex_revspec() -> BitResult<()> {
 fn test_resolve_parent_of_non_commit_revspec() -> BitResult<()> {
     BitRepo::find(repos_dir!("ribble"), |repo| {
         let rev = parse_rev!("ebc3780a093cbda629d531c1c0d530a82063ee6f^");
-        let err = repo.resolve_rev(rev.eval()?).unwrap_err();
+        let err = repo.resolve_rev(&rev).unwrap_err();
         assert_eq!(
             err.to_string(),
             format!("object `ebc3780a093cbda629d531c1c0d530a82063ee6f` is a tree, not a commit")
@@ -100,7 +103,7 @@ fn test_resolve_parent_of_non_commit_revspec() -> BitResult<()> {
 fn test_resolve_non_commit_revspec() -> BitResult<()> {
     BitRepo::find(repos_dir!("ribble"), |repo| {
         let rev = parse_rev!("ebc3780a093cbda629d531c1c0d530a82063ee6f");
-        let oid = repo.resolve_rev(rev.eval()?)?;
+        let oid = repo.resolve_rev(&rev)?;
         assert_eq!(oid, "ebc3780a093cbda629d531c1c0d530a82063ee6f".into());
         Ok(())
     })
@@ -110,7 +113,7 @@ fn test_resolve_non_commit_revspec() -> BitResult<()> {
 fn test_resolve_partial_revspec() -> BitResult<()> {
     BitRepo::find(repos_dir!("ribble"), |repo| {
         let rev = parse_rev!("ebc3780");
-        let oid = repo.resolve_rev(rev.eval()?)?;
+        let oid = repo.resolve_rev(&rev)?;
         assert_eq!(oid, "ebc3780a093cbda629d531c1c0d530a82063ee6f".into());
         Ok(())
     })
@@ -120,7 +123,7 @@ fn test_resolve_partial_revspec() -> BitResult<()> {
 fn test_resolve_revspec_non_existent_ancestor() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let rev = parse_rev!("HEAD~2000");
-        let err = repo.resolve_rev(rev.eval()?).unwrap_err();
+        let err = repo.resolve_rev(&rev).unwrap_err();
         assert_eq!(
             err.to_string(),
             "revision `HEAD~2000` refers to the parent of an initial commit"
