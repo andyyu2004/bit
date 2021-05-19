@@ -73,7 +73,7 @@ impl<I: TreeIterator> FallibleIterator for TreePeekable<I> {
     type Item = I::Item;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        if let Some(peeked) = self.peeked { Ok(Some(peeked)) } else { self.iter.next() }
+        if let Some(peeked) = self.peeked.take() { Ok(Some(peeked)) } else { self.iter.next() }
     }
 }
 

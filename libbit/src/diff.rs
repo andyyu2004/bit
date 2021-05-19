@@ -7,7 +7,7 @@ use crate::obj::{Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
-use fallible_iterator::{Fuse, Peekable};
+use fallible_iterator::{FallibleIterator, Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -134,25 +134,23 @@ pub struct TreeDiff {
     deleted: Vec<TreeEntry>,
 }
 
-pub struct TreeDifferImpl<'a, 'r> {
+pub struct TreeDifferImpl<'r> {
     // need an inner type otherwise we can't use `GenericDiffer::new` as it takes self but also needs `a` and `b`
     repo: &'r BitRepo,
-    index: &'a mut BitIndex<'r>,
     a: TreePeekable<TreeIter<'r>>,
     b: TreePeekable<TreeIter<'r>>,
     diff: TreeDiff,
 }
 
-impl<'a, 'r> TreeDifferImpl<'a, 'r> {
-    pub fn new(index: &'a mut BitIndex<'r>, a: &Tree, b: &Tree) -> Self {
-        let repo = index.repo;
+impl<'r> TreeDifferImpl<'r> {
+    pub fn new(repo: &'r BitRepo, a: &Tree, b: &Tree) -> Self {
         let a = repo.tree_iter(a).tree_peekable();
         let b = repo.tree_iter(b).tree_peekable();
-        Self { repo, index, a, b, diff: Default::default() }
+        Self { repo, a, b, diff: Default::default() }
     }
 }
 
-impl<'a, 'r> TreeDifferImpl<'a, 'r> {
+impl<'r> TreeDifferImpl<'r> {
     fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
         // TODO is identical to GenericDiffer::generic_diff
         // maybe there is a a good way to unify the two
@@ -175,26 +173,33 @@ impl<'a, 'r> TreeDifferImpl<'a, 'r> {
     }
 }
 
-impl<'a, 'r> TreeDiffer<'r> for TreeDifferImpl<'a, 'r> {
+impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
     fn on_created(&mut self, new: TreeEntry) -> BitResult<()> {
         //? no need to recurse at all I think?
         self.diff.new.push(new);
+        self.b.over()?;
         Ok(())
     }
 
     fn on_match(&mut self, old: TreeEntry, new: TreeEntry) -> BitResult<()> {
-        if old.hash != new.hash {
-            self.diff.modified.push((old, new));
-        } else if old.mode.is_dir() && new.mode.is_dir() {
+        if old.hash == new.hash && old.mode.is_dir() && new.mode.is_dir() {
             // if hashes match and both are directories we can step over them
             self.a.over()?;
             self.b.over()?;
+        } else {
+            if old.hash != new.hash {
+                self.diff.modified.push((old, new));
+            }
+            self.a.next()?;
+            self.b.next()?;
         }
+
         Ok(())
     }
 
     fn on_deleted(&mut self, old: TreeEntry) -> BitResult<()> {
         self.diff.deleted.push(old);
+        self.a.over()?;
         Ok(())
     }
 }
@@ -208,8 +213,8 @@ impl BitRepo {
         self.with_index_mut(|index| index.diff_head())
     }
 
-    pub fn diff_tree_to_tree(&self, a: Tree, b: Tree) -> BitResult<WorkspaceDiff> {
-        todo!()
+    pub fn diff_tree_to_tree(&self, a: &Tree, b: &Tree) -> BitResult<WorkspaceDiff> {
+        TreeDifferImpl::new(self, a, b).run_diff()
     }
 }
 
