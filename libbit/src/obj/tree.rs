@@ -137,8 +137,11 @@ impl TreeEntry {
     // i.e. index.rs < index/
     // however, the trailing slash is not actually stored in the tree entry path (TODO confirm against git)
     // we (hackily) fix this by appending a symbol with ascii code > `.`
-    // the natural choice would be to append a slash but that breaks the assertion on `BitPath::cmp` which expects
-    // a relative path so we rather arbitrarily chose = which fixes this ordering issue
+    // the natural choice would be to append a slash but that gets normalized away
+    // so we rather arbitrarily chose the next ascii character '=' which fixes this ordering issue
+
+    // the same thing is done in WorktreeIter
+    // pretty unfortunate workaround, hopefully can think of something better
     fn sort_path(&self) -> BitPath {
         if self.mode == FileMode::DIR { self.path.join("=") } else { self.path }
     }

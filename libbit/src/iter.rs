@@ -91,7 +91,7 @@ impl<'r> TreeIterator for TreeIter<'r> {
             // TODO can dry out this code (with above) if it turns out to be what we want
             match self.entry_stack.pop() {
                 Some((base, mut entry)) => match entry.mode {
-                    // step over for directories returns the entry but does not recurse into it
+                    // step over for trees returns the entry but does not recurse into it
                     FileMode::DIR | FileMode::REG | FileMode::LINK | FileMode::EXEC => {
                         debug!("HeadIter::over: entry: {:?}", entry);
                         entry.path = base.join(entry.path);
@@ -163,7 +163,21 @@ impl<'r> WorktreeIter<'r> {
     pub fn new(repo: &'r BitRepo) -> BitResult<Self> {
         Ok(Self {
             repo,
-            walk: WalkBuilder::new(repo.workdir).sort_by_file_path(Ord::cmp).hidden(false).build(),
+            walk: WalkBuilder::new(repo.workdir)
+                .sort_by_file_path(|a, b| {
+                    let mut a = BitPath::intern(a);
+                    // see TreeEntry::cmp comments
+                    if a.is_dir() {
+                        a = a.join("=");
+                    }
+                    let mut b = BitPath::intern(b);
+                    if b.is_dir() {
+                        b = b.join("=");
+                    }
+                    a.cmp(&b)
+                })
+                .hidden(false)
+                .build(),
         })
     }
 
@@ -203,14 +217,8 @@ pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 
 impl BitRepo {
     pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + '_> {
-        let mut entries: Vec<_> = WorktreeIter::new(self)?.collect()?;
-        // TODO worktree iterator does not return in the correct order
-        // the comparator function on works per directory
-        // for some reason git places files before directory
-        // i.e. src/index.rs < index/mod.rs
-        // but no directory traverser I've seen does this so we just collect and sort for now
-        entries.sort();
-        Ok(fallible_iterator::convert(entries.into_iter().map(Ok)))
+        trace!("worktree_iter()");
+        WorktreeIter::new(self)
     }
 
     pub fn head_iter(&self) -> BitResult<impl BitEntryIterator + '_> {

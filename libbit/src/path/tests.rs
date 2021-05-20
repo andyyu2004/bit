@@ -26,8 +26,9 @@ fn test_path_accumulative_components() {
 
 #[test]
 fn test_path_ordering() {
-    // we do need some actual files
     assert!(p!("foo") < p!("foo/"));
     assert!(p!("foo") < p!("foo/bar"));
     assert!(p!("foo") == p!("foo"));
+
+    assert!(p!("dir/bar.l") < p!("dir/bar/qux"));
 }
