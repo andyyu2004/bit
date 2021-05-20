@@ -1,5 +1,5 @@
 use crate::error::{BitGenericError, BitResult};
-use crate::index::BitIndexEntry;
+use crate::index::{BitIndexEntries, BitIndexEntry};
 use crate::obj::{FileMode, Tree, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -137,7 +137,7 @@ pub struct DirIter {
 
 impl DirIter {
     pub fn new(path: impl AsRef<Path>) -> Self {
-        Self { walk: Walk::new(path) }
+        Self { walk: WalkBuilder::new(path).sort_by_file_path(Ord::cmp).build() }
     }
 }
 
