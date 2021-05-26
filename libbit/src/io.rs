@@ -207,7 +207,7 @@ impl<R: BufRead> BufReadExtSized for R {
 }
 
 pub trait BufReadExt: BufRead {
-    fn into_zlib_decode_stream(&mut self) -> BufReader<flate2::bufread::ZlibDecoder<&mut Self>> {
+    fn as_zlib_decode_stream(&mut self) -> BufReader<flate2::bufread::ZlibDecoder<&mut Self>> {
         BufReader::new(flate2::bufread::ZlibDecoder::new(self))
     }
 

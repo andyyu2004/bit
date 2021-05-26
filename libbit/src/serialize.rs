@@ -41,16 +41,6 @@ pub trait DeserializeSized {
     where
         Self: Sized;
 
-    // this is a reasonable default implementation but will need to be overriden for the cases where size has alternative semantics
-    fn deserialize_sized_raw(reader: &mut impl BufRead, size: u64) -> BitResult<Vec<u8>>
-    where
-        Self: Sized,
-    {
-        let mut buf = vec![];
-        reader.take(size).read_to_end(&mut buf)?;
-        Ok(buf)
-    }
-
     fn deserialize_from_slice(slice: &[u8]) -> BitResult<Self>
     where
         Self: Sized,

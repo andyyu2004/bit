@@ -23,20 +23,8 @@ impl DeserializeSized for RefDelta {
         Self: Sized,
     {
         let base_oid = reader.read_oid()?;
-        let delta = Delta::deserialize_sized(&mut reader.into_zlib_decode_stream(), delta_size)?;
+        let delta = Delta::deserialize_sized(&mut reader.as_zlib_decode_stream(), delta_size)?;
         Ok(Self { base_oid, delta })
-    }
-
-    // we encode the offset in the first 20 bytes (network order) followed by the raw delta
-    fn deserialize_sized_raw(reader: &mut impl BufRead, size: u64) -> BitResult<Vec<u8>>
-    where
-        Self: Sized,
-    {
-        let oid = reader.read_oid()?;
-        let mut buf = Vec::with_capacity(20);
-        buf.extend_from_slice(oid.as_bytes());
-        reader.into_zlib_decode_stream().take(size).read_to_end(&mut buf)?;
-        Ok(buf)
     }
 }
 

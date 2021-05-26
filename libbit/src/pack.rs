@@ -30,6 +30,7 @@ pub struct BitObjRaw {
 
 impl BitObjRaw {
     pub fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
+        trace!("BitObjRaw::expand_with_delta(..)");
         //? is it guaranteed that the (expanded) base of a delta is of the same type?
         let &Self { obj_type, ref bytes } = self;
         Ok(Self { obj_type, bytes: delta.expand(bytes)? })
@@ -133,7 +134,7 @@ impl Pack {
             BitObjRawKind::Ref(base_oid, delta) => (self.read_obj_raw(base_oid)?, delta),
         };
 
-        trace!("expand_raw_obj:base = base={:?}; delta_len={}", base, delta_bytes.len());
+        trace!("expand_raw_obj:base={:?}; delta_len={}", base, delta_bytes.len());
         let delta = Delta::deserialize_from_slice(&delta_bytes[..])?;
         base.expand_with_delta(&delta)
     }
@@ -202,6 +203,7 @@ impl Pack {
                 BitObjKind::from_raw(raw)?
             }
             BitObjKind::RefDelta(ref_delta) => {
+                trace!("read_obj:ref_delta {{ base_oid={} }}", ref_delta.base_oid,);
                 let raw =
                     self.read_obj_raw(ref_delta.base_oid)?.expand_with_delta(&ref_delta.delta)?;
                 BitObjKind::from_raw(raw)?
@@ -445,7 +447,8 @@ impl<R: BufReadSeek> PackfileReader<R> {
     }
 
     fn read_compressed_obj_data(&mut self, obj_ty: BitObjType, size: u64) -> BitResult<BitObjKind> {
-        let mut reader = BufReader::new(flate2::bufread::ZlibDecoder::new(&mut self.reader));
+        assert!(!obj_ty.is_delta());
+        let mut reader = self.reader.as_zlib_decode_stream();
         BitObjKind::deserialize_as(&mut reader, obj_ty, size)
     }
 
@@ -465,15 +468,15 @@ impl<R: BufReadSeek> PackfileReader<R> {
             BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
                 Ok(BitObjRawKind::Raw(BitObjRaw {
                     obj_type,
-                    bytes: self.into_zlib_decode_stream().take(size).read_to_vec()?,
+                    bytes: self.as_zlib_decode_stream().take(size).read_to_vec()?,
                 })),
             BitObjType::OfsDelta => Ok(BitObjRawKind::Ofs(
                 self.read_offset()?,
-                self.into_zlib_decode_stream().take(size).read_to_vec()?,
+                self.as_zlib_decode_stream().take(size).read_to_vec()?,
             )),
             BitObjType::RefDelta => Ok(BitObjRawKind::Ref(
                 self.read_oid()?,
-                self.into_zlib_decode_stream().take(size).read_to_vec()?,
+                self.as_zlib_decode_stream().take(size).read_to_vec()?,
             )),
         }
     }
@@ -483,11 +486,10 @@ impl<R: BufReadSeek> PackfileReader<R> {
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
         // we so we have to treat them a bit differently
-        match obj_type {
-            BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
-                self.read_compressed_obj_data(obj_type, size),
-            BitObjType::OfsDelta | BitObjType::RefDelta =>
-                BitObjKind::deserialize_as(&mut self.reader, obj_type, size),
+        if obj_type.is_delta() {
+            BitObjKind::deserialize_as(&mut self.reader, obj_type, size)
+        } else {
+            self.read_compressed_obj_data(obj_type, size)
         }
     }
 }
