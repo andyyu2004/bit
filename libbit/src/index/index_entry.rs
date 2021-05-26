@@ -102,6 +102,8 @@ impl Deserialize for BitIndexEntry {
 /// this also the uniform representation of tree (head) entries,
 /// index entries, and workdir entries
 /// and is the yielded type of `BitIterator`
+// NOTE: this type is rather large and so while it is copy out of necessity,
+// we should probably try to pass it by reference where possible
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BitIndexEntry {
     pub ctime: Timespec,

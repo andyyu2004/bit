@@ -7,7 +7,7 @@ use crate::obj::{Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::tls;
-use fallible_iterator::{FallibleIterator, Fuse, Peekable};
+use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -16,9 +16,9 @@ pub struct BitDiff {}
 
 pub trait Differ<'r> {
     fn index_mut(&mut self) -> &mut BitIndex<'r>;
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()>;
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()>;
+    fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()>;
+    fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()>;
+    fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()>;
 }
 
 pub trait TreeDiffer<'r> {
@@ -55,38 +55,6 @@ enum Changed {
     Maybe,
 }
 
-impl<'d, 'r, D, I, J> Differ<'r> for GenericDiffer<'d, 'r, D, I, J>
-where
-    D: Differ<'r>,
-    I: BitEntryIterator,
-    J: BitEntryIterator,
-{
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
-        self.differ.index_mut()
-    }
-
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        self.old_iter.next()?;
-        self.differ.on_deleted(old)
-    }
-
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        self.new_iter.next()?;
-        self.differ.on_created(new)
-    }
-
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        self.old_iter.next()?;
-        self.new_iter.next()?;
-        // if we are here then we know that the path and stage of the entries match
-        // however, that does not mean that the file has not changed
-        if self.differ.index_mut().has_changes(&old, &new)? {
-            self.differ.on_modified(old, new)?;
-        }
-        Ok(())
-    }
-}
-
 impl<'d, 'r, D, I, J> GenericDiffer<'d, 'r, D, I, J>
 where
     D: Differ<'r>,
@@ -103,18 +71,42 @@ where
     }
 
     pub fn diff_generic(&mut self) -> BitResult<()> {
+        macro_rules! on_created {
+            ($new:expr) => {{
+                self.differ.on_created($new)?;
+                self.new_iter.next()?;
+            }};
+        }
+
+        macro_rules! on_deleted {
+            ($old:expr) => {{
+                self.differ.on_deleted($old)?;
+                self.old_iter.next()?;
+            }};
+        }
+
+        macro_rules! on_modified {
+            ($old:expr => $new:expr) => {{
+                if self.differ.index_mut().has_changes($old, $new)? {
+                    self.differ.on_modified($old, $new)?;
+                }
+                self.old_iter.next()?;
+                self.new_iter.next()?;
+            }};
+        }
+
         loop {
             match (self.old_iter.peek()?, self.new_iter.peek()?) {
                 (None, None) => break,
-                (None, Some(&new)) => self.on_created(new)?,
-                (Some(&old), None) => self.on_deleted(old)?,
-                (Some(&old), Some(&new)) => {
+                (None, Some(new)) => on_created!(new),
+                (Some(old), None) => on_deleted!(old),
+                (Some(old), Some(new)) => {
                     // there is an old record that no longer has a matching new record
                     // therefore it has been deleted
-                    match old.cmp(&new) {
-                        Ordering::Less => self.on_deleted(old)?,
-                        Ordering::Equal => self.on_modified(old, new)?,
-                        Ordering::Greater => self.on_created(new)?,
+                    match old.cmp(new) {
+                        Ordering::Less => on_deleted!(old),
+                        Ordering::Equal => on_modified!(old => new),
+                        Ordering::Greater => on_created!(new),
                     }
                 }
             };
@@ -265,17 +257,17 @@ impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
         self.index
     }
 
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        Ok(self.new.push(new))
+    fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
+        Ok(self.new.push(*new))
     }
 
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+    fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
         assert_eq!(old.path, new.path);
-        Ok(self.staged.push((old, new)))
+        Ok(self.staged.push((*old, *new)))
     }
 
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        Ok(self.deleted.push(old))
+    fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+        Ok(self.deleted.push(*old))
     }
 }
 
@@ -298,13 +290,13 @@ pub trait Diff {
 
 impl Diff for WorkspaceDiff {
     fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()> {
-        for &deleted in self.deleted.iter() {
+        for deleted in self.deleted.iter() {
             differ.on_deleted(deleted)?;
         }
-        for &(old, new) in self.modified.iter() {
+        for (old, new) in self.modified.iter() {
             differ.on_modified(old, new)?;
         }
-        for &new in self.new.iter() {
+        for new in self.new.iter() {
             differ.on_created(new)?;
         }
         Ok(())
@@ -351,18 +343,18 @@ impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
         self.index
     }
 
-    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        self.untracked.push(new);
+    fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
+        self.untracked.push(*new);
         Ok(())
     }
 
-    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+    fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
         assert_eq!(old.path, new.path);
-        Ok(self.modified.push((old, new)))
+        Ok(self.modified.push((*old, *new)))
     }
 
-    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        Ok(self.deleted.push(old))
+    fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+        Ok(self.deleted.push(*old))
     }
 }
 
