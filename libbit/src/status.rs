@@ -13,9 +13,11 @@ pub struct BitStatusReport {
 impl BitRepo {
     pub fn status_report(&self) -> BitResult<BitStatusReport> {
         // TODO rename diff to status as we need the term diff for other matters
-        let unstaged = self.diff_index_worktree()?;
-        let staged = self.diff_head_index()?;
-        Ok(BitStatusReport { staged, unstaged })
+        self.with_index_mut(|index| {
+            let staged = index.diff_head()?;
+            let unstaged = index.diff_worktree()?;
+            Ok(BitStatusReport { staged, unstaged })
+        })
     }
 }
 
