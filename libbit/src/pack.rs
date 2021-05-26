@@ -81,8 +81,12 @@ impl Pack {
         &mut self.idx_reader
     }
 
-    pub fn obj_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
+    pub fn obj_crc_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
         self.idx_reader().find_oid_crc_offset(oid)
+    }
+
+    pub fn obj_offset(&mut self, oid: Oid) -> BitResult<u64> {
+        self.obj_crc_offset(oid).map(|(_crc, offset)| offset)
     }
 
     /// returns a list of oids that start with `prefix`
@@ -144,15 +148,13 @@ impl Pack {
     /// returns fully expanded raw object with oid
     pub fn read_obj_raw(&mut self, oid: Oid) -> BitResult<BitObjRaw> {
         trace!("read_obj_raw(oid: {})", oid);
-        let (crc, offset) = self.obj_offset(oid)?;
+        let offset = self.obj_offset(oid)?;
         let raw = self.read_obj_raw_at(offset)?;
-        // TODO crc not checked for ofs_deltas as it doesn't use this function
-        ensure_eq!(crc_of(&raw.bytes), crc, "crc doesn't match");
         Ok(raw)
     }
 
     pub fn read_obj_header(&mut self, oid: Oid) -> BitResult<BitObjHeader> {
-        let (crc, offset) = self.obj_offset(oid)?;
+        let (crc, offset) = self.obj_crc_offset(oid)?;
         trace!("read_obj_header(oid: {}); crc={}; offset={}", oid, crc, offset);
         let header = self.read_obj_header_at(offset)?;
         assert!(!header.obj_type.is_delta());
@@ -181,7 +183,7 @@ impl Pack {
 
     pub fn read_obj(&mut self, oid: Oid) -> BitResult<BitObjKind> {
         trace!("read_obj(oid: {}) ", oid);
-        let (crc, offset) = self.obj_offset(oid)?;
+        let (crc, offset) = self.obj_crc_offset(oid)?;
         trace!("read_obj(..); crc={}; offset={}", crc, offset);
         let obj = self.pack_reader().read_obj_from_offset(offset)?;
         let obj = match obj {

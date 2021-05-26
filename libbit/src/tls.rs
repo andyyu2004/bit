@@ -26,7 +26,3 @@ pub(crate) fn with_config<R>(f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>)
 pub(crate) fn with_index<R>(f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
     REPO.with(|repo| repo.with_index(f))
 }
-
-pub(crate) fn with_index_mut<R>(f: impl FnOnce(&mut BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
-    REPO.with(|repo| repo.with_index_mut(f))
-}
