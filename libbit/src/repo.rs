@@ -126,7 +126,7 @@ impl BitRepo {
 
     pub fn with_index_mut<R>(
         &self,
-        f: impl for<'r> FnOnce(&mut BitIndex<'r>) -> BitResult<R>,
+        f: impl FnOnce(&mut BitIndex<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
         Lockfile::with_mut(self.index_path(), |lockfile| {
             let index = &mut BitIndex::from_lockfile(self, &lockfile)?;
