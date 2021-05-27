@@ -76,12 +76,13 @@ impl Deserialize for DeltaOp {
             // assert highest byte is zero
             debug_assert_eq!(n & 0xFF << 56, 0);
             let (offset, mut size) = (n & 0xFFFFFFFF, n >> 32);
-            // 16 is default value for size
+            // 0x10000 is default value for size
             if size == 0 {
-                size = 16
+                size = 0x10000;
             }
             Ok(Self::Copy(offset, size))
         } else {
+            assert_ne!(byte, 0);
             reader.read_vec::<u8>(byte as usize & 0x7f).map(Self::Insert)
         }
     }

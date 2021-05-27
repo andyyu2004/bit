@@ -42,7 +42,7 @@ fn test_parse_delta_copy_op() -> BitResult<()> {
 #[test]
 fn test_parse_delta_zero_size() -> BitResult<()> {
     let op = DeltaOp::deserialize(&mut &[0x80][..])?;
-    assert_eq!(op, DeltaOp::Copy(0, 16));
+    assert_eq!(op, DeltaOp::Copy(0, 0x10000));
     Ok(())
 }
 

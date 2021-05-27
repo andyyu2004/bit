@@ -3,7 +3,7 @@ use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultE
 use crate::hash::{SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::iter::{BitEntryIterator, BitIterator};
-use crate::obj::{*};
+use crate::obj::*;
 use crate::path::{BitFileStream, BitPath};
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
@@ -43,6 +43,7 @@ impl Debug for BitObjRaw {
     }
 }
 
+// all the bytes of the delta in `Self::Ofs` and `Self::Ref` should be zlib-inflated already
 #[derive(PartialEq)]
 pub enum BitObjRawKind {
     Raw(BitObjRaw),
