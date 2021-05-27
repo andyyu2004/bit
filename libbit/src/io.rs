@@ -30,6 +30,7 @@ pub(crate) trait ReadExt: Read {
         Ok(offset)
     }
 
+    /// alias for `read_le_varint` with a more intuitive name
     fn read_size(&mut self) -> io::Result<u64> {
         self.read_le_varint()
     }

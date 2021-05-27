@@ -18,6 +18,7 @@ pub struct Delta {
 
 impl Delta {
     pub fn expand(&self, bytes: impl AsRef<[u8]>) -> BitResult<Vec<u8>> {
+        dbg!(self);
         trace!(
             "Delta::expand(bytes: ...) (source_size: {} -> target_size: {})",
             self.source_size,

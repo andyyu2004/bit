@@ -448,12 +448,6 @@ impl<R: BufReadSeek> PackfileReader<R> {
         Ok(BitObjHeader { obj_type, size })
     }
 
-    fn read_compressed_obj_data(&mut self, obj_ty: BitObjType, size: u64) -> BitResult<BitObjKind> {
-        assert!(!obj_ty.is_delta());
-        let mut reader = self.reader.as_zlib_decode_stream();
-        BitObjKind::deserialize_as(&mut reader, obj_ty, size)
-    }
-
     /// seek to `offset` and read pack object header
     pub fn read_header_from_offset(&mut self, offset: u64) -> BitResult<BitObjHeader> {
         self.seek(SeekFrom::Start(offset))?;
@@ -494,7 +488,7 @@ impl<R: BufReadSeek> PackfileReader<R> {
         if obj_type.is_delta() {
             BitObjKind::deserialize_as(&mut self.reader, obj_type, size)
         } else {
-            self.read_compressed_obj_data(obj_type, size)
+            BitObjKind::deserialize_as(&mut self.reader.as_zlib_decode_stream(), obj_type, size)
         }
     }
 }
