@@ -102,6 +102,7 @@ impl Pack {
                 // we know `idx` is the index of the very first oid that has prefix `prefix`
                 // as we extended prefix by using only zeroes
                 // so we just start scanning from `idx` until the prefixes change
+                trace!("Pack::prefix_matches: prefix not found, searching for candidates");
                 let (_, idx) = err.into_obj_not_found_in_pack_index_err()?;
                 self.idx_reader().oid_iter(idx).take_while(|oid| oid.has_prefix(prefix)).collect()
             }
@@ -265,12 +266,13 @@ impl<R: BufReadSeek> PackIndexReader<R> {
 impl<R: BufReadSeek> PackIndexReader<R> {
     /// returns the offset of the object with oid `oid` in the packfile
     pub fn find_oid_crc_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
-        trace!("find_oid_crc_offset(oid: {})", oid);
+        trace!("PackIndexReader::find_oid_crc_offset(oid: {})", oid);
         let index = self.find_oid_index(oid)?;
         debug_assert_eq!(oid, self.read_from(Layer::Oid, index)?);
         let crc = self.read_from::<u32>(Layer::Crc, index)?;
         let offset = self.read_from::<u32>(Layer::Ofs, index)?;
         assert!(offset < MAX_OFFSET, "todo ext");
+        trace!("PackIndexReader::find_oid_crc_offset(..) -> ({}, {})", crc, offset);
         Ok((crc, offset as u64))
     }
 
@@ -486,6 +488,9 @@ impl<R: BufReadSeek> PackfileReader<R> {
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
         // we so we have to treat them a bit differently
+
+        // note the reading header above leaves the reader in the correct place
+        // just after the object header
         if obj_type.is_delta() {
             BitObjKind::deserialize_as(&mut self.reader, obj_type, size)
         } else {

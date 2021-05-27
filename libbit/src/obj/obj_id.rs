@@ -31,8 +31,7 @@ impl Oid {
         // if prefix has odd length then we mask the next 4 bits and compare those too
         let mask = if prefix.len & 1 == 0 { 0x00 } else { 0xf0 };
         let oid_bytes = self.as_bytes();
-        Ok(prefix_bytes[..n] == oid_bytes[..n]
-            && prefix_bytes[n + 1] & mask == oid_bytes[n + 1] & mask)
+        Ok(prefix_bytes[..n] == oid_bytes[..n] && prefix_bytes[n] == oid_bytes[n] & mask)
     }
 }
 

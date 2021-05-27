@@ -98,12 +98,20 @@ fn test_match_oid_prefix() -> BitResult<()> {
     let oid = Oid::new(bytes);
     assert!(oid.has_prefix(partial)?);
 
-    // check it still works even tho only half the byte matches
+    // check it still works even though only half the byte matches
     bytes[2] = 0xe8;
     let oid = Oid::new(bytes);
     assert!(oid.has_prefix(partial)?);
 
     let partial = PartialOid::from_str("abcded")?;
     assert!(!oid.has_prefix(partial)?);
+    Ok(())
+}
+
+#[test]
+fn test_oid_prefix2() -> BitResult<()> {
+    let prefix = PartialOid::from_str("3febc6e")?;
+    let oid = Oid::from_str("3febc6e6f3075ed6b2170dc5fd88878a27012b1d")?;
+    assert!(oid.has_prefix(prefix)?);
     Ok(())
 }
