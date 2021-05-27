@@ -1,15 +1,15 @@
 use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
-use crate::hash::{crc_of, SHA1Hash, BIT_HASH_SIZE};
+use crate::hash::{SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::iter::{BitEntryIterator, BitIterator};
-use crate::obj::{self, *};
+use crate::obj::{*};
 use crate::path::{BitFileStream, BitPath};
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::fmt::{self, Debug, Formatter};
-use std::io::{BufRead, BufReader, Read, SeekFrom};
+use std::io::{BufRead, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;

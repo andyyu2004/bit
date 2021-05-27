@@ -1,6 +1,6 @@
 use super::is_valid_name;
 use crate::error::{BitErrorExt, BitResult};
-use crate::refs::{BitRef, SymbolicRef};
+use crate::refs::{BitRef};
 use crate::repo::BitRepo;
 
 #[test]

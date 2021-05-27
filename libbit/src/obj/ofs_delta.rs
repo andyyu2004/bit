@@ -12,7 +12,7 @@ pub struct OfsDelta {
 }
 
 impl Serialize for OfsDelta {
-    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+    fn serialize(&self, _writer: &mut dyn Write) -> BitResult<()> {
         todo!()
     }
 }

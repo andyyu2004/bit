@@ -1,5 +1,5 @@
 use crate::error::{BitGenericError, BitResult};
-use crate::index::{BitIndexEntries, BitIndexEntry};
+use crate::index::{BitIndexEntry};
 use crate::obj::{FileMode, Tree, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;

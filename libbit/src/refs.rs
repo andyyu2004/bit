@@ -1,6 +1,6 @@
 use crate::error::{BitError, BitGenericError, BitResult};
 use crate::lockfile::Lockfile;
-use crate::obj::{BitId, Oid};
+use crate::obj::{Oid};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -284,7 +284,7 @@ impl BitRefDbBackend for BitRefDb {
         Lockfile::with_mut(self.join(sym.path), |lockfile| to.serialize(lockfile))
     }
 
-    fn delete(&self, sym: SymbolicRef) -> BitResult<()> {
+    fn delete(&self, _sym: SymbolicRef) -> BitResult<()> {
         todo!()
     }
 

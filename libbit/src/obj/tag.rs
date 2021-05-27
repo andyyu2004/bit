@@ -7,13 +7,13 @@ use std::io::prelude::*;
 pub struct Tag {}
 
 impl Serialize for Tag {
-    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+    fn serialize(&self, _writer: &mut dyn Write) -> BitResult<()> {
         todo!()
     }
 }
 
 impl Deserialize for Tag {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(_reader: &mut impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

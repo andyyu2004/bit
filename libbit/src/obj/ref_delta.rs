@@ -12,7 +12,7 @@ pub struct RefDelta {
 }
 
 impl Serialize for RefDelta {
-    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+    fn serialize(&self, _writer: &mut dyn Write) -> BitResult<()> {
         todo!()
     }
 }

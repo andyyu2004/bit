@@ -1,7 +1,7 @@
 use super::{BitObj, BitObjType};
 use crate::error::BitResult;
 use crate::io::ReadExt;
-use crate::serialize::{Deserialize, DeserializeSized, Serialize};
+use crate::serialize::{DeserializeSized, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 
