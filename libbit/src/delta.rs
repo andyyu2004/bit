@@ -44,7 +44,7 @@ impl Delta {
             expanded.extend_from_slice(slice)
         }
 
-        assert_eq!(
+        ensure_eq!(
             self.target_size as usize,
             expanded.len(),
             "expected target size to be `{}`, but got expanded target with size `{}`",

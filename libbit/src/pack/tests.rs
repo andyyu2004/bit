@@ -39,6 +39,13 @@ fn pack() -> BitResult<Pack> {
     Pack::new(BitPath::intern("tests/files/pack.pack"), BitPath::intern("tests/files/pack.idx"))
 }
 
+fn rustc_pack() -> BitResult<Pack> {
+    Pack::new(
+        BitPath::intern("tests/files/pack-60ac90f4de41b44ce379159aef33377876973d6a.pack"),
+        BitPath::intern("tests/files/pack-60ac90f4de41b44ce379159aef33377876973d6a.idx"),
+    )
+}
+
 lazy_static! {
     // these commits are from the packfile in the `l-lang` repository
     // oid of the HEAD commit at the time (undeltified)
@@ -351,5 +358,17 @@ fn test_packed_header_is_expanded() -> BitResult<()> {
     let header = pack.read_obj_header("2a09245f13365a5d812a9d463595d815062b7d42".into())?;
     assert_eq!(header.obj_type, BitObjType::Tree);
     assert_eq!(header.size, 138);
+    Ok(())
+}
+
+#[test]
+fn test_read_obj_from_large_pack() -> BitResult<()> {
+    // in particular this tests an edge case where the default size is 0x10000 which is not hit very often
+    // TODO add some actual metadata to assert against
+    // the test currently is just asking it to not error
+    let mut pack = rustc_pack()?;
+    for oid in pack.prefix_matches("3febc".into())? {
+        pack.read_obj(oid)?;
+    }
     Ok(())
 }
