@@ -3,7 +3,7 @@ use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultE
 use crate::hash::{crc_of, SHA1Hash, BIT_HASH_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::iter::{BitEntryIterator, BitIterator};
-use crate::obj::*;
+use crate::obj::{self, *};
 use crate::path::{BitFileStream, BitPath};
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
@@ -185,34 +185,8 @@ impl Pack {
 
     pub fn read_obj(&mut self, oid: Oid) -> BitResult<BitObjKind> {
         trace!("read_obj(oid: {}) ", oid);
-        let (crc, offset) = self.obj_crc_offset(oid)?;
-        trace!("read_obj(..); crc={}; offset={}", crc, offset);
-        let obj = self.pack_reader().read_obj_from_offset(offset)?;
-        let obj = match obj {
-            BitObjKind::Blob(..)
-            | BitObjKind::Commit(..)
-            | BitObjKind::Tree(..)
-            | BitObjKind::Tag(..) => obj,
-            BitObjKind::OfsDelta(ofs_delta) => {
-                let base_offset = offset - ofs_delta.offset;
-                trace!(
-                    "read_obj:ofs_delta {{ raw_offset={}; offset={} }}",
-                    ofs_delta.offset,
-                    base_offset
-                );
-                let raw = self.read_obj_raw_at(base_offset)?.expand_with_delta(&ofs_delta.delta)?;
-                BitObjKind::from_raw(raw)?
-            }
-            BitObjKind::RefDelta(ref_delta) => {
-                trace!("read_obj:ref_delta {{ base_oid={} }}", ref_delta.base_oid,);
-                let raw =
-                    self.read_obj_raw(ref_delta.base_oid)?.expand_with_delta(&ref_delta.delta)?;
-                BitObjKind::from_raw(raw)?
-            }
-        };
-        // TODO does crc include the extra bytes of ofs and delta?
-        // ensure!(crc_of(obj), crc);
-        Ok(obj)
+        let raw = self.read_obj_raw(oid)?;
+        BitObjKind::from_raw(raw)
     }
 }
 
@@ -474,21 +448,6 @@ impl<R: BufReadSeek> PackfileReader<R> {
                 self.read_oid()?,
                 self.as_zlib_decode_stream().take(size).read_to_vec()?,
             )),
-        }
-    }
-
-    pub fn read_obj_from_offset(&mut self, offset: u64) -> BitResult<BitObjKind> {
-        let BitObjHeader { obj_type, size } = self.read_header_from_offset(offset)?;
-        // the delta types have only the delta compressed but the size/baseoid is not,
-        // the 4 base object types have all their data compressed
-        // we so we have to treat them a bit differently
-
-        // note the reading header above leaves the reader in the correct place
-        // just after the object header
-        if obj_type.is_delta() {
-            BitObjKind::deserialize_as(&mut self.reader, obj_type, size)
-        } else {
-            BitObjKind::deserialize_as(&mut self.reader.as_zlib_decode_stream(), obj_type, size)
         }
     }
 }
