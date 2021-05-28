@@ -1,5 +1,6 @@
 use crate::diff::WorkspaceDiff;
 use crate::error::BitResult;
+use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
@@ -12,10 +13,14 @@ pub struct BitStatusReport {
 
 impl BitRepo {
     pub fn status_report(&self) -> BitResult<BitStatusReport> {
+        self.scoped_status_report(Pathspec::match_all())
+    }
+
+    pub fn scoped_status_report(&self, pathspec: Pathspec) -> BitResult<BitStatusReport> {
         // TODO rename diff to status as we need the term diff for other matters
         self.with_index_mut(|index| {
-            let staged = index.diff_head()?;
-            let unstaged = index.diff_worktree()?;
+            let staged = index.diff_head_scoped(pathspec)?;
+            let unstaged = index.diff_worktree_scoped(pathspec)?;
             Ok(BitStatusReport { staged, unstaged })
         })
     }

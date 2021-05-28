@@ -1,20 +1,35 @@
 use crate::error::{BitGenericError, BitResult};
+use crate::index::BitIndex;
 use crate::iter::BitEntryIterator;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
-use crate::tls;
 use itertools::Itertools;
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::path::Path;
 use std::str::FromStr;
 
+// pathspec needs to be copy/static due to some lifetimes below
+// or at least its much more convenient this way
+// match_iterator is difficult otherwise
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Pathspec {
     /// non-wildcard prefix
     /// up to either the first wildcard or the last slash
     pub prefix: BitPath,
     // pathspec: Vec<()>,
+}
+
+impl Pathspec {
+    pub fn new(prefix: BitPath) -> Self {
+        Self { prefix }
+    }
+
+    // create a pathspec that matches anything
+    // TODO consider making this a constant if possible
+    pub fn match_all() -> Self {
+        Self::new(BitPath::empty())
+    }
 }
 
 impl TryFrom<&str> for Pathspec {
@@ -56,15 +71,13 @@ impl Pathspec {
         self.match_iterator(repo.worktree_iter()?)
     }
 
-    pub fn match_index(self) -> BitResult<impl BitEntryIterator> {
-        tls::with_index(|index| self.match_iterator(index.iter()))
+    pub fn match_index(self, index: &BitIndex<'_>) -> BitResult<impl BitEntryIterator> {
+        self.match_iterator(index.iter())
     }
 
-    // pub fn match_tree(
-    //     &self,
-    //     tree: &Tree,
-    // ) -> impl BitIterator {
-    // }
+    pub fn match_head<'r>(&self, repo: &'r BitRepo) -> BitResult<impl BitEntryIterator + 'r> {
+        self.match_iterator(repo.head_iter()?)
+    }
 
     // braindead implementation for now
     pub fn matches_path(&self, path: impl AsRef<Path>) -> bool {
@@ -90,14 +103,14 @@ impl FromStr for Pathspec {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "." {
-            return Ok(Self { prefix: BitPath::intern("") });
+            return Ok(Self::match_all());
         }
         let prefix_end = Self::find_prefix_end(&s);
         let prefix = match prefix_end {
             Some(i) => &s[..i],
             None => s,
         };
-        Ok(Self { prefix: BitPath::intern(prefix) })
+        Ok(Self::new(BitPath::intern(prefix)))
     }
 }
 

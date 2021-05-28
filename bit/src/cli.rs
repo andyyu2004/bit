@@ -32,6 +32,8 @@ use libbit::repo::BitRepo;
 use libbit::rev::LazyRevspec;
 use std::path::PathBuf;
 
+use self::cli_bit_diff::BitDiffCliOpts;
+
 // experiment with changing structure of everything
 // more code should be in the binary
 // to much is in libbit I think
@@ -69,10 +71,11 @@ pub fn run() -> BitResult<()> {
             dbg!(opts);
             todo!()
         }
-        BitSubCmd::Status(_opts) => Ok(print!("{}", repo.status_report()?)),
+        BitSubCmd::Status(opts) => opts.exec(repo),
         BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
         BitSubCmd::Commit(opts) => repo.bit_commit(opts.message),
         BitSubCmd::Branch(opts) => opts.exec(repo),
+        BitSubCmd::Diff(opts) => opts.exec(repo),
     })
 }
 
