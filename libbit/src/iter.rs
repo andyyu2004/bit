@@ -1,5 +1,5 @@
 use crate::error::{BitGenericError, BitResult};
-use crate::index::{BitIndexEntry};
+use crate::index::BitIndexEntry;
 use crate::obj::{FileMode, Tree, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -67,8 +67,15 @@ impl<'r> FallibleIterator for TreeIter<'r> {
                         let tree = self.repo.read_obj(entry.hash)?.into_tree()?;
                         let path = base.join(entry.path);
                         debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.hash);
-                        self.entry_stack
-                            .extend(tree.entries.into_iter().rev().map(|entry| (path, entry)))
+
+                        let entries = tree.entries.into_iter().rev().map(|entry| (path, entry));
+
+                        // if no subentries then we want to yield the directory/tree itself
+                        if entries.is_empty() {
+                            return Ok(Some(TreeEntry { path, ..entry }));
+                        } else {
+                            self.entry_stack.extend(entries);
+                        }
                     }
                     FileMode::REG | FileMode::LINK | FileMode::EXEC => {
                         debug!("TreeIter::next: entry: {:?}", entry);
@@ -168,11 +175,11 @@ impl<'r> WorktreeIter<'r> {
                     let mut a = BitPath::intern(a);
                     // see TreeEntry::cmp comments
                     if a.is_dir() {
-                        a = a.join("=");
+                        a = a.join_trailing_slash();
                     }
                     let mut b = BitPath::intern(b);
                     if b.is_dir() {
-                        b = b.join("=");
+                        b = b.join_trailing_slash()
                     }
                     a.cmp(&b)
                 })

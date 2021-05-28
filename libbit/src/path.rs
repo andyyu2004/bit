@@ -49,6 +49,12 @@ impl BitPath {
         Self::intern(self.as_path().with_extension(ext))
     }
 
+    /// adds trailing slash which is crucial for correct comparison ordering
+    // TODO consider a more succinct name
+    pub fn join_trailing_slash(self) -> Self {
+        self.join("")
+    }
+
     pub fn join(self, path: impl AsRef<Path>) -> Self {
         Self::intern(self.as_path().join(path))
     }

@@ -1,6 +1,7 @@
 #![deny(rust_2018_idioms)]
 #![feature(pattern)]
 #![feature(never_type)]
+#![feature(exact_size_is_empty)]
 #![feature(maybe_uninit_uninit_array, maybe_uninit_slice)]
 #![feature(associated_type_defaults)]
 #![feature(min_type_alias_impl_trait)]
