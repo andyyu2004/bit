@@ -258,7 +258,7 @@ impl BitRepo {
     }
 
     /// writes `obj` into the object store returning its full hash
-    pub fn write_obj(&self, obj: &impl BitObj) -> BitResult<Oid> {
+    pub fn write_obj(&self, obj: &dyn BitObj) -> BitResult<Oid> {
         self.odb.write(obj)
     }
 
