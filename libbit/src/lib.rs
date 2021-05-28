@@ -72,3 +72,4 @@ mod signature;
 mod time;
 mod tls;
 mod util;
+mod xdiff;
