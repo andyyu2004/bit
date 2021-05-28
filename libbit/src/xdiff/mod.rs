@@ -1,4 +1,11 @@
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
+
+pub type BitPatch<'a> = diffy::Patch<'a, str>;
+
+// TODO too lazy to implement all this so just using a library and see how it goes
+pub fn xdiff<'a>(original: &'a str, modified: &'a str) -> BitPatch<'a> {
+    diffy::create_patch(original, modified)
+}
 
 struct OffsetVec<T> {
     base: Vec<T>,
@@ -15,35 +22,73 @@ impl<T> OffsetVec<T> {
     }
 }
 
+impl<T: Default + Clone> OffsetVec<T> {
+    pub fn filled_with_capacity(offset: isize, capacity: usize) -> Self {
+        Self { offset, base: vec![T::default(); capacity] }
+    }
+}
+
 impl<T> Index<isize> for OffsetVec<T> {
     type Output = T;
 
     fn index(&self, index: isize) -> &Self::Output {
-        &self.base[(index - self.offset) as usize]
+        &self.base[(index + self.offset) as usize]
     }
 }
 
-struct MyersDiff<'a, I, J> {
-    something: &'a (),
-    a: I,
-    b: J,
-    v: OffsetVec<u32>,
+impl<T> IndexMut<isize> for OffsetVec<T> {
+    fn index_mut(&mut self, index: isize) -> &mut Self::Output {
+        &mut self.base[(index + self.offset) as usize]
+    }
 }
 
-trait LinesIter<'a> = ExactSizeIterator<Item = &'a str>;
+struct MyersDiff<'a, 's> {
+    something: &'a (),
+    a: &'a [&'s str],
+    b: &'a [&'s str],
+    v: OffsetVec<isize>,
+}
 
-impl<'a, I: LinesIter<'a>, J: LinesIter<'a>> MyersDiff<'a, I, J> {
-    pub fn new(a: I, b: J) -> Self {
+pub fn xdiff_dist(a: &[&str], b: &[&str]) -> isize {
+    MyersDiff::new(a, b).diff()
+}
+
+impl<'a, 's> MyersDiff<'a, 's> {
+    pub fn new(a: &'a [&'s str], b: &'a [&'s str]) -> Self {
         let m = a.len();
         let n = b.len();
         let size = m + n;
-        let v = OffsetVec::with_capacity(size as isize, size * 2);
+        let v = OffsetVec::filled_with_capacity(size as isize, size * 2);
         Self { a, b, v, something: &() }
     }
 
-    pub fn diff(
-        a: impl ExactSizeIterator<Item = &'a str>,
-        b: impl ExactSizeIterator<Item = &'a str>,
-    ) {
+    pub fn diff(mut self) -> isize {
+        let v = &mut self.v;
+        let a = self.a;
+        let b = self.b;
+        let m = a.len() as isize;
+        let n = b.len() as isize;
+        for d in 0..m + n {
+            for k in (-d..=d).step_by(2) {
+                let mut x = if k == -d || (k != d && v[k - 1] < v[k + 1]) {
+                    v[k + 1]
+                } else {
+                    v[k - 1] + 1
+                };
+                let mut y = x - k;
+                while x < m && y < n && a[x as usize] == b[y as usize] {
+                    x += 1;
+                    y += 1;
+                }
+                v[k] = x;
+                if x == m && y == n {
+                    return d;
+                }
+            }
+        }
+        unreachable!()
     }
 }
+
+#[cfg(test)]
+mod tests;

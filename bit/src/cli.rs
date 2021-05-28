@@ -1,10 +1,12 @@
 mod cli_add;
+mod cli_bit_diff;
 mod cli_branch;
 mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
 mod cli_ls_files;
 mod cli_status;
+mod cli_switch;
 mod cli_update_index;
 
 // notes
@@ -91,6 +93,7 @@ pub enum BitSubCmd {
     CommitTree(BitCommitTreeCliOpts),
     Config(BitConfigCliOpts),
     Commit(BitCommitCliOpts),
+    Diff(BitDiffCliOpts),
     HashObject(BitHashObjectCliOpts),
     Init(BitInitCliOpts),
     Log(BitLogCliOpts),
