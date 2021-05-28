@@ -152,8 +152,7 @@ impl<'r> BitIndex<'r> {
             }
         }
         let diff = self.diff_worktree()?;
-        diff.apply(&mut AddAll { index: self })?;
-        self.repo.worktree_iter()?.for_each(|entry| self.add_entry(entry))
+        diff.apply(&mut AddAll { index: self })
     }
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
