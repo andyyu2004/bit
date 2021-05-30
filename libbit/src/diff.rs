@@ -225,26 +225,32 @@ impl<'r> BitIndex<'r> {
         IndexWorktreeDiffer::new(self, pathspec).run_diff()
     }
 
+    pub fn diff_tree(&mut self, tree: &Tree, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+        TreeIndexDiffer::new(self, tree, pathspec).run_diff()
+    }
+
     pub fn diff_head(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
-        HeadIndexDiffer::new(self, pathspec).run_diff()
+        self.diff_tree(&self.repo.head_tree()?, pathspec)
     }
 }
 
-pub(crate) struct HeadIndexDiffer<'a, 'r> {
+pub(crate) struct TreeIndexDiffer<'a, 'r> {
     repo: &'r BitRepo,
     index: &'a mut BitIndex<'r>,
+    tree: &'a Tree,
     pathspec: Pathspec,
     new: Vec<BitIndexEntry>,
     staged: Vec<(BitIndexEntry, BitIndexEntry)>,
     deleted: Vec<BitIndexEntry>,
 }
 
-impl<'a, 'r> HeadIndexDiffer<'a, 'r> {
-    pub fn new(index: &'a mut BitIndex<'r>, pathspec: Pathspec) -> Self {
+impl<'a, 'r> TreeIndexDiffer<'a, 'r> {
+    pub fn new(index: &'a mut BitIndex<'r>, tree: &'a Tree, pathspec: Pathspec) -> Self {
         let repo = index.repo;
         Self {
             index,
             repo,
+            tree,
             pathspec,
             new: Default::default(),
             staged: Default::default(),
@@ -253,19 +259,19 @@ impl<'a, 'r> HeadIndexDiffer<'a, 'r> {
     }
 }
 
-impl<'a, 'r> DiffBuilder<'r> for HeadIndexDiffer<'a, 'r> {
+impl<'a, 'r> DiffBuilder<'r> for TreeIndexDiffer<'a, 'r> {
     type Diff = WorkspaceDiff;
 
     fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
         let repo = self.repo;
-        let head_iter = self.pathspec.match_head(repo)?;
+        let tree_iter = self.pathspec.match_tree(repo, self.tree)?;
         let index_iter = self.pathspec.match_index(self.index)?;
-        GenericDiffer::run(&mut self, head_iter, index_iter)?;
+        GenericDiffer::run(&mut self, tree_iter, index_iter)?;
         Ok(WorkspaceDiff { deleted: self.deleted, modified: self.staged, new: self.new })
     }
 }
 
-impl<'a, 'r> Differ<'r> for HeadIndexDiffer<'a, 'r> {
+impl<'a, 'r> Differ<'r> for TreeIndexDiffer<'a, 'r> {
     fn index_mut(&mut self) -> &mut BitIndex<'r> {
         self.index
     }

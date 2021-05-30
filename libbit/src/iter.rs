@@ -119,17 +119,17 @@ impl<'r> TreeIterator for TreeIter<'r> {
 }
 
 #[derive(Debug)]
-struct HeadIter<'r> {
+struct TreeEntryIter<'r> {
     tree_iter: TreeIter<'r>,
 }
 
-impl<'r> HeadIter<'r> {
+impl<'r> TreeEntryIter<'r> {
     pub fn new(repo: &'r BitRepo, root: &Tree) -> Self {
         Self { tree_iter: TreeIter::new(repo, root) }
     }
 }
 
-impl<'r> FallibleIterator for HeadIter<'r> {
+impl<'r> FallibleIterator for TreeEntryIter<'r> {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
@@ -228,10 +228,15 @@ impl BitRepo {
         WorktreeIter::new(self)
     }
 
+    pub fn tree_entry_iter(&self, tree: &Tree) -> BitResult<impl BitEntryIterator + '_> {
+        trace!("tree_entry_iter()");
+        Ok(TreeEntryIter::new(self, tree))
+    }
+
     pub fn head_iter(&self) -> BitResult<impl BitEntryIterator + '_> {
         trace!("head_iter()");
         let tree = self.head_tree()?;
-        Ok(HeadIter::new(self, &tree))
+        self.tree_entry_iter(&tree)
     }
 }
 
