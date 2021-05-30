@@ -44,6 +44,15 @@ macro_rules! bit_add_all {
     };
 }
 
+macro_rules! bit_status {
+    ($repo:expr) => {
+        $repo.status(crate::pathspec::Pathspec::match_all())?
+    };
+    ($repo:ident in $pathspec:expr) => {
+        $repo.status_report($pathspec)?
+    };
+}
+
 macro_rules! mkdir {
     ($repo:ident: $path:expr) => {
         std::fs::create_dir($repo.workdir.join($path))?

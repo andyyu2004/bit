@@ -25,16 +25,16 @@ fn test_status_add_and_delete_file() -> BitResult<()> {
         bit_add_all!(repo);
         rm!(repo: "foo");
 
-        let diff = repo.status_report()?;
-        assert!(diff.staged.modified.is_empty());
-        assert!(diff.staged.deleted.is_empty());
-        assert!(diff.unstaged.new.is_empty());
-        assert!(diff.unstaged.modified.is_empty());
+        let status = bit_status!(repo);
+        assert!(status.staged.modified.is_empty());
+        assert!(status.staged.deleted.is_empty());
+        assert!(status.unstaged.new.is_empty());
+        assert!(status.unstaged.modified.is_empty());
 
-        assert_eq!(diff.staged.new.len(), 1);
-        assert_eq!(diff.unstaged.deleted.len(), 1);
-        assert_eq!(diff.staged.new[0].path, "foo");
-        assert_eq!(diff.unstaged.deleted[0].path, "foo");
+        assert_eq!(status.staged.new.len(), 1);
+        assert_eq!(status.unstaged.deleted.len(), 1);
+        assert_eq!(status.staged.new[0].path, "foo");
+        assert_eq!(status.unstaged.deleted[0].path, "foo");
         Ok(())
     })
 }

@@ -200,19 +200,19 @@ impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
 
 impl BitRepo {
     pub fn diff_index_worktree(&self) -> BitResult<WorkspaceDiff> {
-        self.with_index_mut(|index| index.diff_worktree_scoped(Pathspec::match_all()))
+        self.with_index_mut(|index| index.diff_worktree(Pathspec::match_all()))
     }
 
     pub fn diff_head_index(&self) -> BitResult<WorkspaceDiff> {
-        self.with_index_mut(|index| index.diff_head_scoped(Pathspec::match_all()))
+        self.with_index_mut(|index| index.diff_head(Pathspec::match_all()))
     }
 
     pub fn diff_index_worktree_scoped(&self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
-        self.with_index_mut(|index| index.diff_worktree_scoped(pathspec))
+        self.with_index_mut(|index| index.diff_worktree(pathspec))
     }
 
     pub fn diff_head_index_scoped(&self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
-        self.with_index_mut(|index| index.diff_head_scoped(pathspec))
+        self.with_index_mut(|index| index.diff_head(pathspec))
     }
 
     pub fn diff_tree_to_tree(&self, a: &Tree, b: &Tree) -> BitResult<TreeDiff> {
@@ -221,19 +221,11 @@ impl BitRepo {
 }
 
 impl<'r> BitIndex<'r> {
-    pub fn diff_worktree(&mut self) -> BitResult<WorkspaceDiff> {
-        self.diff_worktree_scoped(Pathspec::match_all())
-    }
-
-    pub fn diff_head(&mut self) -> BitResult<WorkspaceDiff> {
-        self.diff_head_scoped(Pathspec::match_all())
-    }
-
-    pub fn diff_worktree_scoped(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+    pub fn diff_worktree(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         IndexWorktreeDiffer::new(self, pathspec).run_diff()
     }
 
-    pub fn diff_head_scoped(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+    pub fn diff_head(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         HeadIndexDiffer::new(self, pathspec).run_diff()
     }
 }

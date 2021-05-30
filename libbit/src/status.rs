@@ -6,29 +6,24 @@ use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
-pub struct BitStatusReport {
+pub struct BitStatus {
     pub staged: WorkspaceDiff,
     pub unstaged: WorkspaceDiff,
 }
 
 impl BitRepo {
-    pub fn status_report(&self) -> BitResult<BitStatusReport> {
-        self.scoped_status_report(Pathspec::match_all())
-    }
-
-    pub fn scoped_status_report(&self, pathspec: Pathspec) -> BitResult<BitStatusReport> {
-        // TODO rename diff to status as we need the term diff for other matters
+    pub fn status(&self, pathspec: Pathspec) -> BitResult<BitStatus> {
         self.with_index_mut(|index| {
-            let staged = index.diff_head_scoped(pathspec)?;
-            let unstaged = index.diff_worktree_scoped(pathspec)?;
-            Ok(BitStatusReport { staged, unstaged })
+            let staged = index.diff_head(pathspec)?;
+            let unstaged = index.diff_worktree(pathspec)?;
+            Ok(BitStatus { staged, unstaged })
         })
     }
 }
 
 // TODO if a directory only contains untracked directories
 // it should just print the directory and not its contents
-impl Display for BitStatusReport {
+impl Display for BitStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if !self.staged.is_empty() {
             writeln!(f, "Changes to be committed")?;

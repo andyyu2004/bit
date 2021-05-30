@@ -18,6 +18,7 @@ mod cli_update_index;
 
 use clap::{AppSettings, Clap};
 use cli_add::BitAddCliOpts;
+use cli_bit_diff::BitDiffCliOpts;
 use cli_branch::*;
 use cli_commit::BitCommitCliOpts;
 use cli_commit_tree::BitCommitTreeCliOpts;
@@ -31,8 +32,6 @@ use libbit::obj::BitObjType;
 use libbit::repo::BitRepo;
 use libbit::rev::LazyRevspec;
 use std::path::PathBuf;
-
-use self::cli_bit_diff::BitDiffCliOpts;
 
 // experiment with changing structure of everything
 // more code should be in the binary
