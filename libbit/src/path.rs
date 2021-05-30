@@ -23,7 +23,7 @@ pub struct BitPath(u32);
 pub type BitFileStream = impl BufReadSeek;
 
 impl BitPath {
-    pub(crate) fn new(u: u32) -> Self {
+    pub(crate) const fn new(u: u32) -> Self {
         Self(u)
     }
 

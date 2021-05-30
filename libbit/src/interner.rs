@@ -25,6 +25,14 @@ impl Intern for str {
 }
 
 impl Interner {
+    pub fn prefill(init: &[&'static str]) -> Self {
+        Self {
+            map: init.iter().copied().zip((0..).map(BitPath::new)).collect(),
+            paths: init.to_vec(),
+            ..Default::default()
+        }
+    }
+
     // this only exists due to some lifetime difficulties with the GitConfig parser
     pub fn intern_str(&mut self, s: &str) -> &'static str {
         // could potentially reuse same allocation as some path, but its really insignificant
@@ -85,8 +93,34 @@ impl Interner {
     }
 }
 
+macro_rules! prefill {
+    (@index $idx:expr) => {};
+    (@index $idx:expr, $name:ident => $lit:literal) => {{
+        impl BitPath {
+            pub const $name: Self = Self::new($idx);
+        }
+    }};
+    (@index $idx:expr, $name:ident => $lit:literal, $($tail:tt)*) => {{
+        // items are statements so we can sort of "abuse" the rust grammar a bit here
+        // and put the BitPath impl in statement position
+
+        impl BitPath {
+            pub const $name: Self = Self::new($idx);
+        }
+
+        prefill!(@index 1u32 + $idx, $($tail)*)
+    }};
+    ($($name:ident => $lit:literal),*) => {{
+        prefill!(@index 0u32, $($name => $lit),*);
+        &[$($lit),*]
+    }}
+}
+
 thread_local! {
-    static INTERNER: RefCell<Interner> = Default::default();
+    static INTERNER: RefCell<Interner> = RefCell::new(Interner::prefill(prefill! {
+        EMPTY => "",
+        HEAD => "HEAD"
+    }));
 }
 
 pub(crate) fn with_path_interner<R>(f: impl FnOnce(&Interner) -> R) -> R {

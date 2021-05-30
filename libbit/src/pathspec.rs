@@ -21,14 +21,10 @@ pub struct Pathspec {
 }
 
 impl Pathspec {
-    pub fn new(prefix: BitPath) -> Self {
-        Self { prefix }
-    }
+    pub const MATCH_ALL: Self = Self::new(BitPath::EMPTY);
 
-    // create a pathspec that matches anything
-    // TODO consider making this a constant if possible
-    pub fn match_all() -> Self {
-        Self::new(BitPath::empty())
+    pub const fn new(prefix: BitPath) -> Self {
+        Self { prefix }
     }
 }
 
@@ -103,7 +99,7 @@ impl FromStr for Pathspec {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "." {
-            return Ok(Self::match_all());
+            return Ok(Self::MATCH_ALL);
         }
         let prefix_end = Self::find_prefix_end(&s);
         let prefix = match prefix_end {

@@ -151,7 +151,7 @@ impl<'r> BitIndex<'r> {
                 self.index.remove_entry(old)
             }
         }
-        let diff = self.diff_worktree(Pathspec::match_all())?;
+        let diff = self.diff_worktree(Pathspec::MATCH_ALL)?;
         diff.apply(&mut AddAll { index: self })
     }
 

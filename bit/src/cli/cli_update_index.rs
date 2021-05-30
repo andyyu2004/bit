@@ -7,7 +7,7 @@ use std::convert::TryInto;
 pub struct BitUpdateIndexCliOpts {
     #[clap(long = "add")]
     add: bool,
-    #[clap(long = "cacheinfo", use_delimiter = true)]
+    #[clap(long = "cacheinfo", use_delimiter = true, number_of_values = 3)]
     cacheinfo: Vec<String>,
 }
 
@@ -16,9 +16,6 @@ impl TryInto<BitUpdateIndexOpts> for BitUpdateIndexCliOpts {
 
     fn try_into(self) -> Result<BitUpdateIndexOpts, Self::Error> {
         let Self { add, mut cacheinfo } = self;
-        if cacheinfo.len() != 3 {
-            bail!("option 'cacheinfo' expects arguments `<mode>,<sha1>,<path>`");
-        }
 
         let cacheinfo = CacheInfo {
             mode: cacheinfo[0].parse()?,

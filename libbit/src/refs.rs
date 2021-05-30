@@ -1,6 +1,6 @@
 use crate::error::{BitError, BitGenericError, BitResult};
 use crate::lockfile::Lockfile;
-use crate::obj::{Oid};
+use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -118,13 +118,10 @@ pub struct SymbolicRef {
     path: BitPath,
 }
 
-lazy_static! {
-    static ref SYM_REF_REGEX: Regex = Regex::new(r#"HEAD$|refs/heads/"#).unwrap();
-}
-
 impl SymbolicRef {
-    pub fn new(path: BitPath) -> Self {
-        debug_assert!(SYM_REF_REGEX.is_match(path.as_str()), "invalid symref `{}`", path);
+    pub const HEAD: Self = Self::new(BitPath::HEAD);
+
+    pub const fn new(path: BitPath) -> Self {
         Self { path }
     }
 
@@ -162,6 +159,8 @@ impl FromStr for SymbolicRef {
 }
 
 impl BitRef {
+    pub const HEAD: Self = Self::Symbolic(SymbolicRef::HEAD);
+
     /// resolves the reference as much as possible
     /// if the symref points to a path that doesn't exist, then the value of the symref itself is returned
     /// i.e. if `HEAD` -> `refs/heads/master` which doesn't yet exist, then `refs/heads/master` will be returned

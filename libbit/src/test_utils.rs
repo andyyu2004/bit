@@ -46,7 +46,7 @@ macro_rules! bit_add_all {
 
 macro_rules! bit_status {
     ($repo:expr) => {
-        $repo.status(crate::pathspec::Pathspec::match_all())?
+        $repo.status(crate::pathspec::Pathspec::MATCH_ALL)?
     };
     ($repo:ident in $pathspec:expr) => {
         $repo.status_report($pathspec)?
