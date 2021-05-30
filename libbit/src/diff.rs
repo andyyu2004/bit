@@ -11,16 +11,22 @@ use crate::tls;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::path::Path;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BitDiff {}
-
-pub trait Differ<'r> {
-    fn index_mut(&mut self) -> &mut BitIndex<'r>;
+// TODO bad name
+pub trait Apply {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()>;
     fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()>;
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()>;
+}
+
+pub trait Differ<'r>: Apply {
+    fn index_mut(&mut self) -> &mut BitIndex<'r>;
+}
+
+pub trait DiffBuilder<'r>: Differ<'r> {
+    /// the type of the resulting diff (returned by `Self::build_diff`)
+    type Diff;
+    fn build_diff(self) -> BitResult<Self::Diff>;
 }
 
 pub trait TreeDiffer<'r> {
@@ -30,12 +36,6 @@ pub trait TreeDiffer<'r> {
     fn on_match(&mut self, old: TreeEntry, new: TreeEntry) -> BitResult<()>;
     /// unmatched old entry
     fn on_deleted(&mut self, old: TreeEntry) -> BitResult<()>;
-}
-
-pub trait DiffBuilder<'r>: Differ<'r> {
-    /// the type of the resulting diff (returned by `Self::run_diff`)
-    type Diff;
-    fn run_diff(self) -> BitResult<Self::Diff>;
 }
 
 pub struct GenericDiffer<'d, 'r, D, I, J>
@@ -145,7 +145,7 @@ impl<'r> TreeDifferImpl<'r> {
 }
 
 impl<'r> TreeDifferImpl<'r> {
-    fn run_diff(mut self) -> BitResult<TreeDiff> {
+    fn build_diff(mut self) -> BitResult<TreeDiff> {
         // TODO is identical to GenericDiffer::generic_diff
         // maybe there is a a good way to unify the two
         // the difference is that subtrees can be skipped in TreeDiffer
@@ -212,17 +212,17 @@ impl BitRepo {
     }
 
     pub fn diff_tree_to_tree(&self, a: &Tree, b: &Tree) -> BitResult<TreeDiff> {
-        TreeDifferImpl::new(self, a, b).run_diff()
+        TreeDifferImpl::new(self, a, b).build_diff()
     }
 }
 
 impl<'r> BitIndex<'r> {
     pub fn diff_worktree(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
-        IndexWorktreeDiffer::new(self, pathspec).run_diff()
+        IndexWorktreeDiffer::new(self, pathspec).build_diff()
     }
 
     pub fn diff_tree(&mut self, tree: &Tree, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
-        TreeIndexDiffer::new(self, tree, pathspec).run_diff()
+        TreeIndexDiffer::new(self, tree, pathspec).build_diff()
     }
 
     pub fn diff_head(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
@@ -258,7 +258,7 @@ impl<'a, 'r> TreeIndexDiffer<'a, 'r> {
 impl<'a, 'r> DiffBuilder<'r> for TreeIndexDiffer<'a, 'r> {
     type Diff = WorkspaceDiff;
 
-    fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
+    fn build_diff(mut self) -> BitResult<WorkspaceDiff> {
         let repo = self.repo;
         let tree_iter = self.pathspec.match_tree(repo, self.tree)?;
         let index_iter = self.pathspec.match_index(self.index)?;
@@ -267,11 +267,7 @@ impl<'a, 'r> DiffBuilder<'r> for TreeIndexDiffer<'a, 'r> {
     }
 }
 
-impl<'a, 'r> Differ<'r> for TreeIndexDiffer<'a, 'r> {
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
-        self.index
-    }
-
+impl<'a, 'r> Apply for TreeIndexDiffer<'a, 'r> {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
         Ok(self.new.push(*new))
     }
@@ -283,6 +279,12 @@ impl<'a, 'r> Differ<'r> for TreeIndexDiffer<'a, 'r> {
 
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
         Ok(self.deleted.push(*old))
+    }
+}
+
+impl<'a, 'r> Differ<'r> for TreeIndexDiffer<'a, 'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.index
     }
 }
 
@@ -300,19 +302,19 @@ impl WorkspaceDiff {
     }
 }
 pub trait Diff {
-    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()>;
+    fn apply<A: Apply>(&self, applier: &mut A) -> BitResult<()>;
 }
 
 impl Diff for WorkspaceDiff {
-    fn apply<'r, D: Differ<'r>>(&self, differ: &mut D) -> BitResult<()> {
+    fn apply<A: Apply>(&self, applier: &mut A) -> BitResult<()> {
         for deleted in self.deleted.iter() {
-            differ.on_deleted(deleted)?;
+            applier.on_deleted(deleted)?;
         }
         for (old, new) in self.modified.iter() {
-            differ.on_modified(old, new)?;
+            applier.on_modified(old, new)?;
         }
         for new in self.new.iter() {
-            differ.on_created(new)?;
+            applier.on_created(new)?;
         }
         Ok(())
     }
@@ -347,7 +349,7 @@ impl<'a, 'r> IndexWorktreeDiffer<'a, 'r> {
 impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
     type Diff = WorkspaceDiff;
 
-    fn run_diff(mut self) -> BitResult<WorkspaceDiff> {
+    fn build_diff(mut self) -> BitResult<WorkspaceDiff> {
         let repo = self.repo;
         let index_iter = self.pathspec.match_index(self.index)?;
         let worktree_iter = self.pathspec.match_worktree(repo)?;
@@ -356,11 +358,7 @@ impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
     }
 }
 
-impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
-        self.index
-    }
-
+impl<'a, 'r> Apply for IndexWorktreeDiffer<'a, 'r> {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
         self.untracked.push(*new);
         Ok(())
@@ -373,6 +371,12 @@ impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
 
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
         Ok(self.deleted.push(*old))
+    }
+}
+
+impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
+    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+        self.index
     }
 }
 

@@ -48,8 +48,10 @@ mod macros;
 
 pub mod cmd;
 pub mod config;
+pub mod diff;
 pub mod error;
 pub mod hash;
+pub mod index;
 pub mod obj;
 pub mod path;
 pub mod pathspec;
@@ -59,8 +61,6 @@ pub mod rev;
 pub mod status;
 
 mod delta;
-mod diff;
-mod index;
 mod interner;
 mod io;
 mod iter;

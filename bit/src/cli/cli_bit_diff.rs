@@ -1,6 +1,11 @@
 use super::Cmd;
 use clap::Clap;
+use libbit::diff::Apply;
+use libbit::diff::Diff;
+use libbit::diff::Differ;
 use libbit::error::BitResult;
+use libbit::index::BitIndex;
+use libbit::index::BitIndexEntry;
 use libbit::pathspec::Pathspec;
 use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
@@ -24,8 +29,26 @@ impl Cmd for BitDiffCliOpts {
         } else {
             repo.diff_index_worktree(pathspec)?
         };
-        dbg!(status);
-        Ok(())
+
+        struct DiffFormatter<'r> {
+            repo: &'r BitRepo,
+        }
+
+        impl<'r> Apply for DiffFormatter<'r> {
+            fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
+                todo!()
+            }
+
+            fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
+                todo!()
+            }
+
+            fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+                todo!()
+            }
+        }
+
+        status.apply(&mut DiffFormatter { repo })
     }
 }
 
