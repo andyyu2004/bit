@@ -1,4 +1,5 @@
 use crate::error::BitResult;
+use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 
 #[test]
@@ -9,7 +10,7 @@ fn test_status_untracked_files() -> BitResult<()> {
         touch!(repo: "baz");
         bit_add!(repo: "bar");
 
-        let diff = repo.diff_index_worktree()?;
+        let diff = repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
         assert!(diff.modified.is_empty());
         assert_eq!(diff.new.len(), 2);
         assert_eq!(diff.new[0].path, "baz");
@@ -50,7 +51,7 @@ fn test_status_modified_files() -> BitResult<()> {
         modify!(repo: "foo.l");
         modify!(repo: "foo/bar");
 
-        let diff = repo.diff_index_worktree()?;
+        let diff = repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
         assert!(diff.new.is_empty());
         assert_eq!(diff.modified.len(), 2);
         let mut modified = diff.modified.into_iter();
@@ -76,7 +77,7 @@ fn test_status_modified_then_reverted() -> BitResult<()> {
             // revert foo/bar back to original contents
             modify!(repo: "foo/bar" < "original content");
 
-            let diff = repo.diff_index_worktree()?;
+            let diff = repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
             assert!(diff.new.is_empty());
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
@@ -102,7 +103,7 @@ fn test_status_modified_then_reverted_with_same_filesizes() -> BitResult<()> {
             // revert foo/bar back to original contents
             modify!(repo: "foo/bar" < "abc");
 
-            let diff = repo.diff_index_worktree()?;
+            let diff = repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
             assert_eq!(diff.modified.len(), 1);
             let mut modified = diff.modified.into_iter();
             assert_eq!(modified.next().unwrap().1.path, "foo.l");
@@ -120,7 +121,7 @@ fn test_status_on_symlink() -> BitResult<()> {
         symlink!(repo: "foo" <- "link");
         bit_add_all!(repo);
         bit_commit!(repo);
-        let diff = repo.diff_index_worktree()?;
+        let diff = repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
         assert_eq!(diff.modified.len(), 0);
         assert_eq!(diff.new.len(), 0);
         Ok(())
@@ -132,7 +133,7 @@ fn test_status_staged_modified_files() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         modify!(repo: "foo");
         bit_add!(repo: "foo");
-        let diff = repo.diff_head_index()?;
+        let diff = repo.diff_head_index(Pathspec::MATCH_ALL)?;
         // assert!(diff.deleted.is_empty());
         assert!(diff.new.is_empty());
         assert_eq!(diff.modified.len(), 1);
@@ -146,7 +147,7 @@ fn test_status_staged_new_files_simple() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         touch!(repo: "new");
         bit_add!(repo: "new");
-        let diff = repo.diff_head_index()?;
+        let diff = repo.diff_head_index(Pathspec::MATCH_ALL)?;
         assert!(diff.deleted.is_empty());
         assert!(diff.modified.is_empty());
         assert_eq!(diff.new.len(), 1);
@@ -164,7 +165,7 @@ fn test_status_staged_deleted_directory() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         rmdir!(repo: "dir");
         bit_add_all!(repo);
-        let diff = repo.diff_head_index()?;
+        let diff = repo.diff_head_index(Pathspec::MATCH_ALL)?;
         assert!(diff.modified.is_empty());
         assert!(diff.new.is_empty());
         assert_eq!(diff.deleted.len(), 4);
@@ -184,7 +185,7 @@ fn test_status_staged_new_files_no_head() -> BitResult<()> {
         touch!(repo: "foo");
         touch!(repo: "bar");
         bit_add!(repo: "foo");
-        let diff = repo.diff_head_index()?;
+        let diff = repo.diff_head_index(Pathspec::MATCH_ALL)?;
         assert!(diff.deleted.is_empty());
         assert!(diff.modified.is_empty());
         assert_eq!(diff.new.len(), 1);

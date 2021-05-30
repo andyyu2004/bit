@@ -199,19 +199,15 @@ impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
 }
 
 impl BitRepo {
-    pub fn diff_index_worktree(&self) -> BitResult<WorkspaceDiff> {
-        self.with_index_mut(|index| index.diff_worktree(Pathspec::MATCH_ALL))
+    pub fn diff_tree_index(&self, tree: &Tree, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+        self.with_index_mut(|index| index.diff_tree(tree, pathspec))
     }
 
-    pub fn diff_head_index(&self) -> BitResult<WorkspaceDiff> {
-        self.with_index_mut(|index| index.diff_head(Pathspec::MATCH_ALL))
-    }
-
-    pub fn diff_index_worktree_scoped(&self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+    pub fn diff_index_worktree(&self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         self.with_index_mut(|index| index.diff_worktree(pathspec))
     }
 
-    pub fn diff_head_index_scoped(&self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+    pub fn diff_head_index(&self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         self.with_index_mut(|index| index.diff_head(pathspec))
     }
 

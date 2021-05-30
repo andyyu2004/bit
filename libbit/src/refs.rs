@@ -1,6 +1,6 @@
 use crate::error::{BitError, BitGenericError, BitResult};
 use crate::lockfile::Lockfile;
-use crate::obj::Oid;
+use crate::obj::{BitObjKind, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -169,6 +169,17 @@ impl BitRef {
         match self {
             Self::Direct(..) => Ok(*self),
             Self::Symbolic(sym) => sym.resolve(repo),
+        }
+    }
+
+    pub fn resolve_to_tree(&self, repo: &BitRepo) -> BitResult<Tree> {
+        let oid = self.fully_resolve(repo)?;
+        match repo.read_obj(oid)? {
+            BitObjKind::Blob(..) => bail!("blob type is not treeish"),
+            BitObjKind::Commit(commit) => repo.read_obj(commit.tree)?.into_tree(),
+            BitObjKind::Tree(tree) => Ok(tree),
+            BitObjKind::Tag(_) => todo!(),
+            BitObjKind::OfsDelta(..) | BitObjKind::RefDelta(..) => bug!(),
         }
     }
 

@@ -1,6 +1,7 @@
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
+use libbit::pathspec::Pathspec;
 use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
 
@@ -10,16 +11,20 @@ pub struct BitDiffCliOpts {
     // can't seem to get the `default_missing_value` to work so just nesting options instead
     // and create the default in code
     staged: Option<Option<BitRef>>,
+    pathspec: Option<Pathspec>,
 }
 
 impl Cmd for BitDiffCliOpts {
     fn exec(&self, repo: &BitRepo) -> BitResult<()> {
+        let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
         let status = if let Some(r) = self.staged {
             let r = r.unwrap_or(BitRef::HEAD);
-            repo.diff_head_index()
+            let tree = r.resolve_to_tree(repo)?;
+            repo.diff_tree_index(&tree, pathspec)?
         } else {
-            repo.diff_index_worktree()
+            repo.diff_index_worktree(pathspec)?
         };
+        dbg!(status);
         Ok(())
     }
 }
@@ -34,16 +39,14 @@ mod tests {
     fn test_cli_parse_bit_diff_staged() {
         let opts = BitDiffCliOpts::parse_from(&["--", "--staged", "foo"]);
         assert_eq!(
-            opts,
-            BitDiffCliOpts {
-                staged: Some(Some(BitRef::Symbolic(SymbolicRef::new(BitPath::intern("foo")))))
-            }
+            opts.staged,
+            Some(Some(BitRef::Symbolic(SymbolicRef::new(BitPath::intern("foo"))))),
         );
 
         let opts = BitDiffCliOpts::parse_from(&["--", "--staged"]);
-        assert_eq!(opts, BitDiffCliOpts { staged: Some(None) });
+        assert_eq!(opts.staged, Some(None));
 
         let opts = BitDiffCliOpts::parse_from(&["--"]);
-        assert_eq!(opts, BitDiffCliOpts { staged: None });
+        assert_eq!(opts.staged, None);
     }
 }
