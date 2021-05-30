@@ -464,7 +464,7 @@ impl<'r> BitIndex<'r> {
             return Ok(Changed::Yes);
         }
 
-        if tls::with_config(|config| config.filemode())? && old.mode != new.mode {
+        if self.repo.config().filemode()? && old.mode != new.mode {
             debug!("{} changed: filemode {} -> {}", old.path, old.mode, new.mode);
             return Ok(Changed::Yes);
         }

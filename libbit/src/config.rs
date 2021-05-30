@@ -2,6 +2,8 @@
 //! certain things will need to be rewritten to be valid toml
 
 // yes this file is pretty disgusting, but its only config right? :)
+// I can't actually remember why its written the way it is, could consider a rewrite if something
+// major requires changing
 
 use crate::error::BitResult;
 use crate::interner::Intern;
@@ -32,7 +34,20 @@ pub struct BitConfig<'c> {
     path: PathBuf,
 }
 
+// this struct provides convenient access to each setting
+// e.g. to access filemode, we can just write repo.config().filemode()
+// its nicer to use than the with_config api
+pub struct Config<'r> {
+    repo: &'r BitRepo,
+}
+
 impl BitRepo {
+    // this is only here to namespace all the configuration to not be directly under repo
+    // although I do wonder if this is actually more annoying than helpful
+    pub fn config(&self) -> Config<'_> {
+        Config { repo: self }
+    }
+
     pub fn with_config<R>(
         &self,
         scope: BitConfigScope,
@@ -150,6 +165,12 @@ impl<'c> BitConfig<'c> {
 // if none of the configurations contain the value
 macro_rules! get_opt {
     ($section:ident.$field:ident:$ty:ty) => {
+        impl Config<'_> {
+            pub fn $field(&self) -> BitResult<Option<$ty>> {
+                self.repo.with_local_config(|config| config.$field())
+            }
+        }
+
         impl<'c> BitConfig<'c> {
             pub fn $field(&self) -> BitResult<Option<$ty>> {
                 let section = stringify!($section);
@@ -168,6 +189,12 @@ macro_rules! get_opt {
 
 macro_rules! get {
     ($section:ident.$field:ident:$ty:ty, $default:expr) => {
+        impl Config<'_> {
+            pub fn $field(&self) -> BitResult<$ty> {
+                self.repo.with_local_config(|config| config.$field())
+            }
+        }
+
         impl<'c> BitConfig<'c> {
             pub fn $field(&self) -> BitResult<$ty> {
                 let section = stringify!($section);
@@ -184,9 +211,10 @@ macro_rules! get {
     };
 }
 
+get!(core.filemode: bool, false);
+get!(core.pager: String, "less".to_owned());
+
 get_opt!(core.repositoryformatversion: i64);
 get_opt!(core.bare: bool);
-get!(core.filemode: bool, false);
-
 get_opt!(user.name: String);
 get_opt!(user.email: String);

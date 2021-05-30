@@ -59,6 +59,7 @@ pub mod refs;
 pub mod repo;
 pub mod rev;
 pub mod status;
+pub mod xdiff;
 
 mod delta;
 mod interner;
@@ -72,4 +73,3 @@ mod signature;
 mod time;
 mod tls;
 mod util;
-mod xdiff;

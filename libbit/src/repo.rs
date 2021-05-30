@@ -32,11 +32,6 @@ pub struct BitRepo {
     refdb: BitRefDb,
 }
 
-#[inline]
-fn repo_relative_path(repo: &BitRepo, path: impl AsRef<Path>) -> BitPath {
-    repo.bitdir.join(path)
-}
-
 impl BitRepo {
     pub fn default_signature(&self) -> BitResult<BitSignature> {
         todo!()
@@ -286,8 +281,8 @@ impl BitRepo {
     }
 
     /// converts relative_paths to absolute paths
-    /// checks absolute paths exist and has a base relative to the bit directory
-    pub(crate) fn normalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
+    /// checks absolute paths exist and have a base relative to the bit directory
+    pub fn normalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
@@ -312,7 +307,7 @@ impl BitRepo {
     }
 
     /// converts an absolute path into a path relative to the workdir of the repository
-    pub(crate) fn to_relative_path(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
+    pub fn to_relative_path(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
         // this seems to work just as well as the pathdiff crate
         let path = path.as_ref();
         assert!(path.is_absolute());
@@ -320,7 +315,7 @@ impl BitRepo {
     }
 
     pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> BitPath {
-        repo_relative_path(self, path)
+        self.bitdir.join(path)
     }
 
     #[cfg(test)]

@@ -1,10 +1,16 @@
+use diffy::PatchFormatter;
+use std::io::{self, Write};
 use std::ops::{Index, IndexMut};
 
 pub type BitPatch<'a> = diffy::Patch<'a, str>;
 
-// TODO too lazy to implement all this so just using a library and see how it goes
+// TODO too lazy to implement all this rn so just using a library and see how it goes
 pub fn xdiff<'a>(original: &'a str, modified: &'a str) -> BitPatch<'a> {
     diffy::create_patch(original, modified)
+}
+
+pub fn format_patch_into<W: Write>(writer: W, patch: &BitPatch<'_>) -> io::Result<()> {
+    PatchFormatter::new().write_patch_into(patch, writer)
 }
 
 struct OffsetVec<T> {

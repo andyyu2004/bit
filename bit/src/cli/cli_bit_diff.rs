@@ -1,14 +1,20 @@
+use std::borrow::Cow;
+use std::io::Write;
+use std::process::Child;
+use std::process::Command;
+use std::process::Stdio;
+
 use super::Cmd;
 use clap::Clap;
 use libbit::diff::Apply;
 use libbit::diff::Diff;
-use libbit::diff::Differ;
 use libbit::error::BitResult;
-use libbit::index::BitIndex;
 use libbit::index::BitIndexEntry;
+use libbit::path::BitPath;
 use libbit::pathspec::Pathspec;
 use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
+use libbit::xdiff;
 
 #[derive(Clap, Debug, PartialEq)]
 pub struct BitDiffCliOpts {
@@ -30,8 +36,45 @@ impl Cmd for BitDiffCliOpts {
             repo.diff_index_worktree(pathspec)?
         };
 
+        // NOTES:
+        // don't know how correct this reasoning is
+        // where to read the blob from given a `BitIndexEntry` `entry`?
+        // if `entry.hash.is_unknown()` then it must be a worktree entry as otherwise the hash
+        // would be definitely known.
+        // however, does the converse hold? I think it currently does. Even though hashes for worktree entries
+        // maybe sometimes be calculated due to racy git, I don't think the change is recorded in the entry we access
+        // in the Apply trait.
+        // if this is the case, we could just have two cases
+        // - if the hash is known, then we read it from the object store,
+        // - otherwise, we read it from disk
         struct DiffFormatter<'r> {
             repo: &'r BitRepo,
+            pager: Child,
+        }
+
+        impl<'r> DiffFormatter<'r> {
+            pub fn new(repo: &'r BitRepo) -> BitResult<Self> {
+                let pager = Command::new(&repo.config().pager()?).stdin(Stdio::piped()).spawn()?;
+                Ok(Self { repo, pager })
+            }
+
+            fn pipe(&mut self) -> impl Write + '_ {
+                self.pager.stdin.as_mut().unwrap()
+            }
+        }
+
+        impl<'r> DiffFormatter<'r> {
+            fn read_blob(&self, entry: &BitIndexEntry) -> BitResult<String> {
+                if entry.hash.is_known() {
+                    // TODO diffing binary files?
+                    // currently the tostring impl will return the same thing
+                    // so if we textually diff it it won't show anything
+                    Ok(self.repo.read_obj(entry.hash)?.into_blob().to_string())
+                } else {
+                    let absolute_path = self.repo.normalize(entry.path)?;
+                    Ok(std::fs::read_to_string(absolute_path)?)
+                }
+            }
         }
 
         impl<'r> Apply for DiffFormatter<'r> {
@@ -40,7 +83,16 @@ impl Cmd for BitDiffCliOpts {
             }
 
             fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
-                todo!()
+                let old_txt = self.read_blob(old)?;
+                let new_txt = self.read_blob(new)?;
+                let mut patch = xdiff::xdiff(&old_txt, &new_txt);
+                let a = BitPath::A.join(old.path).as_str();
+                let b = BitPath::B.join(new.path).as_str();
+                writeln!(self.pipe(), "diff --bit {} {}", a, b)?;
+                patch.set_original(Cow::Borrowed(a));
+                patch.set_modified(Cow::Borrowed(b));
+                xdiff::format_patch_into(self.pipe(), &patch)?;
+                Ok(())
             }
 
             fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
@@ -48,7 +100,10 @@ impl Cmd for BitDiffCliOpts {
             }
         }
 
-        status.apply(&mut DiffFormatter { repo })
+        let mut formatter: DiffFormatter = DiffFormatter::new(repo)?;
+        status.apply(&mut formatter)?;
+        formatter.pager.wait()?;
+        Ok(())
     }
 }
 

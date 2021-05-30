@@ -119,7 +119,9 @@ macro_rules! prefill {
 thread_local! {
     static INTERNER: RefCell<Interner> = RefCell::new(Interner::prefill(prefill! {
         EMPTY => "",
-        HEAD => "HEAD"
+        HEAD => "HEAD",
+        A => "a",
+        B => "b"
     }));
 }
 
