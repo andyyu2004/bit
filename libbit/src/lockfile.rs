@@ -1,8 +1,11 @@
 use crate::error::BitResult;
+use crate::serialize::Deserialize;
 use anyhow::Context;
 use std::cell::Cell;
 use std::fs::File;
+use std::io::BufReader;
 use std::io::{self, prelude::*};
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
 const LOCK_FILE_EXT: &str = "lock";
@@ -143,6 +146,30 @@ impl Lockfile {
     fn rollback(&self) {
         // does rollback actually have to anything that the drop impl doesn't do?
         // just exists for semantic purposes for now
+    }
+
+    fn lock<T: Deserialize + Default>(path: impl AsRef<Path>) -> BitResult<LockfileGuard<T>> {
+        let lockfile = Lockfile::open(path)?;
+        todo!()
+        // match &mut lockfile.file {
+        //     Some(file) => T::deserialize(BufReader::new(file))?,
+        //     None => T::default(),
+        // }
+        // let data = T::deserialize(&mut lockfile.file)?;
+        // Ok(LockfileGuard { lockfile, data })
+    }
+}
+
+pub struct LockfileGuard<T> {
+    data: T,
+    lockfile: Lockfile,
+}
+
+impl<T> Deref for LockfileGuard<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        todo!()
     }
 }
 

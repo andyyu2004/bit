@@ -1,4 +1,4 @@
-use super::{BitRef, SymbolicRef};
+use super::{BitRef, BitReflog, SymbolicRef};
 use crate::error::BitResult;
 use crate::lockfile::Lockfile;
 use crate::path::BitPath;
@@ -14,8 +14,12 @@ impl BitRefDb {
         Self { bitdir }
     }
 
-    pub fn join(&self, path: BitPath) -> BitPath {
+    pub fn join_ref(&self, path: BitPath) -> BitPath {
         self.bitdir.join(path)
+    }
+
+    pub fn join_log(&self, path: BitPath) -> BitPath {
+        self.bitdir.join("logs").join(path)
     }
 }
 
@@ -28,6 +32,8 @@ pub trait BitRefDbBackend {
     fn update(&self, sym: SymbolicRef, to: BitRef) -> BitResult<()>;
     fn delete(&self, sym: SymbolicRef) -> BitResult<()>;
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool>;
+
+    fn read_reflog(&self, sym: SymbolicRef) -> BitResult<BitReflog>;
 }
 
 impl BitRefDbBackend for BitRefDb {
@@ -41,7 +47,7 @@ impl BitRefDbBackend for BitRefDb {
     }
 
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
-        Lockfile::with_readonly(self.join(sym.path), |lockfile| {
+        Lockfile::with_readonly(self.join_ref(sym.path), |lockfile| {
             let head_file =
                 lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
             BitRef::deserialize_unbuffered(head_file)
@@ -49,7 +55,7 @@ impl BitRefDbBackend for BitRefDb {
     }
 
     fn update(&self, sym: SymbolicRef, to: BitRef) -> BitResult<()> {
-        Lockfile::with_mut(self.join(sym.path), |lockfile| to.serialize(lockfile))
+        Lockfile::with_mut(self.join_ref(sym.path), |lockfile| to.serialize(lockfile))
     }
 
     fn delete(&self, _sym: SymbolicRef) -> BitResult<()> {
@@ -57,6 +63,11 @@ impl BitRefDbBackend for BitRefDb {
     }
 
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool> {
-        Ok(self.join(sym.path).exists())
+        Ok(self.join_ref(sym.path).exists())
+    }
+
+    fn read_reflog(&self, sym: SymbolicRef) -> BitResult<BitReflog> {
+        let path = self.join_log(sym.path);
+        todo!()
     }
 }

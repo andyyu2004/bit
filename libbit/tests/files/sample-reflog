@@ -1,0 +1,77 @@
+0000000000000000000000000000000000000000 ec44fd74ed01ecb42a2140b6b4215e3dd630f008 Andy Yu <andyyu2004@gmail.com> 1621324304 +1200	clone: from gitlab.com:andyyu2004/bit.git
+ec44fd74ed01ecb42a2140b6b4215e3dd630f008 365b8eb44b291fb36a22f90ad33ac961488f627a Andy Yu <andyyu2004@gmail.com> 1621324335 +1200	checkout: moving from master to wip
+365b8eb44b291fb36a22f90ad33ac961488f627a ec44fd74ed01ecb42a2140b6b4215e3dd630f008 Andy Yu <andyyu2004@gmail.com> 1621324344 +1200	checkout: moving from wip to master
+ec44fd74ed01ecb42a2140b6b4215e3dd630f008 365b8eb44b291fb36a22f90ad33ac961488f627a Andy Yu <andyyu2004@gmail.com> 1621324346 +1200	rebase (start): checkout wip
+365b8eb44b291fb36a22f90ad33ac961488f627a 365b8eb44b291fb36a22f90ad33ac961488f627a Andy Yu <andyyu2004@gmail.com> 1621324346 +1200	rebase (finish): returning to refs/heads/master
+365b8eb44b291fb36a22f90ad33ac961488f627a ec44fd74ed01ecb42a2140b6b4215e3dd630f008 Andy Yu <andyyu2004@gmail.com> 1621326758 +1200	reset: moving to ec44fd74ed01ecb42a2140b6b4215e3dd630f008
+ec44fd74ed01ecb42a2140b6b4215e3dd630f008 e0ae352f40bc13a576199e13f68a034948a698ad Andy Yu <andyyu2004@gmail.com> 1621326800 +1200	commit: do not use relative seeks as reader may be reused now and we cannot assume anything about the current position of the seeker
+e0ae352f40bc13a576199e13f68a034948a698ad 9e62a48e4ac3f664ebe1d91784250a1c749ace78 Andy Yu <andyyu2004@gmail.com> 1621328100 +1200	commit (amend): do not use relative seeks as reader may be reused now and we cannot assume anything about the current position of the seeker
+9e62a48e4ac3f664ebe1d91784250a1c749ace78 191e2430ebdd32a23e12af45905057ff7895d7f6 Andy Yu <andyyu2004@gmail.com> 1621331635 +1200	commit: add some tests in bit itself (for ui and cli tests)
+191e2430ebdd32a23e12af45905057ff7895d7f6 5a41f156131a3505e2db5d78349cedf459ba2fd9 Andy Yu <andyyu2004@gmail.com> 1621331639 +1200	commit (amend): add some tests in bit itself (for ui and cli tests)
+5a41f156131a3505e2db5d78349cedf459ba2fd9 171e243c18de06b810376635be5ee566efeb5e0f Andy Yu <andyyu2004@gmail.com> 1621331761 +1200	commit (amend): add some tests in bit itself (for ui and cli tests)
+171e243c18de06b810376635be5ee566efeb5e0f 5d008d74ec18b683ca85e1c510197cae0e5de19b Andy Yu <andyyu2004@gmail.com> 1621332061 +1200	commit: fix test repository which git thought was a submodule (by rm --cached and readding) caused by not renaming .git -> .bit; had a pre-commit script to do this but unfortunately they're not actually saved on a fresh clone. so looking for a better way to do this stuff
+5d008d74ec18b683ca85e1c510197cae0e5de19b afb6014f084f16460723715621c7f1bba9110005 Andy Yu <andyyu2004@gmail.com> 1621333463 +1200	commit: unify IndexWorktreeDiff and HeadIndexDiff into just `WorkspaceDiff`, the only difference were slightly more meaningful names but its better to have a uniform representation of diffs
+afb6014f084f16460723715621c7f1bba9110005 40ae5ac36bd5da87e6f675ffbaddee3939b79e19 Andy Yu <andyyu2004@gmail.com> 1621333483 +1200	commit (amend): unify IndexWorktreeDiff and HeadIndexDiff into just `WorkspaceDiff`, the only difference were slightly more meaningful names but its better to have a uniform representation of diffs
+40ae5ac36bd5da87e6f675ffbaddee3939b79e19 40ae5ac36bd5da87e6f675ffbaddee3939b79e19 Andy Yu <andyyu2004@gmail.com> 1621402887 +1200	reset: moving to HEAD
+40ae5ac36bd5da87e6f675ffbaddee3939b79e19 9a3a6227f089b59263384fe400d58279cb668e2d Andy Yu <andyyu2004@gmail.com> 1621403038 +1200	commit: readd foo repo in bit
+9a3a6227f089b59263384fe400d58279cb668e2d b36749ef0c226994d1542689866f50fd3943b48f Andy Yu <andyyu2004@gmail.com> 1621403041 +1200	commit (amend): readd foo repo in bit as it thought it was a submodule
+b36749ef0c226994d1542689866f50fd3943b48f c0e6b8fc9cb84408cea272cebbcdd499c673f90c Andy Yu <andyyu2004@gmail.com> 1621403155 +1200	commit: move everything out of src folder into top level as there is no reason to have it (why was docs in there in the first place?..)
+c0e6b8fc9cb84408cea272cebbcdd499c673f90c 64da2e4928a455c7aded986bab4e92ebb0217611 Andy Yu <andyyu2004@gmail.com> 1621404440 +1200	commit: experimentation with TreeIterator which allows stepping over directories (useful if we know two trees match via their hashes, then we can just step over the entire thing rather than wasting time recursing;
+64da2e4928a455c7aded986bab4e92ebb0217611 47af1a70f29c4e9800039071d29aec06d0eeed90 Andy Yu <andyyu2004@gmail.com> 1621404445 +1200	commit (amend): experimentation with TreeIterator
+47af1a70f29c4e9800039071d29aec06d0eeed90 aea7a163f90060d9eb92a5755b7d26b418d4f1a1 Andy Yu <andyyu2004@gmail.com> 1621405045 +1200	commit: add simple test for stepping over
+aea7a163f90060d9eb92a5755b7d26b418d4f1a1 7d236eaf66c7fbb3989562650add49366060d9b6 Andy Yu <andyyu2004@gmail.com> 1621405794 +1200	commit: change tree_iter to only take a &Tree as the elements are copy we can just `cloned()` the iterator
+7d236eaf66c7fbb3989562650add49366060d9b6 cfb0b37344ac8a0c0f647687b29b9b0a54a97b36 Andy Yu <andyyu2004@gmail.com> 1621412160 +1200	commit: refactor diff
+cfb0b37344ac8a0c0f647687b29b9b0a54a97b36 9462ffa5a81d27a9c394c85ffdcc92858c1e8444 Andy Yu <andyyu2004@gmail.com> 1621412314 +1200	commit (amend): refactor diff
+9462ffa5a81d27a9c394c85ffdcc92858c1e8444 8ac9fee79d34ec2b73439a934b1a9dd254ef90ba Andy Yu <andyyu2004@gmail.com> 1621419580 +1200	commit: rough tree iterator impl
+8ac9fee79d34ec2b73439a934b1a9dd254ef90ba 1fc5490633d637e6b28c58cc369f79414528816d Andy Yu <andyyu2004@gmail.com> 1621419896 +1200	commit: change `LazyRevspec` api
+1fc5490633d637e6b28c58cc369f79414528816d fd2b5bf24e2bffdd61dff1f7c6768a18e7f16a84 Andy Yu <andyyu2004@gmail.com> 1621420441 +1200	commit: add `Treeish` trait for convenience for things that can be 'defereferenced' into trees (only commits and trees and bitobjkind currently)
+fd2b5bf24e2bffdd61dff1f7c6768a18e7f16a84 f437ec5d791210c9c2f4f5f5da0b5566cdfd5e4a Andy Yu <andyyu2004@gmail.com> 1621420580 +1200	commit (amend): add `Treeish` trait for convenience for things that can be 'defereferenced' into trees (only commits and trees and bitobjkind currently)
+f437ec5d791210c9c2f4f5f5da0b5566cdfd5e4a 6a7cd66592875f4cc8128687914ba202b71a9da7 Andy Yu <andyyu2004@gmail.com> 1621421515 +1200	commit: minor changes
+6a7cd66592875f4cc8128687914ba202b71a9da7 cb5b965783909f915f3bdd2ca04ecf20f8990f78 Andy Yu <andyyu2004@gmail.com> 1621424614 +1200	commit: move peek method into trait and away from an adaptor for reasons mentioned in comments
+cb5b965783909f915f3bdd2ca04ecf20f8990f78 af76c09ff86b73b4a675a6e2d497f40a54a831eb Andy Yu <andyyu2004@gmail.com> 1621425213 +1200	commit: step over should return the directory entry, just not recurse; add test case
+af76c09ff86b73b4a675a6e2d497f40a54a831eb 24616df54f9acfc4524f63cb2f4215a9fce15203 Andy Yu <andyyu2004@gmail.com> 1621502898 +1200	commit: add our rather unfortunate workaround to `worktree_iter` so the ordering is correct; there must be a better way to get our desired ordering for paths...
+24616df54f9acfc4524f63cb2f4215a9fce15203 9b26d67c07c05bbf6a86f2de9a3334afd546656f Andy Yu <andyyu2004@gmail.com> 1621503372 +1200	commit (amend): add our rather unfortunate workaround to `worktree_iter` so the ordering is correct; there must be a better way to get our desired ordering for paths...
+9b26d67c07c05bbf6a86f2de9a3334afd546656f 1effcbe6008b16421ab7d3deafea0cf0885013a7 Andy Yu <andyyu2004@gmail.com> 1621506885 +1200	commit: add explicit sort (by path ordering) to DirIter
+1effcbe6008b16421ab7d3deafea0cf0885013a7 1effcbe6008b16421ab7d3deafea0cf0885013a7 Andy Yu <andyyu2004@gmail.com> 1621508224 +1200	checkout: moving from master to master
+1effcbe6008b16421ab7d3deafea0cf0885013a7 1effcbe6008b16421ab7d3deafea0cf0885013a7 Andy Yu <andyyu2004@gmail.com> 1622184002 +1200	reset: moving to HEAD
+1effcbe6008b16421ab7d3deafea0cf0885013a7 3d9ba9d76583465dcf30bcbff1ffdbf7e92ec1fa Andy Yu <andyyu2004@gmail.com> 1622184151 +1200	pull: Fast-forward
+3d9ba9d76583465dcf30bcbff1ffdbf7e92ec1fa 3d9ba9d76583465dcf30bcbff1ffdbf7e92ec1fa Andy Yu <andyyu2004@gmail.com> 1622186189 +1200	checkout: moving from master to xdiff
+3d9ba9d76583465dcf30bcbff1ffdbf7e92ec1fa f1c25a843f3e7c022e0263f0c2cbb6d29ed9189d Andy Yu <andyyu2004@gmail.com> 1622186198 +1200	commit: WIP diff
+f1c25a843f3e7c022e0263f0c2cbb6d29ed9189d 3d9ba9d76583465dcf30bcbff1ffdbf7e92ec1fa Andy Yu <andyyu2004@gmail.com> 1622186201 +1200	checkout: moving from xdiff to master
+3d9ba9d76583465dcf30bcbff1ffdbf7e92ec1fa f1c25a843f3e7c022e0263f0c2cbb6d29ed9189d Andy Yu <andyyu2004@gmail.com> 1622187411 +1200	checkout: moving from master to xdiff
+f1c25a843f3e7c022e0263f0c2cbb6d29ed9189d eea8674d6fdf90cc512adde65ec467bce0bd45a9 Andy Yu <andyyu2004@gmail.com> 1622194244 +1200	commit: some WIP diffing
+eea8674d6fdf90cc512adde65ec467bce0bd45a9 eea8674d6fdf90cc512adde65ec467bce0bd45a9 Andy Yu <andyyu2004@gmail.com> 1622196595 +1200	reset: moving to HEAD
+eea8674d6fdf90cc512adde65ec467bce0bd45a9 787db2b053d2ad38fb01330cf5c1ab62134b56ec Andy Yu <andyyu2004@gmail.com> 1622196715 +1200	commit: remove accidental old code from BitIndex::add_all
+787db2b053d2ad38fb01330cf5c1ab62134b56ec c0bb5cec3e9041f9219046d1d15cb068bc09a226 Andy Yu <andyyu2004@gmail.com> 1622197025 +1200	commit: add pathspec option to status to scope operations
+c0bb5cec3e9041f9219046d1d15cb068bc09a226 e2145bae9892be84e371578d6a6a3799c8972e71 Andy Yu <andyyu2004@gmail.com> 1622197072 +1200	commit (amend): add pathspec option to status to scope operations
+e2145bae9892be84e371578d6a6a3799c8972e71 a4ebe46ee53d106dd66aab0fc0b767686365079a Andy Yu <andyyu2004@gmail.com> 1622332915 +1200	commit: remove scoped unscoped distinction and just make everything take a pathspec
+a4ebe46ee53d106dd66aab0fc0b767686365079a d96cb97b047a5e674df197ab0ff81939e9469aa8 Andy Yu <andyyu2004@gmail.com> 1622332921 +1200	commit (amend): remove scoped unscoped distinction and just make everything take a pathspec
+d96cb97b047a5e674df197ab0ff81939e9469aa8 e76d42ce56af6fd1a11959ae8dbcde5b28e77e54 Andy Yu <andyyu2004@gmail.com> 1622343228 +1200	commit: prefill interner allowing for BitPath constants
+e76d42ce56af6fd1a11959ae8dbcde5b28e77e54 5546fc47b4e8ee8b619e8c48467e59379bacda88 Andy Yu <andyyu2004@gmail.com> 1622346138 +1200	commit (amend): prefill interner allowing for BitPath constants
+5546fc47b4e8ee8b619e8c48467e59379bacda88 e76d42ce56af6fd1a11959ae8dbcde5b28e77e54 Andy Yu <andyyu2004@gmail.com> 1622346235 +1200	reset: moving to HEAD@{1}
+e76d42ce56af6fd1a11959ae8dbcde5b28e77e54 048258debe454031d4736e2de2568086342eed24 Andy Yu <andyyu2004@gmail.com> 1622346244 +1200	commit: generalize things that operate over `HEAD` tree to operate over any tree
+048258debe454031d4736e2de2568086342eed24 25b296120d9a1747c35d8af7f3da60bed77978c3 Andy Yu <andyyu2004@gmail.com> 1622347647 +1200	commit: remove scoped variants in repo impl too
+25b296120d9a1747c35d8af7f3da60bed77978c3 710aad88d561f748604d2c877f4d515067e16131 Andy Yu <andyyu2004@gmail.com> 1622347686 +1200	commit (amend): remove scoped variants in repo impl too
+710aad88d561f748604d2c877f4d515067e16131 9cc17e93f09d1b2b32d0589f6f7496bec1b796c3 Andy Yu <andyyu2004@gmail.com> 1622347753 +1200	commit (amend): remove scoped variants in repo impl too
+9cc17e93f09d1b2b32d0589f6f7496bec1b796c3 f008a3f1c35171e0f79fae1bf9311e2e8254b10d Andy Yu <andyyu2004@gmail.com> 1622347758 +1200	commit (amend): remove scoped variants in repo impl too
+f008a3f1c35171e0f79fae1bf9311e2e8254b10d 3d9ba9d76583465dcf30bcbff1ffdbf7e92ec1fa Andy Yu <andyyu2004@gmail.com> 1622347867 +1200	checkout: moving from xdiff to master
+3d9ba9d76583465dcf30bcbff1ffdbf7e92ec1fa f008a3f1c35171e0f79fae1bf9311e2e8254b10d Andy Yu <andyyu2004@gmail.com> 1622347872 +1200	merge xdiff: Fast-forward
+f008a3f1c35171e0f79fae1bf9311e2e8254b10d da3b4a1472a0b9acdeea6126b48b38cf924cb7a3 Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (start): checkout da3b4a1472a0b9acdeea6126b48b38cf924cb7a3
+da3b4a1472a0b9acdeea6126b48b38cf924cb7a3 d6ec9b775adb79ad25f6bcf7c9c4fb36268054ac Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (pick): WIP diff
+d6ec9b775adb79ad25f6bcf7c9c4fb36268054ac a90dba9f9b388ed0afd4bc31439c1ad56cbba98e Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (pick): some WIP diffing
+a90dba9f9b388ed0afd4bc31439c1ad56cbba98e 889f7d0393d4b5523fc8e20b57b3900272152204 Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (pick): remove accidental old code from BitIndex::add_all
+889f7d0393d4b5523fc8e20b57b3900272152204 07de1af1aaae61d086e2a4a0f4ddcf468763bcee Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (pick): add pathspec option to status to scope operations
+07de1af1aaae61d086e2a4a0f4ddcf468763bcee 5b59d3bf025f44a2ac26c34c3338eb35e2e06d85 Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (pick): remove scoped unscoped distinction and just make everything take a pathspec
+5b59d3bf025f44a2ac26c34c3338eb35e2e06d85 d6ac2f7d19858c872c540470d015d8adb0e6c16d Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (pick): prefill interner allowing for BitPath constants
+d6ac2f7d19858c872c540470d015d8adb0e6c16d bebb5b6e9e6da4fa7303555458e77fd2ab90819f Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (pick): generalize things that operate over `HEAD` tree to operate over any tree
+bebb5b6e9e6da4fa7303555458e77fd2ab90819f 02a0222aaeecae48bf62a8ad4a6fad3efe34656c Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (pick): remove scoped variants in repo impl too
+02a0222aaeecae48bf62a8ad4a6fad3efe34656c 02a0222aaeecae48bf62a8ad4a6fad3efe34656c Andy Yu <andyyu2004@gmail.com> 1622347883 +1200	pull (finish): returning to refs/heads/master
+02a0222aaeecae48bf62a8ad4a6fad3efe34656c f008a3f1c35171e0f79fae1bf9311e2e8254b10d Andy Yu <andyyu2004@gmail.com> 1622347905 +1200	checkout: moving from master to xdiff
+f008a3f1c35171e0f79fae1bf9311e2e8254b10d 02a0222aaeecae48bf62a8ad4a6fad3efe34656c Andy Yu <andyyu2004@gmail.com> 1622347907 +1200	rebase (start): checkout master
+02a0222aaeecae48bf62a8ad4a6fad3efe34656c 02a0222aaeecae48bf62a8ad4a6fad3efe34656c Andy Yu <andyyu2004@gmail.com> 1622347907 +1200	rebase (finish): returning to refs/heads/xdiff
+02a0222aaeecae48bf62a8ad4a6fad3efe34656c 02a0222aaeecae48bf62a8ad4a6fad3efe34656c Andy Yu <andyyu2004@gmail.com> 1622347909 +1200	checkout: moving from xdiff to master
+02a0222aaeecae48bf62a8ad4a6fad3efe34656c f10a8650ea8901f746c3f7bae947aabdb84e7d71 Andy Yu <andyyu2004@gmail.com> 1622356100 +1200	commit: restructure diffing traits again
+f10a8650ea8901f746c3f7bae947aabdb84e7d71 00ef82a47eda536a8488f6837aa7f6a46ce32b4c Andy Yu <andyyu2004@gmail.com> 1622370339 +1200	commit: update deps
+00ef82a47eda536a8488f6837aa7f6a46ce32b4c cc52c1c90967ff3076128b67b87c27059b78ddb4 Andy Yu <andyyu2004@gmail.com> 1622370397 +1200	commit: roughly implement `diff` using diffy crate; with pager option; looks roughly ok using delta but not quite the same at git yet
+cc52c1c90967ff3076128b67b87c27059b78ddb4 95a612b0afcae388c4f9fb9ddf4dba489919b766 Andy Yu <andyyu2004@gmail.com> 1622448791 +1200	commit: add assertion to `add_all`
+95a612b0afcae388c4f9fb9ddf4dba489919b766 4f0b23654b5ffc3a994ec4bf0212ed8dc4358400 Andy Yu <andyyu2004@gmail.com> 1622453485 +1200	commit: create reflog module and move refdb to it's own module

@@ -34,7 +34,7 @@ impl SHA1Hash {
     // didn't find anywhere that SHA1 can't return 0
     // but libgit2 also uses this special value
     // and its so incredibly unlikely even if it is possible
-    pub const ZERO: Self = Self([0; 20]);
+    pub const UNKNOWN: Self = Self([0; 20]);
 
     #[inline]
     pub fn new(bytes: [u8; 20]) -> Self {
@@ -48,12 +48,12 @@ impl SHA1Hash {
 
     #[inline]
     pub fn is_unknown(self) -> bool {
-        self == Self::ZERO
+        self == Self::UNKNOWN
     }
 
     #[inline]
     pub fn is_known(self) -> bool {
-        self != Self::ZERO
+        self != Self::UNKNOWN
     }
 
     /// split hash into the first two hex digits (hence first byte)

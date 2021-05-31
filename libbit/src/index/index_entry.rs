@@ -184,7 +184,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             uid: metadata.st_uid(),
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,
-            hash: Oid::ZERO,
+            hash: Oid::UNKNOWN,
             flags: BitIndexEntryFlags::with_path_len(relative.len()),
         })
     }

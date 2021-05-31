@@ -1,7 +1,12 @@
-use super::is_valid_name;
-use crate::error::{BitErrorExt, BitResult};
-use crate::refs::{BitRef};
+use super::BitReflogEntry;
+use crate::error::BitErrorExt;
+use crate::error::BitResult;
+use crate::refs::is_valid_name;
+use crate::refs::BitRef;
+use crate::refs::BitReflog;
 use crate::repo::BitRepo;
+use crate::signature::BitSignature;
+use std::str::FromStr;
 
 #[test]
 fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
@@ -67,4 +72,26 @@ fn test_branch_regex() {
     assert!(!is_valid_name("caret^"));
     assert!(!is_valid_name("badendingslash/"));
     assert!(!is_valid_name("bads/.dot"));
+}
+
+#[test]
+fn test_parse_reflog() {
+    let s = include_str!("../../tests/files/sample-reflog");
+    BitReflog::from_str(s).expect("failed to parse valid reflog");
+}
+
+#[test]
+fn test_parse_reflog_entry() {
+    let s = "95a612b0afcae388c4f9fb9ddf4dba489919b766 4f0b23654b5ffc3a994ec4bf0212ed8dc4358400 Andy Yu <andyyu2004@gmail.com> 1622453485 +1200	commit: some commit message";
+    let entry = BitReflogEntry::from_str(s).unwrap();
+    assert_eq!(
+        entry,
+        BitReflogEntry {
+            old_oid: "95a612b0afcae388c4f9fb9ddf4dba489919b766".into(),
+            new_oid: "4f0b23654b5ffc3a994ec4bf0212ed8dc4358400".into(),
+            committer: BitSignature::from_str("Andy Yu <andyyu2004@gmail.com> 1622453485 +1200")
+                .unwrap(),
+            msg: "commit: some commit message".into(),
+        }
+    );
 }
