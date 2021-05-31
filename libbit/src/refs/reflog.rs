@@ -1,6 +1,11 @@
 use crate::error::BitGenericError;
+use crate::error::BitResult;
 use crate::obj::Oid;
+use crate::serialize::Deserialize;
+use crate::serialize::Serialize;
 use crate::signature::BitSignature;
+use std::io::BufRead;
+use std::io::Write;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -11,7 +16,7 @@ pub struct BitReflogEntry {
     pub msg: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BitReflog {
     entries: Vec<BitReflogEntry>,
 }
@@ -48,5 +53,22 @@ impl FromStr for BitReflog {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let entries = s.lines().map(BitReflogEntry::from_str).collect::<Result<Vec<_>, _>>()?;
         Ok(Self { entries })
+    }
+}
+
+impl Serialize for BitReflog {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        todo!()
+    }
+}
+
+impl Deserialize for BitReflog {
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        let mut s = String::new();
+        reader.read_to_string(&mut s)?;
+        Self::from_str(&s)
     }
 }

@@ -66,8 +66,11 @@ impl BitRefDbBackend for BitRefDb {
         Ok(self.join_ref(sym.path).exists())
     }
 
+    // read_reflog is probably not a great method to have
+    // probably better to have method that directly manipulate the log instead
     fn read_reflog(&self, sym: SymbolicRef) -> BitResult<BitReflog> {
         let path = self.join_log(sym.path);
+        let reflog = Lockfile::lock::<BitReflog>(path)?;
         todo!()
     }
 }

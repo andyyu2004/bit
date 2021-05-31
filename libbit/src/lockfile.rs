@@ -1,5 +1,7 @@
 use crate::error::BitResult;
+use crate::path::BitPath;
 use crate::serialize::Deserialize;
+use crate::serialize::Serialize;
 use anyhow::Context;
 use std::cell::Cell;
 use std::fs::File;
@@ -147,30 +149,6 @@ impl Lockfile {
         // does rollback actually have to anything that the drop impl doesn't do?
         // just exists for semantic purposes for now
     }
-
-    fn lock<T: Deserialize + Default>(path: impl AsRef<Path>) -> BitResult<LockfileGuard<T>> {
-        let lockfile = Lockfile::open(path)?;
-        todo!()
-        // match &mut lockfile.file {
-        //     Some(file) => T::deserialize(BufReader::new(file))?,
-        //     None => T::default(),
-        // }
-        // let data = T::deserialize(&mut lockfile.file)?;
-        // Ok(LockfileGuard { lockfile, data })
-    }
-}
-
-pub struct LockfileGuard<T> {
-    data: T,
-    lockfile: Lockfile,
-}
-
-impl<T> Deref for LockfileGuard<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        todo!()
-    }
 }
 
 impl Drop for Lockfile {
@@ -180,5 +158,62 @@ impl Drop for Lockfile {
             return;
         }
         self.cleanup().unwrap();
+    }
+}
+
+/// the default is `commit`, `rollback` must be explicit
+/// data must not have interior mutability otherwise changes may be ignored
+pub struct LockfileGuard<T: Serialize> {
+    data: T,
+    lockfile: Lockfile,
+    has_changes: bool,
+    rolled_back: bool,
+}
+
+impl Lockfile {
+    pub fn lock<T: Serialize + Deserialize + Default>(
+        path: BitPath,
+    ) -> BitResult<LockfileGuard<T>> {
+        let mut lockfile = Lockfile::open(path)?;
+        let data = match &mut lockfile.file {
+            Some(file) => T::deserialize(&mut BufReader::new(file))?,
+            None => T::default(),
+        };
+        Ok(LockfileGuard { lockfile, data, has_changes: false, rolled_back: false })
+    }
+}
+
+impl<T: Serialize> LockfileGuard<T> {
+    pub fn rollback(&mut self) {
+        self.rolled_back = true;
+        self.lockfile.rollback();
+    }
+}
+
+impl<T: Serialize> Drop for LockfileGuard<T> {
+    fn drop(&mut self) {
+        if self.rolled_back || !self.has_changes {
+            // the lockfile drop impl will do the necessary cleanup
+            return;
+        }
+        // otherwise, write the data into the lockfile and commit
+        self.data.serialize(&mut self.lockfile).expect("failed to write data (LockfileGuard)h");
+        self.lockfile.commit().expect("failed to commit lockfile");
+    }
+}
+
+impl<T: Serialize> Deref for LockfileGuard<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T: Serialize> DerefMut for LockfileGuard<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // conservatively assume any mutable access results in a change
+        self.has_changes = true;
+        &mut self.data
     }
 }
