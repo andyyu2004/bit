@@ -148,7 +148,11 @@ impl<'r> BitIndex<'r> {
             }
         }
         let diff = self.diff_worktree(Pathspec::MATCH_ALL)?;
-        diff.apply(&mut AddAll { index: self })
+        diff.apply(&mut AddAll { index: self })?;
+
+        // worktree should exactly match the index after `add_all`
+        debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
+        Ok(())
     }
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
