@@ -5,7 +5,9 @@ use crate::refs::is_valid_name;
 use crate::refs::BitRef;
 use crate::refs::BitReflog;
 use crate::repo::BitRepo;
+use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
+use std::io::BufReader;
 use std::str::FromStr;
 
 #[test]
@@ -94,4 +96,16 @@ fn test_parse_reflog_entry() {
             msg: "commit: some commit message".into(),
         }
     );
+}
+
+#[test]
+fn test_deserialize_then_reserialize_reflog() -> BitResult<()> {
+    let bytes = &include_bytes!("../../tests/files/sample-reflog")[..];
+    let mut reader = BufReader::new(bytes);
+    let reflog = BitReflog::deserialize(&mut reader)?;
+    let mut buf = vec![];
+    reflog.serialize(&mut buf)?;
+
+    assert_eq!(bytes, &buf);
+    Ok(())
 }

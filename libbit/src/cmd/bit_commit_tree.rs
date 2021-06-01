@@ -1,4 +1,5 @@
 use crate::error::BitResult;
+use crate::obj::Commit;
 use crate::obj::Oid;
 use crate::repo::BitRepo;
 
@@ -9,7 +10,7 @@ impl BitRepo {
         message: Option<String>,
         tree: Oid,
     ) -> BitResult<()> {
-        let hash = self.commit_tree(parent, message, tree)?;
+        let (hash, _) = self.commit_tree(parent, message, tree)?;
         println!("{}", hash);
         Ok(())
     }
@@ -19,13 +20,13 @@ impl BitRepo {
         parent: Option<Oid>,
         message: Option<String>,
         tree: Oid,
-    ) -> BitResult<Oid> {
+    ) -> BitResult<(Oid, Commit)> {
         let message = match message {
             Some(msg) => msg,
             None => self.read_commit_msg()?,
         };
         let commit = self.mk_commit(tree, message, parent)?;
         let hash = self.write_obj(&commit)?;
-        Ok(hash)
+        Ok((hash, commit))
     }
 }

@@ -16,6 +16,12 @@ pub struct BitReflogEntry {
     pub msg: String,
 }
 
+impl Serialize for BitReflogEntry {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        Ok(writeln!(writer, "{} {} {}\t{}", self.old_oid, self.new_oid, self.committer, self.msg)?)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct BitReflog {
     entries: Vec<BitReflogEntry>,
@@ -58,7 +64,10 @@ impl FromStr for BitReflog {
 
 impl Serialize for BitReflog {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
-        todo!()
+        for entry in &self.entries {
+            entry.serialize(writer)?;
+        }
+        Ok(())
     }
 }
 

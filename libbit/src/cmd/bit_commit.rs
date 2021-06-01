@@ -1,6 +1,7 @@
 use crate::error::BitResult;
 use crate::obj::Oid;
 use crate::refs::BitRef;
+use crate::refs::RefUpdateCause;
 use crate::repo::BitRepo;
 
 impl BitRepo {
@@ -10,7 +11,7 @@ impl BitRepo {
         Ok(())
     }
 
-    pub fn commit(&self, message: Option<String>) -> BitResult<Oid> {
+    pub fn commit(&self, msg: Option<String>) -> BitResult<Oid> {
         let head = self.read_head()?;
         let sym = match head {
             BitRef::Direct(_oid) =>
@@ -19,8 +20,14 @@ impl BitRepo {
         };
         let parent = self.try_fully_resolve_ref(sym)?;
         let tree = self.write_tree()?;
-        let oid = self.commit_tree(parent, message, tree)?;
-        self.update_ref(sym, oid)?;
+        let (oid, commit) = self.commit_tree(parent, msg, tree)?;
+        // does commit tree move head?
+        // should the log on the current branches log or HEAD?
+        // intuitively it makes sense to log on the branch as HEAD isn't actually moving
+        // but the reflog doesn't contain any symbolic refs and only contains oids so
+        // in that sense it is actually moving?
+        // TODO check git's behaviour
+        self.update_ref(sym, oid, RefUpdateCause::Commit { msg: commit.message, amend: false })?;
         Ok(oid)
     }
 }

@@ -5,6 +5,7 @@ use crate::lockfile::Lockfile;
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree, Treeish};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
+use crate::refs::RefUpdateCause;
 use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, SymbolicRef};
 use crate::serialize::Serialize;
 use crate::signature::BitSignature;
@@ -30,6 +31,27 @@ pub struct BitRepo {
     index_filepath: BitPath,
     odb: BitObjDb,
     refdb: BitRefDb,
+}
+
+trait Repo {
+    type Odb: BitObjDbBackend;
+    type RefDb: BitRefDbBackend;
+
+    fn odb(&self) -> &Self::Odb;
+    fn refdb(&self) -> &Self::RefDb;
+}
+
+impl Repo for BitRepo {
+    type Odb = BitObjDb;
+    type RefDb = BitRefDb;
+
+    fn odb(&self) -> &Self::Odb {
+        todo!()
+    }
+
+    fn refdb(&self) -> &Self::RefDb {
+        todo!()
+    }
 }
 
 impl BitRepo {
@@ -238,18 +260,23 @@ impl BitRepo {
         self.refdb.read(self.head_ref())
     }
 
-    pub fn update_head(&self, bitref: impl Into<BitRef>) -> BitResult<()> {
-        self.update_ref(self.head_ref(), bitref.into())
+    pub fn update_head(&self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
+        self.update_ref(self.head_ref(), bitref.into(), cause)
     }
 
     pub fn create_branch(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
         let resolved = from.fully_resolve(self)?;
-        self.refdb.create(sym, resolved.into())
+        self.refdb.create_branch(sym, resolved.into())
     }
 
-    pub fn update_ref(&self, sym: SymbolicRef, to: impl Into<BitRef>) -> BitResult<()> {
-        self.refdb.update(sym, to.into())
+    pub fn update_ref(
+        &self,
+        sym: SymbolicRef,
+        to: impl Into<BitRef>,
+        cause: RefUpdateCause,
+    ) -> BitResult<()> {
+        self.refdb.update(sym, to.into(), cause)
     }
 
     /// writes `obj` into the object store returning its full hash
