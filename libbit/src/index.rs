@@ -30,7 +30,7 @@ const BIT_INDEX_VERSION: u32 = 2;
 
 #[derive(Debug)]
 pub struct BitIndex<'r> {
-    pub repo: &'r BitRepo,
+    pub repo: BitRepo<'r>,
     // index file may not yet exist
     mtime: Option<Timespec>,
     inner: BitIndexInner,
@@ -78,7 +78,7 @@ impl BitIndexInner {
 // }
 
 impl<'r> BitIndex<'r> {
-    pub fn from_lockfile(repo: &'r BitRepo, lockfile: &Lockfile) -> BitResult<Self> {
+    pub fn from_lockfile(repo: BitRepo<'r>, lockfile: &Lockfile) -> BitResult<Self> {
         // not actually writing anything here, so we rollback
         // the lockfile is just to check that another process
         // is not currently writing to the index
@@ -230,7 +230,7 @@ impl BitIndexInner {
 
 struct TreeBuilder<'a, 'r> {
     index: &'a BitIndex<'r>,
-    repo: &'a BitRepo,
+    repo: BitRepo<'r>,
     index_entries: Peekable<IndexIterator>,
     // count the number of blobs created (not subtrees)
     // should match the number of index entries

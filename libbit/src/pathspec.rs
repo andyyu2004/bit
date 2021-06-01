@@ -43,11 +43,8 @@ impl Display for Pathspec {
     }
 }
 
-impl BitRepo {
-    pub fn match_worktree_with(
-        &self,
-        pathspec: &Pathspec,
-    ) -> BitResult<impl BitEntryIterator + '_> {
+impl<'r> BitRepo<'r> {
+    pub fn match_worktree_with(self, pathspec: &Pathspec) -> BitResult<impl BitEntryIterator + 'r> {
         pathspec.match_worktree(self)
     }
 }
@@ -64,7 +61,7 @@ impl Pathspec {
         None
     }
 
-    pub fn match_worktree<'r>(self, repo: &'r BitRepo) -> BitResult<impl BitEntryIterator + 'r> {
+    pub fn match_worktree<'r>(self, repo: BitRepo<'r>) -> BitResult<impl BitEntryIterator + 'r> {
         self.match_iterator(repo.worktree_iter()?)
     }
 
@@ -74,13 +71,13 @@ impl Pathspec {
 
     pub fn match_tree<'r>(
         &self,
-        repo: &'r BitRepo,
+        repo: BitRepo<'r>,
         tree: &Tree,
     ) -> BitResult<impl BitEntryIterator + 'r> {
         self.match_iterator(repo.tree_entry_iter(tree)?)
     }
 
-    pub fn match_head<'r>(&self, repo: &'r BitRepo) -> BitResult<impl BitEntryIterator + 'r> {
+    pub fn match_head<'r>(&self, repo: BitRepo<'r>) -> BitResult<impl BitEntryIterator + 'r> {
         self.match_iterator(repo.head_iter()?)
     }
 

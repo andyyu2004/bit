@@ -8,26 +8,26 @@ use ignore::{Walk, WalkBuilder};
 use std::convert::TryFrom;
 use std::path::Path;
 
-impl BitRepo {
-    pub fn head_tree_iter(&self) -> BitResult<TreeIter<'_>> {
+impl<'r> BitRepo<'r> {
+    pub fn head_tree_iter(self) -> BitResult<TreeIter<'r>> {
         let tree = self.head_tree()?;
         Ok(self.tree_iter(&tree))
     }
 
-    pub fn tree_iter(&self, tree: &Tree) -> TreeIter<'_> {
+    pub fn tree_iter(self, tree: &Tree) -> TreeIter<'r> {
         TreeIter::new(self, tree)
     }
 }
 
 #[derive(Debug)]
 pub struct TreeIter<'r> {
-    repo: &'r BitRepo,
+    repo: BitRepo<'r>,
     // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself
     entry_stack: Vec<(BitPath, TreeEntry)>,
 }
 
 impl<'r> TreeIter<'r> {
-    pub fn new(repo: &'r BitRepo, tree: &Tree) -> Self {
+    pub fn new(repo: BitRepo<'r>, tree: &Tree) -> Self {
         Self {
             repo,
             entry_stack: tree
@@ -124,7 +124,7 @@ struct TreeEntryIter<'r> {
 }
 
 impl<'r> TreeEntryIter<'r> {
-    pub fn new(repo: &'r BitRepo, root: &Tree) -> Self {
+    pub fn new(repo: BitRepo<'r>, root: &Tree) -> Self {
         Self { tree_iter: TreeIter::new(repo, root) }
     }
 }
@@ -162,12 +162,12 @@ impl FallibleIterator for DirIter {
 }
 
 struct WorktreeIter<'r> {
-    repo: &'r BitRepo,
+    repo: BitRepo<'r>,
     walk: Walk,
 }
 
 impl<'r> WorktreeIter<'r> {
-    pub fn new(repo: &'r BitRepo) -> BitResult<Self> {
+    pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
         Ok(Self {
             repo,
             walk: WalkBuilder::new(repo.workdir)
@@ -222,18 +222,18 @@ pub trait BitEntryIterator = BitIterator<BitIndexEntry>;
 
 pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 
-impl BitRepo {
-    pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + '_> {
+impl<'r> BitRepo<'r> {
+    pub fn worktree_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("worktree_iter()");
         WorktreeIter::new(self)
     }
 
-    pub fn tree_entry_iter(&self, tree: &Tree) -> BitResult<impl BitEntryIterator + '_> {
+    pub fn tree_entry_iter(self, tree: &Tree) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("tree_entry_iter()");
         Ok(TreeEntryIter::new(self, tree))
     }
 
-    pub fn head_iter(&self) -> BitResult<impl BitEntryIterator + '_> {
+    pub fn head_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("head_iter()");
         let tree = self.head_tree()?;
         self.tree_entry_iter(&tree)

@@ -11,9 +11,11 @@ use crate::serialize::Serialize;
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
+use bumpalo::Bump as Arena;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
+use std::lazy::OnceCell;
 use std::path::{Path, PathBuf};
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
@@ -22,7 +24,7 @@ pub const BIT_CONFIG_FILE_PATH: &str = "config";
 pub const BIT_OBJECTS_DIR_PATH: &str = "objects";
 
 #[derive(Copy, Clone)]
-pub struct BitRepo {
+pub struct BitRepo<'r> {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
     pub workdir: BitPath,
@@ -30,6 +32,12 @@ pub struct BitRepo {
     head_filepath: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
+    ctxt: &'r RepoCtxt<'r>,
+}
+
+pub struct RepoCtxt<'r> {
+    arena: Arena,
+    refdb_cell: OnceCell<BitRefDb<'r>>,
 }
 
 trait Repo {
@@ -40,9 +48,9 @@ trait Repo {
     fn refdb(&self) -> Self::RefDb;
 }
 
-impl Repo for BitRepo {
+impl<'r> Repo for BitRepo<'r> {
     type Odb = BitObjDb;
-    type RefDb = BitRefDb;
+    type RefDb = BitRefDb<'r>;
 
     fn odb(&self) -> Self::Odb {
         // TODO shouldn't have to recreate this everytime
@@ -55,7 +63,7 @@ impl Repo for BitRepo {
     }
 }
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn default_signature(&self) -> BitResult<BitSignature> {
         todo!()
         // BitSignature { name: self.config, email: , time: () }
@@ -64,21 +72,24 @@ impl BitRepo {
     /// initialize a repository and use it in the closure
     pub fn init_load<R>(
         path: impl AsRef<Path>,
-        f: impl FnOnce(&Self) -> BitResult<R>,
+        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
         Self::init(&path)?;
         let repo = Self::load(&path)?;
-        tls::enter_repo(&repo, f)
+        tls::enter_repo(repo, f)
     }
 
     /// recursively searches parents starting from the current directory for a git repo
-    pub fn find<R>(path: impl AsRef<Path>, f: impl FnOnce(&Self) -> BitResult<R>) -> BitResult<R> {
+    pub fn find<R>(
+        path: impl AsRef<Path>,
+        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
+    ) -> BitResult<R> {
         let path = path.as_ref();
         let canonical_path = path.canonicalize().with_context(|| {
             format!("failed to find bit repository in nonexistent path `{}`", path.display())
         })?;
         let repo = Self::find_inner(canonical_path.as_ref())?;
-        tls::enter_repo(&repo, f)
+        tls::enter_repo(repo, f)
     }
 
     fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> BitResult<Self> {
@@ -91,6 +102,7 @@ impl BitRepo {
             bitdir,
             index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
+            ctxt: todo!(),
         })
     }
 
@@ -131,7 +143,7 @@ impl BitRepo {
         self.index_filepath
     }
 
-    pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
         Lockfile::with_readonly(self.index_path(), |lockfile| {
             // not actually writing anything here, so we rollback
             // the lockfile is just to check that another process
@@ -141,7 +153,7 @@ impl BitRepo {
     }
 
     pub fn with_index_mut<R>(
-        &self,
+        self,
         f: impl FnOnce(&mut BitIndex<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
         Lockfile::with_mut(self.index_path(), |lockfile| {
@@ -248,7 +260,7 @@ impl BitRepo {
         self.resolve_ref(head)
     }
 
-    pub fn partially_resolve_head(&self) -> BitResult<BitRef> {
+    pub fn partially_resolve_head(self) -> BitResult<BitRef> {
         self.read_head()?.partially_resolve(self)
     }
 
@@ -263,14 +275,14 @@ impl BitRepo {
         self.update_ref(self.head_ref(), bitref.into(), cause)
     }
 
-    pub fn create_branch(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
+    pub fn create_branch(self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
         let resolved = from.fully_resolve(self)?;
         self.refdb().create_branch(sym, resolved.into())
     }
 
     pub fn update_ref(
-        &self,
+        self,
         sym: SymbolicRef,
         to: impl Into<BitRef>,
         cause: RefUpdateCause,
@@ -358,7 +370,7 @@ impl BitRepo {
     }
 }
 
-impl Debug for BitRepo {
+impl Debug for BitRepo<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BitRepo")
             .field("worktree", &self.workdir)

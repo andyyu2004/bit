@@ -38,13 +38,13 @@ pub struct BitConfig<'c> {
 // e.g. to access filemode, we can just write repo.config().filemode()
 // its nicer to use than the with_config api
 pub struct Config<'r> {
-    repo: &'r BitRepo,
+    repo: BitRepo<'r>,
 }
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     // this is only here to namespace all the configuration to not be directly under repo
     // although I do wonder if this is actually more annoying than helpful
-    pub fn config(&self) -> Config<'_> {
+    pub fn config(self) -> Config<'r> {
         Config { repo: self }
     }
 

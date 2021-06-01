@@ -15,7 +15,7 @@ Run
 to set your account's default identity.
 Omit --global to set the identity only in this repository."#;
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn user_signature(&self) -> BitResult<BitSignature> {
         self.with_local_config(|config| {
             let name = config.name()?;

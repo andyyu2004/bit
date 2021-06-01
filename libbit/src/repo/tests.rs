@@ -2,9 +2,9 @@ use super::*;
 use crate::cmd::BitHashObjectOpts;
 use crate::obj;
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     /// be careful when deleting `rm foo` as the symlink points at it
-    pub fn with_sample_repo<R>(f: impl FnOnce(&Self) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_sample_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         Self::with_test_repo(|repo| {
             touch!(repo: "foo");
             touch!(repo: "bar");
@@ -25,7 +25,7 @@ impl BitRepo {
     // sample repository with a series of commits
     // can't precompute commit hashes as the time is always changing
     pub fn with_sample_repo_commits<R>(
-        f: impl FnOnce(&Self, Vec<Oid>) -> BitResult<R>,
+        f: impl FnOnce(BitRepo<'_>, Vec<Oid>) -> BitResult<R>,
     ) -> BitResult<R> {
         let strs = ["a", "b", "c", "d", "e"];
         let mut commit_oids = Vec::with_capacity(strs.len());

@@ -9,13 +9,13 @@ use crate::signature::BitSignature;
 use crate::tls;
 use std::fmt::{self, Display, Formatter};
 
-pub struct BitRefDb {
-    repo: BitRepo,
+pub struct BitRefDb<'r> {
+    repo: BitRepo<'r>,
     bitdir: BitPath,
 }
 
-impl BitRefDb {
-    pub fn new(repo: BitRepo) -> Self {
+impl<'r> BitRefDb<'r> {
+    pub fn new(repo: BitRepo<'r>) -> Self {
         Self { repo, bitdir: repo.bitdir }
     }
 
@@ -52,7 +52,7 @@ pub trait BitRefDbBackend {
     }
 }
 
-impl BitRefDbBackend for BitRefDb {
+impl<'r> BitRefDbBackend for BitRefDb<'r> {
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
         if self.exists(sym)? {
             // todo improve error message by only leaving the branch name in a reliable manner somehow

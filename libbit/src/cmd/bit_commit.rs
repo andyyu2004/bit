@@ -4,7 +4,7 @@ use crate::refs::BitRef;
 use crate::refs::RefUpdateCause;
 use crate::repo::BitRepo;
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn bit_commit(&self, message: Option<String>) -> BitResult<()> {
         let bitref = self.commit(message)?;
         println!("committed {}", bitref);

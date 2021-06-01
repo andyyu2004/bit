@@ -26,7 +26,7 @@ pub struct BitDiffCliOpts {
 }
 
 impl Cmd for BitDiffCliOpts {
-    fn exec(&self, repo: &BitRepo) -> BitResult<()> {
+    fn exec(&self, repo: BitRepo<'_>) -> BitResult<()> {
         let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
         let status = if let Some(r) = self.staged {
             let r = r.unwrap_or(BitRef::HEAD);
@@ -48,12 +48,12 @@ impl Cmd for BitDiffCliOpts {
         // - if the hash is known, then we read it from the object store,
         // - otherwise, we read it from disk
         struct DiffFormatter<'r> {
-            repo: &'r BitRepo,
+            repo: BitRepo<'r>,
             pager: Child,
         }
 
         impl<'r> DiffFormatter<'r> {
-            pub fn new(repo: &'r BitRepo) -> BitResult<Self> {
+            pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
                 let pager = Command::new(&repo.config().pager()?).stdin(Stdio::piped()).spawn()?;
                 Ok(Self { repo, pager })
             }

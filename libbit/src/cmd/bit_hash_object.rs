@@ -13,7 +13,7 @@ pub struct BitHashObjectOpts {
     pub path: PathBuf,
 }
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn bit_hash_object(&self, opts: BitHashObjectOpts) -> BitResult<()> {
         let hash = self.hash_object(opts)?;
         println!("{}", hash);

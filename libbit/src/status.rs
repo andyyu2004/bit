@@ -11,7 +11,7 @@ pub struct BitStatus {
     pub unstaged: WorkspaceDiff,
 }
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn status(&self, pathspec: Pathspec) -> BitResult<BitStatus> {
         self.with_index_mut(|index| {
             let staged = index.diff_head(pathspec)?;

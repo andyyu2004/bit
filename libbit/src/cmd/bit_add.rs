@@ -3,7 +3,7 @@ use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn bit_add_dryrun(&self, pathspecs: &[Pathspec]) -> BitResult<()> {
         for pathspec in pathspecs {
             self.match_worktree_with(pathspec)?

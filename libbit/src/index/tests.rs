@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::str::FromStr;
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn index_add(
         &self,
         pathspec: impl TryInto<Pathspec, Error = BitGenericError>,
@@ -16,7 +16,7 @@ impl BitRepo {
     }
 
     // creates an empty repository in a temporary directory and initializes it
-    pub fn with_test_repo<R>(f: impl FnOnce(&BitRepo) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_test_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         let basedir = tempfile::tempdir()?;
         BitRepo::init_load(&basedir, f)
     }

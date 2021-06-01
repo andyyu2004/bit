@@ -3,18 +3,19 @@ use crate::error::BitResult;
 use crate::index::BitIndex;
 use crate::repo::BitRepo;
 
-scoped_thread_local!(pub static REPO: BitRepo);
+scoped_thread_local!(pub static REPO: BitRepo<'_>);
 
 pub(crate) fn enter_repo<R>(
-    repo: &BitRepo,
-    f: impl FnOnce(&BitRepo) -> BitResult<R>,
+    repo: BitRepo<'_>,
+    f: impl for<'r> FnOnce(BitRepo<'r>) -> BitResult<R>,
 ) -> BitResult<R> {
-    REPO.set(&repo, || REPO.with(f))
+    todo!()
+    // REPO.set(repo, || REPO.with(|repo| f(*repo)))
 }
 
 // use this function access the repo if you are going to return a `Result`
 // otherwise there is some trouble with type inference
-pub(crate) fn with_repo<R>(f: impl FnOnce(&BitRepo) -> BitResult<R>) -> BitResult<R> {
+pub(crate) fn with_repo<R>(f: impl FnOnce(&BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
     REPO.with(f)
 }
 

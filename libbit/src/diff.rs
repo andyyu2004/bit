@@ -7,7 +7,6 @@ use crate::obj::{Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
-use crate::tls;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -130,14 +129,14 @@ pub struct TreeDiff {
 
 pub struct TreeDifferImpl<'r> {
     // need an inner type otherwise we can't use `GenericDiffer::new` as it takes self but also needs `a` and `b`
-    repo: &'r BitRepo,
+    repo: BitRepo<'r>,
     a: TreeIter<'r>,
     b: TreeIter<'r>,
     diff: TreeDiff,
 }
 
 impl<'r> TreeDifferImpl<'r> {
-    pub fn new(repo: &'r BitRepo, a: &Tree, b: &Tree) -> Self {
+    pub fn new(repo: BitRepo<'r>, a: &Tree, b: &Tree) -> Self {
         let a = repo.tree_iter(a);
         let b = repo.tree_iter(b);
         Self { repo, a, b, diff: Default::default() }
@@ -198,20 +197,20 @@ impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
     }
 }
 
-impl BitRepo {
-    pub fn diff_tree_index(&self, tree: &Tree, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+impl<'r> BitRepo<'r> {
+    pub fn diff_tree_index(self, tree: &Tree, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         self.with_index_mut(|index| index.diff_tree(tree, pathspec))
     }
 
-    pub fn diff_index_worktree(&self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+    pub fn diff_index_worktree(self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         self.with_index_mut(|index| index.diff_worktree(pathspec))
     }
 
-    pub fn diff_head_index(&self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+    pub fn diff_head_index(self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         self.with_index_mut(|index| index.diff_head(pathspec))
     }
 
-    pub fn diff_tree_to_tree(&self, a: &Tree, b: &Tree) -> BitResult<TreeDiff> {
+    pub fn diff_tree_to_tree(self, a: &Tree, b: &Tree) -> BitResult<TreeDiff> {
         TreeDifferImpl::new(self, a, b).build_diff()
     }
 }
@@ -231,7 +230,7 @@ impl<'r> BitIndex<'r> {
 }
 
 pub(crate) struct TreeIndexDiffer<'a, 'r> {
-    repo: &'r BitRepo,
+    repo: BitRepo<'r>,
     index: &'a mut BitIndex<'r>,
     tree: &'a Tree,
     pathspec: Pathspec,
@@ -321,7 +320,7 @@ impl Diff for WorkspaceDiff {
 }
 
 pub(crate) struct IndexWorktreeDiffer<'a, 'r> {
-    repo: &'r BitRepo,
+    repo: BitRepo<'r>,
     index: &'a mut BitIndex<'r>,
     pathspec: Pathspec,
     untracked: Vec<BitIndexEntry>,

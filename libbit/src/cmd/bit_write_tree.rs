@@ -2,7 +2,7 @@ use crate::error::BitResult;
 use crate::obj::Oid;
 use crate::repo::BitRepo;
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn bit_write_tree(&self) -> BitResult<()> {
         let hash = self.write_tree()?;
         println!("{}", hash);

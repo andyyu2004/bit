@@ -42,12 +42,12 @@ pub enum BitRef {
     Symbolic(SymbolicRef),
 }
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     /// returns `None` if the reference does not yet exist
     // don't think this can be written in terms of `fully_resolve_ref` below
     // if we were to do something like `fully_resolve_ref().ok()`, then all errors will result in None
     // which is not quite right
-    pub fn try_fully_resolve_ref(&self, r: impl Into<BitRef>) -> BitResult<Option<Oid>> {
+    pub fn try_fully_resolve_ref(self, r: impl Into<BitRef>) -> BitResult<Option<Oid>> {
         let r: BitRef = r.into();
         match r.resolve(self)? {
             BitRef::Direct(oid) => Ok(Some(oid)),
@@ -55,12 +55,12 @@ impl BitRepo {
         }
     }
 
-    pub fn fully_resolve_ref(&self, r: impl Into<BitRef>) -> BitResult<Oid> {
+    pub fn fully_resolve_ref(self, r: impl Into<BitRef>) -> BitResult<Oid> {
         // just written this way for rust-analyzer, having some trouble resolving `fully_resolve` otherwise
         Into::<BitRef>::into(r).fully_resolve(self)
     }
 
-    pub fn resolve_ref(&self, r: BitRef) -> BitResult<BitRef> {
+    pub fn resolve_ref(self, r: BitRef) -> BitResult<BitRef> {
         r.resolve(self)
     }
 }
@@ -171,14 +171,14 @@ impl BitRef {
     /// if the symref points to a path that doesn't exist, then the value of the symref itself is returned
     /// i.e. if `HEAD` -> `refs/heads/master` which doesn't yet exist, then `refs/heads/master` will be returned
     /// returns iff a symbolic ref points at a non-existing branch
-    pub fn resolve(&self, repo: &BitRepo) -> BitResult<Self> {
+    pub fn resolve(&self, repo: BitRepo<'_>) -> BitResult<Self> {
         match self {
             Self::Direct(..) => Ok(*self),
             Self::Symbolic(sym) => sym.resolve(repo),
         }
     }
 
-    pub fn resolve_to_tree(&self, repo: &BitRepo) -> BitResult<Tree> {
+    pub fn resolve_to_tree(&self, repo: BitRepo<'_>) -> BitResult<Tree> {
         let oid = self.fully_resolve(repo)?;
         match repo.read_obj(oid)? {
             BitObjKind::Blob(..) => bail!("blob type is not treeish"),
@@ -190,7 +190,7 @@ impl BitRef {
     }
 
     /// resolves the reference to an oid, failing if a symbolic reference points at a nonexistent path
-    pub fn fully_resolve(&self, repo: &BitRepo) -> BitResult<Oid> {
+    pub fn fully_resolve(&self, repo: BitRepo<'_>) -> BitResult<Oid> {
         match self.resolve(repo)? {
             BitRef::Direct(oid) => Ok(oid),
             BitRef::Symbolic(sym) => sym.fully_resolve(repo),
@@ -198,7 +198,7 @@ impl BitRef {
     }
 
     /// resolves the reference one layer
-    pub fn partially_resolve(&self, repo: &BitRepo) -> BitResult<Self> {
+    pub fn partially_resolve(&self, repo: BitRepo<'_>) -> BitResult<Self> {
         match self {
             BitRef::Direct(..) => Ok(*self),
             BitRef::Symbolic(sym) => sym.partially_resolve(repo),
@@ -208,7 +208,7 @@ impl BitRef {
 
 impl SymbolicRef {
     /// dereference one layer
-    pub fn partially_resolve(self, repo: &BitRepo) -> BitResult<BitRef> {
+    pub fn partially_resolve(self, repo: BitRepo<'_>) -> BitResult<BitRef> {
         let ref_path = repo.relative_path(self.path);
         if !ref_path.exists() {
             return Ok(BitRef::Symbolic(self));
@@ -236,14 +236,14 @@ impl SymbolicRef {
         Ok(r)
     }
 
-    pub fn fully_resolve(self, repo: &BitRepo) -> BitResult<Oid> {
+    pub fn fully_resolve(self, repo: BitRepo<'_>) -> BitResult<Oid> {
         match self.resolve(repo)? {
             BitRef::Direct(oid) => Ok(oid),
             BitRef::Symbolic(sym) => bail!(BitError::NonExistentSymRef(sym)),
         }
     }
 
-    pub fn resolve(self, repo: &BitRepo) -> BitResult<BitRef> {
+    pub fn resolve(self, repo: BitRepo<'_>) -> BitResult<BitRef> {
         match self.partially_resolve(repo)? {
             BitRef::Direct(oid) => Ok(BitRef::Direct(oid)),
             // avoid infinite loops

@@ -34,7 +34,7 @@ impl Commit {
     }
 }
 
-impl BitRepo {
+impl<'r> BitRepo<'r> {
     pub fn mk_commit(&self, tree: Oid, message: String, parent: Option<Oid>) -> BitResult<Commit> {
         // TODO validate hashes of parent and tree
         let author = self.user_signature()?;

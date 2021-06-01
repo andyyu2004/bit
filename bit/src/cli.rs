@@ -38,7 +38,7 @@ use std::path::PathBuf;
 // to much is in libbit I think
 // see comment above
 pub trait Cmd {
-    fn exec(&self, repo: &BitRepo) -> BitResult<()>;
+    fn exec(&self, repo: BitRepo<'_>) -> BitResult<()>;
 }
 
 pub fn run() -> BitResult<()> {
