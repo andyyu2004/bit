@@ -3,18 +3,20 @@ use crate::error::BitResult;
 use crate::lockfile::{Lockfile, LockfileGuard};
 use crate::obj::Oid;
 use crate::path::BitPath;
+use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use crate::tls;
 use std::fmt::{self, Display, Formatter};
 
 pub struct BitRefDb {
+    repo: BitRepo,
     bitdir: BitPath,
 }
 
 impl BitRefDb {
-    pub fn new(bitdir: BitPath) -> Self {
-        Self { bitdir }
+    pub fn new(repo: BitRepo) -> Self {
+        Self { repo, bitdir: repo.bitdir }
     }
 
     pub fn join_ref(&self, path: BitPath) -> BitPath {

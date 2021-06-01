@@ -21,6 +21,7 @@ pub const BIT_HEAD_FILE_PATH: &str = "HEAD";
 pub const BIT_CONFIG_FILE_PATH: &str = "config";
 pub const BIT_OBJECTS_DIR_PATH: &str = "objects";
 
+#[derive(Copy, Clone)]
 pub struct BitRepo {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
@@ -29,28 +30,28 @@ pub struct BitRepo {
     head_filepath: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
-    odb: BitObjDb,
-    refdb: BitRefDb,
 }
 
 trait Repo {
     type Odb: BitObjDbBackend;
     type RefDb: BitRefDbBackend;
 
-    fn odb(&self) -> &Self::Odb;
-    fn refdb(&self) -> &Self::RefDb;
+    fn odb(&self) -> Self::Odb;
+    fn refdb(&self) -> Self::RefDb;
 }
 
 impl Repo for BitRepo {
     type Odb = BitObjDb;
     type RefDb = BitRefDb;
 
-    fn odb(&self) -> &Self::Odb {
-        todo!()
+    fn odb(&self) -> Self::Odb {
+        // TODO shouldn't have to recreate this everytime
+        // TODO should be able to just return a reference somehow
+        BitObjDb::new(self.bitdir.join(BIT_OBJECTS_DIR_PATH)).expect("todo error handling")
     }
 
-    fn refdb(&self) -> &Self::RefDb {
-        todo!()
+    fn refdb(&self) -> Self::RefDb {
+        BitRefDb::new(*self)
     }
 }
 
@@ -90,8 +91,6 @@ impl BitRepo {
             bitdir,
             index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
-            odb: BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH))?,
-            refdb: BitRefDb::new(bitdir),
         })
     }
 
@@ -257,7 +256,7 @@ impl BitRepo {
     /// e.g. if `HEAD` -> `ref: refs/heads/master`
     /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
     pub fn read_head(&self) -> BitResult<BitRef> {
-        self.refdb.read(self.head_ref())
+        self.refdb().read(self.head_ref())
     }
 
     pub fn update_head(&self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
@@ -267,7 +266,7 @@ impl BitRepo {
     pub fn create_branch(&self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
         let resolved = from.fully_resolve(self)?;
-        self.refdb.create_branch(sym, resolved.into())
+        self.refdb().create_branch(sym, resolved.into())
     }
 
     pub fn update_ref(
@@ -276,28 +275,28 @@ impl BitRepo {
         to: impl Into<BitRef>,
         cause: RefUpdateCause,
     ) -> BitResult<()> {
-        self.refdb.update(sym, to.into(), cause)
+        self.refdb().update(sym, to.into(), cause)
     }
 
     /// writes `obj` into the object store returning its full hash
     pub fn write_obj(&self, obj: &dyn BitObj) -> BitResult<Oid> {
-        self.odb.write(obj)
+        self.odb().write(obj)
     }
 
     pub fn read_obj(&self, id: impl Into<BitId>) -> BitResult<BitObjKind> {
-        self.odb.read(id.into())
+        self.odb().read(id.into())
     }
 
     pub fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
-        self.odb.expand_prefix(prefix)
+        self.odb().expand_prefix(prefix)
     }
 
     pub fn obj_exists(&self, id: impl Into<BitId>) -> BitResult<bool> {
-        self.odb.exists(id.into())
+        self.odb().exists(id.into())
     }
 
     pub fn read_obj_header(&self, id: impl Into<BitId>) -> BitResult<BitObjHeader> {
-        self.odb.read_header(id.into())
+        self.odb().read_header(id.into())
     }
 
     pub fn hash_blob(&self, path: BitPath) -> BitResult<Oid> {

@@ -5,6 +5,7 @@ use crate::lockfile::Lockfile;
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, Oid, PartialOid};
 use crate::pack::Pack;
 use crate::path::BitPath;
+use arrayvec::ArrayVec;
 use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
@@ -27,17 +28,17 @@ macro_rules! process {
 
 pub struct BitObjDb {
     // backends will be searched in order
-    backends: Vec<Box<dyn BitObjDbBackend>>,
+    backends: ArrayVec<Box<dyn BitObjDbBackend>, 2>,
 }
 
 impl BitObjDb {
     pub fn new(objects_path: BitPath) -> BitResult<Self> {
         Ok(Self {
-            // we want to search the loose backend first
-            backends: vec![
-                Box::new(BitLooseObjDb::new(objects_path)),
+            //? we want to search the loose backend first as its cheaper (at least intuitively)
+            backends: ArrayVec::from([
+                Box::new(BitLooseObjDb::new(objects_path)) as Box<dyn BitObjDbBackend>,
                 Box::new(BitPackedObjDb::new(objects_path)?),
-            ],
+            ]),
         })
     }
 }
@@ -221,13 +222,13 @@ struct BitPackedObjDb {
     /// path to .git/objects
     objects_path: BitPath,
     /// [(packfile, idxfile)]
-    packs: RefCell<Vec<Pack>>,
+    packs: RefCell<ArrayVec<Pack, 1>>,
 }
 
 impl BitPackedObjDb {
     pub fn new(objects_path: BitPath) -> BitResult<Self> {
         let pack_dir = objects_path.join("pack");
-        let packs = RefCell::new(vec![]);
+        let packs = Default::default();
 
         if !pack_dir.exists() {
             return Ok(Self { objects_path, packs });

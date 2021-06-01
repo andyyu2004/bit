@@ -8,6 +8,7 @@ version = "0.1.0"
 # use_nsec = []
 
 [dependencies]
+arrayvec = "0.7.0"
 flate2 = "1.0.20"
 hex = "0.4.2"
 log = "0.4.14"
