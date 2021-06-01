@@ -43,8 +43,8 @@ impl<'r> BitRepo<'r> {
 
 #[test]
 fn repo_checks_repo_for_version_zero() {
-    // TODO check error message too
-    BitRepo::find(repos_dir!("notversion0"), |_repo| Ok(())).unwrap_err();
+    let err = BitRepo::find(repos_dir!("notversion0"), |_repo| Ok(())).unwrap_err();
+    assert_eq!(err.to_string(), "unsupported repositoryformatversion `2`. expected version 0");
 }
 
 #[test]

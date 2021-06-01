@@ -124,7 +124,21 @@ impl<'r> RepoCtxt<'r> {
         let bitdir = worktree.join(bitdir);
         assert!(bitdir.exists());
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
-        RepoCtxt::new(worktree, bitdir, config_filepath)
+
+        let ctxt = RepoCtxt::new(worktree, bitdir, config_filepath)?;
+
+        let version = ctxt
+            .config()
+            .repositoryformatversion()?
+            .expect("`repositoryformatversion` missing in configuration");
+
+        ensure!(
+            version == 0,
+            "unsupported repositoryformatversion `{}`. expected version 0",
+            version
+        );
+
+        Ok(ctxt)
     }
 
     fn load(path: impl AsRef<Path>) -> BitResult<Self> {
@@ -189,16 +203,6 @@ impl<'r> BitRepo<'r> {
         })?;
         let ctxt = RepoCtxt::find_inner(canonical_path.as_ref())?;
 
-        // ?.with_res(|repo| {
-        //             let version = repo
-        //                 .config()
-        //                 .repositoryformatversion()?
-        //                 .expect("`repositoryformatversion` missing in configuration");
-        //             if version != 0 {
-        //                 panic!("Unsupported repositoryformatversion {}", version);
-        //             }
-        //             Ok(())
-        //         })
         tls::enter_repo(&ctxt, f)
     }
 
