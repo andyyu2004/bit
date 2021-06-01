@@ -42,6 +42,12 @@ impl<'r> BitRepo<'r> {
 }
 
 #[test]
+fn repo_checks_repo_for_version_zero() {
+    // TODO check error message too
+    BitRepo::find(repos_dir!("notversion0"), |_repo| Ok(())).unwrap_err();
+}
+
+#[test]
 fn repo_init_creates_correct_initial_local_config() -> BitResult<()> {
     let basedir = tempfile::tempdir()?;
     BitRepo::init_load(&basedir, |repo| {

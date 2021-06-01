@@ -1,8 +1,9 @@
 use crate::error::BitResult;
 use crate::hash;
 use crate::index::BitIndex;
+use crate::index::BitIndexExperimental;
 use crate::lockfile::Lockfile;
-use crate::obj::Commit;
+use crate::lockfile::LockfileGuard;
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree, Treeish};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
@@ -12,12 +13,11 @@ use crate::serialize::Serialize;
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
-use bumpalo::Bump as Arena;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::lazy::OnceCell;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
@@ -40,26 +40,37 @@ pub struct RepoCtxt<'r> {
     index_filepath: BitPath,
     odb_cell: OnceCell<BitObjDb>,
     refdb_cell: OnceCell<BitRefDb<'r>>,
+    index_cell: OnceCell<BitIndexExperimental<'r>>,
 }
 
-trait Repo {
+trait Repo<'r> {
     type Odb: BitObjDbBackend;
     type RefDb: BitRefDbBackend;
+    type Index;
 
     fn odb(&self) -> &Self::Odb;
     fn refdb(&self) -> &Self::RefDb;
+    fn index(&self) -> &Self::Index;
 }
 
-impl<'r> Repo for BitRepo<'r> {
+impl<'r> Repo<'r> for BitRepo<'r> {
+    type Index = BitIndexExperimental<'r>;
     type Odb = BitObjDb;
     type RefDb = BitRefDb<'r>;
 
+    // could consider doing something similar with the index itself
+    // but this would be much less trivial change
+    // and it would probably need to sit behind a LockfileGuard
     fn odb(&self) -> &Self::Odb {
-        self.odb_cell.get().unwrap_or_else(|| bug!("should be initialized already"))
+        self.odb_cell.get().unwrap_or_else(|| bug!("odb should be initialized"))
     }
 
     fn refdb(&self) -> &Self::RefDb {
         self.refdb_cell.get_or_init(|| BitRefDb::new(*self))
+    }
+
+    fn index(&self) -> &Self::Index {
+        self.index_cell.get().unwrap_or_else(|| bug!("index should be initialized"))
     }
 }
 
@@ -68,20 +79,24 @@ impl<'r> RepoCtxt<'r> {
         let workdir = BitPath::intern(workdir);
         let bitdir = BitPath::intern(bitdir);
         let config_filepath = BitPath::intern(config_filepath);
+        let index_filepath = bitdir.join(BIT_INDEX_FILE_PATH);
 
-        // early init `odb_cell` as its fallible and we don't want `self.odb()` to return a result
-        let odb_cell = OnceCell::new();
-        odb_cell.get_or_try_init(|| BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH)))?;
-
-        Ok(Self {
+        let this = Self {
             config_filepath,
             workdir,
             bitdir,
-            odb_cell,
-            index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
+            index_filepath,
+            odb_cell: Default::default(),
+            index_cell: Default::default(),
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
             refdb_cell: Default::default(),
-        })
+        };
+
+        // early init `odb_cell` as its fallible and we don't want `self.odb()` to return a result
+        this.odb_cell.get_or_try_init(|| BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH)))?;
+        // this.index_cell.get_or_try_init(|| BitIndexExperimental::new(this))?;
+
+        Ok(this)
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {

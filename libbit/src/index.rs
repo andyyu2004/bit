@@ -6,6 +6,7 @@ use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::BitEntryIterator;
 use crate::lockfile::Lockfile;
+use crate::lockfile::LockfileGuard;
 use crate::obj::{FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
@@ -34,6 +35,13 @@ pub struct BitIndex<'r> {
     // index file may not yet exist
     mtime: Option<Timespec>,
     inner: BitIndexInner,
+}
+
+pub struct BitIndexExperimental<'r> {
+    pub repo: BitRepo<'r>,
+    // index file may not yet exist
+    mtime: Option<Timespec>,
+    inner: LockfileGuard<BitIndexInner>,
 }
 
 impl<'r> Deref for BitIndex<'r> {
@@ -76,6 +84,12 @@ impl BitIndexInner {
 //         self.entries.values().copied()
 //     }
 // }
+
+impl<'r> BitIndexExperimental<'r> {
+    pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
+        todo!()
+    }
+}
 
 impl<'r> BitIndex<'r> {
     pub fn from_lockfile(repo: BitRepo<'r>, lockfile: &Lockfile) -> BitResult<Self> {
