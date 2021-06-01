@@ -10,6 +10,7 @@ use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
+use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -222,7 +223,7 @@ struct BitPackedObjDb {
     /// path to .git/objects
     objects_path: BitPath,
     /// [(packfile, idxfile)]
-    packs: RefCell<ArrayVec<Pack, 1>>,
+    packs: RefCell<SmallVec<[Pack; 1]>>,
 }
 
 impl BitPackedObjDb {
