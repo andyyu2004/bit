@@ -23,7 +23,7 @@ pub struct Commit {
 
 impl Treeish for Commit {
     fn into_tree(self) -> BitResult<Tree> {
-        tls::REPO.with(|repo| repo.read_obj(self.tree)?.into_tree())
+        tls::with_repo(|repo| repo.read_obj(self.tree)?.into_tree())
     }
 }
 

@@ -16,6 +16,7 @@ use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::lazy::OnceCell;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
@@ -25,6 +26,10 @@ pub const BIT_OBJECTS_DIR_PATH: &str = "objects";
 
 #[derive(Copy, Clone)]
 pub struct BitRepo<'r> {
+    ctxt: &'r RepoCtxt<'r>,
+}
+
+pub struct RepoCtxt<'r> {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
     pub workdir: BitPath,
@@ -32,11 +37,7 @@ pub struct BitRepo<'r> {
     head_filepath: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
-    ctxt: &'r RepoCtxt<'r>,
-}
-
-pub struct RepoCtxt<'r> {
-    arena: Arena,
+    odb_cell: OnceCell<BitObjDb>,
     refdb_cell: OnceCell<BitRefDb<'r>>,
 }
 
@@ -44,65 +45,41 @@ trait Repo {
     type Odb: BitObjDbBackend;
     type RefDb: BitRefDbBackend;
 
-    fn odb(&self) -> Self::Odb;
-    fn refdb(&self) -> Self::RefDb;
+    fn odb(&self) -> &Self::Odb;
+    fn refdb(&self) -> &Self::RefDb;
 }
 
 impl<'r> Repo for BitRepo<'r> {
     type Odb = BitObjDb;
     type RefDb = BitRefDb<'r>;
 
-    fn odb(&self) -> Self::Odb {
-        // TODO shouldn't have to recreate this everytime
-        // TODO should be able to just return a reference somehow
-        BitObjDb::new(self.bitdir.join(BIT_OBJECTS_DIR_PATH)).expect("todo error handling")
+    fn odb(&self) -> &Self::Odb {
+        self.odb_cell.get().unwrap_or_else(|| bug!("should be initialized already"))
     }
 
-    fn refdb(&self) -> Self::RefDb {
-        BitRefDb::new(*self)
+    fn refdb(&self) -> &Self::RefDb {
+        self.refdb_cell.get_or_init(|| BitRefDb::new(*self))
     }
 }
 
-impl<'r> BitRepo<'r> {
-    pub fn default_signature(&self) -> BitResult<BitSignature> {
-        todo!()
-        // BitSignature { name: self.config, email: , time: () }
-    }
-
-    /// initialize a repository and use it in the closure
-    pub fn init_load<R>(
-        path: impl AsRef<Path>,
-        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
-    ) -> BitResult<R> {
-        Self::init(&path)?;
-        let repo = Self::load(&path)?;
-        tls::enter_repo(repo, f)
-    }
-
-    /// recursively searches parents starting from the current directory for a git repo
-    pub fn find<R>(
-        path: impl AsRef<Path>,
-        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
-    ) -> BitResult<R> {
-        let path = path.as_ref();
-        let canonical_path = path.canonicalize().with_context(|| {
-            format!("failed to find bit repository in nonexistent path `{}`", path.display())
-        })?;
-        let repo = Self::find_inner(canonical_path.as_ref())?;
-        tls::enter_repo(repo, f)
-    }
-
+impl<'r> RepoCtxt<'r> {
     fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> BitResult<Self> {
         let workdir = BitPath::intern(workdir);
         let bitdir = BitPath::intern(bitdir);
         let config_filepath = BitPath::intern(config_filepath);
+
+        // early init `odb_cell` as its fallible and we don't want `self.odb()` to return a result
+        let odb_cell = OnceCell::new();
+        odb_cell.get_or_try_init(|| BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH)))?;
+
         Ok(Self {
             config_filepath,
             workdir,
             bitdir,
+            odb_cell,
             index_filepath: bitdir.join(BIT_INDEX_FILE_PATH),
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
-            ctxt: todo!(),
+            refdb_cell: Default::default(),
         })
     }
 
@@ -121,6 +98,29 @@ impl<'r> BitRepo<'r> {
             Some(parent) => Self::find_inner(parent),
             None => Err(anyhow!("not a bit repository (or any of the parent directories)")),
         }
+    }
+
+    fn load_with_bitdir(path: impl AsRef<Path>, bitdir: impl AsRef<Path>) -> BitResult<Self> {
+        let worktree = path
+            .as_ref()
+            .canonicalize()
+            .with_context(|| anyhow!("failed to load bit in non-existent directory"))?;
+        let bitdir = worktree.join(bitdir);
+        assert!(bitdir.exists());
+        let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
+        RepoCtxt::new(worktree, bitdir, config_filepath)
+    }
+
+    fn load(path: impl AsRef<Path>) -> BitResult<Self> {
+        Self::load_with_bitdir(path, ".git")
+    }
+
+    pub fn with_res<R>(&'r self, f: impl FnOnce(BitRepo<'r>) -> BitResult<R>) -> BitResult<R> {
+        self.with(f)
+    }
+
+    pub fn with<R>(&'r self, f: impl FnOnce(BitRepo<'r>) -> R) -> R {
+        f(BitRepo { ctxt: self })
     }
 
     #[inline]
@@ -142,6 +142,49 @@ impl<'r> BitRepo<'r> {
     pub fn index_path(&self) -> BitPath {
         self.index_filepath
     }
+}
+
+impl<'r> BitRepo<'r> {
+    pub fn default_signature(&self) -> BitResult<BitSignature> {
+        todo!()
+        // BitSignature { name: self.config, email: , time: () }
+    }
+
+    /// initialize a repository and use it in the closure
+    // testing convenience function
+    #[cfg(test)]
+    pub fn init_load<R>(
+        path: impl AsRef<Path>,
+        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
+    ) -> BitResult<R> {
+        Self::init(&path)?;
+        let ctxt = RepoCtxt::load(&path)?;
+        tls::enter_repo(&ctxt, f)
+    }
+
+    /// recursively searches parents starting from the current directory for a git repo
+    pub fn find<R>(
+        path: impl AsRef<Path>,
+        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
+    ) -> BitResult<R> {
+        let path = path.as_ref();
+        let canonical_path = path.canonicalize().with_context(|| {
+            format!("failed to find bit repository in nonexistent path `{}`", path.display())
+        })?;
+        let ctxt = RepoCtxt::find_inner(canonical_path.as_ref())?;
+
+        // ?.with_res(|repo| {
+        //             let version = repo
+        //                 .config()
+        //                 .repositoryformatversion()?
+        //                 .expect("`repositoryformatversion` missing in configuration");
+        //             if version != 0 {
+        //                 panic!("Unsupported repositoryformatversion {}", version);
+        //             }
+        //             Ok(())
+        //         })
+        tls::enter_repo(&ctxt, f)
+    }
 
     pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
         Lockfile::with_readonly(self.index_path(), |lockfile| {
@@ -162,33 +205,6 @@ impl<'r> BitRepo<'r> {
             index.serialize(lockfile)?;
             Ok(r)
         })
-    }
-
-    fn load(path: impl AsRef<Path>) -> BitResult<Self> {
-        Self::load_with_bitdir(path, ".git")
-    }
-
-    fn load_with_bitdir(path: impl AsRef<Path>, bitdir: impl AsRef<Path>) -> BitResult<Self> {
-        let worktree = path
-            .as_ref()
-            .canonicalize()
-            .with_context(|| anyhow!("failed to load bit in non-existent directory"))?;
-        let bitdir = worktree.join(bitdir);
-        assert!(bitdir.exists());
-        let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
-        let this = Self::new(worktree, bitdir, config_filepath)?;
-
-        this.with_local_config(|config| {
-            let version = config
-                .repositoryformatversion()?
-                .expect("`repositoryformatversion` missing in configuration");
-            if version != 0 {
-                panic!("Unsupported repositoryformatversion {}", version)
-            }
-            Ok(())
-        })?;
-
-        Ok(this)
     }
 
     // returns unit as we don't want anyone accessing the repo directly like this
@@ -213,26 +229,30 @@ impl<'r> BitRepo<'r> {
 
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
 
-        let this = Self::new(workdir, bitdir, config_filepath)?;
-        this.mk_bitdir("objects")?;
-        this.mk_bitdir("refs/tags")?;
-        this.mk_bitdir("refs/heads")?;
+        RepoCtxt::new(workdir, bitdir, config_filepath)?.with(|repo| {
+            repo.mk_bitdir("objects")?;
+            repo.mk_bitdir("refs/tags")?;
+            repo.mk_bitdir("refs/heads")?;
 
-        let mut desc = this.mk_bitfile("description")?;
-        writeln!(desc, "Unnamed repository; edit this file 'description' to name the repository.")?;
+            let mut desc = repo.mk_bitfile("description")?;
+            writeln!(
+                desc,
+                "Unnamed repository; edit this file 'description' to name the repository."
+            )?;
 
-        let mut head = this.mk_bitfile("HEAD")?;
-        writeln!(head, "ref: refs/heads/master")?;
+            let mut head = repo.mk_bitfile("HEAD")?;
+            writeln!(head, "ref: refs/heads/master")?;
 
-        this.with_local_config(|config| {
-            config.set("core", "repositoryformatversion", 0)?;
-            config.set("core", "bare", false)?;
-            config.set("core", "filemode", true)?;
+            repo.with_local_config(|config| {
+                config.set("core", "repositoryformatversion", 0)?;
+                config.set("core", "bare", false)?;
+                config.set("core", "filemode", true)?;
+                Ok(())
+            })?;
+
+            println!("initialized empty bit repository in `{}`", repo.workdir.display());
             Ok(())
-        })?;
-
-        println!("initialized empty bit repository in `{}`", this.workdir.display());
-        Ok(())
+        })
     }
 
     /// todo only works with full hash
@@ -376,6 +396,14 @@ impl Debug for BitRepo<'_> {
             .field("worktree", &self.workdir)
             .field("bitdir", &self.bitdir)
             .finish_non_exhaustive()
+    }
+}
+
+impl<'r> Deref for BitRepo<'r> {
+    type Target = RepoCtxt<'r>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ctxt
     }
 }
 

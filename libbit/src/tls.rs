@@ -1,29 +1,30 @@
-use crate::config::BitConfig;
 use crate::error::BitResult;
-use crate::index::BitIndex;
 use crate::repo::BitRepo;
+use crate::repo::RepoCtxt;
+use std::cell::Cell;
 
-scoped_thread_local!(pub static REPO: BitRepo<'_>);
+thread_local! {
+    static REPO_CTXT: Cell<usize> = Cell::new(0);
+}
 
-pub(crate) fn enter_repo<R>(
-    repo: BitRepo<'_>,
-    f: impl for<'r> FnOnce(BitRepo<'r>) -> BitResult<R>,
+pub(crate) fn enter_repo<'r, R>(
+    ctxt: &'r RepoCtxt<'r>,
+    f: impl FnOnce(BitRepo<'r>) -> BitResult<R>,
 ) -> BitResult<R> {
-    todo!()
-    // REPO.set(repo, || REPO.with(|repo| f(*repo)))
+    REPO_CTXT.with(|ptr| ptr.set(ctxt as *const _ as usize));
+    with_repo(f)
 }
 
 // use this function access the repo if you are going to return a `Result`
 // otherwise there is some trouble with type inference
-pub(crate) fn with_repo<R>(f: impl FnOnce(&BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
-    REPO.with(f)
+pub(crate) fn with_repo_res<'r, R>(f: impl FnOnce(BitRepo<'r>) -> BitResult<R>) -> BitResult<R> {
+    let ctxt_ptr = REPO_CTXT.with(|ctxt| ctxt.get()) as *const RepoCtxt<'r>;
+    let ctxt = unsafe { &*ctxt_ptr };
+    ctxt.with(f)
 }
 
-pub(crate) fn with_config<R>(f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>) -> BitResult<R> {
-    REPO.with(|repo| repo.with_local_config(f))
-}
-
-/// convenience functions to access the index without having a localrepo variable handy
-pub(crate) fn with_index<R>(f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
-    REPO.with(|repo| repo.with_index(f))
+pub(crate) fn with_repo<'r, R>(f: impl FnOnce(BitRepo<'r>) -> R) -> R {
+    let ctxt_ptr = REPO_CTXT.with(|ctxt| ctxt.get()) as *const RepoCtxt<'r>;
+    let ctxt = unsafe { &*ctxt_ptr };
+    ctxt.with(f)
 }

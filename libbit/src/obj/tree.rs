@@ -47,7 +47,7 @@ impl Display for TreeEntry {
             let obj_type = self.mode.infer_obj_type();
             debug_assert_eq!(
                 obj_type,
-                tls::REPO.with(|repo| repo.read_obj_header(self.hash).unwrap().obj_type)
+                tls::with_repo(|repo| repo.read_obj_header(self.hash).unwrap().obj_type)
             );
             write!(f, "{} {} {}\t{}", self.mode, obj_type, self.hash, self.path)
         }

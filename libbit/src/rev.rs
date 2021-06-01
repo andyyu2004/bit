@@ -65,7 +65,7 @@ impl Display for Revspec {
 // problem is revspec requires repo to be properly evaluated (as it requires some context to be parsed properly)
 // but we want FromStr to be implemented so clap can use it
 // this wrapper can lazily evaluated to get a parsed revspec (via `eval`)
-// obviously, this must only be done after tls::REPO is set
+// obviously, this must only be done after `tls::REPO` is set
 #[derive(Debug)]
 pub struct LazyRevspec {
     src: String,

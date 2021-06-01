@@ -8,6 +8,7 @@
 use crate::error::BitResult;
 use crate::interner::Intern;
 use crate::repo::BitRepo;
+use crate::repo::RepoCtxt;
 use git_config::file::GitConfig;
 use git_config::values::{Boolean, Integer};
 use lazy_static::lazy_static;
@@ -37,14 +38,14 @@ pub struct BitConfig<'c> {
 // this struct provides convenient access to each setting
 // e.g. to access filemode, we can just write repo.config().filemode()
 // its nicer to use than the with_config api
-pub struct Config<'r> {
-    repo: BitRepo<'r>,
+pub struct Config<'a, 'r> {
+    repo: &'a RepoCtxt<'r>,
 }
 
-impl<'r> BitRepo<'r> {
+impl<'r> RepoCtxt<'r> {
     // this is only here to namespace all the configuration to not be directly under repo
     // although I do wonder if this is actually more annoying than helpful
-    pub fn config(self) -> Config<'r> {
+    pub fn config<'a>(&'a self) -> Config<'a, 'r> {
         Config { repo: self }
     }
 
@@ -165,7 +166,7 @@ impl<'c> BitConfig<'c> {
 // if none of the configurations contain the value
 macro_rules! get_opt {
     ($section:ident.$field:ident:$ty:ty) => {
-        impl Config<'_> {
+        impl<'a, 'r> Config<'a, 'r> {
             pub fn $field(&self) -> BitResult<Option<$ty>> {
                 self.repo.with_local_config(|config| config.$field())
             }
@@ -189,7 +190,7 @@ macro_rules! get_opt {
 
 macro_rules! get {
     ($section:ident.$field:ident:$ty:ty, $default:expr) => {
-        impl Config<'_> {
+        impl<'a, 'r> Config<'a, 'r> {
             pub fn $field(&self) -> BitResult<$ty> {
                 self.repo.with_local_config(|config| config.$field())
             }

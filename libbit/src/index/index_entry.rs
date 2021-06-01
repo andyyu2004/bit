@@ -162,7 +162,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
     type Error = BitGenericError;
 
     fn try_from(path: BitPath) -> Result<Self, Self::Error> {
-        let (normalized, relative) = tls::with_repo(|repo| {
+        let (normalized, relative) = tls::with_repo_res(|repo| {
             let normalized = repo.normalize(path)?;
             let relative = repo.to_relative_path(normalized)?;
             Ok((normalized, relative))
