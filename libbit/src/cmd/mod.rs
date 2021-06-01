@@ -17,3 +17,6 @@ pub use bit_init::*;
 pub use bit_ls_files::*;
 pub use bit_update_index::*;
 pub use bit_write_tree::*;
+
+#[cfg(test)]
+mod tests;

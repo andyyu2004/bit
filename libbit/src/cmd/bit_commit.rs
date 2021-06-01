@@ -19,7 +19,17 @@ impl<'r> BitRepo<'r> {
             BitRef::Symbolic(sym) => sym,
         };
         let parent = self.try_fully_resolve_ref(sym)?;
+
         let tree = self.write_tree()?;
+        let head_tree = self.head_tree_oid()?;
+
+        // don't allow empty commits; also don't currently provide the option to do so as it's not that useful
+        if tree == head_tree {
+            bail!("nothing to commit");
+        } else if head_tree.is_unknown() {
+            // TODO initial commit check index entries is empty (or otherwise)?
+        }
+
         let (oid, commit) = self.commit_tree(parent, msg, tree)?;
         // does commit tree move head?
         // should the log on the current branches log or HEAD?

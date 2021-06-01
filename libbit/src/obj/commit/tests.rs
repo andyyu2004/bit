@@ -18,7 +18,10 @@ impl Arbitrary for Commit {
 
 impl Arbitrary for CommitMessage {
     fn arbitrary(_g: &mut Gen) -> Self {
-        Self { subject: generate_sane_string(0..50), message: generate_sane_string(0..5) }
+        Self {
+            subject: "\ncommit message subject".to_owned(),
+            message: "\n\ncommit message content".to_owned(),
+        }
     }
 }
 
@@ -29,6 +32,17 @@ fn test_parse_and_display_commit_message_quickcheck(s: String) -> BitResult<()> 
     let t = msg.to_string();
     assert_eq!(s, t);
     Ok(())
+}
+
+#[test]
+fn test_parse_commit_message_with_trailing_newline_in_message() {
+    let message = CommitMessage {
+        subject: "\ncommit message subject".to_owned(),
+        message: "\n\ncommit message content\n\n".to_owned(),
+    };
+
+    let parsed = CommitMessage::from_str(&message.to_string()).unwrap();
+    assert_eq!(message, parsed);
 }
 
 // doing a manual one too as quickcheck generates some pretty crazy strings

@@ -26,7 +26,7 @@ fn test_parse_revspec_with_symref_ancestor() -> BitResult<()> {
 
 #[test]
 fn test_parse_revspec_with_symref() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         let rev = parse_rev!("e3eaee01f47f98216f4160658179420ff5e30f50");
         assert_eq!(
             rev.eval(repo)?,

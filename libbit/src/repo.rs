@@ -2,6 +2,7 @@ use crate::error::BitResult;
 use crate::hash;
 use crate::index::BitIndex;
 use crate::lockfile::Lockfile;
+use crate::obj::Commit;
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree, Treeish};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
@@ -272,6 +273,16 @@ impl<'r> BitRepo<'r> {
         };
         let commit = self.read_obj(oid)?.into_commit();
         Ok(self.read_obj(commit.tree())?.into_tree()?)
+    }
+
+    /// gets the oid of the tree belonging to the HEAD commit
+    /// returns Oid::Unknown if there is no HEAD commit
+    pub fn head_tree_oid(&self) -> BitResult<Oid> {
+        let oid = match self.resolve_head()? {
+            BitRef::Direct(oid) => oid,
+            _ => return Ok(Oid::UNKNOWN),
+        };
+        Ok(self.read_obj(oid)?.into_commit().tree)
     }
 
     /// returns the resolved hash of the HEAD symref

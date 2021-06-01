@@ -5,7 +5,7 @@ use crate::obj;
 impl<'r> BitRepo<'r> {
     /// be careful when deleting `rm foo` as the symlink points at it
     pub fn with_sample_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
-        Self::with_test_repo(|repo| {
+        Self::with_empty_repo(|repo| {
             touch!(repo: "foo");
             touch!(repo: "bar");
             mkdir!(repo: "dir");
@@ -29,7 +29,7 @@ impl<'r> BitRepo<'r> {
     ) -> BitResult<R> {
         let strs = ["a", "b", "c", "d", "e"];
         let mut commit_oids = Vec::with_capacity(strs.len());
-        Self::with_test_repo(|repo| {
+        Self::with_empty_repo(|repo| {
             touch!(repo: "foo");
             for s in &strs {
                 modify!(repo: "foo" << s);

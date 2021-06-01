@@ -72,7 +72,7 @@ fn test_tree_iterator_peekable_step_over_peeked() -> BitResult<()> {
 
 #[test]
 fn test_worktree_iterator_reads_symlinks() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         touch!(repo: "foo");
         symlink!(repo: "foo" <- "link");
         let entries = repo.worktree_iter()?.collect::<Vec<_>>()?;

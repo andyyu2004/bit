@@ -12,7 +12,7 @@ use std::str::FromStr;
 
 #[test]
 fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         // repo initializes with `HEAD` pointing to `refs/heads/master`
         // resolving nonexistent symbolic ref should just return itself (minus the prefix)
         assert_eq!(
@@ -25,7 +25,7 @@ fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
 
 #[test]
 fn test_resolve_head_symref_in_fresh_repo() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         // it should only resolve until `refs/heads/master` as the branch file doesn't exist yet
         assert_eq!(repo.resolve_ref(HEAD!())?, symbolic_ref!("refs/heads/master"));
         Ok(())
@@ -46,7 +46,7 @@ fn test_resolve_head_symref() -> BitResult<()> {
 
 #[test]
 fn test_create_branch_in_fresh() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         let err = repo.bit_create_branch("new-branch").unwrap_err();
         assert_eq!(err.into_nonexistent_symref_err()?, symbolic!("refs/heads/master"));
         Ok(())

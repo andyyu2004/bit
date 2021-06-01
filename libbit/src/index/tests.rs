@@ -16,7 +16,7 @@ impl<'r> BitRepo<'r> {
     }
 
     // creates an empty repository in a temporary directory and initializes it
-    pub fn with_test_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_empty_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         let basedir = tempfile::tempdir()?;
         BitRepo::init_load(&basedir, f)
     }
@@ -32,7 +32,7 @@ impl<'r> BitIndex<'r> {
 
 #[test]
 fn test_add_non_matching_pathspec() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         let err = repo.index_add("wer").unwrap_err();
         assert_eq!(err.to_string(), "no files added: pathspec `wer` did not match any files");
         Ok(())
@@ -41,7 +41,7 @@ fn test_add_non_matching_pathspec() -> BitResult<()> {
 
 #[test]
 fn test_add_symlink() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         touch!(repo: "foo");
         symlink!(repo: "foo" <- "link");
         bit_add_all!(repo);
@@ -73,7 +73,7 @@ fn test_parse_large_index() -> BitResult<()> {
 /// check all files in a directory are added (recursively)
 #[test]
 fn test_index_add_directory() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         mkdir!(repo: "dir");
         mkdir!(repo: "dir/c");
         touch!(repo: "dir/c/d");
@@ -97,7 +97,7 @@ fn test_index_add_directory() -> BitResult<()> {
 // not too important to match this behaviour as its quite an edge case
 #[test]
 fn test_index_add_dot_on_empty() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         bit_add!(repo: ".");
         Ok(())
     })
@@ -117,7 +117,7 @@ fn test_index_add_dot_on_empty() -> BitResult<()> {
 /// `
 #[test]
 fn index_file_directory_collision() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         let a = repo.workdir.join("a");
         File::create(&a)?;
         repo.with_index_mut(|index| {
@@ -148,7 +148,7 @@ fn index_file_directory_collision() -> BitResult<()> {
 /// check that `bar` is not removed but `foo/bar` is
 #[test]
 fn index_nested_file_directory_collision() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         mkdir!(repo: "foo");
         touch!(repo: "foo/bar");
         touch!(repo: "bar");
@@ -184,7 +184,7 @@ fn index_nested_file_directory_collision() -> BitResult<()> {
 /// of the directory foo recursively
 #[test]
 fn index_directory_file_collision() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         repo.with_index_mut(|index| {
             let foo = repo.workdir.join("foo");
             std::fs::create_dir(foo)?;
@@ -223,7 +223,7 @@ fn test_status_staged_deleted_files() -> BitResult<()> {
 // tests that `add_all` correctly stages removes deleted files from the index
 #[test]
 fn test_stage_deleted_file() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         touch!(repo: "foo");
         bit_add_all!(repo);
         rm!(repo: "foo");
@@ -237,7 +237,7 @@ fn test_stage_deleted_file() -> BitResult<()> {
 // `with_index` reparses it
 #[test]
 fn add_file_to_index() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         let filepath = repo.workdir.join("a");
         File::create(&filepath)?;
         assert!(filepath.exists());

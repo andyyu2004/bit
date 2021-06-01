@@ -4,7 +4,7 @@ use crate::repo::BitRepo;
 
 #[test]
 fn test_status_untracked_files() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         touch!(repo: "foo");
         touch!(repo: "bar");
         touch!(repo: "baz");
@@ -21,7 +21,7 @@ fn test_status_untracked_files() -> BitResult<()> {
 
 #[test]
 fn test_status_add_and_delete_file() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         touch!(repo: "foo");
         bit_add_all!(repo);
         rm!(repo: "foo");
@@ -42,7 +42,7 @@ fn test_status_add_and_delete_file() -> BitResult<()> {
 
 #[test]
 fn test_status_modified_files() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         mkdir!(repo: "foo");
         touch!(repo: "foo/bar");
         touch!(repo: "foo/baz");
@@ -65,7 +65,7 @@ fn test_status_modified_files() -> BitResult<()> {
 fn test_status_modified_then_reverted() -> BitResult<()> {
     // potential race conditions in here so we run it a few times to be surer
     for _ in 0..100 {
-        BitRepo::with_test_repo(|repo| {
+        BitRepo::with_empty_repo(|repo| {
             mkdir!(repo: "foo");
             touch!(repo: "foo/bar");
             touch!(repo: "foo/baz");
@@ -91,7 +91,7 @@ fn test_status_modified_then_reverted() -> BitResult<()> {
 #[test]
 fn test_status_modified_then_reverted_with_same_filesizes() -> BitResult<()> {
     for _ in 0..100 {
-        BitRepo::with_test_repo(|repo| {
+        BitRepo::with_empty_repo(|repo| {
             mkdir!(repo: "foo");
             touch!(repo: "foo/bar");
             touch!(repo: "foo/baz");
@@ -115,7 +115,7 @@ fn test_status_modified_then_reverted_with_same_filesizes() -> BitResult<()> {
 
 #[test]
 fn test_status_on_symlink() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         touch!(repo: "foo");
         modify!(repo: "foo" < "some content that is not the same size as the symlink itself");
         symlink!(repo: "foo" <- "link");
@@ -181,7 +181,7 @@ fn test_status_staged_deleted_directory() -> BitResult<()> {
 
 #[test]
 fn test_status_staged_new_files_no_head() -> BitResult<()> {
-    BitRepo::with_test_repo(|repo| {
+    BitRepo::with_empty_repo(|repo| {
         touch!(repo: "foo");
         touch!(repo: "bar");
         bit_add!(repo: "foo");
