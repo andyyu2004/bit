@@ -7,7 +7,7 @@ mod tag;
 mod tree;
 
 pub use blob::Blob;
-pub use commit::Commit;
+pub use commit::*;
 pub use obj_id::*;
 pub use tag::Tag;
 pub use tree::{Tree, TreeEntry, Treeish};

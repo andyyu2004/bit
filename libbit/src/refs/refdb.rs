@@ -96,15 +96,15 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
 
 pub enum RefUpdateCause {
     NewBranch { from: BitRef },
-    Commit { msg: String, amend: bool },
+    Commit { subject: String, amend: bool },
 }
 
 impl Display for RefUpdateCause {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             RefUpdateCause::NewBranch { from } => write!(f, "branch: Created from {}", from),
-            RefUpdateCause::Commit { msg, amend } => match amend {
-                false => write!(f, "commit: {}", msg),
+            RefUpdateCause::Commit { subject, amend } => match amend {
+                false => write!(f, "commit: {}", subject),
                 true => todo!(),
             },
         }

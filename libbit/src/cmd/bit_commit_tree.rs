@@ -1,7 +1,7 @@
 use crate::error::BitResult;
-use crate::obj::Commit;
-use crate::obj::Oid;
+use crate::obj::{Commit, CommitMessage, Oid};
 use crate::repo::BitRepo;
+use std::str::FromStr;
 
 impl<'r> BitRepo<'r> {
     pub fn bit_commit_tree(
@@ -21,10 +21,10 @@ impl<'r> BitRepo<'r> {
         message: Option<String>,
         tree: Oid,
     ) -> BitResult<(Oid, Commit)> {
-        let message = match message {
-            Some(msg) => msg,
-            None => self.read_commit_msg()?,
-        };
+        let message = match &message {
+            Some(msg) => CommitMessage::from_str(msg),
+            None => self.read_commit_msg(),
+        }?;
         let commit = self.mk_commit(tree, message, parent)?;
         let hash = self.write_obj(&commit)?;
         Ok((hash, commit))

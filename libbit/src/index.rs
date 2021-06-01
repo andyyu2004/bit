@@ -157,8 +157,9 @@ impl<'r> BitIndex<'r> {
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
         let mut iter = pathspec.match_worktree(self.repo)?.peekable();
+        // if a `match_all` doesn't match any files then it's not an error, just means there are no files
         ensure!(
-            iter.peek()?.is_some(),
+            iter.peek()?.is_some() || pathspec.is_match_all(),
             "no files added: pathspec `{}` did not match any files",
             pathspec
         );

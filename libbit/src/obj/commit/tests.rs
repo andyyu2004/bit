@@ -11,9 +11,36 @@ impl Arbitrary for Commit {
             author: Arbitrary::arbitrary(g),
             committer: Arbitrary::arbitrary(g),
             gpgsig: Some(generate_sane_string(100..300)),
-            message: generate_sane_string(1..300),
+            message: Arbitrary::arbitrary(g),
         }
     }
+}
+
+impl Arbitrary for CommitMessage {
+    fn arbitrary(_g: &mut Gen) -> Self {
+        Self { subject: generate_sane_string(0..50), message: generate_sane_string(0..5) }
+    }
+}
+
+// it's a bit awkward to do the other way as the Arby impl for CommitMessage generates some invalid commits such as a subject that starts with \n\n
+#[quickcheck]
+fn test_parse_and_display_commit_message_quickcheck(s: String) -> BitResult<()> {
+    let msg = CommitMessage::from_str(&s)?;
+    let t = msg.to_string();
+    assert_eq!(s, t);
+    Ok(())
+}
+
+// doing a manual one too as quickcheck generates some pretty crazy strings
+#[test]
+fn test_parse_and_display_commit_message() -> BitResult<()> {
+    for _ in 0..100 {
+        let s = generate_sane_string(1..100);
+        let msg = CommitMessage::from_str(&s)?;
+        let t = msg.to_string();
+        assert_eq!(s, t);
+    }
+    Ok(())
 }
 
 #[test]
@@ -39,7 +66,7 @@ fn parse_commit() -> BitResult<()> {
     // assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
     // assert_eq!(&commit.committer, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
     assert!(commit.gpgsig.is_none());
-    assert_eq!(&commit.message, "First commit");
+    assert_eq!(&commit.message.subject, "First commit");
     Ok(())
 }
 

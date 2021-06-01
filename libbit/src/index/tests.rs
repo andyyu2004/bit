@@ -91,6 +91,18 @@ fn test_index_add_directory() -> BitResult<()> {
     })
 }
 
+// TODO incomplete test
+// for some reason `git add .` on empty directory doesn't give an error
+// but `git add <some-other-pathspec>` gives error `pathspec does not match any files`
+// not too important to match this behaviour as its quite an edge case
+#[test]
+fn test_index_add_dot_on_empty() -> BitResult<()> {
+    BitRepo::with_test_repo(|repo| {
+        bit_add!(repo: ".");
+        Ok(())
+    })
+}
+
 /// file `a` and file `a/somefile` should not exist simultaneously
 /// however, naively we can achieve the above state in the index by the following
 /// ```

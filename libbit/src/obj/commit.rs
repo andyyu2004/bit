@@ -1,5 +1,5 @@
 use super::{Tree, Treeish};
-use crate::error::BitResult;
+use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObj, BitObjType, Oid};
 use crate::repo::BitRepo;
 use crate::serialize::{DeserializeSized, Serialize};
@@ -10,15 +10,46 @@ use std::fmt::{self, Display, Formatter};
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::process::Command;
+use std::str::FromStr;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
     pub(crate) tree: Oid,
     pub(crate) author: BitSignature,
     pub(crate) committer: BitSignature,
-    pub(crate) message: String,
+    pub(crate) message: CommitMessage,
     pub(crate) parent: Option<Oid>,
     pub(crate) gpgsig: Option<String>,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct CommitMessage {
+    pub subject: String,
+    pub message: String,
+}
+
+impl FromStr for CommitMessage {
+    type Err = BitGenericError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (subject, message) = if let Some((subject, message)) = s.split_once("\n\n") {
+            (subject, message)
+        } else {
+            (s, "")
+        };
+
+        Ok(Self { subject: subject.to_owned(), message: message.to_owned() })
+    }
+}
+
+impl Display for CommitMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.subject)?;
+        if !self.message.is_empty() {
+            write!(f, "\n\n{}", self.message)?;
+        }
+        Ok(())
+    }
 }
 
 impl Treeish for Commit {
@@ -35,14 +66,19 @@ impl Commit {
 }
 
 impl<'r> BitRepo<'r> {
-    pub fn mk_commit(&self, tree: Oid, message: String, parent: Option<Oid>) -> BitResult<Commit> {
+    pub fn mk_commit(
+        &self,
+        tree: Oid,
+        message: CommitMessage,
+        parent: Option<Oid>,
+    ) -> BitResult<Commit> {
         // TODO validate hashes of parent and tree
         let author = self.user_signature()?;
         let committer = author.clone();
         Ok(Commit { tree, parent, message, author, committer, gpgsig: None })
     }
 
-    pub fn read_commit_msg(&self) -> BitResult<String> {
+    pub fn read_commit_msg(&self) -> BitResult<CommitMessage> {
         let editor = std::env::var("EDITOR").expect("$EDITOR variable is not set");
         let template = r#"
 # Please; enter the commit message for your changes. Lines starting
@@ -63,7 +99,7 @@ impl<'r> BitRepo<'r> {
         if msg.is_empty() {
             bail!("aborting commit due to empty commit message");
         }
-        Ok(msg)
+        Ok(CommitMessage::from_str(&msg)?)
     }
 }
 
@@ -134,6 +170,8 @@ impl DeserializeSized for Commit {
         }
 
         let message = lines.collect::<Result<Vec<_>, _>>()?.join("\n");
+        // TODO could definitely do this more efficiently but its not urgent
+        let message = CommitMessage::from_str(&message)?;
 
         let tree = attrs["tree"].parse().unwrap();
         let parent = attrs.get("parent").map(|parent| parent.parse().unwrap());

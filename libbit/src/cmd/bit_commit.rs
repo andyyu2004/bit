@@ -27,7 +27,11 @@ impl<'r> BitRepo<'r> {
         // but the reflog doesn't contain any symbolic refs and only contains oids so
         // in that sense it is actually moving?
         // TODO check git's behaviour
-        self.update_ref(sym, oid, RefUpdateCause::Commit { msg: commit.message, amend: false })?;
+        self.update_ref(
+            sym,
+            oid,
+            RefUpdateCause::Commit { subject: commit.message.subject, amend: false },
+        )?;
         Ok(oid)
     }
 }

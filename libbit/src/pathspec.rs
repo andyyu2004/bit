@@ -27,6 +27,10 @@ impl Pathspec {
     pub const fn new(prefix: BitPath) -> Self {
         Self { prefix }
     }
+
+    pub fn is_match_all(self) -> bool {
+        self == Self::MATCH_ALL
+    }
 }
 
 impl TryFrom<&str> for Pathspec {
