@@ -1,7 +1,7 @@
 use crate::error::{BitError, BitResult, BitResultExt};
 use crate::hash;
 use crate::iter::DirIter;
-use crate::lockfile::Lockfile;
+use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, Oid, PartialOid};
 use crate::pack::Pack;
 use crate::path::BitPath;
@@ -176,7 +176,7 @@ impl BitObjDbBackend for BitLooseObjDb {
             return Ok(hash);
         }
 
-        Lockfile::with_mut(&path, true, |lockfile| {
+        Lockfile::with_mut(&path, LockfileFlags::SET_READONLY, |lockfile| {
             Ok(ZlibEncoder::new(lockfile, Compression::default()).write_all(&bytes)?)
         })?;
 

@@ -1,6 +1,6 @@
 use super::{BitRef, BitReflog, SymbolicRef};
 use crate::error::BitResult;
-use crate::lockfile::{Lockfile, LockfileGuard};
+use crate::lockfile::{Lockfile, LockfileFlags, LockfileGuard};
 use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -63,7 +63,7 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
     }
 
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
-        Lockfile::with_readonly(self.join_ref(sym.path), true, |lockfile| {
+        Lockfile::with_readonly(self.join_ref(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
             let head_file =
                 lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
             BitRef::deserialize_unbuffered(head_file)
@@ -71,7 +71,9 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
     }
 
     fn update(&self, sym: SymbolicRef, to: BitRef, cause: RefUpdateCause) -> BitResult<()> {
-        Lockfile::with_mut(self.join_ref(sym.path), true, |lockfile| to.serialize(lockfile))?;
+        Lockfile::with_mut(self.join_ref(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
+            to.serialize(lockfile)
+        })?;
         let (new_oid, committer) =
             tls::with_repo_res(|repo| Ok((repo.fully_resolve_ref(to)?, repo.user_signature()?)))?;
         self.log(sym, new_oid, committer, cause.to_string())?;
@@ -90,7 +92,7 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
     // probably better to have method that directly manipulate the log instead
     fn read_reflog(&self, sym: SymbolicRef) -> BitResult<LockfileGuard<BitReflog>> {
         let path = self.join_log(sym.path);
-        Lockfile::lock::<BitReflog>(path, false)
+        Lockfile::lock::<BitReflog>(path)
     }
 }
 

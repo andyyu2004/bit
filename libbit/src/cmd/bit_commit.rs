@@ -28,6 +28,7 @@ impl<'r> BitRepo<'r> {
             bail!("nothing to commit");
         } else if head_tree.is_unknown() {
             // TODO initial commit check index entries is empty (or otherwise)?
+            // TODO also check for untracked files and show those and suggest adding them
         }
 
         let (oid, commit) = self.commit_tree(parent, msg, tree)?;

@@ -2,7 +2,7 @@ mod refdb;
 mod reflog;
 
 use crate::error::{BitError, BitGenericError, BitResult};
-use crate::lockfile::Lockfile;
+use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{BitObjKind, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -215,7 +215,7 @@ impl SymbolicRef {
         }
 
         // TODO check second parameter
-        let r = Lockfile::with_readonly(ref_path, true, |_| {
+        let r = Lockfile::with_readonly(ref_path, LockfileFlags::SET_READONLY, |_| {
             let contents = std::fs::read_to_string(ref_path)?;
             // symbolic references can be recursive
             // i.e. HEAD -> refs/heads/master -> <oid>
