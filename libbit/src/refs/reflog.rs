@@ -1,11 +1,10 @@
 use crate::error::BitGenericError;
 use crate::error::BitResult;
 use crate::obj::Oid;
-use crate::serialize::Deserialize;
-use crate::serialize::Serialize;
+use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
-use std::io::BufRead;
-use std::io::Write;
+use std::io::{BufRead, Write};
+use std::ops::Deref;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,12 +12,16 @@ pub struct BitReflogEntry {
     pub old_oid: Oid,
     pub new_oid: Oid,
     pub committer: BitSignature,
-    pub msg: String,
+    pub message: String,
 }
 
 impl Serialize for BitReflogEntry {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
-        Ok(writeln!(writer, "{} {} {}\t{}", self.old_oid, self.new_oid, self.committer, self.msg)?)
+        Ok(writeln!(
+            writer,
+            "{} {} {}\t{}",
+            self.old_oid, self.new_oid, self.committer, self.message
+        )?)
     }
 }
 
@@ -33,7 +36,15 @@ impl BitReflog {
             Some(entry) => entry.new_oid,
             None => Oid::UNKNOWN,
         };
-        self.entries.push(BitReflogEntry { old_oid, new_oid, committer, msg })
+        self.entries.push(BitReflogEntry { old_oid, new_oid, committer, message: msg })
+    }
+}
+
+impl Deref for BitReflog {
+    type Target = Vec<BitReflogEntry>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.entries
     }
 }
 
@@ -44,11 +55,12 @@ impl FromStr for BitReflogEntry {
         let (old_oid, s) = s.split_once(' ').unwrap();
         let (new_oid, s) = s.split_once(' ').unwrap();
         let (committer, msg) = s.split_once('\t').unwrap();
+
         Ok(Self {
             old_oid: old_oid.parse()?,
             new_oid: new_oid.parse()?,
             committer: committer.parse()?,
-            msg: msg.to_owned(),
+            message: msg.to_owned(),
         })
     }
 }

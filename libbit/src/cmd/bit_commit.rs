@@ -1,7 +1,6 @@
 use crate::error::BitResult;
 use crate::obj::Oid;
-use crate::refs::BitRef;
-use crate::refs::RefUpdateCause;
+use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind, SymbolicRef};
 use crate::repo::BitRepo;
 
 impl<'r> BitRepo<'r> {
@@ -26,23 +25,38 @@ impl<'r> BitRepo<'r> {
         // don't allow empty commits; also don't currently provide the option to do so as it's not that useful
         if tree == head_tree {
             bail!("nothing to commit");
-        } else if head_tree.is_unknown() {
+        } else {
             // TODO initial commit check index entries is empty (or otherwise)?
             // TODO also check for untracked files and show those and suggest adding them
         }
 
         let (oid, commit) = self.commit_tree(parent, msg, tree)?;
-        // does commit tree move head?
-        // should the log on the current branches log or HEAD?
-        // intuitively it makes sense to log on the branch as HEAD isn't actually moving
-        // but the reflog doesn't contain any symbolic refs and only contains oids so
-        // in that sense it is actually moving?
-        // TODO check git's behaviour
-        self.update_ref(
-            sym,
-            oid,
-            RefUpdateCause::Commit { subject: commit.message.subject, amend: false },
-        )?;
+
+        // TODO if head_tree.is_unknown() print (root-commit)
+        // or return something that can be printed as a status
+        // HEAD is already pointing at sym (as that's how we got the value of sym anyway)
+        // we do this just to write something to HEAD's reflog
+        // this must happen after updating the ref above
+        if head_tree.is_unknown() {
+            let cause = RefUpdateCause::Commit {
+                subject: commit.message.subject,
+                kind: RefUpdateCommitKind::Initial,
+            };
+            self.update_ref(sym, oid, cause.clone())?;
+            self.update_ref(SymbolicRef::HEAD, sym, cause)?;
+        } else {
+            // does commit tree move head?
+            // should the log on the current branches log or HEAD?
+            // intuitively it makes sense to log on the branch as HEAD isn't actually moving
+            // but the reflog doesn't contain any symbolic refs and only contains oids so
+            // in that sense it is actually moving?
+            // TODO check git's behaviour
+            let cause = RefUpdateCause::Commit {
+                subject: commit.message.subject,
+                kind: RefUpdateCommitKind::Normal,
+            };
+            self.update_ref(sym, oid, cause)?;
+        }
         Ok(oid)
     }
 }

@@ -213,14 +213,6 @@ macro_rules! symbolic_ref {
     }};
 }
 
-macro_rules! HEAD {
-    () => {{
-        #[allow(unused_imports)]
-        use std::str::FromStr;
-        crate::refs::BitRef::Symbolic(crate::refs::SymbolicRef::from_str("HEAD").unwrap())
-    }};
-}
-
 macro_rules! parse_rev {
     ($rev:expr) => {{
         // NOTE: `eval` must be called with a repository in scope (tls)

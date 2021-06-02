@@ -1,12 +1,10 @@
 use super::BitReflogEntry;
-use crate::error::BitErrorExt;
 use crate::error::BitResult;
-use crate::refs::is_valid_name;
-use crate::refs::BitRef;
-use crate::refs::BitReflog;
-use crate::repo::BitRepo;
+use crate::refs::{is_valid_name, BitRef, BitRefDbBackend, BitReflog};
+use crate::repo::{BitRepo, Repo};
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
+use crate::{error::BitErrorExt, obj::CommitMessage};
 use std::io::BufReader;
 use std::str::FromStr;
 
@@ -27,7 +25,7 @@ fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
 fn test_resolve_head_symref_in_fresh_repo() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         // it should only resolve until `refs/heads/master` as the branch file doesn't exist yet
-        assert_eq!(repo.resolve_ref(HEAD!())?, symbolic_ref!("refs/heads/master"));
+        assert_eq!(repo.resolve_ref(BitRef::HEAD)?, symbolic_ref!("refs/heads/master"));
         Ok(())
     })
 }
@@ -37,7 +35,7 @@ fn test_resolve_head_symref() -> BitResult<()> {
     BitRepo::find(repos_dir!("ribble"), |repo| {
         // HEAD -> `refs/heads/master` should exist on a non empty repo, then it should resolve to the oid contained within master
         assert_eq!(
-            repo.resolve_ref(HEAD!())?,
+            repo.resolve_ref(BitRef::HEAD)?,
             BitRef::Direct("902e59e7eadc1c44586354c9ecb3098fb316c2c4".into())
         );
         Ok(())
@@ -93,7 +91,7 @@ fn test_parse_reflog_entry() {
             new_oid: "4f0b23654b5ffc3a994ec4bf0212ed8dc4358400".into(),
             committer: BitSignature::from_str("Andy Yu <andyyu2004@gmail.com> 1622453485 +1200")
                 .unwrap(),
-            msg: "commit: some commit message".into(),
+            message: "commit: some commit message".into(),
         }
     );
 }
@@ -108,4 +106,24 @@ fn test_deserialize_then_reserialize_reflog() -> BitResult<()> {
 
     assert_eq!(bytes, &buf);
     Ok(())
+}
+
+#[test]
+fn test_reflog_contents_on_initial_commit() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        touch!(repo: "foo");
+        bit_commit_all!(repo);
+        let head_reflog = repo.refdb().read_reflog(symbolic!("HEAD"))?;
+        let master_reflog = repo.refdb().read_reflog(symbolic!("refs/heads/master"))?;
+
+        let expected_committer = repo.user_signature()?;
+        let expected_message = "commit (initial): arbitrary message".to_owned();
+        assert_eq!(head_reflog.len(), 1);
+        assert_eq!(head_reflog[0].committer, expected_committer);
+        assert_eq!(head_reflog[0].message, expected_message);
+        assert_eq!(master_reflog.len(), 1);
+        assert_eq!(master_reflog[0].committer, expected_committer);
+        assert_eq!(master_reflog[0].message, expected_message);
+        Ok(())
+    })
 }

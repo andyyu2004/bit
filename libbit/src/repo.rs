@@ -40,7 +40,7 @@ pub struct RepoCtxt<'r> {
     index_cell: OnceCell<BitIndexExperimental<'r>>,
 }
 
-trait Repo<'r> {
+pub trait Repo<'r> {
     type Odb: BitObjDbBackend;
     type RefDb: BitRefDbBackend;
     type Index;

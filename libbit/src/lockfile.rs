@@ -137,7 +137,10 @@ impl Lockfile {
     /// replaces the old file if it exists
     /// commits on drop unless rollback was called
     fn commit(&self) -> io::Result<()> {
-        if self.path.exists() {
+        let set_readonly = self.flags.contains(LockfileFlags::SET_READONLY);
+        // we only do this branch if we expect it to be readonly
+        // if its when this flag is false then that is unexpected and we should get an error
+        if set_readonly && self.path.exists() {
             let mut permissions = self.path.metadata()?.permissions();
             permissions.set_readonly(false);
             std::fs::set_permissions(&self.path, permissions)?;
@@ -146,9 +149,11 @@ impl Lockfile {
         std::fs::rename(&self.lockfile_path, &self.path)?;
         self.committed.set(true);
 
-        let mut permissions = self.path.metadata()?.permissions();
-        permissions.set_readonly(self.flags.contains(LockfileFlags::SET_READONLY));
-        std::fs::set_permissions(&self.path, permissions)?;
+        if set_readonly {
+            let mut permissions = self.path.metadata()?.permissions();
+            permissions.set_readonly(true);
+            std::fs::set_permissions(&self.path, permissions)?;
+        }
 
         Ok(())
     }

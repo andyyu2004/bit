@@ -6,7 +6,7 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
-use crate::tls;
+use bitflags::bitflags;
 use std::fmt::{self, Display, Formatter};
 
 pub struct BitRefDb<'r> {
@@ -74,8 +74,8 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
         Lockfile::with_mut(self.join_ref(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
             to.serialize(lockfile)
         })?;
-        let (new_oid, committer) =
-            tls::with_repo_res(|repo| Ok((repo.fully_resolve_ref(to)?, repo.user_signature()?)))?;
+        let new_oid = self.repo.fully_resolve_ref(to)?;
+        let committer = self.repo.user_signature()?;
         self.log(sym, new_oid, committer, cause.to_string())?;
         Ok(())
     }
@@ -96,18 +96,27 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum RefUpdateCommitKind {
+    Amend,
+    Initial,
+    Normal,
+}
+
+#[derive(Debug, Clone)]
 pub enum RefUpdateCause {
     NewBranch { from: BitRef },
-    Commit { subject: String, amend: bool },
+    Commit { subject: String, kind: RefUpdateCommitKind },
 }
 
 impl Display for RefUpdateCause {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             RefUpdateCause::NewBranch { from } => write!(f, "branch: Created from {}", from),
-            RefUpdateCause::Commit { subject, amend } => match amend {
-                false => write!(f, "commit: {}", subject),
-                true => todo!(),
+            RefUpdateCause::Commit { subject, kind } => match *kind {
+                RefUpdateCommitKind::Normal => write!(f, "commit: {}", subject),
+                RefUpdateCommitKind::Amend => write!(f, "commit (amend): {}", subject),
+                RefUpdateCommitKind::Initial => write!(f, "commit (initial): {}", subject),
             },
         }
     }
