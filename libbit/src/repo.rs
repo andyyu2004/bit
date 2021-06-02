@@ -207,7 +207,7 @@ impl<'r> BitRepo<'r> {
     }
 
     pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
-        Lockfile::with_readonly(self.index_path(), |lockfile| {
+        Lockfile::with_readonly(self.index_path(), true, |lockfile| {
             // not actually writing anything here, so we rollback
             // the lockfile is just to check that another process
             // is not currently writing to the index
@@ -219,7 +219,7 @@ impl<'r> BitRepo<'r> {
         self,
         f: impl FnOnce(&mut BitIndex<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
-        Lockfile::with_mut(self.index_path(), |lockfile| {
+        Lockfile::with_mut(self.index_path(), true, |lockfile| {
             let index = &mut BitIndex::from_lockfile(self, &lockfile)?;
             let r = f(index)?;
             index.serialize(lockfile)?;

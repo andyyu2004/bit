@@ -19,6 +19,7 @@ pub struct Lockfile {
     file: Option<File>,
     // the lockfile itself
     lockfile: File,
+    set_readonly: bool,
     path: PathBuf,
     lockfile_path: PathBuf,
     committed: Cell<bool>,
@@ -36,11 +37,13 @@ impl Write for Lockfile {
 
 impl Lockfile {
     /// accepts the path to the file to be locked
+    /// `set_readonly` determines whether to make the file readonly when finished
     /// this function will create a lockfile with an extension `<path>.lock`
-    /// consumers of this api should never have access to the lockfile
-    /// this will create the file if it doesn't exist
-    /// directly, instead they should use the `with_` apis
-    fn open(path: impl AsRef<Path>) -> BitResult<Self> {
+    //
+    // consumers of this api should never have access to the lockfile
+    // this will create the file if it doesn't exist
+    // directly, instead they should use the `with_` apis
+    fn open(path: impl AsRef<Path>, set_readonly: bool) -> BitResult<Self> {
         let path = path.as_ref();
         assert!(!path.exists() || path.is_file(), "cannot create lock on symlinks or directories");
         let lockfile_path = path.with_extension(LOCK_FILE_EXT);
@@ -66,6 +69,7 @@ impl Lockfile {
         Ok(Self {
             file,
             lockfile,
+            set_readonly,
             lockfile_path,
             path: path.to_path_buf(),
             committed: Cell::new(false),
@@ -80,9 +84,10 @@ impl Lockfile {
 
     pub fn with_readonly<R>(
         path: impl AsRef<Path>,
+        set_readonly: bool,
         f: impl FnOnce(&Self) -> BitResult<R>,
     ) -> BitResult<R> {
-        Self::open(path)?.with_readonly_inner(f)
+        Self::open(path, set_readonly)?.with_readonly_inner(f)
     }
 
     /// run's a function under the lock without having write access to the lock
@@ -95,9 +100,10 @@ impl Lockfile {
 
     pub fn with_mut<R>(
         path: impl AsRef<Path>,
+        set_readonly: bool,
         f: impl FnOnce(&mut Self) -> BitResult<R>,
     ) -> BitResult<R> {
-        Self::open(path)?.with_mut_inner(f)
+        Self::open(path, set_readonly)?.with_mut_inner(f)
     }
 
     /// runs a function under the lock having mutable access to the underlying file
@@ -125,8 +131,10 @@ impl Lockfile {
     /// replaces the old file if it exists
     /// commits on drop unless rollback was called
     fn commit(&self) -> io::Result<()> {
+        let mut is_readonly = false;
         if self.path.exists() {
             let mut permissions = self.path.metadata()?.permissions();
+            is_readonly = permissions.readonly();
             permissions.set_readonly(false);
             std::fs::set_permissions(&self.path, permissions)?;
         }
@@ -134,9 +142,13 @@ impl Lockfile {
         std::fs::rename(&self.lockfile_path, &self.path)?;
         self.committed.set(true);
 
-        let mut permissions = self.path.metadata()?.permissions();
-        permissions.set_readonly(true);
-        std::fs::set_permissions(&self.path, permissions)
+        if is_readonly {
+            let mut permissions = self.path.metadata()?.permissions();
+            permissions.set_readonly(true);
+            std::fs::set_permissions(&self.path, permissions)?;
+        }
+
+        Ok(())
     }
 
     fn cleanup(&self) -> BitResult<()> {
@@ -173,8 +185,9 @@ pub struct LockfileGuard<T: Serialize> {
 impl Lockfile {
     pub fn lock<T: Serialize + Deserialize + Default>(
         path: BitPath,
+        set_readonly: bool,
     ) -> BitResult<LockfileGuard<T>> {
-        let mut lockfile = Lockfile::open(path)?;
+        let mut lockfile = Lockfile::open(path, set_readonly)?;
         let data = match &mut lockfile.file {
             Some(file) => T::deserialize(&mut BufReader::new(file))?,
             None => T::default(),

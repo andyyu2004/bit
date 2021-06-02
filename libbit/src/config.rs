@@ -7,7 +7,6 @@
 
 use crate::error::BitResult;
 use crate::interner::Intern;
-use crate::repo::BitRepo;
 use crate::repo::RepoCtxt;
 use git_config::file::GitConfig;
 use git_config::values::{Boolean, Integer};

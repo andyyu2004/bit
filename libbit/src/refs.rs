@@ -214,7 +214,8 @@ impl SymbolicRef {
             return Ok(BitRef::Symbolic(self));
         }
 
-        let r = Lockfile::with_readonly(ref_path, |_| {
+        // TODO check second parameter
+        let r = Lockfile::with_readonly(ref_path, true, |_| {
             let contents = std::fs::read_to_string(ref_path)?;
             // symbolic references can be recursive
             // i.e. HEAD -> refs/heads/master -> <oid>
