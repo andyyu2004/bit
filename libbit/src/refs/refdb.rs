@@ -77,9 +77,17 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
         let new_oid = self.repo.fully_resolve_ref(to)?;
         let committer = self.repo.user_signature()?;
 
-        self.log(sym, new_oid, committer, cause.to_string())?;
+        let cause_str = cause.to_string();
 
-        Ok(())
+        // TODO not sure this is completely correct behaviour, but it at least works for commits
+        // if HEAD points to the ref being updated, then we also record the same update in HEAD's log
+        if let BitRef::Symbolic(head) = self.repo.read_head()? {
+            if head == sym {
+                self.log(SymbolicRef::HEAD, new_oid, committer.clone(), cause_str.clone())?;
+            }
+        }
+
+        self.log(sym, new_oid, committer, cause_str)
     }
 
     fn delete(&self, _sym: SymbolicRef) -> BitResult<()> {

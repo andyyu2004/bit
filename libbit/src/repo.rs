@@ -32,7 +32,6 @@ pub struct RepoCtxt<'r> {
     // shared (immutable) access to this struct
     pub workdir: BitPath,
     pub bitdir: BitPath,
-    head_filepath: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
     odb_cell: OnceCell<BitObjDb>,
@@ -93,7 +92,6 @@ impl<'r> RepoCtxt<'r> {
             index_filepath,
             odb_cell: Default::default(),
             index_cell: Default::default(),
-            head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
             refdb_cell: Default::default(),
         };
 
@@ -157,16 +155,6 @@ impl<'r> RepoCtxt<'r> {
     #[inline]
     pub fn config_path(&self) -> BitPath {
         self.config_filepath
-    }
-
-    #[inline]
-    pub fn head_path(&self) -> BitPath {
-        self.head_filepath
-    }
-
-    #[inline]
-    pub fn head_ref(&self) -> SymbolicRef {
-        SymbolicRef::new(self.head_filepath)
     }
 
     #[inline]
@@ -319,11 +307,11 @@ impl<'r> BitRepo<'r> {
     /// e.g. if `HEAD` -> `ref: refs/heads/master`
     /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
     pub fn read_head(&self) -> BitResult<BitRef> {
-        self.refdb()?.read(self.head_ref())
+        self.refdb()?.read(SymbolicRef::HEAD)
     }
 
     pub fn update_head(&self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
-        self.update_ref(self.head_ref(), bitref.into(), cause)
+        self.update_ref(SymbolicRef::HEAD, bitref.into(), cause)
     }
 
     pub fn create_branch(self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {

@@ -125,9 +125,10 @@ pub struct SymbolicRef {
 }
 
 impl SymbolicRef {
-    pub const HEAD: Self = Self::new(BitPath::HEAD);
+    pub const HEAD: Self = Self { path: BitPath::HEAD };
 
-    pub const fn new(path: BitPath) -> Self {
+    pub fn new(path: BitPath) -> Self {
+        assert!(path.is_relative());
         Self { path }
     }
 
