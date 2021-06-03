@@ -172,11 +172,9 @@ impl Lockfile {
 
 impl Drop for Lockfile {
     fn drop(&mut self) {
-        if self.committed.get() {
-            // if committed then the file has been renamed and there is nothing to cleanup
-            return;
+        if !self.committed.get() {
+            self.cleanup().unwrap();
         }
-        self.cleanup().unwrap();
     }
 }
 
@@ -218,8 +216,8 @@ impl<T: Serialize> Drop for Filelock<T> {
             return;
         }
         // otherwise, write the data into the lockfile and commit
-        self.data.serialize(&mut self.lockfile).expect("failed to write data (LockfileGuard)h");
-        self.lockfile.commit().expect("failed to commit lockfile");
+        self.data.serialize(&mut self.lockfile).expect("failed to write data (in Filelock)");
+        self.lockfile.commit().expect("failed to commit lockfile (in Filelock)");
     }
 }
 

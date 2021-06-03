@@ -54,13 +54,13 @@ impl FromStr for BitReflogEntry {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (old_oid, s) = s.split_once(' ').unwrap();
         let (new_oid, s) = s.split_once(' ').unwrap();
-        let (committer, msg) = s.split_once('\t').unwrap();
+        let (committer, message) = s.split_once('\t').unwrap();
 
         Ok(Self {
             old_oid: old_oid.parse()?,
             new_oid: new_oid.parse()?,
             committer: committer.parse()?,
-            message: msg.to_owned(),
+            message: message.to_owned(),
         })
     }
 }

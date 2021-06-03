@@ -109,21 +109,46 @@ fn test_deserialize_then_reserialize_reflog() -> BitResult<()> {
 }
 
 #[test]
-fn test_reflog_contents_on_initial_commit() -> BitResult<()> {
+fn test_reflog_contents_on_commit() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
+        // on initial commit
         touch!(repo: "foo");
         bit_commit_all!(repo);
+        let expected_committer = repo.user_signature()?;
+        let expected_message = "commit (initial): arbitrary message".to_owned();
+
         let head_reflog = repo.refdb()?.read_reflog(symbolic!("HEAD"))?;
         let master_reflog = repo.refdb()?.read_reflog(symbolic!("refs/heads/master"))?;
 
-        let expected_committer = repo.user_signature()?;
-        let expected_message = "commit (initial): arbitrary message".to_owned();
         assert_eq!(head_reflog.len(), 1);
         assert_eq!(head_reflog[0].committer, expected_committer);
         assert_eq!(head_reflog[0].message, expected_message);
         assert_eq!(master_reflog.len(), 1);
         assert_eq!(master_reflog[0].committer, expected_committer);
         assert_eq!(master_reflog[0].message, expected_message);
+
+        // have to drop these otherwise the lockfile will prevent the next commit
+        // (drops look nicer than scoping them with braces imo)
+        drop(head_reflog);
+        drop(master_reflog);
+
+        touch!(repo: "bar");
+        bit_commit_all!(repo);
+
+        // on another commit
+        // the key difference is that there is no initial note
+        // and another detail is that HEAD's reflog is written to even though it's not actually moving itself
+        let head_reflog = repo.refdb()?.read_reflog(symbolic!("HEAD"))?;
+        let master_reflog = repo.refdb()?.read_reflog(symbolic!("refs/heads/master"))?;
+
+        let expected_message = "commit: arbitrary message".to_owned();
+        assert_eq!(head_reflog.len(), 2);
+        assert_eq!(head_reflog[1].committer, expected_committer);
+        assert_eq!(head_reflog[1].message, expected_message);
+        assert_eq!(master_reflog.len(), 2);
+        assert_eq!(master_reflog[1].committer, expected_committer);
+        assert_eq!(master_reflog[1].message, expected_message);
+
         Ok(())
     })
 }
