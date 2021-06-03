@@ -1,3 +1,4 @@
+use crate::error::BitGenericError;
 use crate::hash::SHA1Hash;
 use crate::obj::Oid;
 use crate::path::BitPath;
@@ -7,6 +8,7 @@ use crate::{error::BitResult, serialize::Serialize};
 use sha1::{digest::Output, Digest};
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
+use std::str::FromStr;
 
 // all big-endian
 pub(crate) trait ReadExt: Read {
@@ -244,6 +246,20 @@ pub trait BufReadExt: BufRead {
 
     fn read_null_terminated_path(&mut self) -> BitResult<BitPath> {
         self.read_null_terminated()
+    }
+
+    /// read the bytes upto `sep` parsing as a base10 ascii numberj
+    fn read_ascii_num<T: From<u64>>(&mut self, sep: u8) -> BitResult<T> {
+        let mut buf = vec![];
+        let i = self.read_until(sep, &mut buf)?;
+        Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse::<u64>().unwrap().into())
+    }
+
+    /// read the bytes upto `sep` parsing as an ascii str
+    fn read_ascii_str<T: FromStr<Err = BitGenericError>>(&mut self, sep: u8) -> BitResult<T> {
+        let mut buf = vec![];
+        let i = self.read_until(sep, &mut buf)?;
+        std::str::from_utf8(&buf[..i - 1]).unwrap().parse()
     }
 
     fn read_null_terminated<T: Deserialize>(&mut self) -> BitResult<T> {

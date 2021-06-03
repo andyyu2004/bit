@@ -39,14 +39,13 @@ fn invalid_obj_read_wrong_size() {
 }
 
 #[test]
-#[should_panic]
 fn invalid_obj_read_unknown_obj_ty() {
     let mut bytes = vec![];
     bytes.extend(b"weirdobjty ");
     bytes.extend(b"12\0");
     bytes.extend(b"abcd1234xywz");
 
-    let _ = read_obj_unbuffered(bytes.as_slice());
+    assert!(read_obj_unbuffered(bytes.as_slice()).is_err())
 }
 
 #[test]

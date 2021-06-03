@@ -15,7 +15,7 @@ pub use tree::{Tree, TreeEntry, Treeish};
 use self::ofs_delta::OfsDelta;
 use self::ref_delta::RefDelta;
 use crate::error::{BitGenericError, BitResult};
-use crate::io::ReadExt;
+use crate::io::{BufReadExt, ReadExt};
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
@@ -289,7 +289,7 @@ impl Display for BitObjType {
 }
 
 impl FromStr for BitObjType {
-    type Err = String;
+    type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -297,29 +297,15 @@ impl FromStr for BitObjType {
             "tree" => Ok(BitObjType::Tree),
             "tag" => Ok(BitObjType::Tag),
             "blob" => Ok(BitObjType::Blob),
-            _ => Err(format!("unknown bit object type `{}`", s)),
+            _ => bail!("unknown bit object type `{}`", s),
         }
     }
 }
 
 pub(crate) fn read_obj_header(reader: &mut impl BufRead) -> BitResult<BitObjHeader> {
-    let obj_type = read_obj_type_str(reader)?;
-    let size = read_obj_size(reader)?;
+    let obj_type = reader.read_ascii_str(0x20)?;
+    let size = reader.read_ascii_num(0x00)?;
     Ok(BitObjHeader { obj_type, size })
-}
-
-fn read_obj_type_str(reader: &mut impl BufRead) -> BitResult<BitObjType> {
-    let mut buf = vec![];
-    let i = reader.read_until(0x20, &mut buf)?;
-    Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
-}
-
-/// assumes <type> has been read already
-fn read_obj_size(reader: &mut impl BufRead) -> BitResult<u64> {
-    let mut buf = vec![];
-    let i = reader.read_until(0x00, &mut buf)?;
-    let size = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
-    Ok(size)
 }
 
 #[cfg(test)]

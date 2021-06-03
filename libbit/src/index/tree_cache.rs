@@ -1,4 +1,5 @@
 use crate::error::BitResult;
+use crate::io::BufReadExt;
 use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::serialize::Deserialize;
@@ -18,6 +19,7 @@ impl Deserialize for BitTreeCache {
     where
         Self: Sized,
     {
+        let path = reader.read_null_terminated_path()?;
         todo!()
     }
 }
