@@ -17,5 +17,8 @@ extern crate libbit;
 
 pub fn main() -> libbit::error::BitResult<()> {
     env_logger::builder().parse_env("BIT_LOG").init();
-    cli::run()
+    if let Err(err) = cli::run() {
+        eprintln!("{}", err);
+    }
+    Ok(())
 }

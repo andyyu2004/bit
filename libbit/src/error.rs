@@ -17,6 +17,12 @@ pub enum BitError {
     NonExistentSymRef(SymbolicRef),
 }
 
+impl BitError {
+    pub const EMPTY_COMMIT_CLEAN_WORKTREE: &'static str = "nothing to commit, working tree clean";
+    pub const EMPTY_COMMIT_UNTRACKED_FILES: &'static str =
+        "nothing added to commit but untracked files present (use `bit add` to track)";
+}
+
 pub trait BitErrorExt {
     fn into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)>;
     fn into_nonexistent_symref_err(self) -> BitResult<SymbolicRef>;

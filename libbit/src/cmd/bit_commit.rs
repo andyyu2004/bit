@@ -1,5 +1,6 @@
-use crate::error::BitResult;
+use crate::error::{BitError, BitResult};
 use crate::obj::Oid;
+use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind};
 use crate::repo::BitRepo;
 
@@ -25,7 +26,13 @@ impl<'r> BitRepo<'r> {
 
         // don't allow empty commits; also don't currently provide the option to do so as it's not that useful
         if tree == head_tree {
-            bail!("nothing to commit");
+            let status = self.status(Pathspec::MATCH_ALL)?;
+            println!("{}", status);
+            if status.unstaged.new.is_empty() {
+                bail!(BitError::EMPTY_COMMIT_CLEAN_WORKTREE)
+            } else {
+                bail!(BitError::EMPTY_COMMIT_UNTRACKED_FILES)
+            }
         } else {
             // TODO initial commit check index entries is empty (or otherwise)?
             // TODO also check for untracked files and show those and suggest adding them

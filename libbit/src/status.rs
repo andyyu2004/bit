@@ -1,12 +1,14 @@
 use crate::diff::WorkspaceDiff;
 use crate::error::BitResult;
 use crate::pathspec::Pathspec;
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
 pub struct BitStatus {
+    head: BitRef,
     pub staged: WorkspaceDiff,
     pub unstaged: WorkspaceDiff,
 }
@@ -14,9 +16,10 @@ pub struct BitStatus {
 impl<'r> BitRepo<'r> {
     pub fn status(&self, pathspec: Pathspec) -> BitResult<BitStatus> {
         self.with_index_mut(|index| {
+            let head = self.read_head()?;
             let staged = index.diff_head(pathspec)?;
             let unstaged = index.diff_worktree(pathspec)?;
-            Ok(BitStatus { staged, unstaged })
+            Ok(BitStatus { head, staged, unstaged })
         })
     }
 }
@@ -25,6 +28,12 @@ impl<'r> BitRepo<'r> {
 // it should just print the directory and not its contents
 impl Display for BitStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self.head {
+            BitRef::Direct(oid) => writeln!(f, "HEAD detached at `{}`", oid)?,
+            BitRef::Symbolic(branch) => writeln!(f, "On branch `{}`", branch)?,
+        };
+        writeln!(f)?;
+
         if !self.staged.is_empty() {
             writeln!(f, "Changes to be committed")?;
             writeln!(f, "  (use `bit restore --staged <file>...` to unstage) (unimplemented)")?;
