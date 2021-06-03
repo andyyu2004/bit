@@ -5,6 +5,7 @@ mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
 mod cli_ls_files;
+mod cli_reflog;
 mod cli_status;
 mod cli_switch;
 mod cli_update_index;
@@ -33,12 +34,14 @@ use libbit::repo::BitRepo;
 use libbit::rev::LazyRevspec;
 use std::path::PathBuf;
 
+use self::cli_reflog::BitReflogCliOpts;
+
 // experiment with changing structure of everything
 // more code should be in the binary
 // to much is in libbit I think
 // see comment above
 pub trait Cmd {
-    fn exec(&self, repo: BitRepo<'_>) -> BitResult<()>;
+    fn exec(self, repo: BitRepo<'_>) -> BitResult<()>;
 }
 
 pub fn run() -> BitResult<()> {
@@ -75,6 +78,7 @@ pub fn run() -> BitResult<()> {
         BitSubCmd::Commit(opts) => repo.bit_commit(opts.message),
         BitSubCmd::Branch(opts) => opts.exec(repo),
         BitSubCmd::Diff(opts) => opts.exec(repo),
+        BitSubCmd::Reflog(opts) => opts.exec(repo),
     })
 }
 
@@ -100,6 +104,7 @@ pub enum BitSubCmd {
     Init(BitInitCliOpts),
     Log(BitLogCliOpts),
     LsFiles(BitLsFilesCliOpts),
+    Reflog(BitReflogCliOpts),
     Status(BitStatusCliOpts),
     UpdateIndex(BitUpdateIndexCliOpts),
     WriteTree,

@@ -10,7 +10,7 @@ pub struct BitSwitchCliOpts {
 }
 
 impl Cmd for BitSwitchCliOpts {
-    fn exec(&self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
         dbg!(self.branch.partially_resolve(repo)?);
         dbg!(&self);
         todo!()

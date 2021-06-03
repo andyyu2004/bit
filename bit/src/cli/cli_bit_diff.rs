@@ -26,7 +26,7 @@ pub struct BitDiffCliOpts {
 }
 
 impl Cmd for BitDiffCliOpts {
-    fn exec(&self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
         let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
         let status = if let Some(r) = self.staged {
             let r = r.unwrap_or(BitRef::HEAD);
