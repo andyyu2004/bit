@@ -1,10 +1,10 @@
 use super::BitReflogEntry;
+use crate::error::BitErrorExt;
 use crate::error::BitResult;
 use crate::refs::{is_valid_name, BitRef, BitRefDbBackend, BitReflog};
 use crate::repo::{BitRepo, Repo};
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
-use crate::{error::BitErrorExt, obj::CommitMessage};
 use std::io::BufReader;
 use std::str::FromStr;
 
@@ -113,8 +113,8 @@ fn test_reflog_contents_on_initial_commit() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         touch!(repo: "foo");
         bit_commit_all!(repo);
-        let head_reflog = repo.refdb().read_reflog(symbolic!("HEAD"))?;
-        let master_reflog = repo.refdb().read_reflog(symbolic!("refs/heads/master"))?;
+        let head_reflog = repo.refdb()?.read_reflog(symbolic!("HEAD"))?;
+        let master_reflog = repo.refdb()?.read_reflog(symbolic!("refs/heads/master"))?;
 
         let expected_committer = repo.user_signature()?;
         let expected_message = "commit (initial): arbitrary message".to_owned();

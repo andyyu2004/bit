@@ -72,5 +72,4 @@ mod serialize;
 mod signature;
 mod time;
 mod tls;
-mod transaction;
 mod util;
