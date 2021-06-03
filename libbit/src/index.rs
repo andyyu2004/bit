@@ -3,6 +3,7 @@ mod index_entry;
 use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::BIT_HASH_SIZE;
+use crate::index;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::BitEntryIterator;
 use crate::lockfile::Lockfile;
@@ -44,6 +45,20 @@ pub struct BitIndexExperimental<'r> {
     inner: LockfileGuard<BitIndexInner>,
 }
 
+impl<'r> Deref for BitIndexExperimental<'r> {
+    type Target = BitIndexInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'r> DerefMut for BitIndexExperimental<'r> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 impl<'r> Deref for BitIndex<'r> {
     type Target = BitIndexInner;
 
@@ -76,18 +91,12 @@ impl BitIndexInner {
     }
 }
 
-// impl<'a> IntoIterator for &'a BitIndexInner {
-//     type IntoIter = Copied<Values<'a, (BitPath, MergeStage), BitIndexEntry>>;
-//     type Item = BitIndexEntry;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.entries.values().copied()
-//     }
-// }
-
 impl<'r> BitIndexExperimental<'r> {
     pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
-        todo!()
+        let index_path = repo.index_path();
+        let mtime = std::fs::metadata(index_path).as_ref().map(Timespec::mtime).ok();
+        let inner = Lockfile::lock(index_path)?;
+        Ok(Self { repo, inner, mtime })
     }
 }
 

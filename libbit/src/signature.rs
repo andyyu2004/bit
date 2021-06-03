@@ -17,16 +17,14 @@ Omit --global to set the identity only in this repository."#;
 
 impl<'r> BitRepo<'r> {
     pub fn user_signature(&self) -> BitResult<BitSignature> {
-        self.with_local_config(|config| {
-            let name = config.name()?;
-            let email = config.email()?;
-            if let (Some(name), Some(email)) = (name, email) {
-                Ok(BitSignature { name, email, time: BitTime::now() })
-            } else {
-                // this is too dumb to tell if only one of the entries is missing but whatever
-                Err(anyhow!("{}", MISSING_IDENTITY_MSG))
-            }
-        })
+        let name = self.config().name()?;
+        let email = self.config().email()?;
+        if let (Some(name), Some(email)) = (name, email) {
+            Ok(BitSignature { name, email, time: BitTime::now() })
+        } else {
+            // this is too dumb to tell if only one of the entries is missing but whatever
+            Err(anyhow!("{}", MISSING_IDENTITY_MSG))
+        }
     }
 }
 
@@ -57,6 +55,11 @@ pub struct BitTime {
 
 impl BitTime {
     pub fn now() -> Self {
+        // TODO we should consider having the time provider be variable
+        // one reason we have concrete repos is that we need to compare hashes or something like that
+        // everytime we run a commit in particular the time will change and so will the hash and
+        // everything else
+        // for testing we could consider always have some fixed time so each run is deterministic
         let now = chrono::offset::Local::now();
         let offset = BitTimeZoneOffset(now.offset().local_minus_utc() / 60);
         let time = BitEpochTime(now.timestamp());

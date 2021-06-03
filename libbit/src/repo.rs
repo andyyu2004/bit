@@ -45,9 +45,9 @@ pub trait Repo<'r> {
     type RefDb: BitRefDbBackend;
     type Index;
 
-    fn odb(&self) -> &Self::Odb;
-    fn refdb(&self) -> &Self::RefDb;
-    fn index(&self) -> &Self::Index;
+    fn odb(&self) -> BitResult<&Self::Odb>;
+    fn refdb(&self) -> BitResult<&Self::RefDb>;
+    fn index(&self) -> BitResult<&Self::Index>;
 }
 
 impl<'r> Repo<'r> for BitRepo<'r> {
@@ -58,16 +58,24 @@ impl<'r> Repo<'r> for BitRepo<'r> {
     // could consider doing something similar with the index itself
     // but this would be much less trivial change
     // and it would probably need to sit behind a LockfileGuard
-    fn odb(&self) -> &Self::Odb {
-        self.odb_cell.get().unwrap_or_else(|| bug!("odb should be initialized"))
+    fn odb(&self) -> BitResult<&Self::Odb> {
+        self.odb_cell.get_or_try_init(|| BitObjDb::new(self.bitdir.join(BIT_OBJECTS_DIR_PATH)))
     }
 
-    fn refdb(&self) -> &Self::RefDb {
-        self.refdb_cell.get_or_init(|| BitRefDb::new(*self))
+    fn refdb(&self) -> BitResult<&Self::RefDb> {
+        self.refdb_cell.get_or_try_init(|| Ok(BitRefDb::new(*self)))
     }
 
-    fn index(&self) -> &Self::Index {
-        self.index_cell.get().unwrap_or_else(|| bug!("index should be initialized"))
+    fn index(&self) -> BitResult<&Self::Index> {
+        // its unclear when to commit the index
+        // it would be nice to commit it on drop so we only read/write it exactly once per
+        // repo context which should be fine
+        // then the issue becomes when should we rollback
+        // we should rollback whenever an operation fails on the index but its unclear how to check
+        // that in a nice way
+        // stick to the `with_index` api for now
+        self.index_cell.get_or_try_init(|| BitIndexExperimental::new(*self))?;
+        panic!("don't use this api for now");
     }
 }
 
@@ -88,10 +96,6 @@ impl<'r> RepoCtxt<'r> {
             head_filepath: bitdir.join(BIT_HEAD_FILE_PATH),
             refdb_cell: Default::default(),
         };
-
-        // early init `odb_cell` as its fallible and we don't want `self.odb()` to return a result
-        this.odb_cell.get_or_try_init(|| BitObjDb::new(bitdir.join(BIT_OBJECTS_DIR_PATH)))?;
-        // this.index_cell.get_or_try_init(|| BitIndexExperimental::new(this))?;
 
         Ok(this)
     }
@@ -131,7 +135,7 @@ impl<'r> RepoCtxt<'r> {
 
         ensure!(
             version == 0,
-            "unsupported repositoryformatversion `{}`. expected version 0",
+            "unsupported repositoryformatversion `{}`, expected version 0",
             version
         );
 
@@ -315,7 +319,7 @@ impl<'r> BitRepo<'r> {
     /// e.g. if `HEAD` -> `ref: refs/heads/master`
     /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
     pub fn read_head(&self) -> BitResult<BitRef> {
-        self.refdb().read(self.head_ref())
+        self.refdb()?.read(self.head_ref())
     }
 
     pub fn update_head(&self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
@@ -325,7 +329,7 @@ impl<'r> BitRepo<'r> {
     pub fn create_branch(self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
         let resolved = from.fully_resolve(self)?;
-        self.refdb().create_branch(sym, resolved.into())
+        self.refdb()?.create_branch(sym, resolved.into())
     }
 
     pub fn update_ref(
@@ -334,28 +338,28 @@ impl<'r> BitRepo<'r> {
         to: impl Into<BitRef>,
         cause: RefUpdateCause,
     ) -> BitResult<()> {
-        self.refdb().update(sym, to.into(), cause)
+        self.refdb()?.update(sym, to.into(), cause)
     }
 
     /// writes `obj` into the object store returning its full hash
     pub fn write_obj(&self, obj: &dyn BitObj) -> BitResult<Oid> {
-        self.odb().write(obj)
+        self.odb()?.write(obj)
     }
 
     pub fn read_obj(&self, id: impl Into<BitId>) -> BitResult<BitObjKind> {
-        self.odb().read(id.into())
+        self.odb()?.read(id.into())
     }
 
     pub fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
-        self.odb().expand_prefix(prefix)
+        self.odb()?.expand_prefix(prefix)
     }
 
     pub fn obj_exists(&self, id: impl Into<BitId>) -> BitResult<bool> {
-        self.odb().exists(id.into())
+        self.odb()?.exists(id.into())
     }
 
     pub fn read_obj_header(&self, id: impl Into<BitId>) -> BitResult<BitObjHeader> {
-        self.odb().read_header(id.into())
+        self.odb()?.read_header(id.into())
     }
 
     pub fn hash_blob(&self, path: BitPath) -> BitResult<Oid> {
