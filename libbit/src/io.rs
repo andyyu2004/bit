@@ -1,8 +1,8 @@
-use crate::error::BitResult;
 use crate::hash::SHA1Hash;
 use crate::obj::Oid;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
+use crate::{error::BitResult, serialize::Serialize};
 use sha1::{digest::Output, Digest};
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
@@ -175,6 +175,28 @@ impl Deserialize for Oid {
         Self: Sized,
     {
         Ok(reader.read_oid()?)
+    }
+}
+
+impl Deserialize for Vec<u8> {
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Ok(reader.read_to_vec()?)
+    }
+}
+
+#[cfg(test)]
+impl Serialize for Vec<u8> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        Ok(writer.write_all(self)?)
+    }
+}
+
+impl<'a> Serialize for &'a [u8] {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        Ok(writer.write_all(self)?)
     }
 }
 

@@ -10,6 +10,7 @@ impl<'r> BitRepo<'r> {
         Ok(())
     }
 
+    // TODO return a BitCommitReport which includes the oid, and kind (CommitKind) etc
     pub fn commit(&self, msg: Option<String>) -> BitResult<Oid> {
         let head = self.read_head()?;
         let sym = match head {

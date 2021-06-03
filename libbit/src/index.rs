@@ -6,8 +6,8 @@ use crate::hash::BIT_HASH_SIZE;
 use crate::index;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::BitEntryIterator;
+use crate::lockfile::Filelock;
 use crate::lockfile::Lockfile;
-use crate::lockfile::LockfileGuard;
 use crate::obj::{FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
@@ -42,7 +42,7 @@ pub struct BitIndexExperimental<'r> {
     pub repo: BitRepo<'r>,
     // index file may not yet exist
     mtime: Option<Timespec>,
-    inner: LockfileGuard<BitIndexInner>,
+    inner: Filelock<BitIndexInner>,
 }
 
 impl<'r> Deref for BitIndexExperimental<'r> {
@@ -95,7 +95,7 @@ impl<'r> BitIndexExperimental<'r> {
     pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
         let index_path = repo.index_path();
         let mtime = std::fs::metadata(index_path).as_ref().map(Timespec::mtime).ok();
-        let inner = Lockfile::lock(index_path)?;
+        let inner = Filelock::lock(index_path)?;
         Ok(Self { repo, inner, mtime })
     }
 }

@@ -182,41 +182,36 @@ impl Drop for Lockfile {
 
 /// the default is `commit`, `rollback` must be explicit
 /// data must not have interior mutability otherwise changes may be ignored
-pub struct LockfileGuard<T: Serialize> {
+pub struct Filelock<T: Serialize> {
     data: T,
     lockfile: Lockfile,
     has_changes: bool,
     rolled_back: bool,
 }
 
-impl Lockfile {
-    pub fn lock_with_flags<T: Serialize + Deserialize + Default>(
-        path: BitPath,
-        flags: LockfileFlags,
-    ) -> BitResult<LockfileGuard<T>> {
+impl<T: Serialize + Deserialize + Default> Filelock<T> {
+    pub fn lock_with_flags(path: impl AsRef<Path>, flags: LockfileFlags) -> BitResult<Self> {
         let mut lockfile = Lockfile::open(path, flags)?;
         let data = match &mut lockfile.file {
             Some(file) => T::deserialize(&mut BufReader::new(file))?,
             None => T::default(),
         };
-        Ok(LockfileGuard { lockfile, data, has_changes: false, rolled_back: false })
+        Ok(Filelock { lockfile, data, has_changes: false, rolled_back: false })
     }
 
-    pub fn lock<T: Serialize + Deserialize + Default>(
-        path: BitPath,
-    ) -> BitResult<LockfileGuard<T>> {
+    pub fn lock(path: impl AsRef<Path>) -> BitResult<Self> {
         Self::lock_with_flags(path, LockfileFlags::empty())
     }
 }
 
-impl<T: Serialize> LockfileGuard<T> {
+impl<T: Serialize> Filelock<T> {
     pub fn rollback(&mut self) {
         self.rolled_back = true;
         self.lockfile.rollback();
     }
 }
 
-impl<T: Serialize> Drop for LockfileGuard<T> {
+impl<T: Serialize> Drop for Filelock<T> {
     fn drop(&mut self) {
         if self.rolled_back || !self.has_changes {
             // the lockfile drop impl will do the necessary cleanup
@@ -228,7 +223,7 @@ impl<T: Serialize> Drop for LockfileGuard<T> {
     }
 }
 
-impl<T: Serialize> Deref for LockfileGuard<T> {
+impl<T: Serialize> Deref for Filelock<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -236,10 +231,13 @@ impl<T: Serialize> Deref for LockfileGuard<T> {
     }
 }
 
-impl<T: Serialize> DerefMut for LockfileGuard<T> {
+impl<T: Serialize> DerefMut for Filelock<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // conservatively assume any mutable access results in a change
         self.has_changes = true;
         &mut self.data
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,12 +1,11 @@
 use super::{BitRef, BitReflog, SymbolicRef};
 use crate::error::BitResult;
-use crate::lockfile::{Lockfile, LockfileFlags, LockfileGuard};
+use crate::lockfile::{Filelock, Lockfile, LockfileFlags};
 use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
-use bitflags::bitflags;
 use std::fmt::{self, Display, Formatter};
 
 pub struct BitRefDb<'r> {
@@ -38,7 +37,7 @@ pub trait BitRefDbBackend {
     fn delete(&self, sym: SymbolicRef) -> BitResult<()>;
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool>;
 
-    fn read_reflog(&self, sym: SymbolicRef) -> BitResult<LockfileGuard<BitReflog>>;
+    fn read_reflog(&self, sym: SymbolicRef) -> BitResult<Filelock<BitReflog>>;
     fn log(
         &self,
         sym: SymbolicRef,
@@ -74,9 +73,12 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
         Lockfile::with_mut(self.join_ref(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
             to.serialize(lockfile)
         })?;
+
         let new_oid = self.repo.fully_resolve_ref(to)?;
         let committer = self.repo.user_signature()?;
+
         self.log(sym, new_oid, committer, cause.to_string())?;
+
         Ok(())
     }
 
@@ -90,9 +92,9 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
 
     // read_reflog is probably not a great method to have
     // probably better to have method that directly manipulate the log instead
-    fn read_reflog(&self, sym: SymbolicRef) -> BitResult<LockfileGuard<BitReflog>> {
+    fn read_reflog(&self, sym: SymbolicRef) -> BitResult<Filelock<BitReflog>> {
         let path = self.join_log(sym.path);
-        Lockfile::lock::<BitReflog>(path)
+        Filelock::lock(path)
     }
 }
 
