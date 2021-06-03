@@ -6,20 +6,18 @@ use crate::error::BitResult;
 use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::BitEntryIterator;
-use crate::lockfile::Filelock;
-use crate::lockfile::Lockfile;
+use crate::lockfile::{Filelock, Lockfile};
 use crate::obj::{FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::time::Timespec;
-use crate::util;
 pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::io::{prelude::*, BufReader};
@@ -27,7 +25,10 @@ use std::iter::Peekable;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
+use self::tree_cache::BitTreeCache;
+
 const BIT_INDEX_HEADER_SIG: &[u8; 4] = b"DIRC";
+const BIT_INDEX_TREECACHE_SIG: &[u8; 4] = b"TREE";
 const BIT_INDEX_VERSION: u32 = 2;
 
 #[derive(Debug)]
@@ -82,12 +83,12 @@ pub struct BitIndexInner {
     // the link says `name` which usually refers to the hash
     // but it is sorted by filepath
     entries: BitIndexEntries,
-    pub extensions: Vec<BitIndexExtension>,
+    tree_cache: Option<BitTreeCache>,
 }
 
 impl BitIndexInner {
-    pub fn new(entries: BitIndexEntries, extensions: Vec<BitIndexExtension>) -> Self {
-        Self { entries, extensions }
+    pub fn new(entries: BitIndexEntries, tree_cache: Option<BitTreeCache>) -> Self {
+        Self { entries, tree_cache }
     }
 }
 
@@ -366,13 +367,13 @@ impl BitIndexInner {
         Ok(BitIndexHeader { signature, version, entryc })
     }
 
-    fn parse_extensions(mut buf: &[u8]) -> BitResult<Vec<BitIndexExtension>> {
-        let mut extensions = vec![];
+    fn parse_extensions(mut buf: &[u8]) -> BitResult<HashMap<[u8; 4], BitIndexExtension>> {
+        let mut extensions = HashMap::new();
         while buf.len() > BIT_HASH_SIZE {
             let signature: [u8; 4] = buf[0..4].try_into().unwrap();
             let size = u32::from_be_bytes(buf[4..8].try_into().unwrap());
             let data = buf[8..8 + size as usize].to_vec();
-            extensions.push(BitIndexExtension { signature, size, data });
+            extensions.insert(signature, BitIndexExtension { signature, size, data });
             buf = &buf[8 + size as usize..];
         }
         Ok(extensions)
@@ -413,12 +414,16 @@ impl Serialize for BitIndexInner {
             entry.serialize(&mut hash_writer)?;
         }
 
-        for extension in &self.extensions {
-            extension.serialize(&mut hash_writer)?;
+        if let Some(tree_cache) = &self.tree_cache {
+            // TODO serialize extension header
+            // consider using a wrapper type that keeps count of the number bytes read
+            // which could be used in other places
+            // the current solution is to write into a local buffer and then count bytes then rewrite it which seems a bit unfortuante
+            tree_cache.serialize(&mut hash_writer)?;
         }
 
         let hash = hash_writer.finalize_sha1_hash();
-        hash_writer.write_bit_hash(&hash)?;
+        hash_writer.write_oid(hash)?;
         Ok(())
     }
 }
@@ -444,9 +449,17 @@ impl Deserialize for BitIndexInner {
 
         let mut remainder = vec![];
         assert!(r.read_to_end(&mut remainder)? >= BIT_HASH_SIZE);
-        let extensions = Self::parse_extensions(&remainder)?;
 
-        let bit_index = Self::new(entries, extensions);
+        let mut extensions = Self::parse_extensions(&remainder)?;
+
+        let tree_cache = extensions
+            .remove(BIT_INDEX_TREECACHE_SIG)
+            .map(|ext| BitTreeCache::deserialize(&mut BufReader::new(&ext.data[..])))
+            .transpose()?;
+
+        // TODO other extensions (REUC in particular seems somewhat common)
+
+        let bit_index = Self::new(entries, tree_cache);
 
         let (bytes, hash) = buf.split_at(buf.len() - BIT_HASH_SIZE);
         let mut hasher = sha1::Sha1::new();

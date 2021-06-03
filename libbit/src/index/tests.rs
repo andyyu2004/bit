@@ -303,7 +303,7 @@ fn parse_small_index() -> BitResult<()> {
     ]
     .into();
 
-    let expected_index = BitIndexInner::new(entries, vec![]);
+    let expected_index = BitIndexInner::new(entries, None);
 
     assert_eq!(expected_index, index);
     Ok(())

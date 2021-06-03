@@ -43,7 +43,7 @@ impl Serialize for BitIndexEntry {
         writer.write_u32(self.uid)?;
         writer.write_u32(self.gid)?;
         writer.write_u32(self.filesize)?;
-        writer.write_bit_hash(&self.hash)?;
+        writer.write_oid(self.hash)?;
         writer.write_u16(self.flags.0)?;
         writer.write_all(self.path.as_bytes())?;
         writer.write_all(&[0u8; 8][..self.padding_len()])?;

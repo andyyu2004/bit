@@ -6,6 +6,7 @@ use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
 use sha1::{digest::Output, Digest};
+use std::fmt::Display;
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
 use std::str::FromStr;
@@ -249,10 +250,10 @@ pub trait BufReadExt: BufRead {
     }
 
     /// read the bytes upto `sep` parsing as a base10 ascii numberj
-    fn read_ascii_num<T: From<u64>>(&mut self, sep: u8) -> BitResult<T> {
+    fn read_ascii_num(&mut self, sep: u8) -> BitResult<i64> {
         let mut buf = vec![];
         let i = self.read_until(sep, &mut buf)?;
-        Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse::<u64>().unwrap().into())
+        Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
     }
 
     /// read the bytes upto `sep` parsing as an ascii str
@@ -278,12 +279,21 @@ impl<R: BufRead + ?Sized> BufReadExt for R {
 }
 
 pub trait WriteExt: Write {
+    fn write_u8(&mut self, u: u8) -> io::Result<()> {
+        self.write_all(std::slice::from_ref(&u))
+    }
+
     fn write_u16(&mut self, u: u16) -> io::Result<()> {
         self.write_all(&u.to_be_bytes())
     }
 
     fn write_u32(&mut self, u: u32) -> io::Result<()> {
         self.write_all(&u.to_be_bytes())
+    }
+
+    fn write_ascii_num(&mut self, i: impl Display, sep: u8) -> io::Result<()> {
+        self.write_all(i.to_string().as_bytes())?;
+        self.write_u8(sep)
     }
 
     fn write_timespec(&mut self, t: Timespec) -> io::Result<()> {
@@ -295,8 +305,14 @@ pub trait WriteExt: Write {
         self.write_all(&u.to_be_bytes())
     }
 
-    fn write_bit_hash(&mut self, hash: &Oid) -> io::Result<()> {
-        self.write_all(hash.as_bytes())
+    fn write_null_terminated_path(&mut self, path: BitPath) -> io::Result<()> {
+        self.write_all(path.as_bytes())?;
+        self.write_u8(0)?;
+        Ok(())
+    }
+
+    fn write_oid(&mut self, oid: Oid) -> io::Result<()> {
+        self.write_all(oid.as_bytes())
     }
 }
 

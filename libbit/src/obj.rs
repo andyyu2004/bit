@@ -304,7 +304,7 @@ impl FromStr for BitObjType {
 
 pub(crate) fn read_obj_header(reader: &mut impl BufRead) -> BitResult<BitObjHeader> {
     let obj_type = reader.read_ascii_str(0x20)?;
-    let size = reader.read_ascii_num(0x00)?;
+    let size = reader.read_ascii_num(0x00)? as u64;
     Ok(BitObjHeader { obj_type, size })
 }
 
