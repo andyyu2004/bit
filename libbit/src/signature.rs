@@ -55,15 +55,16 @@ pub struct BitTime {
 
 impl BitTime {
     pub fn now() -> Self {
-        // TODO we should consider having the time provider be variable
-        // one reason we have concrete repos is that we need to compare hashes or something like that
-        // everytime we run a commit in particular the time will change and so will the hash and
-        // everything else
-        // for testing we could consider always have some fixed time so each run is deterministic
-        let now = chrono::offset::Local::now();
-        let offset = BitTimeZoneOffset(now.offset().local_minus_utc() / 60);
-        let time = BitEpochTime(now.timestamp());
-        Self { time, offset }
+        // for testing we always have some fixed time so each run is deterministic
+        // (commit oid depends on time which makes comparing oids impossible)
+        if cfg!(test) {
+            Self { time: BitEpochTime(0), offset: BitTimeZoneOffset(0) }
+        } else {
+            let now = chrono::offset::Local::now();
+            let offset = BitTimeZoneOffset(now.offset().local_minus_utc() / 60);
+            let time = BitEpochTime(now.timestamp());
+            Self { time, offset }
+        }
     }
 }
 
