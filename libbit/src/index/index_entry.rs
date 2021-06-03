@@ -1,5 +1,6 @@
 use super::*;
 use crate::error::BitGenericError;
+use crate::io::BufReadExt;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::tls;
@@ -62,15 +63,10 @@ impl Deserialize for BitIndexEntry {
         let filesize = r.read_u32()?;
         let hash = r.read_oid()?;
         let flags = BitIndexEntryFlags::new(r.read_u16()?);
+        let path = r.read_null_terminated_path()?;
 
-        // read filepath until null terminator (inclusive)
-        let mut filepath_bytes = vec![];
-        r.read_until(0x00, &mut filepath_bytes)?;
-        assert_eq!(*filepath_bytes.last().unwrap(), 0x00);
-        let filepath = util::path_from_bytes(&filepath_bytes[..filepath_bytes.len() - 1]);
-
-        assert!(filepath.is_relative());
-        assert_eq!(flags.path_len() as usize, filepath.len());
+        assert!(path.is_relative());
+        assert_eq!(flags.path_len() as usize, path.len());
 
         let entry = BitIndexEntry {
             ctime,
@@ -83,7 +79,7 @@ impl Deserialize for BitIndexEntry {
             filesize,
             hash,
             flags,
-            path: filepath,
+            path,
         };
 
         // read padding (to make entrysize multiple of 8)

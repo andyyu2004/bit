@@ -1,9 +1,9 @@
 mod index_entry;
+mod tree_cache;
 
 use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::BIT_HASH_SIZE;
-use crate::index;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::BitEntryIterator;
 use crate::lockfile::Filelock;

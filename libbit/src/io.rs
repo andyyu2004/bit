@@ -1,5 +1,6 @@
 use crate::hash::SHA1Hash;
 use crate::obj::Oid;
+use crate::path::BitPath;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
@@ -132,6 +133,13 @@ pub(crate) trait ReadExt: Read {
         Ok(Oid::new(buf))
     }
 
+    // named str to not clash with the existing method
+    fn read_to_str(&mut self) -> io::Result<String> {
+        let mut buf = String::new();
+        self.read_to_string(&mut buf)?;
+        Ok(buf)
+    }
+
     fn read_to_vec(&mut self) -> io::Result<Vec<u8>> {
         let mut buf = vec![];
         self.read_to_end(&mut buf)?;
@@ -232,6 +240,17 @@ impl<R: BufRead> BufReadExtSized for R {
 pub trait BufReadExt: BufRead {
     fn as_zlib_decode_stream(&mut self) -> BufReader<flate2::bufread::ZlibDecoder<&mut Self>> {
         BufReader::new(flate2::bufread::ZlibDecoder::new(self))
+    }
+
+    fn read_null_terminated_path(&mut self) -> BitResult<BitPath> {
+        self.read_null_terminated()
+    }
+
+    fn read_null_terminated<T: Deserialize>(&mut self) -> BitResult<T> {
+        let mut buf = vec![];
+        self.read_until(0, &mut buf)?;
+        // ignore the null character
+        T::deserialize(&mut BufReader::new(&buf[..buf.len() - 1]))
     }
 
     fn is_at_eof(&mut self) -> io::Result<bool> {

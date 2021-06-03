@@ -1,6 +1,5 @@
 use crate::error::BitResult;
 use std::io::{prelude::*, BufReader};
-use std::str::FromStr;
 
 pub trait Serialize {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()>;

@@ -1,3 +1,4 @@
+use crate::error::BitError;
 use crate::repo::BitRepo;
 
 #[test]
@@ -7,7 +8,7 @@ fn test_non_initial_empty_commit() {
         Ok(())
     })
     .unwrap_err();
-    assert_eq!(err.to_string(), "nothing to commit");
+    assert_eq!(err.to_string(), BitError::EMPTY_COMMIT_CLEAN_WORKTREE);
 }
 
 #[test]

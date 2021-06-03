@@ -1,13 +1,13 @@
 use crate::error::BitResult;
 use crate::interner::{with_path_interner, with_path_interner_mut};
 use crate::io::ReadExt;
-use crate::serialize::BufReadSeek;
+use crate::serialize::{BufReadSeek, Deserialize};
 use anyhow::Context;
 use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 use std::ops::{Deref, Index};
 use std::path::{Component, Path, PathBuf};
 use std::slice::SliceIndex;
@@ -210,6 +210,15 @@ impl<'a> Pattern<'a> for BitPath {
 impl Display for BitPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+impl Deserialize for BitPath {
+    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Ok(reader.read_to_str().map(Self::intern)?)
     }
 }
 
