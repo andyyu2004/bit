@@ -35,7 +35,7 @@ impl<'r> TreeIter<'r> {
                 .iter()
                 .cloned()
                 .rev()
-                .map(|entry| (BitPath::empty(), entry))
+                .map(|entry| (BitPath::EMPTY, entry))
                 .collect(),
         }
     }

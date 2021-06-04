@@ -5,6 +5,12 @@ pub trait Serialize {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()>;
 }
 
+impl<'a, S: Serialize + ?Sized> Serialize for &'a S {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        (**self).serialize(writer)
+    }
+}
+
 pub trait BufReadSeek: BufRead + Seek {}
 
 impl<R: BufRead + Seek> BufReadSeek for R {

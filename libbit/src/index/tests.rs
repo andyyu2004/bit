@@ -3,9 +3,21 @@ use crate::error::BitGenericError;
 use crate::obj::Treeish;
 use crate::path::BitPath;
 use itertools::Itertools;
+use quickcheck::Arbitrary;
 use std::fs::File;
 use std::io::BufReader;
 use std::str::FromStr;
+
+impl Arbitrary for BitTreeCache {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        Self {
+            path: Arbitrary::arbitrary(g),
+            entry_count: Arbitrary::arbitrary(g),
+            children: Arbitrary::arbitrary(g),
+            oid: Arbitrary::arbitrary(g),
+        }
+    }
+}
 
 impl<'r> BitRepo<'r> {
     pub fn index_add(
@@ -28,6 +40,12 @@ impl<'r> BitIndex<'r> {
         let pathspec = s.parse::<Pathspec>()?;
         self.repo.match_worktree_with(&pathspec)?.for_each(|entry| self.add_entry(entry))
     }
+}
+
+#[quickcheck]
+fn test_bit_tree_cache_serialize_and_deserialize(tree_cache: BitTreeCache) -> BitResult<()> {
+    dbg!(tree_cache);
+    Ok(())
 }
 
 #[test]

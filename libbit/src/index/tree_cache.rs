@@ -7,11 +7,11 @@ use std::io::{BufRead, Write};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BitTreeCache {
-    path: BitPath,
+    pub path: BitPath,
     // -1 means invalid
-    entry_count: isize,
-    children: Vec<BitTreeCache>,
-    oid: Oid,
+    pub entry_count: isize,
+    pub children: Vec<BitTreeCache>,
+    pub oid: Oid,
 }
 
 impl Serialize for BitTreeCache {

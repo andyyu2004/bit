@@ -419,7 +419,10 @@ impl Serialize for BitIndexInner {
             // consider using a wrapper type that keeps count of the number bytes read
             // which could be used in other places
             // the current solution is to write into a local buffer and then count bytes then rewrite it which seems a bit unfortuante
-            tree_cache.serialize(&mut hash_writer)?;
+            let mut buf = vec![];
+            tree_cache.serialize(&mut buf)?;
+            hash_writer.write_u32(buf.len() as u32)?;
+            hash_writer.write_all(&buf)?;
         }
 
         let hash = hash_writer.finalize_sha1_hash();

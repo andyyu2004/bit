@@ -27,12 +27,8 @@ impl BitPath {
         Self(u)
     }
 
-    pub fn empty() -> Self {
-        Self::intern("")
-    }
-
     pub fn is_empty(self) -> bool {
-        self == Self::empty()
+        self == Self::EMPTY
     }
 
     pub fn index(self) -> u32 {

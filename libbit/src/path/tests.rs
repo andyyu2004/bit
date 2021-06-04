@@ -1,9 +1,17 @@
 use super::*;
+use crate::test_utils::generate_sane_string;
+use quickcheck::Arbitrary;
 
 macro_rules! p {
     ($path:expr) => {
         BitPath::intern($path)
     };
+}
+
+impl Arbitrary for BitPath {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        (0..5).map(|_| p!(generate_sane_string(1..20))).fold(BitPath::EMPTY, |acc, x| acc.join(x))
+    }
 }
 
 #[test]
