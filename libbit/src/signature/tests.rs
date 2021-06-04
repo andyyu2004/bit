@@ -1,13 +1,13 @@
 use super::*;
-use crate::test_utils::generate_sane_string;
+use crate::test_utils::generate_sane_string_with_newlines;
 use quickcheck::{quickcheck, Arbitrary, Gen};
 use rand::Rng;
 
 impl Arbitrary for BitSignature {
     fn arbitrary(_g: &mut Gen) -> Self {
         Self {
-            name: generate_sane_string(5..100),
-            email: generate_sane_string(10..200),
+            name: generate_sane_string_with_newlines(5..100),
+            email: generate_sane_string_with_newlines(10..200),
             // don't care too much about this being random
             time: BitTime { time: BitEpochTime(12345678), offset: BitTimeZoneOffset(200) },
         }

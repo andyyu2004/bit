@@ -10,7 +10,7 @@ impl Arbitrary for Commit {
             parent: Arbitrary::arbitrary(g),
             author: Arbitrary::arbitrary(g),
             committer: Arbitrary::arbitrary(g),
-            gpgsig: Some(generate_sane_string(100..300)),
+            gpgsig: Some(generate_sane_string_with_newlines(100..300)),
             message: Arbitrary::arbitrary(g),
         }
     }
@@ -49,7 +49,7 @@ fn test_parse_commit_message_with_trailing_newline_in_message() {
 #[test]
 fn test_parse_and_display_commit_message() -> BitResult<()> {
     for _ in 0..100 {
-        let s = generate_sane_string(1..100);
+        let s = generate_sane_string_with_newlines(1..100);
         let msg = CommitMessage::from_str(&s)?;
         let t = msg.to_string();
         assert_eq!(s, t);

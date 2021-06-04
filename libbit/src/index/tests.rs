@@ -4,16 +4,33 @@ use crate::obj::Treeish;
 use crate::path::BitPath;
 use itertools::Itertools;
 use quickcheck::Arbitrary;
+use rand::Rng;
 use std::fs::File;
 use std::io::BufReader;
 use std::str::FromStr;
 
 impl Arbitrary for BitTreeCache {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        Self::arbitrary_depth_limited(g, rand::thread_rng().gen_range(0..30))
+    }
+}
+
+impl BitTreeCache {
+    fn arbitrary_depth_limited(g: &mut quickcheck::Gen, size: u8) -> Self {
+        let children = if size == 0 {
+            vec![]
+        } else {
+            (0..rand::thread_rng().gen_range(0..5))
+                .map(|_| Self::arbitrary_depth_limited(g, size / 2))
+                .collect_vec()
+        };
+
         Self {
+            children,
             path: Arbitrary::arbitrary(g),
-            entry_count: Arbitrary::arbitrary(g),
-            children: Arbitrary::arbitrary(g),
+            // just test non-negative numbers
+            // otherwise will generate nonzero oid with negative entry_count and stuff will go wrong
+            entry_count: u16::arbitrary(g) as isize,
             oid: Arbitrary::arbitrary(g),
         }
     }
@@ -44,7 +61,10 @@ impl<'r> BitIndex<'r> {
 
 #[quickcheck]
 fn test_bit_tree_cache_serialize_and_deserialize(tree_cache: BitTreeCache) -> BitResult<()> {
-    dbg!(tree_cache);
+    let mut buf = vec![];
+    tree_cache.serialize(&mut buf)?;
+    let parsed = BitTreeCache::deserialize_unbuffered(&buf[..])?;
+    assert_eq!(tree_cache, parsed);
     Ok(())
 }
 
@@ -80,6 +100,7 @@ fn test_add_symlink() -> BitResult<()> {
         })
     })
 }
+
 #[test]
 fn test_parse_large_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];

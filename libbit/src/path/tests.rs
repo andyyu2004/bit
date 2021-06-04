@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_utils::generate_sane_string;
+use crate::test_utils::generate_random_string;
 use quickcheck::Arbitrary;
 
 macro_rules! p {
@@ -9,8 +9,8 @@ macro_rules! p {
 }
 
 impl Arbitrary for BitPath {
-    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-        (0..5).map(|_| p!(generate_sane_string(1..20))).fold(BitPath::EMPTY, |acc, x| acc.join(x))
+    fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
+        (0..5).map(|_| p!(generate_random_string(1..10))).fold(BitPath::EMPTY, |acc, x| acc.join(x))
     }
 }
 

@@ -25,6 +25,9 @@ extern crate quickcheck;
 extern crate quickcheck_macros;
 
 #[macro_use]
+extern crate quickcheck_derive;
+
+#[macro_use]
 extern crate maplit;
 
 #[macro_use]

@@ -1,9 +1,18 @@
 use rand::Rng;
 
+pub fn generate_random_string(range: std::ops::Range<usize>) -> String {
+    let size = rand::thread_rng().gen_range(range);
+    rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(size)
+        .map(char::from)
+        .collect()
+}
+
 // String::arbitrary is not so good sometimes as it doesn't generate printable strings
 // not ideal as it doesn't generate '\n',' ','/' and other valid characters
 // does some really arbitrary crap logic but should be fine
-pub fn generate_sane_string(range: std::ops::Range<usize>) -> String {
+pub fn generate_sane_string_with_newlines(range: std::ops::Range<usize>) -> String {
     let mut newlines = rand::thread_rng().gen_range(0..10);
     let size = rand::thread_rng().gen_range(range);
     let mut s = String::new();
@@ -81,7 +90,7 @@ macro_rules! symlink {
 
 macro_rules! random {
     () => {
-        crate::test_utils::generate_sane_string(50..1000)
+        crate::test_utils::generate_sane_string_with_newlines(50..1000)
     };
 }
 
