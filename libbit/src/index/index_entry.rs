@@ -8,6 +8,7 @@ use std::fmt::{self, Debug, Formatter};
 use std::os::linux::fs::MetadataExt;
 
 #[derive(Debug, PartialEq, Clone, Default)]
+#[cfg_attr(test, derive(BitArbitrary))]
 pub struct BitIndexEntries(BitIndexEntriesMap);
 
 type BitIndexEntriesMap = BTreeMap<(BitPath, MergeStage), BitIndexEntry>;
@@ -101,6 +102,7 @@ impl Deserialize for BitIndexEntry {
 // NOTE: this type is rather large and so while it is copy out of necessity,
 // we should probably try to pass it by reference where possible
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(test, derive(BitArbitrary))]
 pub struct BitIndexEntry {
     pub ctime: Timespec,
     pub mtime: Timespec,
@@ -225,6 +227,8 @@ impl Ord for BitIndexEntry {
 // what is name really? probably path?
 // probably doesn't really matter and is fine to just default flags to 0
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
+// TODO revisit this if a less random arby impl is required
+#[cfg_attr(test, derive(BitArbitrary))]
 pub struct BitIndexEntryFlags(u16);
 
 impl Debug for BitIndexEntryFlags {

@@ -77,6 +77,7 @@ impl<'r> DerefMut for BitIndex<'r> {
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
 #[derive(Debug, PartialEq, Clone, Default)]
+#[cfg_attr(test, derive(BitArbitrary))]
 pub struct BitIndexInner {
     /// sorted by ascending by filepath (interpreted as unsigned bytes)
     /// ties broken by stage (a part of flags)
@@ -335,6 +336,13 @@ pub enum MergeStage {
     Stage1 = 1,
     Stage2 = 2,
     Stage3 = 3,
+}
+
+#[cfg(test)]
+impl quickcheck::Arbitrary for MergeStage {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        Self::None
+    }
 }
 
 impl Default for MergeStage {

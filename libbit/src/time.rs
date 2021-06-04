@@ -4,6 +4,7 @@ use std::fs::Metadata;
 use std::os::unix::prelude::MetadataExt;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(BitArbitrary))]
 pub struct Timespec {
     pub sec: u32,
     pub nano: u32,

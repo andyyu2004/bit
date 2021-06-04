@@ -84,6 +84,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bit_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -506,6 +515,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
+ "bit_derive",
  "bitflags",
  "bumpalo",
  "chrono",
@@ -528,7 +538,6 @@ dependencies = [
  "owo-colors",
  "pathdiff",
  "quickcheck",
- "quickcheck_derive",
  "quickcheck_macros",
  "rand",
  "rayon",
@@ -800,17 +809,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quickcheck_derive"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "695566b1208e5a3e5a613d3326fcdb78203e1493c81514bfb4f4460ce0694deb"
-dependencies = [
- "proc-macro2",
- "syn",
- "synstructure",
-]
-
-[[package]]
 name = "quickcheck_macros"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1038,18 +1036,6 @@ checksum = "a1e8cdbefb79a9a5a65e0db8b47b723ee907b7c7f8496c76a1770b5c310bab82"
 dependencies = [
  "proc-macro2",
  "quote",
- "unicode-xid",
-]
-
-[[package]]
-name = "synstructure"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b834f2d66f734cb897113e34aaff2f1ab4719ca946f9a7358dba8f8064148701"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
  "unicode-xid",
 ]
 

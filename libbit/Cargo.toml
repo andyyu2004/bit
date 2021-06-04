@@ -16,7 +16,6 @@ libc = "0.2.88"
 snailquote = "0.3.0"
 num_enum = "0.5.1"
 anyhow = "1.0"
-quickcheck_derive = "0.3.0"
 scoped-tls = "1"
 sha-1 = "0.9.4"
 num-traits = "0.2"
@@ -42,6 +41,8 @@ owo-colors = "2.0.0"
 maplit = "1"
 rayon = "1.5"
 diffy = { git = "https://github.com/andyyu2004/diffy" }
+
+bit_derive = { path = "../bit_derive" }
 
 [dev-dependencies]
 quickcheck = "1"
