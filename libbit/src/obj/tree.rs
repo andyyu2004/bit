@@ -41,15 +41,15 @@ impl Display for TreeEntry {
         if f.alternate() {
             write!(f, "{} {}\0{}", self.mode, self.path, unsafe {
                 // SAFETY we're just printing this out and not using it anywhere
-                std::str::from_utf8_unchecked(self.hash.as_ref())
+                std::str::from_utf8_unchecked(self.oid.as_ref())
             })
         } else {
             let obj_type = self.mode.infer_obj_type();
             debug_assert_eq!(
                 obj_type,
-                tls::with_repo(|repo| repo.read_obj_header(self.hash).unwrap().obj_type)
+                tls::with_repo(|repo| repo.read_obj_header(self.oid).unwrap().obj_type)
             );
-            write!(f, "{} {} {}\t{}", self.mode, obj_type, self.hash, self.path)
+            write!(f, "{} {} {}\t{}", self.mode, obj_type, self.oid, self.path)
         }
     }
 }
@@ -117,7 +117,7 @@ impl BitObj for Tree {
 pub struct TreeEntry {
     pub mode: FileMode,
     pub path: BitPath,
-    pub hash: Oid,
+    pub oid: Oid,
 }
 
 impl PartialOrd for TreeEntry {
@@ -156,8 +156,8 @@ impl Deserialize for TreeEntry {
 
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;
-        let hash = Oid::new(hash_bytes);
-        Ok(Self { mode, path, hash })
+        let oid = Oid::new(hash_bytes);
+        Ok(Self { mode, path, oid })
     }
 }
 
@@ -168,7 +168,7 @@ impl Serialize for TreeEntry {
         writer.write_all(b" ")?;
         write!(writer, "{}", self.path)?;
         writer.write_all(b"\0")?;
-        writer.write_all(self.hash.as_ref())?;
+        writer.write_all(self.oid.as_ref())?;
         Ok(())
     }
 }
@@ -191,7 +191,7 @@ mod tests {
             Self {
                 path: BitPath::intern(&generate_sane_string_with_newlines(1..300)),
                 mode: Arbitrary::arbitrary(g),
-                hash: Arbitrary::arbitrary(g),
+                oid: Arbitrary::arbitrary(g),
             }
         }
     }

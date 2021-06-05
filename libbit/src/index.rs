@@ -148,8 +148,8 @@ impl<'r> BitIndex<'r> {
     /// if entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
-        if entry.hash.is_unknown() {
-            entry.hash = self.repo.hash_blob(entry.path)?;
+        if entry.oid.is_unknown() {
+            entry.oid = self.repo.hash_blob(entry.path)?;
         }
         self.entries.insert(entry.key(), entry);
         Ok(())
@@ -282,10 +282,10 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
         let mut entries = BTreeSet::new();
         let current_index_dir = current_index_dir.as_ref();
         while let Some(next_entry) = self.index_entries.peek() {
-            let &BitIndexEntry { mode, path: filepath, hash, .. } = next_entry;
+            let &BitIndexEntry { mode, path, oid, .. } = next_entry;
             // if the depth is greater than the number of components in the filepath
             // then we need to `break` and go out one level
-            let (curr_dir, segment) = match filepath.try_split_path_at(depth) {
+            let (curr_dir, segment) = match path.try_split_path_at(depth) {
                 Some(x) => x,
                 None => break,
             };
@@ -295,15 +295,15 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
             }
 
             let nxt_path = curr_dir.as_path().join(segment);
-            if nxt_path == filepath.as_path() {
+            if nxt_path == path.as_path() {
                 // only keep the final segment of the path inside the tree entry
-                assert!(entries.insert(TreeEntry { mode, path: segment, hash }));
+                assert!(entries.insert(TreeEntry { mode, path: segment, oid }));
                 self.index_entries.next();
             } else {
                 let subtree = self.build_tree(&nxt_path, 1 + depth)?;
-                let hash = self.repo.write_obj(&subtree)?;
+                let oid = self.repo.write_obj(&subtree)?;
 
-                assert!(entries.insert(TreeEntry { path: segment, mode: FileMode::DIR, hash }));
+                assert!(entries.insert(TreeEntry { path: segment, mode: FileMode::DIR, oid }));
             }
         }
         Ok(Tree::new(entries))

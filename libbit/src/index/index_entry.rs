@@ -43,7 +43,7 @@ impl Serialize for BitIndexEntry {
         writer.write_u32(self.uid)?;
         writer.write_u32(self.gid)?;
         writer.write_u32(self.filesize)?;
-        writer.write_oid(self.hash)?;
+        writer.write_oid(self.oid)?;
         writer.write_u16(self.flags.0)?;
         writer.write_all(self.path.as_bytes())?;
         writer.write_all(&[0u8; 8][..self.padding_len()])?;
@@ -61,7 +61,7 @@ impl Deserialize for BitIndexEntry {
         let uid = r.read_u32()?;
         let gid = r.read_u32()?;
         let filesize = r.read_u32()?;
-        let hash = r.read_oid()?;
+        let oid = r.read_oid()?;
         let flags = BitIndexEntryFlags::new(r.read_u16()?);
         // TODO optimization of skipping ahead flags.path_len() bytes instead of a linear scan to find the next null byte
         let path = r.read_null_terminated_path()?;
@@ -78,7 +78,7 @@ impl Deserialize for BitIndexEntry {
             uid,
             gid,
             filesize,
-            hash,
+            oid,
             flags,
             path,
         };
@@ -112,8 +112,7 @@ pub struct BitIndexEntry {
     /// group identifier of the current user
     pub gid: u32,
     pub filesize: u32,
-    /// may be zero if left uncalculated (for efficiency)
-    pub hash: Oid,
+    pub oid: Oid,
     pub flags: BitIndexEntryFlags,
     pub path: BitPath,
 }
@@ -131,7 +130,7 @@ impl From<TreeEntry> for BitIndexEntry {
             uid: 0,
             gid: 0,
             filesize: 0,
-            hash: entry.hash,
+            oid: entry.oid,
             flags: BitIndexEntryFlags::new(0),
             path: entry.path,
         }
@@ -181,7 +180,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             uid: metadata.st_uid(),
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,
-            hash: Oid::UNKNOWN,
+            oid: Oid::UNKNOWN,
             flags: BitIndexEntryFlags::with_path_len(relative.len()),
         })
     }

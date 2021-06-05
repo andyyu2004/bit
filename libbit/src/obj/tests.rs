@@ -8,9 +8,9 @@ use quickcheck_macros::quickcheck;
 #[test]
 fn test_tree_entry_ordering() {
     let mut entries = BTreeSet::new();
-    let dir = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar"), hash: Oid::UNKNOWN };
+    let dir = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar"), oid: Oid::UNKNOWN };
     let file =
-        TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), hash: Oid::UNKNOWN };
+        TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), oid: Oid::UNKNOWN };
     entries.insert(dir);
     entries.insert(file);
     // files come first

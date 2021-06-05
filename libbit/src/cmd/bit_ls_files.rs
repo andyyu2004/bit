@@ -11,7 +11,7 @@ impl<'r> BitRepo<'r> {
         self.with_index(|index| {
             index.iter().for_each(|entry| {
                 if opts.stage {
-                    print!("{} {} {}\t", entry.mode, entry.hash, entry.stage())
+                    print!("{} {} {}\t", entry.mode, entry.oid, entry.stage())
                 }
                 println!("{}", entry.path);
                 Ok(())

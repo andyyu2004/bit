@@ -175,12 +175,12 @@ impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
     }
 
     fn on_match(&mut self, old: TreeEntry, new: TreeEntry) -> BitResult<()> {
-        if old.hash == new.hash && old.mode.is_dir() && new.mode.is_dir() {
+        if old.oid == new.oid && old.mode.is_dir() && new.mode.is_dir() {
             // if hashes match and both are directories we can step over them
             self.a.over()?;
             self.b.over()?;
         } else {
-            if old.hash != new.hash {
+            if old.oid != new.oid {
                 self.diff.modified.push((old, new));
             }
             self.a.next()?;
@@ -389,7 +389,7 @@ impl<'r> BitIndex<'r> {
         // should only be comparing the same file
         assert_eq!(old.path, new.path);
         // the "old" entry should always have a calculated hash
-        assert!(old.hash.is_known());
+        assert!(old.oid.is_known());
         assert_eq!(old.stage(), MergeStage::None);
 
         match self.has_changes_inner(old, new)? {
@@ -406,12 +406,12 @@ impl<'r> BitIndex<'r> {
                 assert!(!old.path.is_empty());
 
                 // file may have changed, but we are not certain, so check the hash
-                let mut new_hash = new.hash;
+                let mut new_hash = new.oid;
                 if new_hash.is_unknown() {
                     new_hash = self.repo.hash_blob(new.path)?;
                 }
 
-                let changed = old.hash != new_hash;
+                let changed = old.oid != new_hash;
                 if !changed {
                     // update index entries so we don't hit this slow path again
                     // we just replace the old entry with the new one to do the update
@@ -432,12 +432,12 @@ impl<'r> BitIndex<'r> {
         // we must check the hash before anything else in case the entry is generated from a `TreeEntry`
         // where most of the fields are zeroed but the hash is known
         // these checks confirm whether entries have definitely NOT changed
-        if old.hash == new.hash {
-            debug!("{} unchanged: hashes match {} {}", old.path, old.hash, new.hash);
+        if old.oid == new.oid {
+            debug!("{} unchanged: hashes match {} {}", old.path, old.oid, new.oid);
             return Ok(Changed::No);
-        } else if new.hash.is_known() {
+        } else if new.oid.is_known() {
             // asserted old.hash.is_known() in outer function
-            debug!("{} changed: two known hashes don't match {} {}", old.path, old.hash, new.hash);
+            debug!("{} changed: two known hashes don't match {} {}", old.path, old.oid, new.oid);
             return Ok(Changed::Yes);
         }
 

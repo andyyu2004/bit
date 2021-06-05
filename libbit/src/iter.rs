@@ -64,9 +64,9 @@ impl<'r> FallibleIterator for TreeIter<'r> {
             match self.entry_stack.pop() {
                 Some((base, mut entry)) => match entry.mode {
                     FileMode::DIR => {
-                        let tree = self.repo.read_obj(entry.hash)?.into_tree()?;
+                        let tree = self.repo.read_obj(entry.oid)?.into_tree()?;
                         let path = base.join(entry.path);
-                        debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.hash);
+                        debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
 
                         let entries = tree.entries.into_iter().rev().map(|entry| (path, entry));
 
