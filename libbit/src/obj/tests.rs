@@ -50,7 +50,7 @@ fn invalid_obj_read_unknown_obj_ty() {
 
 #[test]
 fn write_read_blob_obj() -> BitResult<()> {
-    let bit_obj = BitObjKind::Blob(Blob { bytes: b"hello".to_vec() });
+    let bit_obj = BitObjKind::Blob(Blob::new(b"hello".to_vec()));
     let bytes = bit_obj.serialize_with_headers()?;
     let parsed_bit_obj = read_obj_unbuffered(bytes.as_slice()).unwrap();
     assert_eq!(bit_obj, parsed_bit_obj);
@@ -59,7 +59,7 @@ fn write_read_blob_obj() -> BitResult<()> {
 
 #[quickcheck]
 fn read_write_blob_obj_preserves_bytes(bytes: Vec<u8>) -> BitResult<()> {
-    let bit_obj = BitObjKind::Blob(Blob { bytes });
+    let bit_obj = BitObjKind::Blob(Blob::new(bytes));
     let serialized = bit_obj.serialize_with_headers()?;
     let parsed_bit_obj = read_obj_unbuffered(serialized.as_slice()).unwrap();
     assert_eq!(bit_obj, parsed_bit_obj);

@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::obj::Oid;
+use crate::obj::{Oid, Tree};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, Serialize};
 use std::io::{BufRead, Write};
@@ -12,6 +12,13 @@ pub struct BitTreeCache {
     pub entry_count: isize,
     pub children: Vec<BitTreeCache>,
     pub oid: Oid,
+}
+
+impl BitTreeCache {
+    pub fn read_tree(&mut self, tree: &Tree) -> BitResult<()> {
+        self.entry_count = tree.entries.len() as isize;
+        todo!();
+    }
 }
 
 impl Serialize for BitTreeCache {

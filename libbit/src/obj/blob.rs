@@ -1,4 +1,4 @@
-use super::{BitObj, BitObjType};
+use super::{BitObj, BitObjShared, BitObjType};
 use crate::error::BitResult;
 use crate::io::ReadExt;
 use crate::serialize::{DeserializeSized, Serialize};
@@ -7,6 +7,7 @@ use std::io::prelude::*;
 
 #[derive(PartialEq, Debug)]
 pub struct Blob {
+    obj: BitObjShared,
     pub bytes: Vec<u8>,
 }
 
@@ -25,7 +26,7 @@ impl Blob {
     }
 
     pub fn new(bytes: Vec<u8>) -> Self {
-        Self { bytes }
+        Self { bytes, obj: BitObjShared::new(BitObjType::Blob) }
     }
 }
 
@@ -39,12 +40,12 @@ impl Serialize for Blob {
 impl DeserializeSized for Blob {
     fn deserialize_sized(reader: &mut impl BufRead, size: u64) -> BitResult<Self> {
         let bytes = reader.take(size).read_to_vec()?;
-        Ok(Self { bytes })
+        Ok(Self::new(bytes))
     }
 }
 
 impl BitObj for Blob {
-    fn obj_ty(&self) -> BitObjType {
-        BitObjType::Blob
+    fn obj_shared(&self) -> &BitObjShared {
+        &self.obj
     }
 }

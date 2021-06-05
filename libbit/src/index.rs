@@ -306,7 +306,7 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
                 assert!(entries.insert(TreeEntry { path: segment, mode: FileMode::DIR, hash }));
             }
         }
-        Ok(Tree { entries })
+        Ok(Tree::new(entries))
     }
 
     pub fn build(mut self) -> BitResult<Tree> {

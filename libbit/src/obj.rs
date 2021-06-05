@@ -17,6 +17,7 @@ use self::ref_delta::RefDelta;
 use crate::error::{BitGenericError, BitResult};
 use crate::io::{BufReadExt, ReadExt, WriteExt};
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
+use std::cell::Cell;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
 use std::io::{BufRead, BufReader, Write};
@@ -221,17 +222,27 @@ impl Deserialize for BitObjKind {
 
 // very boring impl which just delegates to the inner type
 impl BitObj for BitObjKind {
-    // TODO this is kinda dumb
-    // try make this method unnecssary
-    fn obj_ty(&self) -> BitObjType {
+    fn obj_shared(&self) -> &BitObjShared {
         match self {
-            BitObjKind::Blob(blob) => blob.obj_ty(),
-            BitObjKind::Commit(commit) => commit.obj_ty(),
-            BitObjKind::Tree(tree) => tree.obj_ty(),
-            BitObjKind::Tag(tag) => tag.obj_ty(),
-            BitObjKind::OfsDelta(ofs_delta) => ofs_delta.obj_ty(),
-            BitObjKind::RefDelta(ref_delta) => ref_delta.obj_ty(),
+            BitObjKind::Blob(blob) => blob.obj_shared(),
+            BitObjKind::Commit(commit) => commit.obj_shared(),
+            BitObjKind::Tree(tree) => tree.obj_shared(),
+            BitObjKind::Tag(tag) => tag.obj_shared(),
+            BitObjKind::OfsDelta(ofs_delta) => ofs_delta.obj_shared(),
+            BitObjKind::RefDelta(ref_delta) => ref_delta.obj_shared(),
         }
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct BitObjShared {
+    oid: Cell<Oid>,
+    ty: BitObjType,
+}
+
+impl BitObjShared {
+    pub fn new(ty: BitObjType) -> Self {
+        Self { ty, oid: Cell::new(Oid::UNKNOWN) }
     }
 }
 
@@ -241,7 +252,19 @@ impl BitObj for BitObjKind {
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
 pub trait BitObj: Serialize + DeserializeSized + Debug {
-    fn obj_ty(&self) -> BitObjType;
+    fn obj_shared(&self) -> &BitObjShared;
+
+    fn obj_ty(&self) -> BitObjType {
+        self.obj_shared().ty
+    }
+
+    fn oid(&self) -> Oid {
+        self.obj_shared().oid.get()
+    }
+
+    fn set_oid(&self, oid: Oid) {
+        self.obj_shared().oid.set(oid)
+    }
 
     /// serialize objects append on the header of `type len`
     fn serialize_with_headers(&self) -> BitResult<Vec<u8>> {

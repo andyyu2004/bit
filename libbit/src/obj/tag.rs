@@ -1,4 +1,4 @@
-use super::{BitObj, BitObjType};
+use super::{BitObj, BitObjShared, BitObjType};
 use crate::error::BitResult;
 use crate::serialize::{Deserialize, Serialize};
 use std::io::prelude::*;
@@ -22,7 +22,7 @@ impl Deserialize for Tag {
 }
 
 impl BitObj for Tag {
-    fn obj_ty(&self) -> BitObjType {
-        BitObjType::Tag
+    fn obj_shared(&self) -> &BitObjShared {
+        todo!()
     }
 }

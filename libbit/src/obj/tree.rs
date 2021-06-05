@@ -1,4 +1,4 @@
-use super::FileMode;
+use super::{BitObjShared, FileMode};
 use crate::error::BitResult;
 use crate::io::BufReadExt;
 use crate::obj::{BitObj, BitObjType, Oid};
@@ -54,23 +54,23 @@ impl Display for TreeEntry {
     }
 }
 
-#[derive(PartialEq, Debug, Default, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Tree {
+    obj: BitObjShared,
     pub entries: BTreeSet<TreeEntry>,
 }
 
-// impl IntoIterator for Tree {
-//     type IntoIter = ();
-//     type Item;
-//     fn into_iter(self) -> Self::IntoIter {
-//         todo!()
-//     }
-// }
-// impl Tree {
-//     pub fn iter(&self) -> impl BitIterator {
-//         todo!()
-//     }
-// }
+impl Tree {
+    pub fn new(entries: BTreeSet<TreeEntry>) -> Self {
+        Self { obj: BitObjShared::new(BitObjType::Tree), entries }
+    }
+}
+
+impl Default for Tree {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
 
 impl Serialize for Tree {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
@@ -108,8 +108,8 @@ impl DeserializeSized for Tree {
 }
 
 impl BitObj for Tree {
-    fn obj_ty(&self) -> BitObjType {
-        BitObjType::Tree
+    fn obj_shared(&self) -> &BitObjShared {
+        &self.obj
     }
 }
 
@@ -198,7 +198,7 @@ mod tests {
 
     impl Arbitrary for Tree {
         fn arbitrary(g: &mut Gen) -> Self {
-            Self { entries: Arbitrary::arbitrary(g) }
+            Self::new(Arbitrary::arbitrary(g))
         }
     }
 

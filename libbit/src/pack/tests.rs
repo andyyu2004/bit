@@ -84,6 +84,7 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
     let mut pack = pack()?;
     let obj = pack.read_obj(*HEAD_OID)?;
     let commit = Commit {
+        obj: BitObjShared::new(BitObjType::Commit),
         tree: "2a09245f13365a5d812a9d463595d815062b7d42".into(),
         author: BitSignature {
             name: "Andy Yu".to_owned(),
@@ -113,8 +114,8 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
 fn test_read_pack_deltified_oid() -> BitResult<()> {
     let mut pack = pack()?;
     let obj = pack.read_obj(*TREE_OID)?;
-    let tree = Tree {
-        entries: vec![
+    let tree = Tree::new(
+        vec![
             TreeEntry {
                 mode: FileMode::new(0o040000),
                 path: BitPath::intern(".cargo"),
@@ -178,7 +179,7 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
         ]
         .into_iter()
         .collect(),
-    };
+    );
 
     assert_eq!(tree, obj.into_tree()?);
     Ok(())
@@ -188,8 +189,8 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
 fn test_read_pack_deltified_oid2() -> BitResult<()> {
     let mut pack = pack()?;
     let obj = pack.read_obj(*SRC_TREE_OID)?;
-    let tree = Tree {
-        entries: vec![
+    let tree = Tree::new(
+        vec![
             TreeEntry {
                 mode: FileMode::new(0o040000),
                 path: BitPath::intern("arena"),
@@ -333,7 +334,7 @@ fn test_read_pack_deltified_oid2() -> BitResult<()> {
         ]
         .into_iter()
         .collect(),
-    };
+    );
     assert_eq!(tree, obj.into_tree()?);
     Ok(())
 }

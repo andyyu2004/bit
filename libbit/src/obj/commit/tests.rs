@@ -5,14 +5,14 @@ use quickcheck::{Arbitrary, Gen};
 
 impl Arbitrary for Commit {
     fn arbitrary(g: &mut Gen) -> Self {
-        Self {
-            tree: Arbitrary::arbitrary(g),
-            parent: Arbitrary::arbitrary(g),
-            author: Arbitrary::arbitrary(g),
-            committer: Arbitrary::arbitrary(g),
-            gpgsig: Some(generate_sane_string_with_newlines(100..300)),
-            message: Arbitrary::arbitrary(g),
-        }
+        Self::new_with_gpg(
+            Arbitrary::arbitrary(g),
+            Arbitrary::arbitrary(g),
+            Arbitrary::arbitrary(g),
+            Arbitrary::arbitrary(g),
+            Arbitrary::arbitrary(g),
+            Some(generate_sane_string_with_newlines(100..300)),
+        )
     }
 }
 
