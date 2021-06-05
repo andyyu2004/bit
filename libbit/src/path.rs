@@ -249,7 +249,7 @@ impl Ord for BitPath {
     // as "a" < "a.ext" < "a/" (where the "a/" may not actually have the trailing slash)
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // doesn't make sense to compare relative with absolute and vice versa
-        assert_eq!(self.is_relative(), other.is_relative());
+        debug_assert_eq!(self.is_relative(), other.is_relative());
 
         // files with the same subpath should come before directories
         let minlen = std::cmp::min(self.len(), other.len());

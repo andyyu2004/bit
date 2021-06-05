@@ -3,7 +3,7 @@ use crate::index::BitIndexEntry;
 use crate::obj::{FileMode, Tree, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
-use fallible_iterator::FallibleIterator;
+use fallible_iterator::{convert, FallibleIterator};
 use ignore::{Walk, WalkBuilder};
 use std::convert::TryFrom;
 use std::path::Path;
@@ -171,18 +171,18 @@ impl<'r> WorktreeIter<'r> {
         Ok(Self {
             repo,
             walk: WalkBuilder::new(repo.workdir)
-                .sort_by_file_path(|a, b| {
-                    let mut a = BitPath::intern(a);
-                    // see TreeEntry::cmp comments
-                    if a.is_dir() {
-                        a = a.join_trailing_slash();
-                    }
-                    let mut b = BitPath::intern(b);
-                    if b.is_dir() {
-                        b = b.join_trailing_slash()
-                    }
-                    a.cmp(&b)
-                })
+                // .sort_by_file_path(|a, b| {
+                //     let mut a = BitPath::intern(a);
+                //     // see TreeEntry::cmp comments
+                //     if a.is_dir() {
+                //         a = a.join_trailing_slash();
+                //     }
+                //     let mut b = BitPath::intern(b);
+                //     if b.is_dir() {
+                //         b = b.join_trailing_slash()
+                //     }
+                //     a.cmp(&b)
+                // })
                 .hidden(false)
                 .build(),
         })
@@ -225,7 +225,10 @@ pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 impl<'r> BitRepo<'r> {
     pub fn worktree_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("worktree_iter()");
-        WorktreeIter::new(self)
+        let iterator = WorktreeIter::new(self)?;
+        let mut entries = iterator.collect::<Vec<_>>()?;
+        entries.sort();
+        Ok(convert(entries.into_iter().map(Ok)))
     }
 
     pub fn tree_entry_iter(self, tree: &Tree) -> BitResult<impl BitEntryIterator + 'r> {

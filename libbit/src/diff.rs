@@ -387,10 +387,10 @@ impl<'r> BitIndex<'r> {
     pub fn has_changes(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<bool> {
         trace!("BitIndex::has_changes({} -> {})?", old.path, new.path);
         // should only be comparing the same file
-        assert_eq!(old.path, new.path);
+        debug_assert_eq!(old.path, new.path);
         // the "old" entry should always have a calculated hash
-        assert!(old.oid.is_known());
-        assert_eq!(old.stage(), MergeStage::None);
+        debug_assert!(old.oid.is_known());
+        debug_assert_eq!(old.stage(), MergeStage::None);
 
         match self.has_changes_inner(old, new)? {
             Changed::Yes => Ok(true),
@@ -403,7 +403,7 @@ impl<'r> BitIndex<'r> {
                 // a head_entry should never reach this section as it should always have a known hash
                 // (from the TreeEntry). To assert this we just check the filepath to be empty
                 // (as this is the default value given when a tree entry is converted to an index entry)
-                assert!(!old.path.is_empty());
+                debug_assert!(!old.path.is_empty());
 
                 // file may have changed, but we are not certain, so check the hash
                 let mut new_hash = new.oid;

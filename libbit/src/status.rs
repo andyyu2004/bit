@@ -3,6 +3,7 @@ use crate::error::BitResult;
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
+use fallible_iterator::FallibleIterator;
 use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
 
@@ -14,11 +15,13 @@ pub struct BitStatus {
 }
 
 impl<'r> BitRepo<'r> {
-    pub fn status(&self, pathspec: Pathspec) -> BitResult<BitStatus> {
+    pub fn status(self, pathspec: Pathspec) -> BitResult<BitStatus> {
         self.with_index_mut(|index| {
             let head = self.read_head()?;
-            let staged = index.diff_head(pathspec)?;
+            pathspec.match_worktree(self)?.count()?;
+            panic!();
             let unstaged = index.diff_worktree(pathspec)?;
+            let staged = index.diff_head(pathspec)?;
             Ok(BitStatus { head, staged, unstaged })
         })
     }
