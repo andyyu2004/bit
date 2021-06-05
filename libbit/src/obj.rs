@@ -259,11 +259,13 @@ pub trait BitObj: Serialize + DeserializeSized + Debug {
     }
 
     fn oid(&self) -> Oid {
-        self.obj_shared().oid.get()
-    }
-
-    fn set_oid(&self, oid: Oid) {
-        self.obj_shared().oid.set(oid)
+        let oid_cell = &self.obj_shared().oid;
+        let mut oid = oid_cell.get();
+        if oid.is_unknown() {
+            oid = crate::hash::hash_obj(self).expect("shouldn't really fail");
+            oid_cell.set(oid);
+        }
+        oid
     }
 
     /// serialize objects append on the header of `type len`

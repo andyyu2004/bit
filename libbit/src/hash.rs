@@ -127,7 +127,7 @@ pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> SHA1Hash {
     SHA1Hash::new(hasher.finalize().into())
 }
 
-pub fn hash_obj(obj: &impl BitObj) -> BitResult<SHA1Hash> {
+pub fn hash_obj<O: BitObj + ?Sized>(obj: &O) -> BitResult<SHA1Hash> {
     let bytes = obj.serialize_with_headers()?;
     Ok(hash_bytes(bytes.as_slice()))
 }

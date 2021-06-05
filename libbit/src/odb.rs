@@ -163,8 +163,8 @@ impl BitObjDbBackend for BitLooseObjDb {
 
     fn write(&self, obj: &dyn BitObj) -> BitResult<Oid> {
         let bytes = obj.serialize_with_headers()?;
-        let hash = hash::hash_bytes(&bytes);
-        let path = self.obj_path(hash);
+        let oid = obj.oid();
+        let path = self.obj_path(oid);
 
         #[cfg(debug_assertions)]
         if path.as_path().exists() {
@@ -173,14 +173,14 @@ impl BitObjDbBackend for BitLooseObjDb {
                 ZlibDecoder::new(File::open(path)?).read_to_end(&mut buf)?;
                 assert_eq!(buf, bytes, "same hash, different contents :O");
             }
-            return Ok(hash);
+            return Ok(oid);
         }
 
         Lockfile::with_mut(&path, LockfileFlags::SET_READONLY, |lockfile| {
             Ok(ZlibEncoder::new(lockfile, Compression::default()).write_all(&bytes)?)
         })?;
 
-        Ok(hash)
+        Ok(oid)
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {

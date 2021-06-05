@@ -353,8 +353,7 @@ impl<'r> BitRepo<'r> {
     pub fn hash_blob(&self, path: BitPath) -> BitResult<Oid> {
         let path = self.normalize(path)?;
         let bytes = path.read_to_vec()?;
-        let blob = Blob::new(bytes);
-        hash::hash_obj(&blob)
+        Ok(Blob::new(bytes).oid())
     }
 
     /// converts relative_paths to absolute paths
