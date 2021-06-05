@@ -314,6 +314,16 @@ pub trait WriteExt: Write {
     fn write_oid(&mut self, oid: Oid) -> io::Result<()> {
         self.write_all(oid.as_bytes())
     }
+
+    /// write `data` prefixed by its serialized size in bytes as a u32
+    fn write_with_size(&mut self, data: impl Serialize) -> BitResult<()> {
+        let mut buf = vec![];
+        data.serialize(&mut buf)?;
+
+        self.write_u32(buf.len() as u32)?;
+        self.write_all(&buf)?;
+        Ok(())
+    }
 }
 
 impl<W: Write + ?Sized> WriteExt for W {

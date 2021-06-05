@@ -1,6 +1,9 @@
 mod index_entry;
+mod reuc;
 mod tree_cache;
 
+use self::reuc::BitReuc;
+use self::tree_cache::BitTreeCache;
 use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::BIT_HASH_SIZE;
@@ -25,10 +28,9 @@ use std::iter::Peekable;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
-use self::tree_cache::BitTreeCache;
-
 const BIT_INDEX_HEADER_SIG: &[u8; 4] = b"DIRC";
 const BIT_INDEX_TREECACHE_SIG: &[u8; 4] = b"TREE";
+const BIT_INDEX_REUC_SIG: &[u8; 4] = b"REUC";
 const BIT_INDEX_VERSION: u32 = 2;
 
 #[derive(Debug)]
@@ -85,12 +87,21 @@ pub struct BitIndexInner {
     // but it is sorted by filepath
     entries: BitIndexEntries,
     tree_cache: Option<BitTreeCache>,
+    reuc: Option<BitReuc>,
 }
 
 impl BitIndexInner {
-    pub fn new(entries: BitIndexEntries, tree_cache: Option<BitTreeCache>) -> Self {
-        Self { entries, tree_cache }
+    pub fn new(
+        entries: BitIndexEntries,
+        tree_cache: Option<BitTreeCache>,
+        reuc: Option<BitReuc>,
+    ) -> Self {
+        Self { entries, tree_cache, reuc }
     }
+}
+
+trait BitIndexExt {
+    fn signature(&self) -> [u8; 4];
 }
 
 impl<'r> BitIndexExperimental<'r> {
@@ -423,16 +434,13 @@ impl Serialize for BitIndexInner {
         }
 
         if let Some(tree_cache) = &self.tree_cache {
-            // TODO serialize extension header
-            // consider using a wrapper type that keeps count of the number bytes read
-            // which could be used in other places
-            // the current solution is to write into a local buffer and then count bytes then rewrite it which seems a bit unfortuante
-            let mut buf = vec![];
-            tree_cache.serialize(&mut buf)?;
-
             hash_writer.write_all(BIT_INDEX_TREECACHE_SIG)?;
-            hash_writer.write_u32(buf.len() as u32)?;
-            hash_writer.write_all(&buf)?;
+            hash_writer.write_with_size(tree_cache)?;
+        }
+
+        if let Some(reuc) = &self.reuc {
+            hash_writer.write_all(BIT_INDEX_REUC_SIG)?;
+            hash_writer.write_with_size(reuc)?;
         }
 
         let hash = hash_writer.finalize_sha1_hash();
@@ -467,12 +475,20 @@ impl Deserialize for BitIndexInner {
 
         let tree_cache = extensions
             .remove(BIT_INDEX_TREECACHE_SIG)
-            .map(|ext| BitTreeCache::deserialize(&mut BufReader::new(&ext.data[..])))
+            .map(|ext| BitTreeCache::deserialize_unbuffered(&ext.data[..]))
             .transpose()?;
 
-        // TODO other extensions (REUC in particular seems somewhat common)
+        let reuc = extensions
+            .remove(BIT_INDEX_REUC_SIG)
+            .map(|ext| BitReuc::deserialize_unbuffered(&ext.data[..]))
+            .transpose()?;
 
-        let bit_index = Self::new(entries, tree_cache);
+        assert!(
+            extensions.is_empty(),
+            "unhandled index extension (its fine to ignore in practice as no extension is mandantory but its good to know)"
+        );
+
+        let bit_index = Self::new(entries, tree_cache, reuc);
 
         let (bytes, hash) = buf.split_at(buf.len() - BIT_HASH_SIZE);
         let mut hasher = sha1::Sha1::new();
