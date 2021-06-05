@@ -169,19 +169,18 @@ impl BitObjDbBackend for BitLooseObjDb {
         let oid = obj.oid();
         let path = self.obj_path(oid);
 
-        #[cfg(debug_assertions)]
         if path.as_path().exists() {
+            #[cfg(debug_assertions)]
             {
                 let mut buf = vec![];
                 ZlibDecoder::new(File::open(path)?).read_to_end(&mut buf)?;
                 assert_eq!(buf, bytes, "same hash, different contents :O");
             }
-            return Ok(oid);
+        } else {
+            Lockfile::with_mut(&path, LockfileFlags::SET_READONLY, |lockfile| {
+                Ok(ZlibEncoder::new(lockfile, Compression::default()).write_all(&bytes)?)
+            })?;
         }
-
-        Lockfile::with_mut(&path, LockfileFlags::SET_READONLY, |lockfile| {
-            Ok(ZlibEncoder::new(lockfile, Compression::default()).write_all(&bytes)?)
-        })?;
 
         Ok(oid)
     }

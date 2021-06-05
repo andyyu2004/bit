@@ -440,6 +440,15 @@ fn bit_index_build_tree_test() -> BitResult<()> {
 }
 
 #[test]
+fn test_index_add_writes_obj_to_objects_dir() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "foo");
+        assert!(repo.obj_exists(Oid::EMPTY_FILE)?);
+        Ok(())
+    })
+}
+
+#[test]
 fn test_bit_index_entry_flags() {
     let flags = BitIndexEntryFlags::new(0xb9fa);
     assert!(flags.assume_valid());

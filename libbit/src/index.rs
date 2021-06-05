@@ -148,9 +148,10 @@ impl<'r> BitIndex<'r> {
     /// if entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
-        if entry.oid.is_unknown() {
-            entry.oid = self.repo.hash_blob(entry.path)?;
-        }
+
+        let blob = self.repo.write_blob(entry.path)?;
+        entry.oid = blob.oid();
+        assert!(entry.oid.is_known());
         self.entries.insert(entry.key(), entry);
         Ok(())
     }

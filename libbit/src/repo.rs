@@ -350,10 +350,20 @@ impl<'r> BitRepo<'r> {
         self.odb()?.read_header(id.into())
     }
 
-    pub fn hash_blob(&self, path: BitPath) -> BitResult<Oid> {
+    pub fn get_blob(&self, path: BitPath) -> BitResult<Blob> {
         let path = self.normalize(path)?;
         let bytes = path.read_to_vec()?;
-        Ok(Blob::new(bytes).oid())
+        Ok(Blob::new(bytes))
+    }
+
+    pub fn write_blob(&self, path: BitPath) -> BitResult<Blob> {
+        let blob = self.get_blob(path)?;
+        self.write_obj(&blob)?;
+        Ok(blob)
+    }
+
+    pub fn hash_blob(&self, path: BitPath) -> BitResult<Oid> {
+        self.get_blob(path).map(|blob| blob.oid())
     }
 
     /// converts relative_paths to absolute paths
