@@ -3,7 +3,6 @@ use crate::error::BitResult;
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
-use fallible_iterator::FallibleIterator;
 use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
 

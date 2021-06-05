@@ -16,6 +16,7 @@ use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::time::Timespec;
+use bitflags::bitflags;
 pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
@@ -33,9 +34,16 @@ const BIT_INDEX_TREECACHE_SIG: &[u8; 4] = b"TREE";
 const BIT_INDEX_REUC_SIG: &[u8; 4] = b"REUC";
 const BIT_INDEX_VERSION: u32 = 2;
 
+bitflags! {
+    pub struct BitIndexFlags: u8 {
+        const DIRTY = 1 << 0;
+    }
+}
+
 #[derive(Debug)]
 pub struct BitIndex<'r> {
     pub repo: BitRepo<'r>,
+    pub(crate) flags: BitIndexFlags,
     // index file may not yet exist
     mtime: Option<Timespec>,
     inner: BitIndexInner,
@@ -72,10 +80,16 @@ impl<'r> Deref for BitIndex<'r> {
 
 impl<'r> DerefMut for BitIndex<'r> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        // NOTE: this makes it somewhat important for efficiency to only take `mut self` if necessary
+        // this is conservative in the sense it assumes chances are made if `inner` is borrowed mutably
+        // furthermore, we cannot use interior mutability anywhere in `BitIndexInner`
+        // also, all data in `BitIndex` must just be metadata that is not persisted otherwise that will be lost
+        self.flags.insert(BitIndexFlags::DIRTY);
         &mut self.inner
     }
 }
 
+/// representation of the index file
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -124,7 +138,7 @@ impl<'r> BitIndex<'r> {
             .transpose()?
             .unwrap_or_default();
         let mtime = std::fs::metadata(repo.index_path()).as_ref().map(Timespec::mtime).ok();
-        Ok(Self { repo, inner, mtime })
+        Ok(Self { repo, inner, mtime, flags: BitIndexFlags::empty() })
     }
 
     /// builds a tree object from the current index entries and writes it and all subtrees to disk

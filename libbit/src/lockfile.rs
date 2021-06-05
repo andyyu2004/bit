@@ -1,5 +1,4 @@
 use crate::error::BitResult;
-use crate::path::BitPath;
 use crate::serialize::Deserialize;
 use crate::serialize::Serialize;
 use anyhow::Context;
@@ -19,6 +18,8 @@ bitflags! {
     }
 }
 
+// TODO this design is getting a bit messy now with committed and rolled_back flags and what not with arbitrary dependencies between them
+
 #[derive(Debug)]
 pub struct Lockfile {
     // the file that this lockfile is guarding
@@ -30,6 +31,7 @@ pub struct Lockfile {
     path: PathBuf,
     lockfile_path: PathBuf,
     committed: Cell<bool>,
+    rolled_back: Cell<bool>,
 }
 
 impl Write for Lockfile {
@@ -79,6 +81,7 @@ impl Lockfile {
             lockfile_path,
             path: path.to_path_buf(),
             committed: Cell::new(false),
+            rolled_back: Cell::new(false),
         })
     }
 
@@ -137,6 +140,10 @@ impl Lockfile {
     /// replaces the old file if it exists
     /// commits on drop unless rollback was called
     fn commit(&self) -> io::Result<()> {
+        // ignore commit after a rollback
+        if self.rolled_back.get() {
+            return Ok(());
+        }
         let set_readonly = self.flags.contains(LockfileFlags::SET_READONLY);
         // we only do this branch if we expect it to be readonly
         // if its when this flag is false then that is unexpected and we should get an error
@@ -164,15 +171,18 @@ impl Lockfile {
         })
     }
 
-    fn rollback(&self) {
-        // does rollback actually have to anything that the drop impl doesn't do?
-        // just exists for semantic purposes for now
+    pub fn rollback(&self) {
+        // don't do anything until the drop impl
+        self.rolled_back.set(true);
     }
 }
 
 impl Drop for Lockfile {
     fn drop(&mut self) {
-        if !self.committed.get() {
+        // can't be both rolled_back and committed
+        assert!(!self.rolled_back.get() || !self.committed.get());
+        // if either explicitly rolled back, or not explicitly committed, then rollback
+        if self.rolled_back.get() || !self.committed.get() {
             self.cleanup().unwrap();
         }
     }

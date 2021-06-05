@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::index::{BitIndex, BitIndexExperimental};
+use crate::index::{BitIndex, BitIndexExperimental, BitIndexFlags};
 use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree, Treeish};
 use crate::odb::{BitObjDb, BitObjDbBackend};
@@ -210,7 +210,11 @@ impl<'r> BitRepo<'r> {
         Lockfile::with_mut(self.index_path(), LockfileFlags::SET_READONLY, |lockfile| {
             let index = &mut BitIndex::from_lockfile(self, &lockfile)?;
             let r = f(index)?;
-            index.serialize(lockfile)?;
+            if index.flags.contains(BitIndexFlags::DIRTY) {
+                index.serialize(lockfile)?;
+            } else {
+                lockfile.rollback();
+            }
             Ok(r)
         })
     }
