@@ -241,6 +241,10 @@ pub struct BitObjShared {
 }
 
 impl BitObjShared {
+    pub fn with_oid(ty: BitObjType, oid: Oid) -> Self {
+        Self { ty, oid: Cell::new(oid) }
+    }
+
     pub fn new(ty: BitObjType) -> Self {
         Self { ty, oid: Cell::new(Oid::UNKNOWN) }
     }
@@ -251,6 +255,7 @@ impl BitObjShared {
 // print user facing content that may not be pretty
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
+// implmentors of BitObj must never be mutated otherwise their `Oid` will be wrong
 pub trait BitObj: Serialize + DeserializeSized + Debug {
     fn obj_shared(&self) -> &BitObjShared;
 
@@ -261,11 +266,19 @@ pub trait BitObj: Serialize + DeserializeSized + Debug {
     fn oid(&self) -> Oid {
         let oid_cell = &self.obj_shared().oid;
         let mut oid = oid_cell.get();
+        // should this ever occur assuming every calls set_oid correctly?
+        // i.e. is this a bug
         if oid.is_unknown() {
             oid = crate::hash::hash_obj(self).expect("shouldn't really fail");
             oid_cell.set(oid);
         }
         oid
+    }
+
+    // not a fan of this api, very prone to just not setting it and then requiring an unnessary hash of the object,
+    //  and we have to set it from places that are a bit weird?
+    fn set_oid(&self, oid: Oid) {
+        self.obj_shared().oid.set(oid)
     }
 
     /// serialize objects append on the header of `type len`

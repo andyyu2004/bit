@@ -187,7 +187,9 @@ impl Pack {
     pub fn read_obj(&mut self, oid: Oid) -> BitResult<BitObjKind> {
         trace!("read_obj(oid: {}) ", oid);
         let raw = self.read_obj_raw(oid)?;
-        BitObjKind::from_raw(raw)
+        let obj = BitObjKind::from_raw(raw)?;
+        obj.set_oid(oid);
+        Ok(obj)
     }
 }
 

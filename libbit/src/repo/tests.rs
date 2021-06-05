@@ -4,6 +4,9 @@ use crate::obj;
 
 impl<'r> BitRepo<'r> {
     /// be careful when deleting `rm foo` as the symlink points at it
+    /// WARNING: be very careful when changing this sample repo,
+    /// it's probably better to create another repo based on this one
+    /// as many tests depend on this
     pub fn with_sample_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {
             touch!(repo: "foo");

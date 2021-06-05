@@ -10,7 +10,7 @@ use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::BitEntryIterator;
 use crate::lockfile::{Filelock, Lockfile};
-use crate::obj::{FileMode, Oid, Tree, TreeEntry};
+use crate::obj::{BitObj, FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
@@ -127,8 +127,8 @@ impl<'r> BitIndex<'r> {
         Ok(Self { repo, inner, mtime })
     }
 
-    /// builds a tree object from the current index entries
-    pub fn build_tree(&self) -> BitResult<Tree> {
+    /// builds a tree object from the current index entries and writes it and all subtrees to disk
+    pub fn write_tree(&self) -> BitResult<Tree> {
         if self.has_conflicts() {
             bail!("cannot write-tree an an index that is not fully merged");
         }
@@ -301,12 +301,17 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
                 self.index_entries.next();
             } else {
                 let subtree = self.build_tree(&nxt_path, 1 + depth)?;
-                let oid = self.repo.write_obj(&subtree)?;
-
-                assert!(entries.insert(TreeEntry { path: segment, mode: FileMode::DIR, oid }));
+                assert!(entries.insert(TreeEntry {
+                    path: segment,
+                    mode: FileMode::DIR,
+                    oid: subtree.oid()
+                }));
             }
         }
-        Ok(Tree::new(entries))
+
+        let tree = Tree::new(entries);
+        self.repo.write_obj(&tree)?;
+        Ok(tree)
     }
 
     pub fn build(mut self) -> BitResult<Tree> {
@@ -503,3 +508,6 @@ impl Deserialize for BitIndexInner {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod tree_cache_tests;

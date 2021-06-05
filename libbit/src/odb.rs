@@ -137,13 +137,13 @@ impl BitLooseObjDb {
         self.objects_path.join(dir).join(file)
     }
 
-    fn locate_obj(&self, id: BitId) -> BitResult<BitPath> {
-        let hash = self.expand_id(id)?;
-        let path = self.obj_path(hash);
-        if path.exists() { Ok(path) } else { Err(anyhow!(BitError::ObjectNotFound(hash.into()))) }
+    fn locate_obj(&self, id: impl Into<BitId>) -> BitResult<BitPath> {
+        let oid = self.expand_id(id.into())?;
+        let path = self.obj_path(oid);
+        if path.exists() { Ok(path) } else { Err(anyhow!(BitError::ObjectNotFound(oid.into()))) }
     }
 
-    fn read_stream(&self, id: BitId) -> BitResult<impl BufRead> {
+    fn read_stream(&self, id: impl Into<BitId>) -> BitResult<impl BufRead> {
         let reader = File::open(self.locate_obj(id)?)?;
         Ok(BufReader::new(ZlibDecoder::new(reader)))
     }
@@ -152,8 +152,11 @@ impl BitLooseObjDb {
 impl BitObjDbBackend for BitLooseObjDb {
     fn read(&self, id: BitId) -> BitResult<BitObjKind> {
         trace!("BitLooseObjDb::read(id: {})", id);
-        let mut stream = self.read_stream(id)?;
-        obj::read_obj(&mut stream)
+        let oid = self.expand_id(id)?;
+        let mut stream = self.read_stream(oid)?;
+        let obj = obj::read_obj(&mut stream)?;
+        obj.set_oid(oid);
+        Ok(obj)
     }
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {

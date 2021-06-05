@@ -74,7 +74,7 @@ impl<'r> BitRepo<'r> {
     // creates an empty repository in a temporary directory and initializes it
     pub fn with_empty_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         let basedir = tempfile::tempdir()?;
-        BitRepo::init_load(&basedir, f)
+        BitRepo::init_load(basedir.into_path(), f)
     }
 }
 
@@ -407,7 +407,7 @@ fn parse_index_header() -> BitResult<()> {
 #[test]
 fn bit_index_build_tree_test() -> BitResult<()> {
     BitRepo::find("tests/repos/indextest", |repo| {
-        let tree = repo.with_index(|index| index.build_tree())?;
+        let tree = repo.with_index(|index| index.write_tree())?;
         let entries = tree.entries.into_iter().collect_vec();
         assert_eq!(entries[0].path, "dir");
         assert_eq!(entries[0].mode, FileMode::DIR);

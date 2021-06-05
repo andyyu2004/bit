@@ -84,7 +84,10 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
     let mut pack = pack()?;
     let obj = pack.read_obj(*HEAD_OID)?;
     let commit = Commit {
-        obj: BitObjShared::new(BitObjType::Commit),
+        obj: BitObjShared::with_oid(
+            BitObjType::Commit,
+            "1806658f16f76480a3f40461db577a02d1e01591".into(),
+        ),
         tree: "2a09245f13365a5d812a9d463595d815062b7d42".into(),
         author: BitSignature {
             name: "Andy Yu".to_owned(),
@@ -180,6 +183,8 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
         .into_iter()
         .collect(),
     );
+
+    tree.set_oid("2a09245f13365a5d812a9d463595d815062b7d42".into());
 
     assert_eq!(tree, obj.into_tree()?);
     Ok(())
@@ -335,6 +340,7 @@ fn test_read_pack_deltified_oid2() -> BitResult<()> {
         .into_iter()
         .collect(),
     );
+    tree.set_oid("223ee1fdad64a152c8e88a5472233dbc2e0119aa".into());
     assert_eq!(tree, obj.into_tree()?);
     Ok(())
 }

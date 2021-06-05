@@ -1,7 +1,8 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::obj::{Oid, Tree};
+use crate::obj::{BitObj, BitObjKind, Oid, Tree};
 use crate::path::BitPath;
+use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use std::io::{BufRead, Write};
 
@@ -9,14 +10,41 @@ use std::io::{BufRead, Write};
 pub struct BitTreeCache {
     pub path: BitPath,
     // -1 means invalid
+    // the number of entries in the index that is covered by the tree this entry represents
     pub entry_count: isize,
     pub children: Vec<BitTreeCache>,
     pub oid: Oid,
 }
 
+impl Default for BitTreeCache {
+    fn default() -> Self {
+        Self { path: BitPath::EMPTY, oid: Oid::UNKNOWN, entry_count: -1, children: vec![] }
+    }
+}
+
 impl BitTreeCache {
-    pub fn read_tree(&mut self, tree: &Tree) -> BitResult<()> {
-        self.entry_count = tree.entries.len() as isize;
+    pub fn read_tree(repo: BitRepo<'_>, tree: &Tree) -> BitResult<Self> {
+        let mut cache_tree = Self::default();
+        cache_tree.oid = tree.oid();
+        cache_tree.entry_count = 0;
+
+        // alloacate a conservative amount of space assuming all entries are trees
+        cache_tree.children = Vec::with_capacity(tree.entries.len());
+
+        for entry in &tree.entries {
+            match repo.read_obj(entry.oid)? {
+                BitObjKind::Blob(..) => cache_tree.entry_count += 1,
+                BitObjKind::Tree(subtree) => {
+                    let child = Self::read_tree(repo, &subtree)?;
+                    cache_tree.entry_count += child.entry_count;
+                    cache_tree.children.push(child);
+                }
+                BitObjKind::Commit(..)
+                | BitObjKind::Tag(..)
+                | BitObjKind::OfsDelta(..)
+                | BitObjKind::RefDelta(..) => unreachable!(),
+            }
+        }
         todo!();
     }
 }
