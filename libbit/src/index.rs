@@ -140,15 +140,15 @@ impl<'r> BitIndex<'r> {
         if entry.hash.is_unknown() {
             entry.hash = self.repo.hash_blob(entry.path)?;
         }
-        self.entries.insert(entry.as_key(), entry);
+        self.entries.insert(entry.key(), entry);
         Ok(())
     }
 
     pub fn remove_entry(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
         assert!(
-            self.entries.remove(&entry.as_key()).is_some(),
+            self.entries.remove(&entry.key()).is_some(),
             "tried to remove nonexistent entry `{:?}`",
-            entry.as_key()
+            entry.key()
         );
         Ok(())
     }
@@ -429,6 +429,8 @@ impl Serialize for BitIndexInner {
             // the current solution is to write into a local buffer and then count bytes then rewrite it which seems a bit unfortuante
             let mut buf = vec![];
             tree_cache.serialize(&mut buf)?;
+
+            hash_writer.write_all(BIT_INDEX_TREECACHE_SIG)?;
             hash_writer.write_u32(buf.len() as u32)?;
             hash_writer.write_all(&buf)?;
         }

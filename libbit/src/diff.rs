@@ -416,7 +416,7 @@ impl<'r> BitIndex<'r> {
                     // update index entries so we don't hit this slow path again
                     // we just replace the old entry with the new one to do the update
                     // TODO add test for this
-                    debug_assert_eq!(old.as_key(), new.as_key());
+                    debug_assert_eq!(old.key(), new.key());
                     self.add_entry(*new)?;
                 }
                 Ok(changed)

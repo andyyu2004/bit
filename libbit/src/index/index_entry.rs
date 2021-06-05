@@ -8,7 +8,6 @@ use std::fmt::{self, Debug, Formatter};
 use std::os::linux::fs::MetadataExt;
 
 #[derive(Debug, PartialEq, Clone, Default)]
-#[cfg_attr(test, derive(BitArbitrary))]
 pub struct BitIndexEntries(BitIndexEntriesMap);
 
 type BitIndexEntriesMap = BTreeMap<(BitPath, MergeStage), BitIndexEntry>;
@@ -64,10 +63,11 @@ impl Deserialize for BitIndexEntry {
         let filesize = r.read_u32()?;
         let hash = r.read_oid()?;
         let flags = BitIndexEntryFlags::new(r.read_u16()?);
+        // TODO optimization of skipping ahead flags.path_len() bytes instead of a linear scan to find the next null byte
         let path = r.read_null_terminated_path()?;
 
         assert!(path.is_relative());
-        assert_eq!(flags.path_len() as usize, path.len());
+        assert!(path.len() <= 0xfff && flags.path_len() as usize == path.len());
 
         let entry = BitIndexEntry {
             ctime,
@@ -102,7 +102,6 @@ impl Deserialize for BitIndexEntry {
 // NOTE: this type is rather large and so while it is copy out of necessity,
 // we should probably try to pass it by reference where possible
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[cfg_attr(test, derive(BitArbitrary))]
 pub struct BitIndexEntry {
     pub ctime: Timespec,
     pub mtime: Timespec,
@@ -140,7 +139,7 @@ impl From<TreeEntry> for BitIndexEntry {
 }
 
 impl BitIndexEntry {
-    pub fn as_key(&self) -> (BitPath, MergeStage) {
+    pub fn key(&self) -> (BitPath, MergeStage) {
         (self.path, self.stage())
     }
 }

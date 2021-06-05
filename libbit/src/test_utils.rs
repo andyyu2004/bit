@@ -34,6 +34,14 @@ pub fn generate_sane_string_with_newlines(range: std::ops::Range<usize>) -> Stri
     s
 }
 
+macro_rules! test_serde {
+    ($item:ident) => {{
+        let mut buf = vec![];
+        $item.serialize(&mut buf)?;
+        assert_eq!($item, Deserialize::deserialize_unbuffered(&buf[..])?);
+        Ok(())
+    }};
+}
 macro_rules! bit_commit {
     ($repo:expr) => {
         $repo.commit(Some(String::from("arbitrary message")))?;

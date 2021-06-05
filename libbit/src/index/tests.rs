@@ -9,9 +9,36 @@ use std::fs::File;
 use std::io::BufReader;
 use std::str::FromStr;
 
+impl Arbitrary for BitIndexEntries {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        // can't derive arbitrary as the key will not match the actual entry
+        Vec::<BitIndexEntry>::arbitrary(g).into()
+    }
+}
+
 impl Arbitrary for BitTreeCache {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
         Self::arbitrary_depth_limited(g, rand::thread_rng().gen_range(0..30))
+    }
+}
+
+impl Arbitrary for BitIndexEntry {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        let path = BitPath::arbitrary(g);
+        let flags = BitIndexEntryFlags::with_path_len(path.len());
+        Self {
+            ctime: Arbitrary::arbitrary(g),
+            mtime: Arbitrary::arbitrary(g),
+            device: Arbitrary::arbitrary(g),
+            inode: Arbitrary::arbitrary(g),
+            mode: Arbitrary::arbitrary(g),
+            uid: Arbitrary::arbitrary(g),
+            gid: Arbitrary::arbitrary(g),
+            filesize: Arbitrary::arbitrary(g),
+            hash: Arbitrary::arbitrary(g),
+            flags,
+            path,
+        }
     }
 }
 
@@ -60,12 +87,18 @@ impl<'r> BitIndex<'r> {
 }
 
 #[quickcheck]
+fn test_bit_index_entry_serialize_and_deserialize(index_entry: BitIndexEntry) -> BitResult<()> {
+    test_serde!(index_entry)
+}
+
+#[quickcheck]
 fn test_bit_tree_cache_serialize_and_deserialize(tree_cache: BitTreeCache) -> BitResult<()> {
-    let mut buf = vec![];
-    tree_cache.serialize(&mut buf)?;
-    let parsed = BitTreeCache::deserialize_unbuffered(&buf[..])?;
-    assert_eq!(tree_cache, parsed);
-    Ok(())
+    test_serde!(tree_cache)
+}
+
+#[quickcheck]
+fn test_bit_index_serialize_and_deserialize(index: BitIndexInner) -> BitResult<()> {
+    test_serde!(index)
 }
 
 #[test]
