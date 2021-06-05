@@ -1,8 +1,91 @@
 use super::*;
 use crate::path::BitPath;
+use crate::repo::BitRepo;
 use crate::test_utils::*;
 use quickcheck::{Arbitrary, Gen};
 use quickcheck_macros::quickcheck;
+
+#[derive(Debug)]
+pub enum DebugTreeEntry {
+    Tree(DebugTree),
+    File(TreeEntry),
+}
+
+impl DebugTreeEntry {
+    pub fn path(&self) -> BitPath {
+        match self {
+            DebugTreeEntry::Tree(tree) => tree.path,
+            DebugTreeEntry::File(file) => file.path,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DebugTree {
+    path: BitPath,
+    oid: Oid,
+    entries: Vec<DebugTreeEntry>,
+}
+
+macro_rules! indent {
+    ($f:expr, $indents:expr) => {
+        write!($f, "{} ", (0..$indents).map(|_| "   ").fold(String::new(), |acc, x| acc + x))?
+    };
+}
+
+impl Display for DebugTreeEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        indent!(f, self.path().components().len());
+        match self {
+            DebugTreeEntry::Tree(tree) => write!(f, "{}", tree),
+            DebugTreeEntry::File(entry) => writeln!(
+                f,
+                "{} ({})",
+                entry.path.file_name().and_then(|os_str| os_str.to_str()).unwrap(),
+                entry.oid
+            ),
+        }
+    }
+}
+
+impl Display for DebugTree {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{}/ ({})",
+            self.path.file_name().and_then(|os_str| os_str.to_str()).unwrap_or("."),
+            self.oid
+        )?;
+        for entry in &self.entries {
+            write!(f, "{}", entry)?;
+        }
+        Ok(())
+    }
+}
+
+impl BitRepo<'_> {
+    // get a view of the entire recursive tree structure
+    pub fn debug_tree(self, tree: &Tree) -> BitResult<DebugTree> {
+        self.debug_tree_internal(tree, BitPath::EMPTY)
+    }
+
+    fn debug_tree_internal(self, tree: &Tree, path: BitPath) -> BitResult<DebugTree> {
+        let mut entries = Vec::with_capacity(tree.entries.len());
+        for &entry in &tree.entries {
+            let path = path.join(entry.path);
+            let entry = TreeEntry { path, ..entry };
+            let dbg_entry = match self.read_obj(entry.oid)? {
+                BitObjKind::Blob(..) => DebugTreeEntry::File(entry),
+                BitObjKind::Tree(tree) =>
+                    DebugTreeEntry::Tree(self.debug_tree_internal(&tree, path)?),
+                _ => unreachable!(),
+            };
+            entries.push(dbg_entry);
+        }
+
+        Ok(DebugTree { path, entries, oid: tree.oid() })
+    }
+}
 
 impl Arbitrary for FileMode {
     fn arbitrary(_g: &mut Gen) -> Self {

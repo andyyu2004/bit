@@ -1,5 +1,4 @@
 use crate::error::BitResult;
-use crate::hash;
 use crate::index::{BitIndex, BitIndexExperimental};
 use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree, Treeish};
