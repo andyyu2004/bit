@@ -11,6 +11,7 @@ pub struct BitTreeCache {
     pub path: BitPath,
     // -1 means invalid
     // the number of entries in the index that is covered by the tree this entry represents
+    // (i.e. the number of "files" under this tree)
     pub entry_count: isize,
     pub children: Vec<BitTreeCache>,
     pub oid: Oid,
@@ -23,10 +24,15 @@ impl Default for BitTreeCache {
 }
 
 impl BitTreeCache {
-    pub fn read_tree(repo: BitRepo<'_>, tree: &Tree) -> BitResult<Self> {
+    pub fn read_tree_cache(repo: BitRepo<'_>, tree: &Tree) -> BitResult<Self> {
+        Self::read_tree_internal(repo, tree, BitPath::EMPTY)
+    }
+
+    fn read_tree_internal(repo: BitRepo<'_>, tree: &Tree, path: BitPath) -> BitResult<Self> {
         let mut cache_tree = Self::default();
         cache_tree.oid = tree.oid();
         cache_tree.entry_count = 0;
+        cache_tree.path = path;
 
         // alloacate a conservative amount of space assuming all entries are trees
         cache_tree.children = Vec::with_capacity(tree.entries.len());
@@ -35,7 +41,7 @@ impl BitTreeCache {
             match repo.read_obj(entry.oid)? {
                 BitObjKind::Blob(..) => cache_tree.entry_count += 1,
                 BitObjKind::Tree(subtree) => {
-                    let child = Self::read_tree(repo, &subtree)?;
+                    let child = Self::read_tree_internal(repo, &subtree, path.join(entry.path))?;
                     cache_tree.entry_count += child.entry_count;
                     cache_tree.children.push(child);
                 }
