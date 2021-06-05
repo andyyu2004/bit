@@ -1,9 +1,8 @@
+use super::*;
 use crate::obj::Oid;
 use crate::path::BitPath;
-use std::collections::BTreeSet;
-
-use super::*;
 use quickcheck_macros::quickcheck;
+use std::collections::BTreeSet;
 
 #[test]
 fn test_tree_entry_ordering() {

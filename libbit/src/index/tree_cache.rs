@@ -45,7 +45,8 @@ impl BitTreeCache {
                 | BitObjKind::RefDelta(..) => unreachable!(),
             }
         }
-        todo!();
+
+        Ok(cache_tree)
     }
 }
 

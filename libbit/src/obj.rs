@@ -371,4 +371,8 @@ pub(crate) fn read_obj(reader: &mut impl BufRead) -> BitResult<BitObjKind> {
 }
 
 #[cfg(test)]
+mod commit_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tree_tests;

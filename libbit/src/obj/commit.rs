@@ -217,6 +217,3 @@ impl BitObj for Commit {
         &self.obj
     }
 }
-
-#[cfg(test)]
-mod tests;
