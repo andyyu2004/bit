@@ -7,6 +7,7 @@ use fallible_iterator::{convert, FallibleIterator};
 use ignore::{Walk, WalkBuilder};
 use std::convert::TryFrom;
 use std::path::Path;
+use walkdir::WalkDir;
 
 impl<'r> BitRepo<'r> {
     pub fn head_tree_iter(self) -> BitResult<TreeIter<'r>> {
@@ -163,28 +164,30 @@ impl FallibleIterator for DirIter {
 
 struct WorktreeIter<'r> {
     repo: BitRepo<'r>,
-    walk: Walk,
+    walk: walkdir::IntoIter,
 }
 
 impl<'r> WorktreeIter<'r> {
     pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
         Ok(Self {
             repo,
-            walk: WalkBuilder::new(repo.workdir)
-                // .sort_by_file_path(|a, b| {
-                //     let mut a = BitPath::intern(a);
-                //     // see TreeEntry::cmp comments
-                //     if a.is_dir() {
-                //         a = a.join_trailing_slash();
-                //     }
-                //     let mut b = BitPath::intern(b);
-                //     if b.is_dir() {
-                //         b = b.join_trailing_slash()
-                //     }
-                //     a.cmp(&b)
-                // })
-                .hidden(false)
-                .build(),
+            walk: WalkDir::new(repo.workdir)
+                .sort_by(|a, b| {
+                    let x = a.path().to_str().unwrap();
+                    let y = b.path().to_str().unwrap();
+
+                    //  for ordering and avoiding allocation where possible
+                    let t = a.file_type().is_dir().then(|| x.to_owned() + "/");
+                    let u = b.file_type().is_dir().then(|| y.to_owned() + "/");
+
+                    match (&t, &u) {
+                        (None, None) => BitPath::path_cmp(x, y),
+                        (None, Some(u)) => BitPath::path_cmp(x, u),
+                        (Some(t), None) => BitPath::path_cmp(t, y),
+                        (Some(t), Some(u)) => BitPath::path_cmp(t, u),
+                    }
+                })
+                .into_iter(),
         })
     }
 
@@ -202,6 +205,7 @@ impl FallibleIterator for WorktreeIter<'_> {
 
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
         // ignore directories
+        // does this not have an iterator api??? yikers
         let direntry = loop {
             match self.walk.next().transpose()? {
                 Some(entry) => {
@@ -225,10 +229,7 @@ pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 impl<'r> BitRepo<'r> {
     pub fn worktree_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("worktree_iter()");
-        let iterator = WorktreeIter::new(self)?;
-        let mut entries = iterator.collect::<Vec<_>>()?;
-        entries.sort();
-        Ok(convert(entries.into_iter().map(Ok)))
+        WorktreeIter::new(self)
     }
 
     pub fn tree_entry_iter(self, tree: &Tree) -> BitResult<impl BitEntryIterator + 'r> {

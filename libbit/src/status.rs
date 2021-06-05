@@ -18,10 +18,8 @@ impl<'r> BitRepo<'r> {
     pub fn status(self, pathspec: Pathspec) -> BitResult<BitStatus> {
         self.with_index_mut(|index| {
             let head = self.read_head()?;
-            pathspec.match_worktree(self)?.count()?;
-            panic!();
-            let unstaged = index.diff_worktree(pathspec)?;
             let staged = index.diff_head(pathspec)?;
+            let unstaged = index.diff_worktree(pathspec)?;
             Ok(BitStatus { head, staged, unstaged })
         })
     }

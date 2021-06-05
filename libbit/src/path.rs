@@ -250,10 +250,17 @@ impl Ord for BitPath {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // doesn't make sense to compare relative with absolute and vice versa
         debug_assert_eq!(self.is_relative(), other.is_relative());
+        Self::path_cmp(self.as_str(), other.as_str())
+    }
+}
 
+impl BitPath {
+    pub fn path_cmp(a: &str, b: &str) -> std::cmp::Ordering {
         // files with the same subpath should come before directories
-        let minlen = std::cmp::min(self.len(), other.len());
-        self[..minlen].cmp(&other[..minlen]).then_with(|| self.len().cmp(&other.len()))
+        let m = a.len();
+        let n = b.len();
+        let minlen = std::cmp::min(m, n);
+        a[..minlen].cmp(&b[..minlen]).then_with(|| m.cmp(&n))
     }
 }
 

@@ -550,6 +550,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "typed-arena",
+ "walkdir",
 ]
 
 [[package]]
