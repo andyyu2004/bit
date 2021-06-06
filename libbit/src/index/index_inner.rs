@@ -26,6 +26,10 @@ impl BitIndexInner {
         Self { entries, tree_cache, reuc }
     }
 
+    pub fn tree_cache(&self) -> Option<&BitTreeCache> {
+        self.tree_cache.as_ref()
+    }
+
     pub fn entries(&self) -> &BitIndexEntries {
         &self.entries
     }

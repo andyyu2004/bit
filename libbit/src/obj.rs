@@ -110,7 +110,7 @@ impl FileMode {
         self.0 & Self::IFFMT == mask
     }
 
-    pub fn is_dir(self) -> bool {
+    pub fn is_tree(self) -> bool {
         self.is_type(Self::IFDIR)
     }
 

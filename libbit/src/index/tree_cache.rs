@@ -24,21 +24,31 @@ impl Default for BitTreeCache {
     }
 }
 
-impl BitTreeCache {
-    pub fn find_child(&self, path: impl AsRef<Path>) -> Option<&BitTreeCache> {
-        let path = path.as_ref();
-        debug_assert!(path.is_relative());
-        if self.path.as_path() == path {
-            return Some(self);
+macro_rules! find_child_base_case {
+    ($self:expr, $path:ident) => {
+        let $path = $path.as_ref();
+        debug_assert!($path.is_relative());
+        if $self.path.as_path() == $path {
+            return Some($self);
         }
+    };
+}
+
+impl BitTreeCache {
+    pub fn find_valid_child(&self, path: impl AsRef<Path>) -> Option<&BitTreeCache> {
+        match self.find_child(path) {
+            Some(child) if child.entry_count < 0 => Some(child),
+            _ => None,
+        }
+    }
+
+    pub fn find_child(&self, path: impl AsRef<Path>) -> Option<&BitTreeCache> {
+        find_child_base_case!(self, path);
         self.children.iter().find_map(|child| child.find_child(path))
     }
 
     pub fn find_child_mut(&mut self, path: impl AsRef<Path>) -> Option<&mut BitTreeCache> {
-        let path = path.as_ref();
-        if self.path.as_path() == path {
-            return Some(self);
-        }
+        find_child_base_case!(self, path);
         self.children.iter_mut().find_map(|child| child.find_child_mut(path))
     }
 
@@ -52,8 +62,12 @@ impl BitTreeCache {
         }
     }
 
+    pub fn is_valid(&self) -> bool {
+        self.entry_count < 0
+    }
+
     pub fn is_fully_valid(&self) -> bool {
-        if self.entry_count < 0 {
+        if self.is_valid() {
             false
         } else {
             self.children.iter().all(|child| child.is_fully_valid())

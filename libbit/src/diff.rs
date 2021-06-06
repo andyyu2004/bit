@@ -127,6 +127,12 @@ pub struct TreeDiff {
     pub deleted: Vec<TreeEntry>,
 }
 
+impl TreeDiff {
+    pub fn is_empty(&self) -> bool {
+        self.new.is_empty() && self.modified.is_empty() && self.deleted.is_empty()
+    }
+}
+
 pub struct TreeDifferImpl<'r> {
     repo: BitRepo<'r>,
     a: TreeIter<'r>,
@@ -176,7 +182,7 @@ impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
     fn on_match(&mut self, old: TreeEntry, new: TreeEntry) -> BitResult<()> {
         debug_assert!(old.oid.is_known());
         debug_assert!(new.oid.is_known());
-        if old.oid == new.oid && old.mode.is_dir() && new.mode.is_dir() {
+        if old.oid == new.oid && old.mode.is_tree() && new.mode.is_tree() {
             // if hashes match and both are directories we can step over them
             self.a.over()?;
             self.b.over()?;
@@ -184,8 +190,8 @@ impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
             if old.oid != new.oid {
                 self.diff.modified.push((old, new));
             }
-            self.b.next()?;
             self.a.next()?;
+            self.b.next()?;
         }
 
         Ok(())

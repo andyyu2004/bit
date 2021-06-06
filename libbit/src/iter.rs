@@ -25,12 +25,16 @@ pub struct TreeIter<'r> {
     repo: BitRepo<'r>,
     // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself
     entry_stack: Vec<(BitPath, TreeEntry)>,
+    // the entries of the directory that was just yielded
+    // if stepped over, then these are dropped, otherwise they are added to the stack
+    dir_entries: Option<Vec<(BitPath, TreeEntry)>>,
 }
 
 impl<'r> TreeIter<'r> {
     pub fn new(repo: BitRepo<'r>, tree: &Tree) -> Self {
         Self {
             repo,
+            dir_entries: None,
             entry_stack: tree
                 .entries
                 .iter()
@@ -44,6 +48,9 @@ impl<'r> TreeIter<'r> {
 
 /// tree iterators allow stepping over entire trees (skipping all entries recursively)
 pub trait TreeIterator: BitIterator<TreeEntry> {
+    /// unstable semantics
+    /// if the next entry is a tree then yield the tree entry but skip over its contents
+    /// otherwise does the same as next
     fn over(&mut self) -> BitResult<Option<TreeEntry>>;
 
     // seems difficult to provide a peek method just via an adaptor
@@ -61,6 +68,10 @@ impl<'r> FallibleIterator for TreeIter<'r> {
     type Item = TreeEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        if let Some(entries) = self.dir_entries.take() {
+            self.entry_stack.extend(entries)
+        }
+
         loop {
             match self.entry_stack.pop() {
                 Some((base, mut entry)) => match entry.mode {
@@ -69,14 +80,11 @@ impl<'r> FallibleIterator for TreeIter<'r> {
                         let path = base.join(entry.path);
                         debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
 
-                        let entries = tree.entries.into_iter().rev().map(|entry| (path, entry));
-
-                        // if no subentries then we want to yield the directory/tree itself
-                        if entries.is_empty() {
-                            return Ok(Some(TreeEntry { path, ..entry }));
-                        } else {
-                            self.entry_stack.extend(entries);
-                        }
+                        let entries =
+                            tree.entries.into_iter().rev().map(|entry| (path, entry)).collect();
+                        debug_assert!(self.dir_entries.is_none());
+                        self.dir_entries = Some(entries);
+                        return Ok(Some(TreeEntry { path, ..entry }));
                     }
                     FileMode::REG | FileMode::LINK | FileMode::EXEC => {
                         debug!("TreeIter::next: entry: {:?}", entry);
@@ -95,22 +103,14 @@ impl<'r> FallibleIterator for TreeIter<'r> {
 
 impl<'r> TreeIterator for TreeIter<'r> {
     fn over(&mut self) -> BitResult<Option<TreeEntry>> {
-        loop {
-            // TODO can dry out this code (with above) if it turns out to be what we want
-            match self.entry_stack.pop() {
-                Some((base, mut entry)) => match entry.mode {
-                    // step over for trees returns the entry but does not recurse into it
-                    FileMode::DIR | FileMode::REG | FileMode::LINK | FileMode::EXEC => {
-                        debug!("HeadIter::over: entry: {:?}", entry);
-                        entry.path = base.join(entry.path);
-                        return Ok(Some(entry));
-                    }
-                    // ignore submodules for now
-                    FileMode::GITLINK => continue,
-                    _ => unreachable!("found unknown filemode `{}`", entry.mode),
-                },
-                None => return Ok(None),
+        match self.next()? {
+            Some(entry) => {
+                if entry.mode == FileMode::DIR {
+                    self.dir_entries.take();
+                }
+                Ok(Some(entry))
             }
+            None => Ok(None),
         }
     }
 
@@ -122,11 +122,12 @@ impl<'r> TreeIterator for TreeIter<'r> {
 struct IndexTreeIter<'a, 'r> {
     index: &'a BitIndex<'r>,
     iter: Peekable<IndexEntryIterator>,
+    current: Option<TreeEntry>,
 }
 
 impl<'a, 'r> IndexTreeIter<'a, 'r> {
     pub fn new(index: &'a BitIndex<'r>) -> Self {
-        Self { index, iter: index.iter().peekable() }
+        Self { index, iter: index.iter().peekable(), current: None }
     }
 }
 
@@ -135,12 +136,37 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
     type Item = TreeEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        Ok(self.iter.next()?.map(TreeEntry::from))
+        self.current = self.iter.next()?.map(TreeEntry::from);
+        Ok(self.current)
+    }
+}
+
+impl<'a, 'r> IndexTreeIter<'a, 'r> {
+    fn has_changed_dir(&self, next: BitPath) -> bool {
+        // check whether the current path and next path belong to the same directory
+        self.current.map(|entry| entry.path).unwrap_or(BitPath::EMPTY).parent() == next.parent()
     }
 }
 
 impl<'a, 'r> TreeIterator for IndexTreeIter<'a, 'r> {
     fn over(&mut self) -> BitResult<Option<TreeEntry>> {
+        let entry = match self.peek()? {
+            Some(entry) => entry,
+            None => return self.next(),
+        };
+
+        // if its not a "directory", then there is nothing to skip
+        if !self.has_changed_dir(entry.path) {
+            return self.next();
+        }
+
+        if let Some(tree_cache) = self.index.tree_cache().and_then(|cache| {
+            cache.find_valid_child(entry.path.parent().expect("handle stepping over parent"))
+        }) {
+            self.nth(tree_cache.entry_count as usize)?;
+        } else {
+        }
+
         todo!()
     }
 
@@ -165,7 +191,15 @@ impl<'r> FallibleIterator for TreeEntryIter<'r> {
     type Item = BitIndexEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        Ok(self.tree_iter.next()?.map(BitIndexEntry::from))
+        // entry iterators only yield non tree entries
+        loop {
+            match self.tree_iter.next()? {
+                Some(entry) if !entry.mode.is_tree() =>
+                    return Ok(Some(BitIndexEntry::from(entry))),
+                None => return Ok(None),
+                _ => continue,
+            }
+        }
     }
 }
 

@@ -50,7 +50,7 @@ fn test_tree_iterator_peekable() -> BitResult<()> {
         check_next!(iter.peek() => "bar":FileMode::REG);
         check_next!(iter.next() => "bar":FileMode::REG);
         check_next!(iter.over() => "dir":FileMode::DIR);
-        check_next!(iter.over() => "foo": FileMode::REG);
+        check_next!(iter.next() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
         Ok(())
     })
