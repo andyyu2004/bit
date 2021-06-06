@@ -128,7 +128,6 @@ pub struct TreeDiff {
 }
 
 pub struct TreeDifferImpl<'r> {
-    // need an inner type otherwise we can't use `GenericDiffer::new` as it takes self but also needs `a` and `b`
     repo: BitRepo<'r>,
     a: TreeIter<'r>,
     b: TreeIter<'r>,
@@ -175,6 +174,8 @@ impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
     }
 
     fn on_match(&mut self, old: TreeEntry, new: TreeEntry) -> BitResult<()> {
+        debug_assert!(old.oid.is_known());
+        debug_assert!(new.oid.is_known());
         if old.oid == new.oid && old.mode.is_dir() && new.mode.is_dir() {
             // if hashes match and both are directories we can step over them
             self.a.over()?;
@@ -234,23 +235,13 @@ pub(crate) struct TreeIndexDiffer<'a, 'r> {
     index: &'a mut BitIndex<'r>,
     tree: &'a Tree,
     pathspec: Pathspec,
-    new: Vec<BitIndexEntry>,
-    staged: Vec<(BitIndexEntry, BitIndexEntry)>,
-    deleted: Vec<BitIndexEntry>,
+    diff: WorkspaceDiff,
 }
 
 impl<'a, 'r> TreeIndexDiffer<'a, 'r> {
     pub fn new(index: &'a mut BitIndex<'r>, tree: &'a Tree, pathspec: Pathspec) -> Self {
         let repo = index.repo;
-        Self {
-            index,
-            repo,
-            tree,
-            pathspec,
-            new: Default::default(),
-            staged: Default::default(),
-            deleted: Default::default(),
-        }
+        Self { index, repo, tree, pathspec, diff: Default::default() }
     }
 }
 
@@ -262,22 +253,22 @@ impl<'a, 'r> DiffBuilder<'r> for TreeIndexDiffer<'a, 'r> {
         let tree_iter = self.pathspec.match_tree(repo, self.tree)?;
         let index_iter = self.pathspec.match_index(self.index)?;
         GenericDiffer::run(&mut self, tree_iter, index_iter)?;
-        Ok(WorkspaceDiff { deleted: self.deleted, modified: self.staged, new: self.new })
+        Ok(self.diff)
     }
 }
 
 impl<'a, 'r> Apply for TreeIndexDiffer<'a, 'r> {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
-        Ok(self.new.push(*new))
+        Ok(self.diff.new.push(*new))
     }
 
     fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
         assert_eq!(old.path, new.path);
-        Ok(self.staged.push((*old, *new)))
+        Ok(self.diff.modified.push((*old, *new)))
     }
 
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
-        Ok(self.deleted.push(*old))
+        Ok(self.diff.deleted.push(*old))
     }
 }
 

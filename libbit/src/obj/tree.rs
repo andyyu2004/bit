@@ -1,5 +1,6 @@
 use super::{BitObjShared, FileMode};
 use crate::error::BitResult;
+use crate::index::BitIndexEntry;
 use crate::io::BufReadExt;
 use crate::obj::{BitObj, BitObjType, Oid};
 use crate::path::BitPath;
@@ -118,6 +119,19 @@ pub struct TreeEntry {
     pub mode: FileMode,
     pub path: BitPath,
     pub oid: Oid,
+}
+
+impl<'a> From<&'a BitIndexEntry> for TreeEntry {
+    fn from(entry: &'a BitIndexEntry) -> Self {
+        Self { mode: entry.mode, path: entry.path, oid: entry.oid }
+    }
+}
+
+impl From<BitIndexEntry> for TreeEntry {
+    fn from(entry: BitIndexEntry) -> Self {
+        let BitIndexEntry { mode, path, oid, .. } = entry;
+        Self { mode, path, oid }
+    }
 }
 
 impl PartialOrd for TreeEntry {

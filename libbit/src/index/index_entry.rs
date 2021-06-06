@@ -5,6 +5,7 @@ use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::tls;
 use std::fmt::{self, Debug, Formatter};
+use std::iter::FromIterator;
 use std::os::linux::fs::MetadataExt;
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -26,9 +27,9 @@ impl DerefMut for BitIndexEntries {
     }
 }
 
-impl From<Vec<BitIndexEntry>> for BitIndexEntries {
-    fn from(entries: Vec<BitIndexEntry>) -> Self {
-        Self(entries.into_iter().map(|entry| ((entry.path, entry.flags.stage()), entry)).collect())
+impl FromIterator<BitIndexEntry> for BitIndexEntries {
+    fn from_iter<T: IntoIterator<Item = BitIndexEntry>>(iter: T) -> Self {
+        Self(iter.into_iter().map(|entry| (entry.key(), entry)).collect())
     }
 }
 

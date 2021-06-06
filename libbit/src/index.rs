@@ -219,16 +219,17 @@ impl<'r> BitIndex<'r> {
     }
 }
 
-type IndexIterator = impl Iterator<Item = BitIndexEntry> + Clone + std::fmt::Debug;
+type IndexStdIterator = impl Iterator<Item = BitIndexEntry> + Clone + std::fmt::Debug;
+pub type IndexEntryIterator = impl BitEntryIterator;
 
 impl BitIndexInner {
-    pub fn std_iter(&self) -> IndexIterator {
+    pub fn std_iter(&self) -> IndexStdIterator {
         // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
         // `self` from the returned iterator
         self.entries.values().cloned().collect_vec().into_iter()
     }
 
-    pub fn iter(&self) -> impl BitEntryIterator {
+    pub fn iter(&self) -> IndexEntryIterator {
         fallible_iterator::convert(self.std_iter().map(Ok))
     }
 
@@ -283,7 +284,7 @@ impl BitIndexInner {
 struct TreeBuilder<'a, 'r> {
     index: &'a BitIndex<'r>,
     repo: BitRepo<'r>,
-    index_entries: Peekable<IndexIterator>,
+    index_entries: Peekable<IndexStdIterator>,
     // count the number of blobs created (not subtrees)
     // should match the number of index entries
 }
@@ -485,8 +486,7 @@ impl Deserialize for BitIndexInner {
         let header = Self::parse_header(&mut r)?;
         let entries = (0..header.entryc)
             .map(|_| BitIndexEntry::deserialize(&mut r))
-            .collect::<Result<Vec<BitIndexEntry>, _>>()?
-            .into();
+            .collect::<Result<BitIndexEntries, _>>()?;
 
         let mut remainder = vec![];
         assert!(r.read_to_end(&mut remainder)? >= BIT_HASH_SIZE);

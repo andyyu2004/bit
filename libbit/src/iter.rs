@@ -1,9 +1,9 @@
 use crate::error::{BitGenericError, BitResult};
-use crate::index::BitIndexEntry;
+use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
 use crate::obj::{FileMode, Tree, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
-use fallible_iterator::{convert, FallibleIterator};
+use fallible_iterator::{FallibleIterator, Peekable};
 use ignore::{Walk, WalkBuilder};
 use std::convert::TryFrom;
 use std::path::Path;
@@ -53,7 +53,7 @@ pub trait TreeIterator: BitIterator<TreeEntry> {
     // similar problems arise with implementing `peek` using `over`
     // probably better to just let the implementor deal with it
     // especially as the implementation is probably trivial
-    fn peek(&self) -> BitResult<Option<TreeEntry>>;
+    fn peek(&mut self) -> BitResult<Option<TreeEntry>>;
 }
 
 impl<'r> FallibleIterator for TreeIter<'r> {
@@ -114,8 +114,38 @@ impl<'r> TreeIterator for TreeIter<'r> {
         }
     }
 
-    fn peek(&self) -> BitResult<Option<TreeEntry>> {
+    fn peek(&mut self) -> BitResult<Option<TreeEntry>> {
         Ok(self.entry_stack.last().map(|x| x.1))
+    }
+}
+
+struct IndexTreeIter<'a, 'r> {
+    index: &'a BitIndex<'r>,
+    iter: Peekable<IndexEntryIterator>,
+}
+
+impl<'a, 'r> IndexTreeIter<'a, 'r> {
+    pub fn new(index: &'a BitIndex<'r>) -> Self {
+        Self { index, iter: index.iter().peekable() }
+    }
+}
+
+impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
+    type Error = BitGenericError;
+    type Item = TreeEntry;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        Ok(self.iter.next()?.map(TreeEntry::from))
+    }
+}
+
+impl<'a, 'r> TreeIterator for IndexTreeIter<'a, 'r> {
+    fn over(&mut self) -> BitResult<Option<TreeEntry>> {
+        todo!()
+    }
+
+    fn peek(&mut self) -> BitResult<Option<TreeEntry>> {
+        Ok(self.iter.peek()?.map(TreeEntry::from))
     }
 }
 

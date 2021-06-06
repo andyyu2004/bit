@@ -12,7 +12,7 @@ use std::str::FromStr;
 impl Arbitrary for BitIndexEntries {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
         // can't derive arbitrary as the key will not match the actual entry
-        Vec::<BitIndexEntry>::arbitrary(g).into()
+        Vec::<BitIndexEntry>::arbitrary(g).into_iter().collect()
     }
 }
 
@@ -373,7 +373,8 @@ fn parse_small_index() -> BitResult<()> {
             oid: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
         },
     ]
-    .into();
+    .into_iter()
+    .collect();
 
     let expected_index = BitIndexInner::new(entries, None, None);
 
