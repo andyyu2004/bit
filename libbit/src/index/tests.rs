@@ -154,7 +154,7 @@ fn test_index_add_directory() -> BitResult<()> {
         repo.with_index_mut(|index| {
             index.add_str("dir")?;
             assert_eq!(index.len(), 3);
-            let mut iterator = index.entries.values();
+            let mut iterator = index.entries().values();
             assert_eq!(iterator.next().unwrap().path, "dir/a");
             assert_eq!(iterator.next().unwrap().path, "dir/b");
             assert_eq!(iterator.next().unwrap().path, "dir/c/d");
@@ -200,7 +200,7 @@ fn index_file_directory_collision() -> BitResult<()> {
             index.add_str("a")?;
 
             assert_eq!(index.len(), 1);
-            let mut iterator = index.entries.values();
+            let mut iterator = index.entries().values();
             assert_eq!(iterator.next().unwrap().path, "a/somefile");
             Ok(())
         })
@@ -232,7 +232,7 @@ fn index_nested_file_directory_collision() -> BitResult<()> {
 
         repo.with_index_mut(|index| {
             assert_eq!(index.len(), 2);
-            let mut iterator = index.entries.values();
+            let mut iterator = index.entries().values();
             assert_eq!(iterator.next().unwrap().path, "bar");
             assert_eq!(iterator.next().unwrap().path, "foo/bar/baz");
             Ok(())
@@ -271,7 +271,7 @@ fn index_directory_file_collision() -> BitResult<()> {
             index.add_str("foo")?;
 
             assert_eq!(index.len(), 1);
-            let mut iter = index.entries.values();
+            let mut iter = index.entries().values();
             assert_eq!(iter.next().unwrap().path, "foo");
             Ok(())
         })
@@ -300,7 +300,7 @@ fn test_stage_deleted_file() -> BitResult<()> {
         bit_add_all!(repo);
         rm!(repo: "foo");
         bit_add_all!(repo);
-        assert!(repo.with_index(|index| Ok(index.entries.is_empty()))?);
+        assert!(repo.with_index(|index| Ok(index.entries().is_empty()))?);
         Ok(())
     })
 }

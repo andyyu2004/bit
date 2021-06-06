@@ -102,8 +102,7 @@ impl DeserializeSized for Tree {
 
         // these debug assertions are checking that the btreeset ordering
         // is consistent with the order of the tree entries on disk
-        #[cfg(debug_assertions)]
-        assert_eq!(tree.entries.iter().cloned().collect::<Vec<_>>(), v);
+        debug_assert_eq!(tree.entries.iter().cloned().collect::<Vec<_>>(), v);
         Ok(tree)
     }
 }
