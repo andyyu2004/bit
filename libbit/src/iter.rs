@@ -1,10 +1,11 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
-use crate::obj::{FileMode, Tree, TreeEntry, Treeish};
+use crate::obj::{FileMode, Oid, Tree, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::{FallibleIterator, Peekable};
 use ignore::{Walk, WalkBuilder};
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -51,6 +52,7 @@ pub trait TreeIterator: BitIterator<TreeEntry> {
     /// unstable semantics
     /// if the next entry is a tree then yield the tree entry but skip over its contents
     /// otherwise does the same as next
+    /// `next` should always yield the tree entry itself
     fn over(&mut self) -> BitResult<Option<TreeEntry>>;
 
     // seems difficult to provide a peek method just via an adaptor
@@ -119,15 +121,40 @@ impl<'r> TreeIterator for TreeIter<'r> {
     }
 }
 
-struct IndexTreeIter<'a, 'r> {
+pub struct IndexTreeIter<'a, 'r> {
     index: &'a BitIndex<'r>,
     iter: Peekable<IndexEntryIterator>,
     current: Option<TreeEntry>,
+    // pseudotrees that have been yielded
+    pseudotrees: HashSet<BitPath>,
 }
 
 impl<'a, 'r> IndexTreeIter<'a, 'r> {
     pub fn new(index: &'a BitIndex<'r>) -> Self {
-        Self { index, iter: index.iter().peekable(), current: None }
+        Self {
+            index,
+            iter: index.iter().peekable(),
+            current: None,
+            pseudotrees: hashset! { BitPath::EMPTY },
+        }
+    }
+
+    fn has_changed_dir(&self, next: BitPath) -> bool {
+        // check whether the current path and next path belong to the same directory
+        let current_path = self.current.map(|entry| entry.path).unwrap_or(BitPath::EMPTY);
+        let current_dir = current_path.parent();
+        let next_dir = next.parent();
+        current_dir != next_dir
+    }
+
+    fn create_pseudotree(&self, path: BitPath) -> TreeEntry {
+        let oid = self
+            .index
+            .tree_cache()
+            .and_then(|cache| cache.find_valid_child(path))
+            .map(|child| child.oid)
+            .unwrap_or(Oid::UNKNOWN);
+        TreeEntry { mode: FileMode::DIR, path, oid }
     }
 }
 
@@ -136,15 +163,19 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
     type Item = TreeEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        self.current = self.iter.next()?.map(TreeEntry::from);
-        Ok(self.current)
-    }
-}
-
-impl<'a, 'r> IndexTreeIter<'a, 'r> {
-    fn has_changed_dir(&self, next: BitPath) -> bool {
-        // check whether the current path and next path belong to the same directory
-        self.current.map(|entry| entry.path).unwrap_or(BitPath::EMPTY).parent() == next.parent()
+        let next = self.iter.peek()?.map(TreeEntry::from);
+        match next {
+            Some(entry) => {
+                let dir = entry.path.parent().unwrap();
+                if self.pseudotrees.insert(dir) {
+                    Ok(Some(self.create_pseudotree(dir)))
+                } else {
+                    self.iter.next()?;
+                    Ok(next)
+                }
+            }
+            None => return Ok(None),
+        }
     }
 }
 
@@ -160,18 +191,26 @@ impl<'a, 'r> TreeIterator for IndexTreeIter<'a, 'r> {
             return self.next();
         }
 
+        // skip the current tree using cache_tree or just scanning
         if let Some(tree_cache) = self.index.tree_cache().and_then(|cache| {
             cache.find_valid_child(entry.path.parent().expect("handle stepping over parent"))
         }) {
             self.nth(tree_cache.entry_count as usize)?;
         } else {
+            while let Some(entry) = self.peek()? {
+                if self.has_changed_dir(entry.path) {
+                    break;
+                }
+                self.next()?;
+            }
         }
 
         todo!()
     }
 
     fn peek(&mut self) -> BitResult<Option<TreeEntry>> {
-        Ok(self.iter.peek()?.map(TreeEntry::from))
+        // just embed a peeked field or something
+        todo!()
     }
 }
 

@@ -45,6 +45,10 @@ impl BitPath {
         Self::intern(self.as_path().with_extension(ext))
     }
 
+    pub fn parent(self) -> Option<Self> {
+        self.as_path().parent().map(Self::intern)
+    }
+
     /// adds trailing slash which is crucial for correct comparison ordering
     // TODO consider a more succinct name
     pub fn join_trailing_slash(self) -> Self {

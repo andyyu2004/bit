@@ -1,5 +1,4 @@
 use crate::error::BitResult;
-use crate::hash;
 use crate::obj::{BitObj, BitObjKind, BitObjType, Blob, Oid};
 use crate::repo::BitRepo;
 use std::fs::File;

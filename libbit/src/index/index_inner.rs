@@ -1,3 +1,5 @@
+use crate::iter::{IndexTreeIter, TreeIterator};
+
 use super::*;
 
 /// representation of the index file

@@ -10,7 +10,7 @@ use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
-use crate::iter::BitEntryIterator;
+use crate::iter::{BitEntryIterator, IndexTreeIter, TreeIterator};
 use crate::lockfile::{Filelock, Lockfile};
 use crate::obj::{BitObj, FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
@@ -116,6 +116,10 @@ impl<'r> BitIndex<'r> {
             .unwrap_or_default();
         let mtime = std::fs::metadata(repo.index_path()).as_ref().map(Timespec::mtime).ok();
         Ok(Self { repo, inner, mtime, flags: BitIndexFlags::empty() })
+    }
+
+    pub fn tree_iter(&self) -> IndexTreeIter<'_, 'r> {
+        IndexTreeIter::new(self)
     }
 
     /// builds a tree object from the current index entries and writes it and all subtrees to disk

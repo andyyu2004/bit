@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::iter::TreeIterator;
-use crate::obj::FileMode;
+use crate::obj::{FileMode, TreeEntry};
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 
@@ -78,5 +78,87 @@ fn test_worktree_iterator_reads_symlinks() -> BitResult<()> {
         let entries = repo.worktree_iter()?.collect::<Vec<_>>()?;
         assert_eq!(entries.len(), 2);
         Ok(())
+    })
+}
+
+/// ├── dir
+/// │  └── test.txt
+/// ├── dir2
+/// │  ├── dir2.txt
+/// │  └── nested
+/// │     └── coolfile.txt
+/// ├── exec
+/// ├── test.txt
+/// └── zs
+///    └── one.txt
+
+// careful of the following scenario that foo is only yielded once as a pseudotree
+// we keep track of all yielded pseudotrees not just the previous one to avoid any issues
+/// ├── a
+/// │  └── foo
+/// │  └── b
+/// │      └── bar
+/// │  └── qux
+#[test]
+fn test_index_tree_iterator() -> BitResult<()> {
+    BitRepo::find(repos_dir!("indextest"), |repo| {
+        repo.with_index(|index| {
+            let iter = index.tree_iter();
+            let entries = iter.collect::<Vec<_>>()?;
+            let expected = vec![
+                TreeEntry {
+                    mode: FileMode::new(0o040000),
+                    path: "dir".into(),
+                    oid: "0000000000000000000000000000000000000000".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o100644),
+                    path: "dir/test.txt".into(),
+                    oid: "ce013625030ba8dba906f756967f9e9ca394464a".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o040000),
+                    path: "dir2".into(),
+                    oid: "0000000000000000000000000000000000000000".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o100644),
+                    path: "dir2/dir2.txt".into(),
+                    oid: "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o040000),
+                    path: "dir2/nested".into(),
+                    oid: "0000000000000000000000000000000000000000".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o100644),
+                    path: "dir2/nested/coolfile.txt".into(),
+                    oid: "d9d0fd07b0c6e36d2db0db2e9a3f4918622c65dc".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o100755),
+                    path: "exec".into(),
+                    oid: "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o100644),
+                    path: "test.txt".into(),
+                    oid: "ce013625030ba8dba906f756967f9e9ca394464a".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o040000),
+                    path: "zs".into(),
+                    oid: "0000000000000000000000000000000000000000".into(),
+                },
+                TreeEntry {
+                    mode: FileMode::new(0o100644),
+                    path: "zs/one.txt".into(),
+                    oid: "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".into(),
+                },
+            ];
+            assert_eq!(entries, expected);
+            Ok(())
+        })
     })
 }
