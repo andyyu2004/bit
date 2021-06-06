@@ -34,6 +34,14 @@ pub fn generate_sane_string_with_newlines(range: std::ops::Range<usize>) -> Stri
     s
 }
 
+macro_rules! check_next {
+    ($next:expr => $path:literal:$mode:expr) => {
+        let entry = $next?.unwrap();
+        assert_eq!(entry.path, $path);
+        assert_eq!(entry.mode, $mode);
+    };
+}
+
 macro_rules! test_serde {
     ($item:ident) => {{
         let mut buf = vec![];

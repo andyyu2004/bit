@@ -127,6 +127,7 @@ pub struct IndexTreeIter<'a, 'r> {
     current: Option<TreeEntry>,
     // pseudotrees that have been yielded
     pseudotrees: HashSet<BitPath>,
+    peeked: Option<TreeEntry>,
 }
 
 impl<'a, 'r> IndexTreeIter<'a, 'r> {
@@ -135,6 +136,7 @@ impl<'a, 'r> IndexTreeIter<'a, 'r> {
             index,
             iter: index.iter().peekable(),
             current: None,
+            peeked: None,
             pseudotrees: hashset! { BitPath::EMPTY },
         }
     }
@@ -163,6 +165,10 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
     type Item = TreeEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        if let Some(peeked) = self.peeked.take() {
+            return Ok(Some(peeked));
+        }
+
         let next = self.iter.peek()?.map(TreeEntry::from);
         match next {
             Some(entry) => {
@@ -180,37 +186,62 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
 }
 
 impl<'a, 'r> TreeIterator for IndexTreeIter<'a, 'r> {
-    fn over(&mut self) -> BitResult<Option<TreeEntry>> {
-        let entry = match self.peek()? {
-            Some(entry) => entry,
-            None => return self.next(),
-        };
+    // fn over(&mut self) -> BitResult<Option<TreeEntry>> {
+    //     let entry = match self.peek()? {
+    //         Some(entry) => entry,
+    //         None => return self.next(),
+    //     };
 
-        // if its not a "directory", then there is nothing to skip
-        if !self.has_changed_dir(entry.path) {
-            return self.next();
-        }
+    //     // if its not a "directory", then there is nothing to skip
+    //     if !self.has_changed_dir(entry.path) {
+    //         return self.next();
+    //     }
 
-        // skip the current tree using cache_tree or just scanning
-        if let Some(tree_cache) = self.index.tree_cache().and_then(|cache| {
-            cache.find_valid_child(entry.path.parent().expect("handle stepping over parent"))
-        }) {
-            self.nth(tree_cache.entry_count as usize)?;
-        } else {
-            while let Some(entry) = self.peek()? {
-                if self.has_changed_dir(entry.path) {
-                    break;
-                }
-                self.next()?;
-            }
-        }
+    //     // skip the current tree using cache_tree or just scanning
+    //     if let Some(tree_cache) = self.index.tree_cache().and_then(|cache| {
+    //         cache.find_valid_child(entry.path.parent().expect("handle stepping over parent"))
+    //     }) {
+    //         self.nth(tree_cache.entry_count as usize)?;
+    //     } else {
+    //         while let Some(entry) = self.peek()? {
+    //             if self.has_changed_dir(entry.path) {
+    //                 break;
+    //             }
+    //             self.next()?;
+    //         }
+    //     }
 
-        todo!()
-    }
+    //     todo!()
+    // }
 
     fn peek(&mut self) -> BitResult<Option<TreeEntry>> {
-        // just embed a peeked field or something
-        todo!()
+        if let Some(peeked) = self.peeked {
+            Ok(Some(peeked))
+        } else {
+            self.peeked = self.next()?;
+            Ok(self.peeked)
+        }
+    }
+
+    fn over(&mut self) -> BitResult<Option<TreeEntry>> {
+        match self.next()? {
+            Some(entry) => match entry.mode {
+                FileMode::DIR => {
+                    while self
+                        .peek()?
+                        .map(|next| next.path.starts_with(entry.path))
+                        .unwrap_or(false)
+                    {
+                        self.next()?;
+                    }
+                    Ok(Some(entry))
+                }
+                FileMode::REG | FileMode::EXEC | FileMode::LINK => Ok(Some(entry)),
+                FileMode::GITLINK => todo!(),
+                _ => unreachable!(),
+            },
+            None => return Ok(None),
+        }
     }
 }
 
