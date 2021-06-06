@@ -5,6 +5,7 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use std::io::{BufRead, Write};
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BitTreeCache {
@@ -24,6 +25,41 @@ impl Default for BitTreeCache {
 }
 
 impl BitTreeCache {
+    pub fn find_child(&self, path: impl AsRef<Path>) -> Option<&BitTreeCache> {
+        let path = path.as_ref();
+        debug_assert!(path.is_relative());
+        if self.path.as_path() == path {
+            return Some(self);
+        }
+        self.children.iter().find_map(|child| child.find_child(path))
+    }
+
+    pub fn find_child_mut(&mut self, path: impl AsRef<Path>) -> Option<&mut BitTreeCache> {
+        let path = path.as_ref();
+        if self.path.as_path() == path {
+            return Some(self);
+        }
+        self.children.iter_mut().find_map(|child| child.find_child_mut(path))
+    }
+
+    pub fn invalidate_path(&mut self, path: BitPath) {
+        self.entry_count = -1;
+        // don't do this recursively as each path contains the full path, not just a component
+        for path in path.accumulative_components() {
+            if let Some(child) = self.find_child_mut(path) {
+                child.entry_count = -1;
+            }
+        }
+    }
+
+    pub fn is_fully_valid(&self) -> bool {
+        if self.entry_count < 0 {
+            false
+        } else {
+            self.children.iter().all(|child| child.is_fully_valid())
+        }
+    }
+
     pub fn read_tree_cache(repo: BitRepo<'_>, tree: &Tree) -> BitResult<Self> {
         Self::read_tree_internal(repo, tree, BitPath::EMPTY)
     }

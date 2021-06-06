@@ -184,8 +184,8 @@ impl<'r> TreeDiffer<'r> for TreeDifferImpl<'r> {
             if old.oid != new.oid {
                 self.diff.modified.push((old, new));
             }
-            self.a.next()?;
             self.b.next()?;
+            self.a.next()?;
         }
 
         Ok(())
