@@ -2,7 +2,7 @@
 
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
-use crate::iter::{BitEntryIterator, TreeIter, TreeIterator};
+use crate::iter::{BitEntryIterator, BitTreeIterator, TreeIter};
 use crate::obj::{Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;

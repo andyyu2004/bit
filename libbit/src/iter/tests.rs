@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::iter::TreeIterator;
+use crate::iter::BitTreeIterator;
 use crate::obj::{FileMode, TreeEntry};
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;

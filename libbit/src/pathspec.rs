@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndex;
-use crate::iter::BitEntryIterator;
+use crate::iter::{BitEntryIterator, BitTreeIterator};
 use crate::obj::Tree;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -66,11 +66,11 @@ impl Pathspec {
     }
 
     pub fn match_worktree<'r>(self, repo: BitRepo<'r>) -> BitResult<impl BitEntryIterator + 'r> {
-        self.match_iterator(repo.worktree_iter()?)
+        self.match_entry_iterator(repo.worktree_iter()?)
     }
 
     pub fn match_index(self, index: &BitIndex<'_>) -> BitResult<impl BitEntryIterator> {
-        self.match_iterator(index.iter())
+        self.match_entry_iterator(index.iter())
     }
 
     pub fn match_tree<'r>(
@@ -78,11 +78,11 @@ impl Pathspec {
         repo: BitRepo<'r>,
         tree: &Tree,
     ) -> BitResult<impl BitEntryIterator + 'r> {
-        self.match_iterator(repo.tree_entry_iter(tree)?)
+        self.match_entry_iterator(repo.tree_entry_iter(tree)?)
     }
 
     pub fn match_head<'r>(&self, repo: BitRepo<'r>) -> BitResult<impl BitEntryIterator + 'r> {
-        self.match_iterator(repo.head_iter()?)
+        self.match_entry_iterator(repo.head_iter()?)
     }
 
     // braindead implementation for now
@@ -90,7 +90,14 @@ impl Pathspec {
         path.as_ref().starts_with(self.prefix)
     }
 
-    fn match_iterator(self, iterator: impl BitEntryIterator) -> BitResult<impl BitEntryIterator> {
+    // fn match_tree_iter(self, iterator: impl BitTreeIterator) -> BitResult<impl BitTreeIterator> {
+    //     Ok(iterator.tree_filter(move |entry| Ok(self.matches_path(entry.path))))
+    // }
+
+    fn match_entry_iterator(
+        self,
+        iterator: impl BitEntryIterator,
+    ) -> BitResult<impl BitEntryIterator> {
         Ok(iterator.filter(move |entry| Ok(self.matches_path(entry.path))))
     }
 

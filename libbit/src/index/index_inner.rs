@@ -1,4 +1,4 @@
-use crate::iter::{IndexTreeIter, TreeIterator};
+use crate::iter::{BitTreeIterator, IndexTreeIter};
 
 use super::*;
 

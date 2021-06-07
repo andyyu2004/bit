@@ -10,7 +10,7 @@ use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
-use crate::iter::{BitEntryIterator, IndexTreeIter, TreeIterator};
+use crate::iter::{BitEntryIterator, BitTreeIterator, IndexTreeIter};
 use crate::lockfile::{Filelock, Lockfile};
 use crate::obj::{BitObj, FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
