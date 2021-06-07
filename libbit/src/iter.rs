@@ -123,8 +123,7 @@ impl<'r> TreeIterator for TreeIter<'r> {
 
 pub struct IndexTreeIter<'a, 'r> {
     index: &'a BitIndex<'r>,
-    iter: Peekable<IndexEntryIterator>,
-    current: Option<TreeEntry>,
+    entry_iter: Peekable<IndexEntryIterator>,
     // pseudotrees that have been yielded
     pseudotrees: HashSet<BitPath>,
     peeked: Option<TreeEntry>,
@@ -134,19 +133,10 @@ impl<'a, 'r> IndexTreeIter<'a, 'r> {
     pub fn new(index: &'a BitIndex<'r>) -> Self {
         Self {
             index,
-            iter: index.iter().peekable(),
-            current: None,
             peeked: None,
+            entry_iter: index.iter().peekable(),
             pseudotrees: hashset! { BitPath::EMPTY },
         }
-    }
-
-    fn has_changed_dir(&self, next: BitPath) -> bool {
-        // check whether the current path and next path belong to the same directory
-        let current_path = self.current.map(|entry| entry.path).unwrap_or(BitPath::EMPTY);
-        let current_dir = current_path.parent();
-        let next_dir = next.parent();
-        current_dir != next_dir
     }
 
     fn create_pseudotree(&self, path: BitPath) -> TreeEntry {
@@ -157,6 +147,22 @@ impl<'a, 'r> IndexTreeIter<'a, 'r> {
             .map(|child| child.oid)
             .unwrap_or(Oid::UNKNOWN);
         TreeEntry { mode: FileMode::DIR, path, oid }
+    }
+
+    fn step_over_dir(&mut self, dir_entry: TreeEntry) -> BitResult<Option<TreeEntry>> {
+        if let Some(tree_cache) =
+            self.index.tree_cache().and_then(|cache| cache.find_valid_child(dir_entry.path))
+        {
+            // for `n` entries we want to call next `n` times which is what `nth(n-1)` will do
+            // we must call `nth` on the inner iterator as that is what `entry_count` corresponds to
+            self.entry_iter.nth(tree_cache.entry_count as usize - 1)?;
+        } else {
+            // step over this tree by stepping over each of its children
+            while self.peek()?.map(|next| next.path.starts_with(dir_entry.path)).unwrap_or(false) {
+                self.over()?;
+            }
+        }
+        Ok(Some(dir_entry))
     }
 }
 
@@ -169,14 +175,14 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
             return Ok(Some(peeked));
         }
 
-        let next = self.iter.peek()?.map(TreeEntry::from);
+        let next = self.entry_iter.peek()?.map(TreeEntry::from);
         match next {
             Some(entry) => {
                 let dir = entry.path.parent().unwrap();
                 if self.pseudotrees.insert(dir) {
                     Ok(Some(self.create_pseudotree(dir)))
                 } else {
-                    self.iter.next()?;
+                    self.entry_iter.next()?;
                     Ok(next)
                 }
             }
@@ -186,34 +192,6 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
 }
 
 impl<'a, 'r> TreeIterator for IndexTreeIter<'a, 'r> {
-    // fn over(&mut self) -> BitResult<Option<TreeEntry>> {
-    //     let entry = match self.peek()? {
-    //         Some(entry) => entry,
-    //         None => return self.next(),
-    //     };
-
-    //     // if its not a "directory", then there is nothing to skip
-    //     if !self.has_changed_dir(entry.path) {
-    //         return self.next();
-    //     }
-
-    //     // skip the current tree using cache_tree or just scanning
-    //     if let Some(tree_cache) = self.index.tree_cache().and_then(|cache| {
-    //         cache.find_valid_child(entry.path.parent().expect("handle stepping over parent"))
-    //     }) {
-    //         self.nth(tree_cache.entry_count as usize)?;
-    //     } else {
-    //         while let Some(entry) = self.peek()? {
-    //             if self.has_changed_dir(entry.path) {
-    //                 break;
-    //             }
-    //             self.next()?;
-    //         }
-    //     }
-
-    //     todo!()
-    // }
-
     fn peek(&mut self) -> BitResult<Option<TreeEntry>> {
         if let Some(peeked) = self.peeked {
             Ok(Some(peeked))
@@ -226,16 +204,7 @@ impl<'a, 'r> TreeIterator for IndexTreeIter<'a, 'r> {
     fn over(&mut self) -> BitResult<Option<TreeEntry>> {
         match self.next()? {
             Some(entry) => match entry.mode {
-                FileMode::DIR => {
-                    while self
-                        .peek()?
-                        .map(|next| next.path.starts_with(entry.path))
-                        .unwrap_or(false)
-                    {
-                        self.next()?;
-                    }
-                    Ok(Some(entry))
-                }
+                FileMode::DIR => self.step_over_dir(entry),
                 FileMode::REG | FileMode::EXEC | FileMode::LINK => Ok(Some(entry)),
                 FileMode::GITLINK => todo!(),
                 _ => unreachable!(),

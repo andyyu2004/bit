@@ -52,3 +52,38 @@ fn test_tree_cache_invalidate_path() {
 
     assert_eq!(cache_tree, expected_tree);
 }
+
+#[test]
+fn test_tree_cache_find_valid_child() {
+    let cache = BitTreeCache {
+        path: BitPath::EMPTY,
+        entry_count: -1,
+        children: vec![
+            BitTreeCache {
+                path: "zs".into(),
+                entry_count: 1,
+                children: vec![],
+                oid: "2d7f016d4251e5ad28c1a88bf34e849f33fc772c".into(),
+            },
+            BitTreeCache {
+                path: "dir".into(),
+                entry_count: 1,
+                children: vec![],
+                oid: "920512d27e4df0c79ca4a929bc5d4254b3d05c4c".into(),
+            },
+            BitTreeCache {
+                path: "dir2".into(),
+                entry_count: 2,
+                children: vec![BitTreeCache {
+                    path: "nested".into(),
+                    entry_count: 1,
+                    children: vec![],
+                    oid: "922a85d55bd55028593c9816724c874c5629b557".into(),
+                }],
+                oid: "fa9b4c62cce3b8a2d60482d717026beb46b1245c".into(),
+            },
+        ],
+        oid: "0000000000000000000000000000000000000000".into(),
+    };
+    assert!(cache.find_valid_child("zs").is_some());
+}

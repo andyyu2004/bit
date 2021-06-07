@@ -133,7 +133,7 @@ fn test_index_tree_iterator_peek() -> BitResult<()> {
 /// │      └── bar
 /// │  └── qux
 #[test]
-fn test_index_tree_iterator() -> BitResult<()> {
+fn test_index_tree_iterator_next() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let iter = index.tree_iter();

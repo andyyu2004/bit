@@ -37,7 +37,7 @@ macro_rules! find_child_base_case {
 impl BitTreeCache {
     pub fn find_valid_child(&self, path: impl AsRef<Path>) -> Option<&BitTreeCache> {
         match self.find_child(path) {
-            Some(child) if child.entry_count < 0 => Some(child),
+            Some(child) if child.entry_count > 0 => Some(child),
             _ => None,
         }
     }
