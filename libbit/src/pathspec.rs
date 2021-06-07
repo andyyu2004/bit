@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndex;
-use crate::iter::{BitEntryIterator, BitTreeIterator};
+use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::Tree;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -90,8 +90,8 @@ impl Pathspec {
         path.as_ref().starts_with(self.prefix)
     }
 
-    fn match_tree_iter(self, iterator: impl BitTreeIterator) -> BitResult<impl BitTreeIterator> {
-        Ok(iterator.filter(move |entry| Ok(self.matches_path(entry.path))))
+    pub fn match_tree_iter(self, iterator: impl BitTreeIterator) -> impl BitTreeIterator {
+        iterator.filter(move |entry| Ok(self.matches_path(entry.path())))
     }
 
     fn match_entry_iterator(

@@ -347,7 +347,7 @@ dependencies = [
 [[package]]
 name = "fallible-iterator"
 version = "0.2.0"
-source = "git+https://github.com/andyyu2004/rust-fallible-iterator#33688d54a8c8b0c9b0f52cfc312d342b21c560dd"
+source = "git+https://github.com/andyyu2004/rust-fallible-iterator#c84b1879bfca42dbf0c56e89244c3c02d4291128"
 
 [[package]]
 name = "flate2"
@@ -520,6 +520,7 @@ dependencies = [
  "chrono",
  "diffy",
  "dirs",
+ "env_logger",
  "fallible-iterator",
  "flate2",
  "fs_extra",

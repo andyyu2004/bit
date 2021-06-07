@@ -21,6 +21,7 @@ fn test_tree_iterator_peekable() -> BitResult<()> {
         check_next!(iter.over() => "dir":FileMode::DIR);
         check_next!(iter.next() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
+        assert_eq!(iter.peek()?, None);
         Ok(())
     })
 }
@@ -131,7 +132,7 @@ fn test_index_tree_iterator_next() -> BitResult<()> {
 fn test_tree_iterator_filter() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
-            let mut iter = index.tree_iter().filter(|entry| Ok(entry.path.starts_with("dir2")));
+            let mut iter = index.tree_iter().filter(|entry| Ok(entry.path().starts_with("dir2")));
             check_next!(iter.peek() => "dir2": FileMode::DIR);
             check_next!(iter.next() => "dir2": FileMode::DIR);
             check_next!(iter.next() => "dir2/dir2.txt": FileMode::REG);

@@ -1,4 +1,5 @@
 use super::{BitObjShared, FileMode};
+use crate::core::BitOrd;
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::io::BufReadExt;
@@ -7,7 +8,6 @@ use crate::path::BitPath;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::tls;
 use crate::util;
-use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
@@ -122,6 +122,7 @@ pub struct TreeEntry {
     pub oid: Oid,
 }
 
+// provide explicit impl on references to avoid some unnecessary copying
 impl<'a> From<&'a BitIndexEntry> for TreeEntry {
     fn from(entry: &'a BitIndexEntry) -> Self {
         Self { mode: entry.mode, path: entry.path, oid: entry.oid }
@@ -136,13 +137,19 @@ impl From<BitIndexEntry> for TreeEntry {
 }
 
 impl PartialOrd for TreeEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for TreeEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.sort_path().cmp(&other.sort_path())
+    }
+}
+
+impl BitOrd for TreeEntry {
+    fn bit_cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.sort_path().cmp(&other.sort_path())
     }
 }

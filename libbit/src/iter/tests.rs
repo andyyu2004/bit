@@ -1,6 +1,4 @@
 use crate::error::BitResult;
-use crate::iter::BitTreeIterator;
-use crate::obj::FileMode;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 
@@ -18,20 +16,6 @@ fn test_head_iterator() -> BitResult<()> {
         check_next!(iter.next() => "dir/baz":FileMode::REG);
         check_next!(iter.next() => "dir/link":FileMode::LINK);
         check_next!(iter.next() => "foo":FileMode::REG);
-        assert_eq!(iter.next()?, None);
-        Ok(())
-    })
-}
-
-#[test]
-fn test_tree_iterator_peekable_step_over_peeked() -> BitResult<()> {
-    BitRepo::with_sample_repo(|repo| {
-        let mut iter = repo.head_tree_iter()?;
-        check_next!(iter.peek() => "bar":FileMode::REG);
-        // remember peeked value
-        check_next!(iter.over() => "bar": FileMode::REG);
-        check_next!(iter.over() => "dir":FileMode::DIR);
-        check_next!(iter.over() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
         Ok(())
     })

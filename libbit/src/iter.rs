@@ -14,78 +14,10 @@ use std::convert::TryFrom;
 use std::path::Path;
 use walkdir::WalkDir;
 
-impl<'r> BitRepo<'r> {
-    pub fn head_tree_iter(self) -> BitResult<TreeIter<'r>> {
-        let tree = self.head_tree()?;
-        Ok(self.tree_iter(&tree))
-    }
-
-    pub fn tree_iter(self, tree: &Tree) -> TreeIter<'r> {
-        TreeIter::new(self, tree)
-    }
-}
-
-#[derive(Debug)]
-pub struct TreeIter<'r> {
-    repo: BitRepo<'r>,
-    // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself
-    entry_stack: Vec<(BitPath, TreeEntry)>,
-    // the entries of the directory that was just yielded
-    // if stepped over, then these are dropped, otherwise they are added to the stack
-    dir_entries: Option<Vec<(BitPath, TreeEntry)>>,
-}
-
-impl<'r> TreeIter<'r> {
-    pub fn new(repo: BitRepo<'r>, tree: &Tree) -> Self {
-        Self {
-            repo,
-            dir_entries: None,
-            entry_stack: tree
-                .entries
-                .iter()
-                .cloned()
-                .rev()
-                .map(|entry| (BitPath::EMPTY, entry))
-                .collect(),
-        }
-    }
-}
-impl<'r> FallibleIterator for TreeIter<'r> {
-    type Error = BitGenericError;
-    type Item = TreeEntry;
-
-    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        if let Some(entries) = self.dir_entries.take() {
-            self.entry_stack.extend(entries)
-        }
-
-        loop {
-            match self.entry_stack.pop() {
-                Some((base, mut entry)) => match entry.mode {
-                    FileMode::DIR => {
-                        let tree = self.repo.read_obj(entry.oid)?.into_tree()?;
-                        let path = base.join(entry.path);
-                        debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
-
-                        let entries =
-                            tree.entries.into_iter().rev().map(|entry| (path, entry)).collect();
-                        debug_assert!(self.dir_entries.is_none());
-                        self.dir_entries = Some(entries);
-                        return Ok(Some(TreeEntry { path, ..entry }));
-                    }
-                    FileMode::REG | FileMode::LINK | FileMode::EXEC => {
-                        debug!("TreeIter::next: entry: {:?}", entry);
-                        entry.path = base.join(entry.path);
-                        return Ok(Some(entry));
-                    }
-                    // ignore submodules for now
-                    FileMode::GITLINK => continue,
-                    _ => unreachable!("found unknown filemode `{}`", entry.mode),
-                },
-                None => return Ok(None),
-            }
-        }
-    }
+pub trait BitEntry {
+    fn oid(&self) -> Oid;
+    fn path(&self) -> BitPath;
+    fn mode(&self) -> FileMode;
 }
 
 /// wrapper around `TreeIter` that skips the tree entries
@@ -108,7 +40,7 @@ impl<'r> FallibleIterator for TreeEntryIter<'r> {
         // entry iterators only yield non tree entries
         loop {
             match self.tree_iter.next()? {
-                Some(entry) if !entry.mode.is_tree() =>
+                Some(TreeIteratorEntry::File(entry)) =>
                     return Ok(Some(BitIndexEntry::from(entry))),
                 None => return Ok(None),
                 _ => continue,

@@ -33,8 +33,8 @@ fn test_status_add_and_delete_file() -> BitResult<()> {
         assert!(status.unstaged.modified.is_empty());
 
         assert_eq!(status.staged.new.len(), 1);
-        assert_eq!(status.unstaged.deleted.len(), 1);
         assert_eq!(status.staged.new[0].path, "foo");
+        assert_eq!(status.unstaged.deleted.len(), 1);
         assert_eq!(status.unstaged.deleted[0].path, "foo");
         Ok(())
     })
