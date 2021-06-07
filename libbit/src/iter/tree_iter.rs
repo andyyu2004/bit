@@ -6,16 +6,49 @@ pub trait BitTreeIterator: BitIterator<TreeEntry> {
     /// if the next entry is a tree then yield the tree entry but skip over its contents
     /// otherwise does the same as next
     /// `next` should always yield the tree entry itself
+    /// if the `peeked` entry is a directory and over is called, then that entry should be yielded
+    /// and its contents skipped over
     fn over(&mut self) -> BitResult<Option<TreeEntry>>;
 
     // seems difficult to provide a peek method just via an adaptor
     // unclear how to implement peek in terms of `over` and `next`
-    // in particular, if `peek` uses `next`, then all the subdirectories would already
+    // in particular for the case of `TreeIter`,
+    // if `peek` uses `next`, then all the subdirectories would already
     // be added to the stack and its awkward to implement `over` after `peek`
     // similar problems arise with implementing `peek` using `over`
     // probably better to just let the implementor deal with it
     // especially as the implementation is probably trivial
     fn peek(&mut self) -> BitResult<Option<TreeEntry>>;
+}
+
+impl<I, F> BitTreeIterator for fallible_iterator::Filter<I, F>
+where
+    I: BitTreeIterator,
+    F: FnMut(&I::Item) -> Result<bool, I::Error>,
+{
+    fn over(&mut self) -> BitResult<Option<TreeEntry>> {
+        let mut next = self.it.over()?;
+        while let Some(x) = next {
+            if (self.f)(&x)? {
+                break;
+            }
+            next = self.it.over()?;
+        }
+        Ok(next)
+    }
+
+    fn peek(&mut self) -> BitResult<Option<TreeEntry>> {
+        loop {
+            let peeked = self.it.peek()?;
+            if let Some(x) = peeked {
+                if (self.f)(&x)? {
+                    break;
+                }
+            }
+            self.it.next()?;
+        }
+        self.it.peek()
+    }
 }
 
 impl<'r> BitTreeIterator for TreeIter<'r> {
@@ -121,7 +154,7 @@ impl<'a, 'r> BitTreeIterator for IndexTreeIter<'a, 'r> {
             Some(entry) => match entry.mode {
                 FileMode::DIR => self.step_over_dir(entry),
                 FileMode::REG | FileMode::EXEC | FileMode::LINK => Ok(Some(entry)),
-                FileMode::GITLINK => todo!(),
+                FileMode::GITLINK => self.over(),
                 _ => unreachable!(),
             },
             None => return Ok(None),

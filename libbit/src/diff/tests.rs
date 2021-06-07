@@ -22,11 +22,6 @@ fn test_diff_two_trees() -> BitResult<()> {
         let tree = repo.read_obj(oid)?.into_commit().into_tree()?;
         let head_tree = repo.head_tree()?;
 
-        println!("{}", repo.debug_tree(&tree)?);
-        println!("{}", repo.debug_tree(&head_tree)?);
-
-        dbg!(repo.tree_iter(&head_tree).collect::<Vec<_>>())?;
-
         let diff = repo.diff_tree_to_tree(&tree, &head_tree)?;
         // let b = repo.tree_iter(b);
         assert!(diff.modified.is_empty());

@@ -229,3 +229,5 @@ impl<I: BitEntryIterator> BitIteratorExt for I {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tree_iter_tests;

@@ -90,9 +90,9 @@ impl Pathspec {
         path.as_ref().starts_with(self.prefix)
     }
 
-    // fn match_tree_iter(self, iterator: impl BitTreeIterator) -> BitResult<impl BitTreeIterator> {
-    //     Ok(iterator.tree_filter(move |entry| Ok(self.matches_path(entry.path))))
-    // }
+    fn match_tree_iter(self, iterator: impl BitTreeIterator) -> BitResult<impl BitTreeIterator> {
+        Ok(iterator.filter(move |entry| Ok(self.matches_path(entry.path))))
+    }
 
     fn match_entry_iterator(
         self,
