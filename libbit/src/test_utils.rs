@@ -211,12 +211,17 @@ macro_rules! tests_dir {
 }
 
 macro_rules! repos_dir {
-    () => {
-        tests_dir!("repos")
-    };
-    ($path:expr) => {
-        repos_dir!().join($path)
-    };
+    () => {{ tests_dir!("repos") }};
+    ($path:expr) => {{
+        // we copy the entire repository to another location as otherwise we get race conditions
+        // as the tests are multithreaded
+        // its also good to not have accidental mutations to the repository data
+        let path = repos_dir!().join($path);
+        let tmpdir = tempfile::tempdir().expect("failed to get tempdir").into_path();
+        fs_extra::dir::copy(path, &tmpdir, &fs_extra::dir::CopyOptions::default())
+            .expect("repo copy failed");
+        tmpdir.join($path)
+    }};
 }
 
 macro_rules! symbolic {

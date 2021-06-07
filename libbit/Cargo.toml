@@ -47,6 +47,7 @@ bit_derive = { path = "../bit_derive" }
 
 [dev-dependencies]
 quickcheck = "1"
+fs_extra = " 1.2.0"
 quickcheck_macros = "1"
 rand = "0.8.3"
 
