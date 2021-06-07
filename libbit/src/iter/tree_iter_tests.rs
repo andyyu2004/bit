@@ -40,11 +40,24 @@ fn test_tree_iterator_peekable_step_over_peeked() -> BitResult<()> {
 }
 
 #[test]
+fn test_index_tree_iterator_step_over_root() -> BitResult<()> {
+    BitRepo::find(repos_dir!("indextest"), |repo| {
+        repo.with_index(|index| {
+            let mut iter = index.tree_iter();
+            check_next!(iter.over() => "":FileMode::DIR);
+            assert!(iter.next()?.is_none());
+            Ok(())
+        })
+    })
+}
+
+#[test]
 fn test_index_tree_iterator_step_over() -> BitResult<()> {
     // TODO can't actually run these concurrently on the same repo...
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
+            check_next!(iter.next() => "":FileMode::DIR);
             check_next!(iter.over() => "dir":FileMode::DIR);
             check_next!(iter.over() => "dir2":FileMode::DIR);
             check_next!(iter.over() => "exec":FileMode::EXEC);
@@ -60,6 +73,9 @@ fn test_index_tree_iterator_peek() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
+            check_next!(iter.peek() => "":FileMode::DIR);
+            check_next!(iter.peek() => "":FileMode::DIR);
+            check_next!(iter.next() => "":FileMode::DIR);
             check_next!(iter.peek() => "dir":FileMode::DIR);
             check_next!(iter.next() => "dir":FileMode::DIR);
             check_next!(iter.next() => "dir/test.txt":FileMode::REG);
@@ -95,6 +111,7 @@ fn test_index_tree_iterator_next() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
+            check_next!(iter.next() => "": FileMode::DIR);
             check_next!(iter.next() => "dir": FileMode::DIR);
             check_next!(iter.next() => "dir/test.txt": FileMode::REG);
             check_next!(iter.next() => "dir2": FileMode::DIR);

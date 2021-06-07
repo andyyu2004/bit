@@ -83,7 +83,7 @@ impl<'a, 'r> IndexTreeIter<'a, 'r> {
             index,
             peeked: None,
             entry_iter: index.iter().peekable(),
-            pseudotrees: hashset! { BitPath::EMPTY },
+            pseudotrees: Default::default(),
         }
     }
 
@@ -119,6 +119,11 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
     type Item = TreeEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        // we do want to yield the root tree
+        if self.pseudotrees.insert(BitPath::EMPTY) {
+            return Ok(Some(self.create_pseudotree(BitPath::EMPTY)));
+        }
+
         if let Some(peeked) = self.peeked.take() {
             return Ok(Some(peeked));
         }
