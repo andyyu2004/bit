@@ -1,7 +1,7 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndex;
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
-use crate::obj::Tree;
+use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use itertools::Itertools;
@@ -76,9 +76,9 @@ impl Pathspec {
     pub fn match_tree<'r>(
         &self,
         repo: BitRepo<'r>,
-        tree: &Tree,
+        oid: Oid,
     ) -> BitResult<impl BitEntryIterator + 'r> {
-        self.match_entry_iterator(repo.tree_entry_iter(tree)?)
+        self.match_entry_iterator(repo.tree_entry_iter(oid)?)
     }
 
     pub fn match_head<'r>(&self, repo: BitRepo<'r>) -> BitResult<impl BitEntryIterator + 'r> {

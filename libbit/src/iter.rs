@@ -27,8 +27,8 @@ pub struct TreeEntryIter<'r> {
 }
 
 impl<'r> TreeEntryIter<'r> {
-    pub fn new(repo: BitRepo<'r>, root: &Tree) -> Self {
-        Self { tree_iter: TreeIter::new(repo, root) }
+    pub fn new(repo: BitRepo<'r>, oid: Oid) -> Self {
+        Self { tree_iter: TreeIter::new(repo, oid) }
     }
 }
 
@@ -142,15 +142,15 @@ impl<'r> BitRepo<'r> {
         WorktreeIter::new(self)
     }
 
-    pub fn tree_entry_iter(self, tree: &Tree) -> BitResult<impl BitEntryIterator + 'r> {
-        trace!("tree_entry_iter()");
-        Ok(TreeEntryIter::new(self, tree))
+    pub fn tree_entry_iter(self, oid: Oid) -> BitResult<impl BitEntryIterator + 'r> {
+        trace!("tree_entry_iter(oid: {})", oid);
+        Ok(TreeEntryIter::new(self, oid))
     }
 
     pub fn head_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("head_iter()");
-        let tree = self.head_tree()?;
-        self.tree_entry_iter(&tree)
+        let oid = self.head_tree_oid()?;
+        self.tree_entry_iter(oid)
     }
 }
 

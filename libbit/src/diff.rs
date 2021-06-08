@@ -4,7 +4,7 @@ use crate::core::BitOrd;
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator, TreeIteratorEntry};
-use crate::obj::{Tree, TreeEntry};
+use crate::obj::{BitObj, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
@@ -251,7 +251,7 @@ impl<'r> BitRepo<'r> {
         self.with_index_mut(|index| index.diff_head(pathspec))
     }
 
-    pub fn diff_tree_to_tree(self, a: &Tree, b: &Tree) -> BitResult<WorkspaceDiff> {
+    pub fn diff_tree_to_tree(self, a: Oid, b: Oid) -> BitResult<WorkspaceDiff> {
         TreeDifferGeneric::new(self, self.tree_iter(a), self.tree_iter(b)).build_diff()
     }
 }
@@ -290,7 +290,8 @@ impl<'a, 'r> DiffBuilder<'r> for TreeIndexDiffer<'a, 'r> {
 
     fn build_diff(self) -> BitResult<Self::Diff> {
         let repo = self.repo;
-        let tree_iter = self.pathspec.match_tree_iter(self.repo.tree_iter(self.tree));
+        // TODO no need to hold tree in the struct anymore since we only need its oid
+        let tree_iter = self.pathspec.match_tree_iter(self.repo.tree_iter(self.tree.oid()));
         let index_tree_iter = self.pathspec.match_tree_iter(self.index.tree_iter());
         TreeDifferGeneric::new(repo, tree_iter, index_tree_iter).build_diff()
     }

@@ -4,6 +4,7 @@ use super::*;
 fn test_tree_iterator_step_over() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let mut iter = repo.head_tree_iter()?;
+        check_next!(iter.next() => "":FileMode::DIR);
         check_next!(iter.next() => "bar":FileMode::REG);
         check_next!(iter.over() => "dir":FileMode::DIR);
         check_next!(iter.over() => "foo": FileMode::REG);
@@ -16,6 +17,8 @@ fn test_tree_iterator_step_over() -> BitResult<()> {
 fn test_tree_iterator_peekable() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let mut iter = repo.head_tree_iter()?;
+        check_next!(iter.peek() => "":FileMode::DIR);
+        check_next!(iter.next() => "":FileMode::DIR);
         check_next!(iter.peek() => "bar":FileMode::REG);
         check_next!(iter.next() => "bar":FileMode::REG);
         check_next!(iter.over() => "dir":FileMode::DIR);
@@ -30,8 +33,9 @@ fn test_tree_iterator_peekable() -> BitResult<()> {
 fn test_tree_iterator_peekable_step_over_peeked() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let mut iter = repo.head_tree_iter()?;
+        check_next!(iter.next() => "":FileMode::DIR);
         check_next!(iter.peek() => "bar":FileMode::REG);
-        // remember peeked value
+        // remembers peeked value
         check_next!(iter.over() => "bar": FileMode::REG);
         check_next!(iter.over() => "dir":FileMode::DIR);
         check_next!(iter.over() => "foo": FileMode::REG);

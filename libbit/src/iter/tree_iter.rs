@@ -1,6 +1,5 @@
-use crate::core::BitOrd;
-
 use super::*;
+use crate::core::BitOrd;
 
 /// tree iterators allow stepping over entire trees (skipping all entries recursively)
 pub trait BitTreeIterator: BitIterator<TreeIteratorEntry> {
@@ -69,12 +68,12 @@ where
 
 impl<'r> BitRepo<'r> {
     pub fn head_tree_iter(self) -> BitResult<TreeIter<'r>> {
-        let tree = self.head_tree()?;
-        Ok(self.tree_iter(&tree))
+        let oid = self.head_tree_oid()?;
+        Ok(self.tree_iter(oid))
     }
 
-    pub fn tree_iter(self, tree: &Tree) -> TreeIter<'r> {
-        TreeIter::new(self, tree)
+    pub fn tree_iter(self, oid: Oid) -> TreeIter<'r> {
+        TreeIter::new(self, oid)
     }
 }
 
@@ -138,23 +137,20 @@ pub struct TreeIter<'r> {
     repo: BitRepo<'r>,
     // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself
     entry_stack: Vec<(BitPath, TreeEntry)>,
-    // the entries of the directory that was just yielded
-    // if stepped over, then these are dropped, otherwise they are added to the stack
-    dir_entries: Option<Vec<(BitPath, TreeEntry)>>,
+    /// the number of entries in the stack before the most recent directory was pushed
+    /// this is used for stepping over
+    previous_len: usize,
 }
 
 impl<'r> TreeIter<'r> {
-    pub fn new(repo: BitRepo<'r>, tree: &Tree) -> Self {
+    pub fn new(repo: BitRepo<'r>, oid: Oid) -> Self {
         Self {
             repo,
-            dir_entries: None,
-            entry_stack: tree
-                .entries
-                .iter()
-                .cloned()
-                .rev()
-                .map(|entry| (BitPath::EMPTY, entry))
-                .collect(),
+            previous_len: 0,
+            entry_stack: vec![(
+                BitPath::EMPTY,
+                TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::DIR },
+            )],
         }
     }
 }
@@ -163,10 +159,6 @@ impl<'r> FallibleIterator for TreeIter<'r> {
     type Item = TreeIteratorEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        if let Some(entries) = self.dir_entries.take() {
-            self.entry_stack.extend(entries)
-        }
-
         loop {
             match self.entry_stack.pop() {
                 Some((base, mut entry)) => match entry.mode {
@@ -175,10 +167,10 @@ impl<'r> FallibleIterator for TreeIter<'r> {
                         let path = base.join(entry.path);
                         debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
 
-                        let entries =
-                            tree.entries.into_iter().rev().map(|entry| (path, entry)).collect();
-                        debug_assert!(self.dir_entries.is_none());
-                        self.dir_entries = Some(entries);
+                        self.previous_len = self.entry_stack.len();
+                        self.entry_stack
+                            .extend(tree.entries.into_iter().rev().map(|entry| (path, entry)));
+
                         return Ok(Some(TreeIteratorEntry::Tree(TreeEntry { path, ..entry })));
                     }
                     FileMode::REG | FileMode::LINK | FileMode::EXEC => {
@@ -200,7 +192,7 @@ impl<'r> BitTreeIterator for TreeIter<'r> {
         match self.next()? {
             Some(entry) => {
                 if entry.mode() == FileMode::DIR {
-                    self.dir_entries.take();
+                    self.entry_stack.truncate(self.previous_len);
                 }
                 Ok(Some(entry))
             }
