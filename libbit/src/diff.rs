@@ -169,7 +169,7 @@ where
     fn on_created(&mut self, new: TreeIteratorEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_created(new: {})", new.path());
         match new {
-            TreeIteratorEntry::Tree(tree) => self.new_iter.collect_over(&mut self.diff.new, tree),
+            TreeIteratorEntry::Tree(_) => self.new_iter.collect_over(&mut self.diff.new),
             TreeIteratorEntry::File(file) => {
                 self.diff.new.push(file);
                 self.new_iter.next()?;
@@ -228,8 +228,7 @@ where
         trace!("TreeDifferGeneric::on_deleted(old : {})", old.path());
         // TODO refactor out shared code
         match old {
-            TreeIteratorEntry::Tree(tree) =>
-                self.old_iter.collect_over(&mut self.diff.deleted, tree),
+            TreeIteratorEntry::Tree(tree) => self.old_iter.collect_over(&mut self.diff.deleted),
             TreeIteratorEntry::File(file) => {
                 self.diff.deleted.push(file);
                 self.old_iter.next()?;

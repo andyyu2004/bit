@@ -1,5 +1,91 @@
+use crate::error::BitResult;
+use crate::obj::{BitObj, BitObjKind, FileMode, Oid, Tree, TreeEntry};
+use crate::path::BitPath;
+use crate::repo::BitRepo;
 use rand::Rng;
+use std::fmt::{self, Display, Formatter};
 
+#[derive(Debug, PartialEq)]
+pub enum DebugTreeEntry {
+    Tree(DebugTree),
+    File(TreeEntry),
+}
+
+impl DebugTreeEntry {
+    pub fn path(&self) -> BitPath {
+        match self {
+            DebugTreeEntry::Tree(tree) => tree.path,
+            DebugTreeEntry::File(file) => file.path,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DebugTree {
+    path: BitPath,
+    oid: Oid,
+    entries: Vec<DebugTreeEntry>,
+}
+
+macro_rules! indent {
+    ($f:expr, $indents:expr) => {
+        write!($f, "{} ", (0..$indents).map(|_| "   ").fold(String::new(), |acc, x| acc + x))?
+    };
+}
+
+impl Display for DebugTreeEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        indent!(f, self.path().components().len());
+        match self {
+            DebugTreeEntry::Tree(tree) => write!(f, "{}", tree),
+            DebugTreeEntry::File(entry) => writeln!(
+                f,
+                "{} ({})",
+                entry.path.file_name().and_then(|os_str| os_str.to_str()).unwrap(),
+                entry.oid
+            ),
+        }
+    }
+}
+
+impl Display for DebugTree {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{}/ ({})",
+            self.path.file_name().and_then(|os_str| os_str.to_str()).unwrap_or("."),
+            self.oid
+        )?;
+        for entry in &self.entries {
+            write!(f, "{}", entry)?;
+        }
+        Ok(())
+    }
+}
+
+impl BitRepo<'_> {
+    // get a view of the entire recursive tree structure
+    pub fn debug_tree(self, tree: &Tree) -> BitResult<DebugTree> {
+        self.debug_tree_internal(tree, BitPath::EMPTY)
+    }
+
+    fn debug_tree_internal(self, tree: &Tree, path: BitPath) -> BitResult<DebugTree> {
+        let mut entries = Vec::with_capacity(tree.entries.len());
+        for &entry in &tree.entries {
+            let path = path.join(entry.path);
+            let entry = TreeEntry { path, ..entry };
+            let dbg_entry = match self.read_obj(entry.oid)? {
+                BitObjKind::Blob(..) => DebugTreeEntry::File(entry),
+                BitObjKind::Tree(tree) =>
+                    DebugTreeEntry::Tree(self.debug_tree_internal(&tree, path)?),
+                _ => unreachable!(),
+            };
+            entries.push(dbg_entry);
+        }
+
+        Ok(DebugTree { path, entries, oid: tree.oid() })
+    }
+}
 pub fn generate_random_string(range: std::ops::Range<usize>) -> String {
     let size = rand::thread_rng().gen_range(range);
     rand::thread_rng()
@@ -255,4 +341,132 @@ macro_rules! parse_rev {
         use std::str::FromStr;
         crate::rev::LazyRevspec::from_str($rev)?
     }};
+}
+
+macro_rules! tree_entry {
+    ($path:ident) => {{
+        let oid = crate::tls::with_repo(|repo| repo.write_obj(&$crate::obj::Blob::new(vec![]))).unwrap();
+        crate::obj::TreeEntry {
+            oid,
+            path: stringify!($path).into(),
+            mode: $crate::obj::FileMode::REG,
+        }
+    }};
+    ($path:ident { $($subtree:tt)* }) => {{
+        let tree = tree!({ $($subtree)* });
+        let oid = crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap();
+        crate::obj::TreeEntry {
+            oid,
+            path: stringify!($path).into(),
+            mode: crate::obj::FileMode::DIR
+        }
+    }};
+}
+
+// this uses a similar technique to the json! macro where the stuff in the square brackets are entries that have been "transformed into rust" so to speak.
+// they contain expressions that evaluate to tree_entries.
+// the stuff on the right of the [..] is not yet translated and is just raw tokens
+// we match the two cases separately
+// we must match the tree case first as the other pattern will also match any tree pattern and parsing will fail
+// these two cases just delegate to the `tree_entry!` macro which is fairly straightforward (the subtree case recurses back onto the `tree!` macro)
+// TODO could add a case where the `path` is a literal rather than an identifier (if we need paths that are not valid identifiers)
+macro_rules! tree_entries {
+    ([ $($entries:expr,)* ] $next:ident { $($subtree:tt)* } $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next { $($subtree)* }), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ] $next:ident $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ]) => {{
+        let btreeset: std::collections::BTreeSet<$crate::obj::TreeEntry> = btreeset! { $($entries,)* };
+        btreeset
+    }};
+}
+
+// uses tls to access repo
+/// grammar
+/// <tree>       ::= { <tree-entry>* }
+/// <tree-entry> ::= <path> | <path> <tree>
+/// <path>       ::= <literal> | <ident>
+macro_rules! tree {
+    ({ $($entries:tt)* }) => {
+        crate::obj::Tree::new(tree_entries!([] $($entries)* ))
+    };
+}
+
+#[test]
+fn test_tree_macro() -> crate::error::BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        assert_eq!(tree!({}), crate::obj::Tree::new(btreeset! {}));
+
+        assert_eq!(
+            tree_entries!([] foo bar),
+            btreeset! {
+                TreeEntry { oid: Oid::EMPTY_BLOB, path: "foo".into(), mode: FileMode::REG },
+                TreeEntry { oid: Oid::EMPTY_BLOB, path: "bar".into(), mode: FileMode::REG },
+            }
+        );
+
+        assert_eq!(
+            tree_entries!([] bar { baz }),
+            btreeset! {
+                TreeEntry {
+                    oid: "94b2978d84f4cbb7449c092255b38a1e1b40da42".into() ,
+                    path: "bar".into(),
+                    mode: FileMode::DIR
+                },
+            }
+        );
+
+        let tree = tree!({
+            foo
+            bar {
+                baz
+                qux {
+                    quux
+                }
+            }
+            qux
+        });
+
+        let debug_tree = repo.debug_tree(&tree)?;
+        let expected_debug_tree = DebugTree {
+            path: BitPath::EMPTY,
+            oid: "957fd7abc8b9f5af6700b54f6ef510017fcfe44b".into(),
+            entries: vec![
+                DebugTreeEntry::Tree(DebugTree {
+                    path: "bar".into(),
+                    oid: "de0a310f7ede65be4c9ffcdc43f7d079ce517a0e".into(),
+                    entries: vec![
+                        DebugTreeEntry::File(TreeEntry {
+                            mode: FileMode::REG,
+                            path: "bar/baz".into(),
+                            oid: Oid::EMPTY_BLOB,
+                        }),
+                        DebugTreeEntry::Tree(DebugTree {
+                            path: "bar/qux".into(),
+                            oid: "c5ae2e49fc463618b26da36970bc6c662e83d9be".into(),
+                            entries: vec![DebugTreeEntry::File(TreeEntry {
+                                mode: FileMode::REG,
+                                path: "bar/qux/quux".into(),
+                                oid: Oid::EMPTY_BLOB,
+                            })],
+                        }),
+                    ],
+                }),
+                DebugTreeEntry::File(TreeEntry {
+                    mode: FileMode::REG,
+                    path: "foo".into(),
+                    oid: Oid::EMPTY_BLOB,
+                }),
+                DebugTreeEntry::File(TreeEntry {
+                    mode: FileMode::REG,
+                    path: "qux".into(),
+                    oid: Oid::EMPTY_BLOB,
+                }),
+            ],
+        };
+        assert_eq!(debug_tree, expected_debug_tree);
+        Ok(())
+    })
 }

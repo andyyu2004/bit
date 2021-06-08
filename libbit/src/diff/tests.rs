@@ -1,6 +1,7 @@
 use fallible_iterator::FallibleIterator;
 
 use crate::error::BitResult;
+use crate::iter::BitEntry;
 use crate::obj::{FileMode, Treeish};
 use crate::repo::BitRepo;
 
@@ -21,9 +22,10 @@ fn test_diff_tree_to_tree() -> BitResult<()> {
         let oid = repo.resolve_rev(&parse_rev!("HEAD^"))?;
         let tree = repo.read_obj(oid)?.into_commit().into_tree()?;
         let head_tree = repo.head_tree()?;
+        dbg!(repo.tree_iter(&tree).map(|entry| Ok(entry.path())).collect::<Vec<_>>()?);
 
         let diff = repo.diff_tree_to_tree(&tree, &head_tree)?;
-        dbg!(&diff);
+        dbg!(&diff.new.iter().map(|entry| entry.path).collect::<Vec<_>>());
         // let b = repo.tree_iter(b);
         assert!(diff.modified.is_empty());
         assert!(diff.deleted.is_empty());

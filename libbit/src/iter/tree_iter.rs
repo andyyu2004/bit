@@ -10,18 +10,18 @@ pub trait BitTreeIterator: BitIterator<TreeIteratorEntry> {
     /// `next` should always yield the tree entry itself
     /// if the `peeked` entry is a directory and over is called, then that entry should be yielded
     /// and its contents skipped over
+    /// full paths should be returned (relative to repo root), not just relative to the parent
     fn over(&mut self) -> BitResult<Option<Self::Item>>;
 
     /// same as `self.over` but instead appends all the non-tree entries into a container
-    fn collect_over(
-        &mut self,
-        container: &mut Vec<BitIndexEntry>,
-        tree_entry: TreeEntry,
-    ) -> BitResult<()> {
-        debug_assert_eq!(tree_entry.mode, FileMode::DIR);
-        while self.peek()?.map(|next| next.path().starts_with(tree_entry.path)).unwrap_or(false) {
-            if let TreeIteratorEntry::File(mut entry) = self.next()?.unwrap() {
-                entry.path = tree_entry.path.join(entry.path);
+    // TODO better name
+    // this takes a container to append to avoid a separate allocation
+    fn collect_over(&mut self, container: &mut Vec<BitIndexEntry>) -> BitResult<()> {
+        let tree_entry = self.peek()?.expect("currently expected to not be called when at end");
+        dbg!(tree_entry);
+        debug_assert_eq!(tree_entry.mode(), FileMode::DIR);
+        while self.peek()?.map(|next| next.path().starts_with(tree_entry.path())).unwrap_or(false) {
+            if let TreeIteratorEntry::File(entry) = self.next()?.unwrap() {
                 container.push(entry);
             }
         }
@@ -275,7 +275,7 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
 
         match self.entry_iter.peek()? {
             Some(&entry) => {
-                let dir = entry.path.parent().unwrap();
+                let dir = entry.path().parent().unwrap();
                 if self.pseudotrees.insert(dir) {
                     Ok(Some(self.create_pseudotree(dir)))
                 } else {

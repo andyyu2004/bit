@@ -97,6 +97,46 @@ fn test_index_tree_iterator_peek() -> BitResult<()> {
     })
 }
 
+#[test]
+fn test_tree_iterator_collect_over_non_root() -> BitResult<()> {
+    BitRepo::find(repos_dir!("indextest"), |repo| {
+        repo.with_index(|index| {
+            let mut iter = index.tree_iter();
+            // step over root, "dir", and "dir/test.txt"
+            iter.nth(2)?;
+            let mut vec = vec![];
+            iter.collect_over(&mut vec)?;
+            let paths = vec.iter().map(BitEntry::path).collect::<Vec<_>>();
+            assert_eq!(paths, vec!["dir2/dir2.txt", "dir2/nested/coolfile.txt",]);
+            Ok(())
+        })
+    })
+}
+
+#[test]
+fn test_tree_iterator_collect_over_root() -> BitResult<()> {
+    BitRepo::find(repos_dir!("indextest"), |repo| {
+        repo.with_index(|index| {
+            let mut iter = index.tree_iter();
+            let mut vec = vec![];
+            iter.collect_over(&mut vec)?;
+            let paths = vec.iter().map(BitEntry::path).collect::<Vec<_>>();
+            assert_eq!(
+                paths,
+                vec![
+                    "dir/test.txt",
+                    "dir2/dir2.txt",
+                    "dir2/nested/coolfile.txt",
+                    "exec",
+                    "test.txt",
+                    "zs/one.txt",
+                ]
+            );
+            Ok(())
+        })
+    })
+}
+
 /// ├── dir
 /// │  └── test.txt
 /// ├── dir2
