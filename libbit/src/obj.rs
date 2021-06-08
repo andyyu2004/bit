@@ -42,6 +42,7 @@ impl Display for BitObjKind {
 // 100644 normal
 // 100755 executable
 // 40000 directory
+// TODO make this an enum
 #[derive(Copy, PartialEq, Eq, Clone)]
 pub struct FileMode(u32);
 

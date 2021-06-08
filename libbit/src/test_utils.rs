@@ -353,7 +353,7 @@ macro_rules! tree_entry {
         }
     }};
     ($path:ident { $($subtree:tt)* }) => {{
-        let tree = tree!({ $($subtree)* });
+        let tree = tree!( $($subtree)* );
         let oid = crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap();
         crate::obj::TreeEntry {
             oid,
@@ -388,8 +388,11 @@ macro_rules! tree_entries {
 /// <tree>       ::= { <tree-entry>* }
 /// <tree-entry> ::= <path> | <path> <tree>
 /// <path>       ::= <literal> | <ident>
+/// note the outermost tree doesn't have explicit braces,
+/// its recommended to use the `{}` delimiters for the macro invocation
+/// i.e. tree! { .. } not tree! ( .. ) or tree! [ .. ]
 macro_rules! tree {
-    ({ $($entries:tt)* }) => {
+    ( $($entries:tt)* ) => {
         crate::obj::Tree::new(tree_entries!([] $($entries)* ))
     };
 }
@@ -397,7 +400,7 @@ macro_rules! tree {
 #[test]
 fn test_tree_macro() -> crate::error::BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        assert_eq!(tree!({}), crate::obj::Tree::new(btreeset! {}));
+        assert_eq!(tree! {}, crate::obj::Tree::new(btreeset! {}));
 
         assert_eq!(
             tree_entries!([] foo bar),
@@ -418,7 +421,7 @@ fn test_tree_macro() -> crate::error::BitResult<()> {
             }
         );
 
-        let tree = tree!({
+        let tree = tree! {
             foo
             bar {
                 baz
@@ -427,7 +430,7 @@ fn test_tree_macro() -> crate::error::BitResult<()> {
                 }
             }
             qux
-        });
+        };
 
         let debug_tree = repo.debug_tree(&tree)?;
         let expected_debug_tree = DebugTree {
