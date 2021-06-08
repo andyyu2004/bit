@@ -343,23 +343,35 @@ macro_rules! parse_rev {
     }};
 }
 
+macro_rules! file_entry {
+    ($path:expr) => {{
+        let oid =
+            crate::tls::with_repo(|repo| repo.write_obj(&$crate::obj::Blob::new(vec![]))).unwrap();
+        crate::obj::TreeEntry { oid, path: $path.into(), mode: $crate::obj::FileMode::REG }
+    }};
+}
+
+macro_rules! dir_entry {
+    ($path:expr, $tree:expr) => {{
+        let oid = crate::tls::with_repo(|repo| repo.write_obj(&$tree)).unwrap();
+        crate::obj::TreeEntry { oid, path: $path.into(), mode: crate::obj::FileMode::DIR }
+    }};
+}
+
 macro_rules! tree_entry {
-    ($path:ident) => {{
-        let oid = crate::tls::with_repo(|repo| repo.write_obj(&$crate::obj::Blob::new(vec![]))).unwrap();
-        crate::obj::TreeEntry {
-            oid,
-            path: stringify!($path).into(),
-            mode: $crate::obj::FileMode::REG,
-        }
+    ($path:ident) => {
+        file_entry!(stringify!($path))
+    };
+    ($path:literal) => {
+        file_entry!($path)
+    };
+    ($path:literal { $($subtree:tt)* }) => {{
+        let tree = tree!( $($subtree)* );
+        dir_entry!($path, tree)
     }};
     ($path:ident { $($subtree:tt)* }) => {{
         let tree = tree!( $($subtree)* );
-        let oid = crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap();
-        crate::obj::TreeEntry {
-            oid,
-            path: stringify!($path).into(),
-            mode: crate::obj::FileMode::DIR
-        }
+        dir_entry!(stringify!($path), tree)
     }};
 }
 
@@ -369,12 +381,18 @@ macro_rules! tree_entry {
 // we match the two cases separately
 // we must match the tree case first as the other pattern will also match any tree pattern and parsing will fail
 // these two cases just delegate to the `tree_entry!` macro which is fairly straightforward (the subtree case recurses back onto the `tree!` macro)
-// TODO could add a case where the `path` is a literal rather than an identifier (if we need paths that are not valid identifiers)
+// there are cases for literals and idents and sometimes valid paths are not valid idents (but it looks nice to use idents where its legal)
 macro_rules! tree_entries {
     ([ $($entries:expr,)* ] $next:ident { $($subtree:tt)* } $($rest:tt)*) => {
         tree_entries!([ $($entries,)* tree_entry!($next { $($subtree)* }), ] $($rest)*)
     };
+    ([ $($entries:expr,)* ] $next:literal { $($subtree:tt)* } $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next { $($subtree)* }), ] $($rest)*)
+    };
     ([ $($entries:expr,)* ] $next:ident $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ] $next:literal $($rest:tt)*) => {
         tree_entries!([ $($entries,)* tree_entry!($next), ] $($rest)*)
     };
     ([ $($entries:expr,)* ]) => {{
@@ -397,16 +415,24 @@ macro_rules! tree {
     };
 }
 
+/// same as `tree!` but writes it to the repo and returns the oid
+macro_rules! tree_oid {
+    ( $($entries:tt)* ) => {{
+        let tree = tree! { $($entries)* };
+        crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap()
+    }};
+}
+
 #[test]
 fn test_tree_macro() -> crate::error::BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         assert_eq!(tree! {}, crate::obj::Tree::new(btreeset! {}));
 
         assert_eq!(
-            tree_entries!([] foo bar),
+            tree_entries!([] foo "bar.l"),
             btreeset! {
                 TreeEntry { oid: Oid::EMPTY_BLOB, path: "foo".into(), mode: FileMode::REG },
-                TreeEntry { oid: Oid::EMPTY_BLOB, path: "bar".into(), mode: FileMode::REG },
+                TreeEntry { oid: Oid::EMPTY_BLOB, path: "bar.l".into(), mode: FileMode::REG },
             }
         );
 
@@ -425,11 +451,11 @@ fn test_tree_macro() -> crate::error::BitResult<()> {
             foo
             bar {
                 baz
-                qux {
+                "qux" {
                     quux
                 }
             }
-            qux
+            "qux"
         };
 
         let debug_tree = repo.debug_tree(&tree)?;

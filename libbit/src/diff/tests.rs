@@ -16,9 +16,10 @@ fn test_diff_two_same_trees() -> BitResult<()> {
 #[test]
 fn test_diff_tree_to_tree() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        let head_oid = repo.resolve_rev(&parse_rev!("HEAD^"))?;
+        let head = repo.resolve_rev(&parse_rev!("HEAD^"))?;
+        let oid = repo.read_obj(head)?.into_commit().tree;
 
-        let diff = repo.diff_tree_to_tree(head_oid, repo.head_tree_oid()?)?;
+        let diff = repo.diff_tree_to_tree(oid, repo.head_tree_oid()?)?;
         dbg!(&diff.new.iter().map(|entry| entry.path).collect::<Vec<_>>());
         // let b = repo.tree_iter(b);
         assert!(diff.modified.is_empty());

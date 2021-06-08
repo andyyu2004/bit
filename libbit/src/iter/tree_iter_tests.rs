@@ -141,6 +141,36 @@ fn test_tree_iterator_collect_over_root() -> BitResult<()> {
     })
 }
 
+#[test]
+fn test_tree_tree_iterator_matches_index_tree_iterator() -> BitResult<()> {
+    BitRepo::find(repos_dir!("indextest"), |repo| {
+        repo.with_index(|index| {
+            // this tree should match the directory structure below
+            let oid = tree_oid! {
+                "dir" {
+                    "test.txt"
+                }
+                "dir2" {
+                    "dir2.txt"
+                    "nested" {
+                        "coolfile.txt"
+                    }
+                }
+                "exec"
+                "test.txt"
+                "zs" {
+                    "one.txt"
+                }
+            };
+            // this only tests `next` and not `peek` or `over`
+            // we only compare paths as comparing modes is a bit pointless, and the the index may correctly have unknown oids
+            let tree_tree_iter = repo.tree_iter(oid).map(|entry| Ok(entry.path()));
+            let index_tree_iter = index.tree_iter().map(|entry| Ok(entry.path()));
+            assert!(tree_tree_iter.eq(index_tree_iter)?);
+            Ok(())
+        })
+    })
+}
 /// ├── dir
 /// │  └── test.txt
 /// ├── dir2
@@ -173,7 +203,7 @@ fn test_index_tree_iterator_next() -> BitResult<()> {
 }
 
 #[test]
-fn test_tree_iterator_filter() -> BitResult<()> {
+fn test_index_tree_iterator_filter() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter().filter(|entry| Ok(entry.path().starts_with("dir2")));
