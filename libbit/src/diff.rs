@@ -322,6 +322,8 @@ impl<'a, 'r> Differ<'r> for TreeIndexDiffer<'a, 'r> {
 #[derive(Debug, Default)]
 // tree entries here are not sufficient as we use this to manipulate the index which requires
 // some data in IndexEntries that are not present in TreeEntries (e.g. stage)
+// invariants:
+// should not contain directories: directories should be expanded first before insertion
 pub struct WorkspaceDiff {
     pub new: Vec<BitIndexEntry>,
     pub modified: Vec<(BitIndexEntry, BitIndexEntry)>,
@@ -333,6 +335,7 @@ impl WorkspaceDiff {
         self.new.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
     }
 }
+
 pub trait Diff {
     fn apply<A: Apply>(&self, applier: &mut A) -> BitResult<()>;
 }

@@ -1,6 +1,5 @@
 use super::*;
 use crate::path::BitPath;
-use crate::repo::BitRepo;
 use crate::test_utils::*;
 use quickcheck::{Arbitrary, Gen};
 use quickcheck_macros::quickcheck;

@@ -14,13 +14,12 @@ fn test_diff_two_same_trees() -> BitResult<()> {
 }
 
 #[test]
-fn test_diff_tree_to_tree() -> BitResult<()> {
+fn test_diff_head_prime_to_head() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let head = repo.resolve_rev(&parse_rev!("HEAD^"))?;
         let oid = repo.read_obj(head)?.into_commit().tree;
 
         let diff = repo.diff_tree_to_tree(oid, repo.head_tree_oid()?)?;
-        dbg!(&diff.new.iter().map(|entry| entry.path).collect::<Vec<_>>());
         // let b = repo.tree_iter(b);
         assert!(diff.modified.is_empty());
         assert!(diff.deleted.is_empty());
@@ -29,6 +28,33 @@ fn test_diff_tree_to_tree() -> BitResult<()> {
         // so the iterator should just return `dir` as changed without recursing
         assert_eq!(diff.new[0].path, "dir");
         assert_eq!(diff.new[0].mode, FileMode::DIR);
+        Ok(())
+    })
+}
+
+#[test]
+fn test_diff_tree_to_tree_deleted() -> BitResult<()> {
+    // TODO test fails
+    BitRepo::with_empty_repo(|repo| {
+        let a = tree_oid! {
+            foo
+            bar {
+                a
+                b
+            }
+            qux
+        };
+
+        let b = tree_oid! {
+            foo
+            qux
+        };
+
+        let diff = repo.diff_tree_to_tree(a, b)?;
+        assert!(diff.new.is_empty());
+        assert!(diff.modified.is_empty());
+        dbg!(&diff.deleted);
+        assert_eq!(diff.deleted.len(), 2);
         Ok(())
     })
 }

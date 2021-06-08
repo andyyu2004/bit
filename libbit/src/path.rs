@@ -18,13 +18,17 @@ use std::str::pattern::Pattern;
 // since its used so much, this will also lend itself to faster comparisons as
 // its now just an integer compare
 #[derive(Eq, PartialEq, Clone, Copy, Hash)]
-pub struct BitPath(u32);
+pub struct BitPath(u32, #[cfg(debug_assertions)] &'static str);
 
 pub type BitFileStream = impl BufReadSeek;
 
 impl BitPath {
-    pub(crate) const fn new(u: u32) -> Self {
-        Self(u)
+    pub(crate) const fn new(u: u32, #[cfg(debug_assertions)] s: &'static str) -> Self {
+        Self(
+            u,
+            #[cfg(debug_assertions)]
+            s,
+        )
     }
 
     pub fn is_empty(self) -> bool {
