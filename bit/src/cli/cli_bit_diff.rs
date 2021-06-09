@@ -30,8 +30,8 @@ impl Cmd for BitDiffCliOpts {
         let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
         let status = if let Some(r) = self.staged {
             let r = r.unwrap_or(BitRef::HEAD);
-            let tree = r.resolve_to_tree(repo)?;
-            repo.diff_tree_index(&tree, pathspec)?
+            let oid = r.fully_resolve(repo)?;
+            repo.diff_tree_index(oid, pathspec)?
         } else {
             repo.diff_index_worktree(pathspec)?
         };

@@ -265,55 +265,6 @@ impl<'r> BitIndex<'r> {
     }
 }
 
-pub(crate) struct TreeIndexDiffer<'a, 'r> {
-    repo: BitRepo<'r>,
-    index: &'a mut BitIndex<'r>,
-    tree: &'a Tree,
-    pathspec: Pathspec,
-    diff: WorkspaceDiff,
-}
-
-impl<'a, 'r> TreeIndexDiffer<'a, 'r> {
-    pub fn new(index: &'a mut BitIndex<'r>, tree: &'a Tree, pathspec: Pathspec) -> Self {
-        let repo = index.repo;
-        Self { index, repo, tree, pathspec, diff: Default::default() }
-    }
-}
-
-impl<'a, 'r> DiffBuilder<'r> for TreeIndexDiffer<'a, 'r> {
-    type Diff = WorkspaceDiff;
-
-    fn build_diff(self) -> BitResult<Self::Diff> {
-        let repo = self.repo;
-        // TODO no need to hold tree in the struct anymore since we only need its oid
-        let tree_iter = self.pathspec.match_tree_iter(self.repo.tree_iter(self.tree.oid()));
-        let index_tree_iter = self.pathspec.match_tree_iter(self.index.tree_iter());
-        TreeDifferGeneric::new(repo, tree_iter, index_tree_iter).build_diff()
-    }
-}
-
-// TODO don't think these impls are used anymore after changing to use treediffergeneric
-impl<'a, 'r> Apply for TreeIndexDiffer<'a, 'r> {
-    fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
-        Ok(self.diff.new.push(*new))
-    }
-
-    fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
-        assert_eq!(old.path, new.path);
-        Ok(self.diff.modified.push((*old, *new)))
-    }
-
-    fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
-        Ok(self.diff.deleted.push(*old))
-    }
-}
-
-impl<'a, 'r> Differ<'r> for TreeIndexDiffer<'a, 'r> {
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
-        self.index
-    }
-}
-
 #[derive(Debug, Default)]
 // tree entries here are not sufficient as we use this to manipulate the index which requires
 // some data in IndexEntries that are not present in TreeEntries (e.g. stage)
