@@ -1,4 +1,7 @@
+use fallible_iterator::FallibleIterator;
+
 use crate::error::BitResult;
+use crate::iter::BitEntry;
 use crate::obj::FileMode;
 use crate::repo::BitRepo;
 
@@ -16,18 +19,24 @@ fn test_diff_two_same_trees() -> BitResult<()> {
 #[test]
 fn test_diff_head_prime_to_head() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        let head = repo.resolve_rev(&parse_rev!("HEAD^"))?;
-        let oid = repo.read_obj(head)?.into_commit().tree;
+        let head_prime = repo.resolve_rev(&parse_rev!("HEAD^"))?;
+        let oid = repo.read_obj(head_prime)?.into_commit().tree;
 
         let diff = repo.diff_tree_to_tree(oid, repo.head_tree_oid()?)?;
-        // let b = repo.tree_iter(b);
         assert!(diff.modified.is_empty());
         assert!(diff.deleted.is_empty());
-        assert_eq!(diff.new.len(), 1);
-        // all the files in `dir` are added between the two commits
-        // so the iterator should just return `dir` as changed without recursing
-        assert_eq!(diff.new[0].path, "dir");
-        assert_eq!(diff.new[0].mode, FileMode::DIR);
+        assert_eq!(diff.new.len(), 4);
+
+        // so the iterator should expand the new directory
+        // and not just add the directory itself
+        assert_eq!(diff.new[0].path, "dir/bar.l");
+        assert_eq!(diff.new[0].mode, FileMode::REG);
+        assert_eq!(diff.new[1].path, "dir/bar/qux");
+        assert_eq!(diff.new[1].mode, FileMode::REG);
+        assert_eq!(diff.new[2].path, "dir/baz");
+        assert_eq!(diff.new[2].mode, FileMode::REG);
+        assert_eq!(diff.new[3].path, "dir/link");
+        assert_eq!(diff.new[3].mode, FileMode::LINK);
         Ok(())
     })
 }
@@ -37,8 +46,8 @@ fn test_diff_tree_to_tree_deleted() -> BitResult<()> {
     // TODO test fails
     BitRepo::with_empty_repo(|repo| {
         let a = tree_oid! {
-            foo
-            bar {
+            bar
+            foo {
                 a
                 b
             }
@@ -46,14 +55,13 @@ fn test_diff_tree_to_tree_deleted() -> BitResult<()> {
         };
 
         let b = tree_oid! {
-            foo
+            bar
             qux
         };
 
         let diff = repo.diff_tree_to_tree(a, b)?;
         assert!(diff.new.is_empty());
         assert!(diff.modified.is_empty());
-        dbg!(&diff.deleted);
         assert_eq!(diff.deleted.len(), 2);
         Ok(())
     })

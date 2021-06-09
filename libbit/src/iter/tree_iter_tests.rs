@@ -109,11 +109,39 @@ fn test_tree_iterator_collect_over_non_root() -> BitResult<()> {
             // step over root, "dir", and "dir/test.txt"
             iter.nth(2)?;
             let mut vec = vec![];
-            iter.collect_over(&mut vec)?;
+            iter.collect_over_tree(&mut vec)?;
             let paths = vec.iter().map(BitEntry::path).collect::<Vec<_>>();
             assert_eq!(paths, vec!["dir2/dir2.txt", "dir2/nested/coolfile.txt",]);
             Ok(())
         })
+    })
+}
+
+#[test]
+fn test_tree_tree_iterator_step_over_tree_twice() -> BitResult<()> {
+    BitRepo::find(repos_dir!("indextest"), |repo| {
+        // this tree should match the directory structure below
+        let oid = tree_oid! {
+            "dir0" {
+                "test.txt"
+            }
+            "dir1" {
+                "dir2.txt"
+                "nested" {
+                    "coolfile.txt"
+                }
+            }
+            "dir2" {
+            }
+        };
+        // this only tests `next` and not `peek` or `over`
+        // we only compare paths as comparing modes is a bit pointless, and the the index may correctly have unknown oids
+        let mut iter = repo.tree_iter(oid);
+        check_next!(iter.next() => "":FileMode::DIR);
+        check_next!(iter.over() => "dir0":FileMode::DIR);
+        check_next!(iter.over() => "dir1":FileMode::DIR);
+        check_next!(iter.over() => "dir2":FileMode::DIR);
+        Ok(())
     })
 }
 
@@ -123,7 +151,7 @@ fn test_tree_iterator_collect_over_root() -> BitResult<()> {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
             let mut vec = vec![];
-            iter.collect_over(&mut vec)?;
+            iter.collect_over_tree(&mut vec)?;
             let paths = vec.iter().map(BitEntry::path).collect::<Vec<_>>();
             assert_eq!(
                 paths,

@@ -156,6 +156,7 @@ fn test_status_staged_new_files_simple() -> BitResult<()> {
     })
 }
 
+// TODO
 #[test]
 fn test_mode_change_is_detected() {
 }

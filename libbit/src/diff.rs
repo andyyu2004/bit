@@ -169,7 +169,7 @@ where
     fn on_created(&mut self, new: TreeIteratorEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_created(new: {})", new.path());
         match new {
-            TreeIteratorEntry::Tree(_) => self.new_iter.collect_over(&mut self.diff.new),
+            TreeIteratorEntry::Tree(_) => self.new_iter.collect_over_tree(&mut self.diff.new),
             TreeIteratorEntry::File(file) => {
                 self.diff.new.push(file);
                 self.new_iter.next()?;
@@ -188,7 +188,7 @@ where
                 self.old_iter.over()?;
                 self.new_iter.over()?;
             }
-            (TreeIteratorEntry::File(a), TreeIteratorEntry::File(b)) if a == b => {
+            (TreeIteratorEntry::File(a), TreeIteratorEntry::File(b)) if a.oid() == b.oid() => {
                 debug_assert!(a.oid().is_known() && b.oid().is_known());
                 self.old_iter.next()?;
                 self.new_iter.next()?;
@@ -196,9 +196,11 @@ where
             (TreeIteratorEntry::Tree(_), TreeIteratorEntry::File(_)) => {
                 // ignore trees
                 self.old_iter.next()?;
+                todo!("probably wrong");
             }
             (TreeIteratorEntry::File(_), TreeIteratorEntry::Tree(_)) => {
                 self.new_iter.next()?;
+                todo!("probably wrong");
             }
             (TreeIteratorEntry::Tree(_), TreeIteratorEntry::Tree(_)) => {
                 self.old_iter.next()?;
@@ -206,19 +208,9 @@ where
             }
             (TreeIteratorEntry::File(a), TreeIteratorEntry::File(b)) => {
                 self.diff.modified.push((a, b));
+                self.old_iter.next()?;
+                self.new_iter.next()?;
             }
-        }
-        if old.oid() == new.oid() && old.mode().is_tree() && new.mode().is_tree() {
-            // if hashes match and both are directories we can step over them
-            self.old_iter.over()?;
-            self.new_iter.over()?;
-        } else {
-            // TODO we should recurse if it is a tree
-            if old.oid() != new.oid() {
-                // self.diff.modified.push((old.into(), new.into()));
-            }
-            self.old_iter.next()?;
-            self.new_iter.next()?;
         }
 
         Ok(())
@@ -228,7 +220,8 @@ where
         trace!("TreeDifferGeneric::on_deleted(old : {})", old.path());
         // TODO refactor out shared code
         match old {
-            TreeIteratorEntry::Tree(tree) => self.old_iter.collect_over(&mut self.diff.deleted),
+            TreeIteratorEntry::Tree(_tree) =>
+                self.old_iter.collect_over_tree(&mut self.diff.deleted),
             TreeIteratorEntry::File(file) => {
                 self.diff.deleted.push(file);
                 self.old_iter.next()?;
@@ -239,7 +232,7 @@ where
 }
 
 impl<'r> BitRepo<'r> {
-    pub fn diff_tree_index(self, tree: &Tree, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+    pub fn diff_tree_index(self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         self.with_index_mut(|index| index.diff_tree(tree, pathspec))
     }
 
@@ -261,12 +254,14 @@ impl<'r> BitIndex<'r> {
         IndexWorktreeDiffer::new(self, pathspec).build_diff()
     }
 
-    pub fn diff_tree(&mut self, tree: &Tree, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
-        TreeIndexDiffer::new(self, tree, pathspec).build_diff()
+    pub fn diff_tree(&mut self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+        let tree_iter = pathspec.match_tree_iter(self.repo.tree_iter(tree));
+        let index_iter = pathspec.match_tree_iter(self.tree_iter());
+        TreeDifferGeneric::new(self.repo, tree_iter, index_iter).build_diff()
     }
 
     pub fn diff_head(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
-        self.diff_tree(&self.repo.head_tree()?, pathspec)
+        self.diff_tree(self.repo.head_tree_oid()?, pathspec)
     }
 }
 

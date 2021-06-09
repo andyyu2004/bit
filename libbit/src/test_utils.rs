@@ -198,6 +198,19 @@ macro_rules! random {
     };
 }
 
+macro_rules! dbg_entry_iter {
+    ($iter:expr) => {{
+        #[allow(unused)]
+        use crate::iter::*;
+        #[allow(unused)]
+        use crate::obj::*;
+        let iter = $iter
+            .map(|entry| Ok(format!("{}:{} ({})", entry.path(), entry.mode(), entry.oid())))
+            .collect::<Vec<_>>()?;
+        dbg!(iter);
+    }};
+}
+
 macro_rules! enable_log {
     () => {
         env_logger::builder().parse_env("BIT_LOG").init();

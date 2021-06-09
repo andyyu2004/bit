@@ -13,12 +13,10 @@ pub trait BitTreeIterator: BitIterator<TreeIteratorEntry> {
     fn over(&mut self) -> BitResult<Option<Self::Item>>;
 
     /// same as `self.over` but instead appends all the non-tree entries into a container
-    // TODO better name
     // this takes a container to append to avoid a separate allocation
-    fn collect_over(&mut self, container: &mut Vec<BitIndexEntry>) -> BitResult<()> {
+    fn collect_over_tree(&mut self, container: &mut Vec<BitIndexEntry>) -> BitResult<()> {
         let tree_entry = self.peek()?.expect("currently expected to not be called when at end");
-        dbg!(tree_entry);
-        debug_assert_eq!(tree_entry.mode(), FileMode::DIR);
+        // debug_assert_eq!(tree_entry.mode(), FileMode::DIR);
         while self.peek()?.map(|next| next.path().starts_with(tree_entry.path())).unwrap_or(false) {
             if let TreeIteratorEntry::File(entry) = self.next()?.unwrap() {
                 container.push(entry);
@@ -97,13 +95,14 @@ impl From<TreeEntry> for TreeIteratorEntry {
 
 impl BitOrd for TreeIteratorEntry {
     fn bit_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // TODO we can probably use the fact that files come before trees and order them this way
         match (self, other) {
             (TreeIteratorEntry::Tree(a), TreeIteratorEntry::Tree(b)) => a.bit_cmp(b),
+            // TODO using the fact that files come before trees of the same name?
+            // or should they just be considered equal?
             (TreeIteratorEntry::Tree(tree), TreeIteratorEntry::File(entry)) =>
-                tree.path.cmp(&entry.path).then_with(|| panic!("todo")),
+                tree.path.cmp(&entry.path).then(std::cmp::Ordering::Greater),
             (TreeIteratorEntry::File(entry), TreeIteratorEntry::Tree(tree)) =>
-                entry.path.cmp(&tree.path).then_with(|| panic!("todo")),
+                entry.path.cmp(&tree.path).then(std::cmp::Ordering::Less),
             (TreeIteratorEntry::File(a), TreeIteratorEntry::File(b)) => a.bit_cmp(b),
         }
     }
@@ -144,14 +143,13 @@ pub struct TreeIter<'r> {
 
 impl<'r> TreeIter<'r> {
     pub fn new(repo: BitRepo<'r>, oid: Oid) -> Self {
-        Self {
-            repo,
-            previous_len: 0,
-            entry_stack: vec![(
-                BitPath::EMPTY,
-                TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::DIR },
-            )],
-        }
+        // if the `oid` is unknown then we just want an empty iterator
+        let entry_stack = if oid.is_known() {
+            vec![(BitPath::EMPTY, TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::DIR })]
+        } else {
+            vec![]
+        };
+        Self { repo, previous_len: 0, entry_stack }
     }
 }
 impl<'r> FallibleIterator for TreeIter<'r> {
@@ -201,7 +199,10 @@ impl<'r> BitTreeIterator for TreeIter<'r> {
     }
 
     fn peek(&mut self) -> BitResult<Option<Self::Item>> {
-        Ok(self.entry_stack.last().map(|x| x.1.into()))
+        Ok(self.entry_stack.last().map(|(base, mut entry)| {
+            entry.path = base.join(entry.path);
+            entry.into()
+        }))
     }
 }
 
