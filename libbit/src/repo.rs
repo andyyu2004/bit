@@ -1,14 +1,13 @@
-use crate::error::BitResult;
-use crate::index::{BitIndex, BitIndexExperimental, BitIndexFlags};
-use crate::lockfile::{Lockfile, LockfileFlags};
+use crate::error::{BitGenericError, BitResult};
+use crate::index::BitIndex;
 use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree, Treeish};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
 use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, SymbolicRef};
-use crate::serialize::Serialize;
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
+use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -35,21 +34,18 @@ pub struct RepoCtxt<'r> {
     index_filepath: BitPath,
     odb_cell: OnceCell<BitObjDb>,
     refdb_cell: OnceCell<BitRefDb<'r>>,
-    index_cell: OnceCell<BitIndexExperimental<'r>>,
+    index_cell: OnceCell<RefCell<BitIndex<'r>>>,
 }
 
 pub trait Repo<'r> {
     type Odb: BitObjDbBackend;
     type RefDb: BitRefDbBackend;
-    type Index;
 
     fn odb(&self) -> BitResult<&Self::Odb>;
     fn refdb(&self) -> BitResult<&Self::RefDb>;
-    fn index(&self) -> BitResult<&Self::Index>;
 }
 
 impl<'r> Repo<'r> for BitRepo<'r> {
-    type Index = BitIndexExperimental<'r>;
     type Odb = BitObjDb;
     type RefDb = BitRefDb<'r>;
 
@@ -62,18 +58,6 @@ impl<'r> Repo<'r> for BitRepo<'r> {
 
     fn refdb(&self) -> BitResult<&Self::RefDb> {
         self.refdb_cell.get_or_try_init(|| Ok(BitRefDb::new(*self)))
-    }
-
-    fn index(&self) -> BitResult<&Self::Index> {
-        // its unclear when to commit the index
-        // it would be nice to commit it on drop so we only read/write it exactly once per
-        // repo context which should be fine
-        // then the issue becomes when should we rollback
-        // we should rollback whenever an operation fails on the index but its unclear how to check
-        // that in a nice way
-        // stick to the `with_index` api for now
-        self.index_cell.get_or_try_init(|| BitIndexExperimental::new(*self))?;
-        panic!("don't use this api for now");
     }
 }
 
@@ -194,29 +178,39 @@ impl<'r> BitRepo<'r> {
         tls::enter_repo(&ctxt, f)
     }
 
+    fn index_ref(&self) -> BitResult<&RefCell<BitIndex<'r>>> {
+        self.index_cell
+            .get_or_try_init::<_, BitGenericError>(|| Ok(RefCell::new(BitIndex::new(*self)?)))
+    }
+
     pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
-        Lockfile::with_readonly(self.index_path(), LockfileFlags::SET_READONLY, |lockfile| {
-            // not actually writing anything here, so we rollback
-            // the lockfile is just to check that another process
-            // is not currently writing to the index
-            f(&BitIndex::from_lockfile(self, &lockfile)?)
-        })
+        // don't have to error check here as the index only
+        f(&*self.index_ref()?.borrow())
     }
 
     pub fn with_index_mut<R>(
         self,
         f: impl FnOnce(&mut BitIndex<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
-        Lockfile::with_mut(self.index_path(), LockfileFlags::SET_READONLY, |lockfile| {
-            let index = &mut BitIndex::from_lockfile(self, &lockfile)?;
-            let r = f(index)?;
-            if index.flags.contains(BitIndexFlags::DIRTY) {
-                index.serialize(lockfile)?;
-            } else {
-                lockfile.rollback();
+        let index_ref = self.index_ref()?;
+        let index = &mut *index_ref.borrow_mut();
+        match f(index) {
+            Ok(r) => Ok(r),
+            Err(err) => {
+                index.rollback();
+                Err(err)
             }
-            Ok(r)
-        })
+        }
+        // Lockfile::with_mut(self.index_path(), LockfileFlags::SET_READONLY, |lockfile| {
+        //     let index = &mut BitIndex::from_lockfile(self, &lockfile)?;
+        //     let r = f(index)?;
+        //     if index.flags.contains(BitIndexFlags::DIRTY) {
+        //         index.serialize(lockfile)?;
+        //     } else {
+        //         lockfile.rollback();
+        //     }
+        //     Ok(r)
+        // })
     }
 
     // returns unit as we don't want anyone accessing the repo directly like this

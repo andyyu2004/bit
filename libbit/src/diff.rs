@@ -145,8 +145,11 @@ where
         // the difference is that subtrees can be skipped in TreeDiffer
         // but Differ goes through everything as a flat list (as that is the natural representation of the index)
         // maybe can implement TreeDiffer for IndexIter somehow then everything can use TreeDiffer which would be nice
+        trace!("TreeDifferGeneric::build_diff");
         loop {
-            match (self.old_iter.peek()?, self.new_iter.peek()?) {
+            let a = self.old_iter.peek()?;
+            let b = self.new_iter.peek()?;
+            match (a, b) {
                 (None, None) => break,
                 (None, Some(new)) => self.on_created(new)?,
                 (Some(old), None) => self.on_deleted(old)?,
@@ -217,7 +220,7 @@ where
     }
 
     fn on_deleted(&mut self, old: TreeIteratorEntry) -> BitResult<()> {
-        trace!("TreeDifferGeneric::on_deleted(old : {})", old.path());
+        trace!("TreeDifferGeneric::on_deleted(old: {})", old.path());
         // TODO refactor out shared code
         match old {
             TreeIteratorEntry::Tree(_tree) =>
@@ -329,7 +332,7 @@ impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
     fn build_diff(mut self) -> BitResult<WorkspaceDiff> {
         let repo = self.repo;
         let index_iter = self.pathspec.match_index(self.index)?;
-        let worktree_iter = self.pathspec.match_worktree(repo)?;
+        let worktree_iter = self.pathspec.match_worktree(self.index)?;
         GenericDiffer::run(&mut self, index_iter, worktree_iter)?;
         Ok(self.diff)
     }
@@ -421,11 +424,12 @@ impl<'r> BitIndex<'r> {
 
         if old.mtime == new.mtime {
             if self.is_racy_entry(old) {
+                // don't return immediately, check other stats too to see if we can detect a change
                 debug!("racy entry {}", new.path);
-                return Ok(Changed::Maybe);
+            } else {
+                debug!("{} unchanged: non-racy mtime match {} {}", old.path, old.mtime, new.mtime);
+                return Ok(Changed::No);
             }
-            debug!("{} unchanged: non-racy mtime match {} {}", old.path, old.mtime, new.mtime);
-            return Ok(Changed::No);
         }
 
         // these checks confirm if the entry definitely have changed

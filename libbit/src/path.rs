@@ -174,7 +174,7 @@ impl<'a> From<&'a str> for BitPath {
 impl Deref for BitPath {
     type Target = Path;
 
-    fn deref(&self) -> &Self::Target {
+    fn deref(&self) -> &'static Self::Target {
         self.as_path()
     }
 }
@@ -246,15 +246,7 @@ impl Ord for BitPath {
     // 		return 1;
     // 	return 0;
     //
-    // IMPORTANT: directories must have a trailing ascii character character > '/')
-    // `/` messes with the assertion
-    // for this ordering to be correct
-    // I think we'd rather not deal with the trailing slash here
-    // as we don't have a better way than reading the path for its type which seems like a waste
-    // when the caller is sometimes able to do it
-    //
-    // we must have a some information about whether the path is a directory or not
-    // as "a" < "a.ext" < "a/" (where the "a/" may not actually have the trailing slash)
+    /// *IMPORTANT*: directories must have a trailing ascii character character > '/') for this ordering to be correct
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // doesn't make sense to compare relative with absolute and vice versa
         debug_assert_eq!(self.is_relative(), other.is_relative());

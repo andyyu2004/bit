@@ -24,10 +24,12 @@ fn test_head_iterator() -> BitResult<()> {
 #[test]
 fn test_worktree_iterator_reads_symlinks() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        touch!(repo: "foo");
-        symlink!(repo: "foo" <- "link");
-        let entries = repo.worktree_iter()?.collect::<Vec<_>>()?;
-        assert_eq!(entries.len(), 2);
-        Ok(())
+        repo.with_index(|index| {
+            touch!(repo: "foo");
+            symlink!(repo: "foo" <- "link");
+            let entries = index.worktree_iter()?.collect::<Vec<_>>()?;
+            assert_eq!(entries.len(), 2);
+            Ok(())
+        })
     })
 }

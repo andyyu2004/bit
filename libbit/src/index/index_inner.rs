@@ -1,10 +1,10 @@
-use crate::iter::{BitTreeIterator, IndexTreeIter};
-
 use super::*;
 
 /// representation of the index file
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
 // for the format of the index
+/// WARNING: this struct *must not* have any interior mutability inside it
+/// as it is stored inside a [crate::lockfile::Filelock]
 #[derive(Debug, PartialEq, Clone, Default)]
 #[cfg_attr(test, derive(BitArbitrary))]
 pub struct BitIndexInner {

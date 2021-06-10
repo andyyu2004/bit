@@ -45,31 +45,9 @@ bitflags! {
 #[derive(Debug)]
 pub struct BitIndex<'r> {
     pub repo: BitRepo<'r>,
-    pub(crate) flags: BitIndexFlags,
-    // index file may not yet exist
-    mtime: Option<Timespec>,
-    inner: BitIndexInner,
-}
-
-pub struct BitIndexExperimental<'r> {
-    pub repo: BitRepo<'r>,
     // index file may not yet exist
     mtime: Option<Timespec>,
     inner: Filelock<BitIndexInner>,
-}
-
-impl<'r> Deref for BitIndexExperimental<'r> {
-    type Target = BitIndexInner;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<'r> DerefMut for BitIndexExperimental<'r> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
 }
 
 impl<'r> Deref for BitIndex<'r> {
@@ -81,12 +59,8 @@ impl<'r> Deref for BitIndex<'r> {
 }
 
 impl<'r> DerefMut for BitIndex<'r> {
+    /// refer to note in [crate::lockfile::Filelock] `deref_mut`
     fn deref_mut(&mut self) -> &mut Self::Target {
-        // NOTE: this makes it somewhat important for efficiency to only take `mut self` if necessary
-        // this is conservative in the sense it assumes chances are made if `inner` is borrowed mutably
-        // furthermore, we cannot use interior mutability anywhere in `BitIndexInner`
-        // also, all data in `BitIndex` must just be metadata that is not persisted otherwise that will be lost
-        self.flags.insert(BitIndexFlags::DIRTY);
         &mut self.inner
     }
 }
@@ -95,27 +69,16 @@ trait BitIndexExt {
     fn signature(&self) -> [u8; 4];
 }
 
-impl<'r> BitIndexExperimental<'r> {
+impl<'r> BitIndex<'r> {
+    pub fn rollback(&mut self) {
+        self.inner.rollback()
+    }
+
     pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
         let index_path = repo.index_path();
         let mtime = std::fs::metadata(index_path).as_ref().map(Timespec::mtime).ok();
         let inner = Filelock::lock(index_path)?;
         Ok(Self { repo, inner, mtime })
-    }
-}
-
-impl<'r> BitIndex<'r> {
-    pub fn from_lockfile(repo: BitRepo<'r>, lockfile: &Lockfile) -> BitResult<Self> {
-        // not actually writing anything here, so we rollback
-        // the lockfile is just to check that another process
-        // is not currently writing to the index
-        let inner = lockfile
-            .file()
-            .map(BitIndexInner::deserialize_unbuffered)
-            .transpose()?
-            .unwrap_or_default();
-        let mtime = std::fs::metadata(repo.index_path()).as_ref().map(Timespec::mtime).ok();
-        Ok(Self { repo, inner, mtime, flags: BitIndexFlags::empty() })
     }
 
     pub fn tree_iter(&self) -> IndexTreeIter<'_, 'r> {
@@ -131,13 +94,8 @@ impl<'r> BitIndex<'r> {
     }
 
     pub fn is_racy_entry(&self, worktree_entry: &BitIndexEntry) -> bool {
-        // shouldn't strict equality be enough but libgit2 is `<=`
-        // all index entries should have time `<=` the index file as
-        // they are read before the index is written
-        // all worktree entries that have been modified since the index has been written
-        // clearly has mtime >= the index mtime.
-        // so racily clean entries are the one's with mtime strictly equal to the index file's mtime
-        self.mtime.map(|mtime| mtime == worktree_entry.mtime).unwrap_or(false)
+        // https://git-scm.com/docs/racy-git/en
+        self.mtime.map(|mtime| mtime <= worktree_entry.mtime).unwrap_or(true)
     }
 
     /// if entry with the same path already exists, it will be replaced
@@ -179,7 +137,7 @@ impl<'r> BitIndex<'r> {
     }
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
-        let mut iter = pathspec.match_worktree(self.repo)?.peekable();
+        let mut iter = pathspec.match_worktree(self)?.peekable();
         // if a `match_all` doesn't match any files then it's not an error, just means there are no files
         ensure!(
             iter.peek()?.is_some() || pathspec.is_match_all(),

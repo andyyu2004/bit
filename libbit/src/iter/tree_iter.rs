@@ -93,18 +93,25 @@ impl From<TreeEntry> for TreeIteratorEntry {
     }
 }
 
+impl TreeIteratorEntry {
+    fn sort_path(&self) -> BitPath {
+        if self.mode() == FileMode::DIR { self.path().join_trailing_slash() } else { self.path() }
+    }
+}
+
 impl BitOrd for TreeIteratorEntry {
     fn bit_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match (self, other) {
-            (TreeIteratorEntry::Tree(a), TreeIteratorEntry::Tree(b)) => a.bit_cmp(b),
-            // TODO using the fact that files come before trees of the same name?
-            // or should they just be considered equal?
-            (TreeIteratorEntry::Tree(tree), TreeIteratorEntry::File(entry)) =>
-                tree.path.cmp(&entry.path).then(std::cmp::Ordering::Greater),
-            (TreeIteratorEntry::File(entry), TreeIteratorEntry::Tree(tree)) =>
-                entry.path.cmp(&tree.path).then(std::cmp::Ordering::Less),
-            (TreeIteratorEntry::File(a), TreeIteratorEntry::File(b)) => a.bit_cmp(b),
-        }
+        self.sort_path().cmp(&other.sort_path())
+        // match (self, other) {
+        //     (TreeIteratorEntry::Tree(a), TreeIteratorEntry::Tree(b)) => a.bit_cmp(b),
+        //     // TODO using the fact that files come before trees of the same name?
+        //     // or should they just be considered equal?
+        //     (TreeIteratorEntry::Tree(tree), TreeIteratorEntry::File(entry)) =>
+        //         tree.path.cmp(&entry.path).then(std::cmp::Ordering::Greater),
+        //     (TreeIteratorEntry::File(entry), TreeIteratorEntry::Tree(tree)) =>
+        //         entry.path.cmp(&tree.path).then(std::cmp::Ordering::Less),
+        //     (TreeIteratorEntry::File(a), TreeIteratorEntry::File(b)) => a.bit_cmp(b),
+        // }
     }
 }
 
@@ -166,8 +173,14 @@ impl<'r> FallibleIterator for TreeIter<'r> {
                         debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
 
                         self.previous_len = self.entry_stack.len();
-                        self.entry_stack
-                            .extend(tree.entries.into_iter().rev().map(|entry| (path, entry)));
+                        self.entry_stack.extend(
+                            tree.entries
+                                .into_iter()
+                                .rev()
+                                // TODO we have to filter out here for now otherwise peek may blow up
+                                .filter(|entry| entry.mode != FileMode::GITLINK)
+                                .map(|entry| (path, entry)),
+                        );
 
                         return Ok(Some(TreeIteratorEntry::Tree(TreeEntry { path, ..entry })));
                     }
@@ -187,6 +200,12 @@ impl<'r> FallibleIterator for TreeIter<'r> {
 }
 impl<'r> BitTreeIterator for TreeIter<'r> {
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
+        // TODO does this really work?
+        // potential issues
+        // it's detecting add and remove of the same thing
+        // could be wrong ordering?
+        // try find a test case to break this over implementation
+        // or is it something wrong with combination of peeking and stepping over?
         match self.next()? {
             Some(entry) => {
                 if entry.mode() == FileMode::DIR {
@@ -210,7 +229,7 @@ pub struct IndexTreeIter<'a, 'r> {
     index: &'a BitIndex<'r>,
     entry_iter: Peekable<IndexEntryIterator>,
     // pseudotrees that have been yielded
-    pseudotrees: HashSet<BitPath>,
+    pseudotrees: FxHashSet<BitPath>,
     peeked: Option<TreeIteratorEntry>,
 }
 

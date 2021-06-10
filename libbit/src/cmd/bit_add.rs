@@ -5,11 +5,14 @@ use fallible_iterator::FallibleIterator;
 
 impl<'r> BitRepo<'r> {
     pub fn bit_add_dryrun(&self, pathspecs: &[Pathspec]) -> BitResult<()> {
-        for pathspec in pathspecs {
-            self.match_worktree_with(pathspec)?
-                .for_each(|entry| Ok(println!("add `{}`", entry.path)))?;
-        }
-        Ok(())
+        self.with_index(|index| {
+            for pathspec in pathspecs {
+                pathspec
+                    .match_worktree(index)?
+                    .for_each(|entry| Ok(println!("add `{}`", entry.path)))?;
+            }
+            Ok(())
+        })
     }
 
     pub fn bit_add_all(&self) -> BitResult<()> {

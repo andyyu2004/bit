@@ -75,8 +75,6 @@ impl Interner {
         debug_assert_eq!(self.intern_path(s), bitpath);
         debug_assert_eq!(self.get_str(bitpath), s);
 
-        trace!("interned path: `{}` <- `{}`", s, bitpath.index());
-
         bitpath
     }
 
@@ -132,6 +130,7 @@ thread_local! {
     static INTERNER: RefCell<Interner> = RefCell::new(Interner::prefill(prefill! {
         EMPTY => "",
         HEAD => "HEAD",
+        DOT_GIT => ".git",
         A => "a",
         B => "b"
     }));

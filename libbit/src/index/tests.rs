@@ -84,7 +84,7 @@ impl<'r> BitIndex<'r> {
     #[cfg(test)]
     pub fn add_str(&mut self, s: &str) -> BitResult<()> {
         let pathspec = s.parse::<Pathspec>()?;
-        self.repo.match_worktree_with(&pathspec)?.for_each(|entry| self.add_entry(entry))
+        pathspec.match_worktree(self)?.for_each(|entry| self.add_entry(entry))
     }
 }
 

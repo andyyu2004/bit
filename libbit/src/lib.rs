@@ -42,13 +42,15 @@ extern crate anyhow;
 #[cfg(test)]
 #[macro_use]
 mod test_utils;
-mod core;
 
 #[macro_use]
 extern crate log;
 
 #[macro_use]
 mod macros;
+
+#[macro_use]
+mod debug;
 
 pub mod cmd;
 pub mod config;
@@ -65,6 +67,7 @@ pub mod rev;
 pub mod status;
 pub mod xdiff;
 
+mod core;
 mod delta;
 mod interner;
 mod io;

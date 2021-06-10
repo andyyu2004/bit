@@ -118,7 +118,44 @@ fn test_tree_iterator_collect_over_non_root() -> BitResult<()> {
 }
 
 #[test]
-fn test_tree_tree_iterator_step_over_tree_twice() -> BitResult<()> {
+fn test_tree_tree_iterator_step_over_multiple_nested() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let oid = tree_oid! {
+            outer {
+                a {
+                    x
+                    y
+                    z
+                }
+                b {
+                    c {
+                        k
+                        m
+                        n
+                    }
+                    d
+                }
+                c {
+                    w
+                    y
+                }
+            }
+        };
+
+        let mut iter = repo.tree_iter(oid);
+        check_next!(iter.next() => "":FileMode::DIR);
+        check_next!(iter.next() => "outer":FileMode::DIR);
+        check_next!(iter.over() => "outer/a":FileMode::DIR);
+        check_next!(iter.next() => "outer/b":FileMode::DIR);
+        check_next!(iter.over() => "outer/b/c":FileMode::DIR);
+        check_next!(iter.over() => "outer/b/d":FileMode::REG);
+        check_next!(iter.over() => "outer/c":FileMode::DIR);
+        Ok(())
+    })
+}
+
+#[test]
+fn test_tree_tree_iterator_step_over_multiple() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         // this tree should match the directory structure below
         let oid = tree_oid! {
@@ -133,6 +170,9 @@ fn test_tree_tree_iterator_step_over_tree_twice() -> BitResult<()> {
             }
             "dir2" {
             }
+            "dir3" {
+                "file"
+            }
         };
         // this only tests `next` and not `peek` or `over`
         // we only compare paths as comparing modes is a bit pointless, and the the index may correctly have unknown oids
@@ -141,6 +181,7 @@ fn test_tree_tree_iterator_step_over_tree_twice() -> BitResult<()> {
         check_next!(iter.over() => "dir0":FileMode::DIR);
         check_next!(iter.over() => "dir1":FileMode::DIR);
         check_next!(iter.over() => "dir2":FileMode::DIR);
+        check_next!(iter.over() => "dir3":FileMode::DIR);
         Ok(())
     })
 }

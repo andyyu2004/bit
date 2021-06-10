@@ -4,12 +4,13 @@ pub use tree_iter::*;
 
 use crate::error::{BitGenericError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
-use crate::obj::{FileMode, Oid, Tree, TreeEntry, Treeish};
+use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::{FallibleIterator, Peekable};
+use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::convert::TryFrom;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -74,13 +75,26 @@ impl FallibleIterator for DirIter {
 
 struct WorktreeIter<'r> {
     repo: BitRepo<'r>,
+    tracked: FxHashSet<BitPath>,
+    // TODO ignoring all nonroot ignores for now
+    // not sure what the correct collection for this is? some kind of tree where gitignores know their "parent" gitignore?
+    ignore: Vec<Gitignore>,
     walk: walkdir::IntoIter,
 }
 
 impl<'r> WorktreeIter<'r> {
-    pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
+    pub fn new(index: &BitIndex<'r>) -> BitResult<Self> {
+        let repo = index.repo;
+        // ignore any gitignore errors for now
+        let ignore = vec![Gitignore::new(repo.workdir.join(".gitignore").as_path()).0];
+        //? we collect it into a hashmap for faster lookup?
+        // not sure if this is actually better than just looking up in the index's entries
+        let tracked = index.entries().keys().map(|(path, _)| path).copied().collect();
+
         Ok(Self {
             repo,
+            ignore,
+            tracked,
             walk: WalkDir::new(repo.workdir)
                 .sort_by(|a, b| {
                     let x = a.path().to_str().unwrap();
@@ -102,10 +116,37 @@ impl<'r> WorktreeIter<'r> {
     }
 
     // we need to explicitly ignore our root `.bit/.git` directories
-    fn ignored(&self, path: &Path) -> BitResult<bool> {
-        let path = self.repo.to_relative_path(path)?;
-        let fst_component = path.components()[0];
-        Ok(fst_component == ".bit" || fst_component == ".git")
+    // TODO testing
+    fn is_ignored(&self, path: &Path) -> BitResult<bool> {
+        // should only run this on files?
+        debug_assert!(path.is_file());
+        debug_assert!(path.is_absolute());
+        let relative = self.repo.to_relative_path(path)?;
+
+        if self.tracked.contains(&relative) {
+            return Ok(false);
+        }
+
+        // not ignoring .bit as git doesn't ignore .bit
+        // perhaps we should just consider .bit as a debug directory only?
+        if relative.components().contains(&BitPath::DOT_GIT) {
+            return Ok(true);
+        }
+
+        for file in &self.ignore {
+            // TODO we need to not ignore files that are already tracked
+            // where a file is tracked if its in the index
+            // we need a different api for the index
+            // the with_index api is not good
+
+            // TODO the matcher wants a path relative to where the gitignore file is
+            // currently just assuming its the repo root (which all paths are relative to)
+            if file.matched(relative, false).is_ignore() {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 }
 
@@ -115,12 +156,12 @@ impl FallibleIterator for WorktreeIter<'_> {
 
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
         // ignore directories
-        // does this not have an iterator api??? yikers
         let direntry = loop {
             match self.walk.next().transpose()? {
                 Some(entry) => {
                     let path = entry.path();
-                    if !path.is_dir() && !self.ignored(path)? {
+                    let is_dir = path.is_dir();
+                    if !is_dir && !self.is_ignored(path)? {
                         break entry;
                     }
                 }
@@ -136,12 +177,14 @@ pub trait BitEntryIterator = BitIterator<BitIndexEntry>;
 
 pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 
-impl<'r> BitRepo<'r> {
-    pub fn worktree_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
+impl<'r> BitIndex<'r> {
+    pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("worktree_iter()");
-        WorktreeIter::new(self)
+        WorktreeIter::new(&self)
     }
+}
 
+impl<'r> BitRepo<'r> {
     pub fn tree_entry_iter(self, oid: Oid) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("tree_entry_iter(oid: {})", oid);
         Ok(TreeEntryIter::new(self, oid))
