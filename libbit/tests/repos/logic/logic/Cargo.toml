@@ -1,0 +1,13 @@
+[package]
+name = "logic"
+version = "0.1.0"
+authors = ["Andy Yu <andyyu2004@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+logic-engine = { path = "../logic-engine" }
+logic-error = { path = "../logic-error" }
+logic-parse = { path = "../logic-parse" }
+logic-ir = { path = "../logic-ir" }
+rustyline = "7.1.0"
+clap = "3.0.0-beta.2"

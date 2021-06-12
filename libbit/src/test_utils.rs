@@ -1,9 +1,104 @@
+use crate::error::BitResult;
+use crate::obj::{BitObj, BitObjKind, FileMode, Oid, Tree, TreeEntry};
+use crate::path::BitPath;
+use crate::repo::BitRepo;
 use rand::Rng;
+use std::fmt::{self, Display, Formatter};
+
+#[derive(Debug, PartialEq)]
+pub enum DebugTreeEntry {
+    Tree(DebugTree),
+    File(TreeEntry),
+}
+
+impl DebugTreeEntry {
+    pub fn path(&self) -> BitPath {
+        match self {
+            DebugTreeEntry::Tree(tree) => tree.path,
+            DebugTreeEntry::File(file) => file.path,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DebugTree {
+    path: BitPath,
+    oid: Oid,
+    entries: Vec<DebugTreeEntry>,
+}
+
+macro_rules! indent {
+    ($f:expr, $indents:expr) => {
+        write!($f, "{} ", (0..$indents).map(|_| "   ").fold(String::new(), |acc, x| acc + x))?
+    };
+}
+
+impl Display for DebugTreeEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        indent!(f, self.path().components().len());
+        match self {
+            DebugTreeEntry::Tree(tree) => write!(f, "{}", tree),
+            DebugTreeEntry::File(entry) => writeln!(
+                f,
+                "{} ({})",
+                entry.path.file_name().and_then(|os_str| os_str.to_str()).unwrap(),
+                entry.oid
+            ),
+        }
+    }
+}
+
+impl Display for DebugTree {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{}/ ({})",
+            self.path.file_name().and_then(|os_str| os_str.to_str()).unwrap_or("."),
+            self.oid
+        )?;
+        for entry in &self.entries {
+            write!(f, "{}", entry)?;
+        }
+        Ok(())
+    }
+}
+
+impl BitRepo<'_> {
+    // get a view of the entire recursive tree structure
+    pub fn debug_tree(self, tree: &Tree) -> BitResult<DebugTree> {
+        self.debug_tree_internal(tree, BitPath::EMPTY)
+    }
+
+    fn debug_tree_internal(self, tree: &Tree, path: BitPath) -> BitResult<DebugTree> {
+        let mut entries = Vec::with_capacity(tree.entries.len());
+        for &entry in &tree.entries {
+            let path = path.join(entry.path);
+            let entry = TreeEntry { path, ..entry };
+            let dbg_entry = match self.read_obj(entry.oid)? {
+                BitObjKind::Blob(..) => DebugTreeEntry::File(entry),
+                BitObjKind::Tree(tree) =>
+                    DebugTreeEntry::Tree(self.debug_tree_internal(&tree, path)?),
+                _ => unreachable!(),
+            };
+            entries.push(dbg_entry);
+        }
+
+        Ok(DebugTree { path, entries, oid: tree.oid() })
+    }
+}
+pub fn generate_random_string(range: std::ops::Range<usize>) -> String {
+    let size = rand::thread_rng().gen_range(range);
+    rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(size)
+        .map(char::from)
+        .collect()
+}
 
 // String::arbitrary is not so good sometimes as it doesn't generate printable strings
 // not ideal as it doesn't generate '\n',' ','/' and other valid characters
 // does some really arbitrary crap logic but should be fine
-pub fn generate_sane_string(range: std::ops::Range<usize>) -> String {
+pub fn generate_sane_string_with_newlines(range: std::ops::Range<usize>) -> String {
     let mut newlines = rand::thread_rng().gen_range(0..10);
     let size = rand::thread_rng().gen_range(range);
     let mut s = String::new();
@@ -25,6 +120,24 @@ pub fn generate_sane_string(range: std::ops::Range<usize>) -> String {
     s
 }
 
+macro_rules! check_next {
+    ($next:expr => $path:literal:$mode:expr) => {
+        #[allow(unused_imports)]
+        use crate::iter::*;
+        let entry = $next?.unwrap();
+        assert_eq!(entry.path(), $path);
+        assert_eq!(entry.mode(), $mode);
+    };
+}
+
+macro_rules! test_serde {
+    ($item:ident) => {{
+        let mut buf = vec![];
+        $item.serialize(&mut buf)?;
+        assert_eq!($item, Deserialize::deserialize_unbuffered(&buf[..])?);
+        Ok(())
+    }};
+}
 macro_rules! bit_commit {
     ($repo:expr) => {
         $repo.commit(Some(String::from("arbitrary message")))?;
@@ -65,6 +178,17 @@ macro_rules! bit_add {
     };
 }
 
+macro_rules! gitignore {
+    ($repo:ident: { $($glob:literal)* }) => {{
+        // obviously very inefficient way to write to a file but should be fine for small tests
+        touch!($repo: ".gitignore");
+        $({
+            modify!($repo: ".gitignore" << $glob);
+            modify!($repo: ".gitignore" << "\n");
+        })*
+    }};
+}
+
 macro_rules! touch {
     ($repo:ident: $path:expr) => {
         std::fs::File::create($repo.workdir.join($path))?
@@ -81,7 +205,13 @@ macro_rules! symlink {
 
 macro_rules! random {
     () => {
-        crate::test_utils::generate_sane_string(50..1000)
+        crate::test_utils::generate_sane_string_with_newlines(50..1000)
+    };
+}
+
+macro_rules! enable_log {
+    () => {
+        env_logger::builder().parse_env("BIT_LOG").init();
     };
 }
 
@@ -113,7 +243,7 @@ macro_rules! modify {
         file.write_all($content.as_ref())?;
         file.sync_all()?
     };
-    ($repo:ident: $path:literal << $content:expr) => {
+    ($repo:ident: $path:literal << $content:expr) => {{
         #[allow(unused_imports)]
         use std::io::prelude::*;
         let mut file = std::fs::File::with_options()
@@ -122,7 +252,7 @@ macro_rules! modify {
             .open($repo.workdir.join($path))?;
         file.write_all($content.as_ref())?;
         file.sync_all()?;
-    };
+    }};
     ($repo:ident: $path:literal) => {
         #[allow(unused_imports)]
         use std::io::prelude::*;
@@ -144,15 +274,12 @@ macro_rules! readlink {
 macro_rules! hash_symlink {
     ($repo:ident: $path:expr) => {{
         let path = readlink!($repo: $path);
-        hash_blob!(path.to_str().unwrap().as_bytes())
+        let bytes = path.to_str().unwrap().as_bytes();
+        // needs the obj header which is why we wrap it in blob
+        crate::hash::hash_obj(&Blob::new(bytes.to_vec()))?
     }};
 }
 
-macro_rules! hash_blob {
-    ($bytes:expr) => {
-        crate::hash::hash_obj(&Blob::new($bytes.to_vec()))?;
-    };
-}
 macro_rules! hash_file {
     ($repo:ident: $path:expr) => {
         hash_blob!(cat!($repo: $path).as_bytes())
@@ -189,12 +316,17 @@ macro_rules! tests_dir {
 }
 
 macro_rules! repos_dir {
-    () => {
-        tests_dir!("repos")
-    };
-    ($path:expr) => {
-        repos_dir!().join($path)
-    };
+    () => {{ tests_dir!("repos") }};
+    ($path:expr) => {{
+        // we copy the entire repository to another location as otherwise we get race conditions
+        // as the tests are multithreaded
+        // its also good to not have accidental mutations to the repository data
+        let path = repos_dir!().join($path);
+        let tmpdir = tempfile::tempdir().expect("failed to get tempdir").into_path();
+        fs_extra::dir::copy(path, &tmpdir, &fs_extra::dir::CopyOptions::default())
+            .expect("repo copy failed");
+        tmpdir.join($path)
+    }};
 }
 
 macro_rules! symbolic {
@@ -220,4 +352,161 @@ macro_rules! parse_rev {
         use std::str::FromStr;
         crate::rev::LazyRevspec::from_str($rev)?
     }};
+}
+
+macro_rules! file_entry {
+    ($path:expr) => {{
+        let oid =
+            crate::tls::with_repo(|repo| repo.write_obj(&$crate::obj::Blob::new(vec![]))).unwrap();
+        crate::obj::TreeEntry { oid, path: $path.into(), mode: $crate::obj::FileMode::REG }
+    }};
+}
+
+macro_rules! dir_entry {
+    ($path:expr, $tree:expr) => {{
+        let oid = crate::tls::with_repo(|repo| repo.write_obj(&$tree)).unwrap();
+        crate::obj::TreeEntry { oid, path: $path.into(), mode: crate::obj::FileMode::DIR }
+    }};
+}
+
+macro_rules! tree_entry {
+    ($path:ident) => {
+        file_entry!(stringify!($path))
+    };
+    ($path:literal) => {
+        file_entry!($path)
+    };
+    ($path:literal { $($subtree:tt)* }) => {{
+        let tree = tree!( $($subtree)* );
+        dir_entry!($path, tree)
+    }};
+    ($path:ident { $($subtree:tt)* }) => {{
+        let tree = tree!( $($subtree)* );
+        dir_entry!(stringify!($path), tree)
+    }};
+}
+
+// this uses a similar technique to the json! macro where the stuff in the square brackets are entries that have been "transformed into rust" so to speak.
+// they contain expressions that evaluate to tree_entries.
+// the stuff on the right of the [..] is not yet translated and is just raw tokens
+// we match the two cases separately
+// we must match the tree case first as the other pattern will also match any tree pattern and parsing will fail
+// these two cases just delegate to the `tree_entry!` macro which is fairly straightforward (the subtree case recurses back onto the `tree!` macro)
+// there are cases for literals and idents and sometimes valid paths are not valid idents (but it looks nice to use idents where its legal)
+macro_rules! tree_entries {
+    ([ $($entries:expr,)* ] $next:ident { $($subtree:tt)* } $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next { $($subtree)* }), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ] $next:literal { $($subtree:tt)* } $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next { $($subtree)* }), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ] $next:ident $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ] $next:literal $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ]) => {{
+        let btreeset: std::collections::BTreeSet<$crate::obj::TreeEntry> = btreeset! { $($entries,)* };
+        btreeset
+    }};
+}
+
+// uses tls to access repo
+/// grammar
+/// <tree>       ::= { <tree-entry>* }
+/// <tree-entry> ::= <path> | <path> <tree>
+/// <path>       ::= <literal> | <ident>
+/// note the outermost tree doesn't have explicit braces,
+/// its recommended to use the `{}` delimiters for the macro invocation
+/// i.e. tree! { .. } not tree! ( .. ) or tree! [ .. ]
+macro_rules! tree {
+    ( $($entries:tt)* ) => {
+        crate::obj::Tree::new(tree_entries!([] $($entries)* ))
+    };
+}
+
+/// same as `tree!` but writes it to the repo and returns the oid
+macro_rules! tree_oid {
+    ( $($entries:tt)* ) => {{
+        let tree = tree! { $($entries)* };
+        crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap()
+    }};
+}
+
+#[test]
+fn test_tree_macro() -> crate::error::BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        assert_eq!(tree! {}, crate::obj::Tree::new(btreeset! {}));
+
+        assert_eq!(
+            tree_entries!([] foo "bar.l"),
+            btreeset! {
+                TreeEntry { oid: Oid::EMPTY_BLOB, path: "foo".into(), mode: FileMode::REG },
+                TreeEntry { oid: Oid::EMPTY_BLOB, path: "bar.l".into(), mode: FileMode::REG },
+            }
+        );
+
+        assert_eq!(
+            tree_entries!([] bar { baz }),
+            btreeset! {
+                TreeEntry {
+                    oid: "94b2978d84f4cbb7449c092255b38a1e1b40da42".into() ,
+                    path: "bar".into(),
+                    mode: FileMode::DIR
+                },
+            }
+        );
+
+        let tree = tree! {
+            foo
+            bar {
+                baz
+                "qux" {
+                    quux
+                }
+            }
+            "qux"
+        };
+
+        let debug_tree = repo.debug_tree(&tree)?;
+        let expected_debug_tree = DebugTree {
+            path: BitPath::EMPTY,
+            oid: "957fd7abc8b9f5af6700b54f6ef510017fcfe44b".into(),
+            entries: vec![
+                DebugTreeEntry::Tree(DebugTree {
+                    path: "bar".into(),
+                    oid: "de0a310f7ede65be4c9ffcdc43f7d079ce517a0e".into(),
+                    entries: vec![
+                        DebugTreeEntry::File(TreeEntry {
+                            mode: FileMode::REG,
+                            path: "bar/baz".into(),
+                            oid: Oid::EMPTY_BLOB,
+                        }),
+                        DebugTreeEntry::Tree(DebugTree {
+                            path: "bar/qux".into(),
+                            oid: "c5ae2e49fc463618b26da36970bc6c662e83d9be".into(),
+                            entries: vec![DebugTreeEntry::File(TreeEntry {
+                                mode: FileMode::REG,
+                                path: "bar/qux/quux".into(),
+                                oid: Oid::EMPTY_BLOB,
+                            })],
+                        }),
+                    ],
+                }),
+                DebugTreeEntry::File(TreeEntry {
+                    mode: FileMode::REG,
+                    path: "foo".into(),
+                    oid: Oid::EMPTY_BLOB,
+                }),
+                DebugTreeEntry::File(TreeEntry {
+                    mode: FileMode::REG,
+                    path: "qux".into(),
+                    oid: Oid::EMPTY_BLOB,
+                }),
+            ],
+        };
+        assert_eq!(debug_tree, expected_debug_tree);
+        Ok(())
+    })
 }

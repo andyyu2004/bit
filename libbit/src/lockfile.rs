@@ -1,5 +1,4 @@
 use crate::error::BitResult;
-use crate::path::BitPath;
 use crate::serialize::Deserialize;
 use crate::serialize::Serialize;
 use anyhow::Context;
@@ -19,6 +18,8 @@ bitflags! {
     }
 }
 
+// TODO this design is getting a bit messy now with committed and rolled_back flags and what not with arbitrary dependencies between them
+
 #[derive(Debug)]
 pub struct Lockfile {
     // the file that this lockfile is guarding
@@ -30,6 +31,7 @@ pub struct Lockfile {
     path: PathBuf,
     lockfile_path: PathBuf,
     committed: Cell<bool>,
+    rolled_back: Cell<bool>,
 }
 
 impl Write for Lockfile {
@@ -79,6 +81,7 @@ impl Lockfile {
             lockfile_path,
             path: path.to_path_buf(),
             committed: Cell::new(false),
+            rolled_back: Cell::new(false),
         })
     }
 
@@ -137,6 +140,10 @@ impl Lockfile {
     /// replaces the old file if it exists
     /// commits on drop unless rollback was called
     fn commit(&self) -> io::Result<()> {
+        // ignore commit after a rollback
+        if self.rolled_back.get() {
+            return Ok(());
+        }
         let set_readonly = self.flags.contains(LockfileFlags::SET_READONLY);
         // we only do this branch if we expect it to be readonly
         // if its when this flag is false then that is unexpected and we should get an error
@@ -164,27 +171,32 @@ impl Lockfile {
         })
     }
 
-    fn rollback(&self) {
-        // does rollback actually have to anything that the drop impl doesn't do?
-        // just exists for semantic purposes for now
+    pub fn rollback(&self) {
+        // don't do anything until the drop impl
+        self.rolled_back.set(true);
     }
 }
 
 impl Drop for Lockfile {
     fn drop(&mut self) {
-        if !self.committed.get() {
+        // can't be both rolled_back and committed
+        assert!(!self.rolled_back.get() || !self.committed.get());
+        // if either explicitly rolled back, or not explicitly committed, then rollback
+        if self.rolled_back.get() || !self.committed.get() {
             self.cleanup().unwrap();
         }
     }
 }
 
 /// the default is `commit`, `rollback` must be explicit
-/// data must not have interior mutability otherwise changes may be ignored
+/// `data` *must not* have interior mutability otherwise changes may be ignored
+/// as the `dirty` flag will not be set
+#[derive(Debug)]
 pub struct Filelock<T: Serialize> {
     data: T,
     lockfile: Lockfile,
-    has_changes: bool,
-    rolled_back: bool,
+    dirty: bool,
+    rolled_back: Cell<bool>,
 }
 
 impl<T: Serialize + Deserialize + Default> Filelock<T> {
@@ -194,7 +206,7 @@ impl<T: Serialize + Deserialize + Default> Filelock<T> {
             Some(file) => T::deserialize(&mut BufReader::new(file))?,
             None => T::default(),
         };
-        Ok(Filelock { lockfile, data, has_changes: false, rolled_back: false })
+        Ok(Filelock { lockfile, data, dirty: false, rolled_back: Cell::new(false) })
     }
 
     pub fn lock(path: impl AsRef<Path>) -> BitResult<Self> {
@@ -203,15 +215,15 @@ impl<T: Serialize + Deserialize + Default> Filelock<T> {
 }
 
 impl<T: Serialize> Filelock<T> {
-    pub fn rollback(&mut self) {
-        self.rolled_back = true;
+    pub fn rollback(&self) {
+        self.rolled_back.set(true);
         self.lockfile.rollback();
     }
 }
 
 impl<T: Serialize> Drop for Filelock<T> {
     fn drop(&mut self) {
-        if self.rolled_back || !self.has_changes {
+        if self.rolled_back.get() || !self.dirty {
             // the lockfile drop impl will do the necessary cleanup
             return;
         }
@@ -225,14 +237,20 @@ impl<T: Serialize> Deref for Filelock<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
+        debug_assert!(!self.rolled_back.get());
         &self.data
     }
 }
 
 impl<T: Serialize> DerefMut for Filelock<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        // conservatively assume any mutable access results in a change
-        self.has_changes = true;
+        // NOTE: conservatively assume any mutable access to the inner type results in a change
+        // this makes it somewhat important for efficiency to only take `mut self` if necessary
+        // this is conservative in the sense it assumes chances are made if `inner` is borrowed mutably
+        // furthermore, we cannot use interior mutability anywhere in `BitIndexInner`
+        // also, all data in `BitIndex` must just be metadata that is not persisted otherwise that will be lost
+        debug_assert!(!self.rolled_back.get());
+        self.dirty = true;
         &mut self.data
     }
 }

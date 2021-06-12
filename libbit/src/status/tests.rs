@@ -33,8 +33,8 @@ fn test_status_add_and_delete_file() -> BitResult<()> {
         assert!(status.unstaged.modified.is_empty());
 
         assert_eq!(status.staged.new.len(), 1);
-        assert_eq!(status.unstaged.deleted.len(), 1);
         assert_eq!(status.staged.new[0].path, "foo");
+        assert_eq!(status.unstaged.deleted.len(), 1);
         assert_eq!(status.unstaged.deleted[0].path, "foo");
         Ok(())
     })
@@ -62,8 +62,8 @@ fn test_status_modified_files() -> BitResult<()> {
 }
 
 #[test]
-fn test_status_modified_then_reverted() -> BitResult<()> {
-    // potential race conditions in here so we run it a few times to be surer
+fn test_status_modified_then_reverted_different_filesizes() -> BitResult<()> {
+    // potential race conditions (to do with racy git) in here so we run it a few times to be surer
     for _ in 0..100 {
         BitRepo::with_empty_repo(|repo| {
             mkdir!(repo: "foo");
@@ -78,8 +78,9 @@ fn test_status_modified_then_reverted() -> BitResult<()> {
             modify!(repo: "foo/bar" < "original content");
 
             let diff = repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
-            assert!(diff.new.is_empty());
             assert_eq!(diff.modified.len(), 1);
+            assert!(diff.new.is_empty());
+            assert!(diff.deleted.is_empty());
             let mut modified = diff.modified.into_iter();
             assert_eq!(modified.next().unwrap().1.path, "foo.l");
             Ok(())
@@ -105,6 +106,8 @@ fn test_status_modified_then_reverted_with_same_filesizes() -> BitResult<()> {
 
             let diff = repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
             assert_eq!(diff.modified.len(), 1);
+            assert!(diff.deleted.is_empty());
+            assert!(diff.new.is_empty());
             let mut modified = diff.modified.into_iter();
             assert_eq!(modified.next().unwrap().1.path, "foo.l");
             Ok(())
@@ -122,8 +125,8 @@ fn test_status_on_symlink() -> BitResult<()> {
         bit_add_all!(repo);
         bit_commit!(repo);
         let diff = repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
-        assert_eq!(diff.modified.len(), 0);
-        assert_eq!(diff.new.len(), 0);
+        assert!(diff.modified.is_empty());
+        assert!(diff.new.is_empty());
         Ok(())
     })
 }
@@ -156,6 +159,7 @@ fn test_status_staged_new_files_simple() -> BitResult<()> {
     })
 }
 
+// TODO
 #[test]
 fn test_mode_change_is_detected() {
 }

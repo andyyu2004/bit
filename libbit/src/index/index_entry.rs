@@ -1,10 +1,13 @@
 use super::*;
+use crate::core::BitOrd;
 use crate::error::BitGenericError;
 use crate::io::BufReadExt;
+use crate::iter::BitEntry;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::tls;
 use std::fmt::{self, Debug, Formatter};
+use std::iter::FromIterator;
 use std::os::linux::fs::MetadataExt;
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -26,9 +29,9 @@ impl DerefMut for BitIndexEntries {
     }
 }
 
-impl From<Vec<BitIndexEntry>> for BitIndexEntries {
-    fn from(entries: Vec<BitIndexEntry>) -> Self {
-        Self(entries.into_iter().map(|entry| ((entry.path, entry.flags.stage()), entry)).collect())
+impl FromIterator<BitIndexEntry> for BitIndexEntries {
+    fn from_iter<T: IntoIterator<Item = BitIndexEntry>>(iter: T) -> Self {
+        Self(iter.into_iter().map(|entry| (entry.key(), entry)).collect())
     }
 }
 
@@ -43,7 +46,7 @@ impl Serialize for BitIndexEntry {
         writer.write_u32(self.uid)?;
         writer.write_u32(self.gid)?;
         writer.write_u32(self.filesize)?;
-        writer.write_bit_hash(&self.hash)?;
+        writer.write_oid(self.oid)?;
         writer.write_u16(self.flags.0)?;
         writer.write_all(self.path.as_bytes())?;
         writer.write_all(&[0u8; 8][..self.padding_len()])?;
@@ -61,12 +64,13 @@ impl Deserialize for BitIndexEntry {
         let uid = r.read_u32()?;
         let gid = r.read_u32()?;
         let filesize = r.read_u32()?;
-        let hash = r.read_oid()?;
+        let oid = r.read_oid()?;
         let flags = BitIndexEntryFlags::new(r.read_u16()?);
+        // TODO optimization of skipping ahead flags.path_len() bytes instead of a linear scan to find the next null byte
         let path = r.read_null_terminated_path()?;
 
         assert!(path.is_relative());
-        assert_eq!(flags.path_len() as usize, path.len());
+        assert!(path.len() <= 0xfff && flags.path_len() as usize == path.len());
 
         let entry = BitIndexEntry {
             ctime,
@@ -77,7 +81,7 @@ impl Deserialize for BitIndexEntry {
             uid,
             gid,
             filesize,
-            hash,
+            oid,
             flags,
             path,
         };
@@ -111,10 +115,23 @@ pub struct BitIndexEntry {
     /// group identifier of the current user
     pub gid: u32,
     pub filesize: u32,
-    /// may be zero if left uncalculated (for efficiency)
-    pub hash: Oid,
+    pub oid: Oid,
     pub flags: BitIndexEntryFlags,
     pub path: BitPath,
+}
+
+impl BitEntry for BitIndexEntry {
+    fn oid(&self) -> Oid {
+        self.oid
+    }
+
+    fn path(&self) -> BitPath {
+        self.path
+    }
+
+    fn mode(&self) -> FileMode {
+        self.mode
+    }
 }
 
 impl From<TreeEntry> for BitIndexEntry {
@@ -130,7 +147,7 @@ impl From<TreeEntry> for BitIndexEntry {
             uid: 0,
             gid: 0,
             filesize: 0,
-            hash: entry.hash,
+            oid: entry.oid,
             flags: BitIndexEntryFlags::new(0),
             path: entry.path,
         }
@@ -138,7 +155,7 @@ impl From<TreeEntry> for BitIndexEntry {
 }
 
 impl BitIndexEntry {
-    pub fn as_key(&self) -> (BitPath, MergeStage) {
+    pub fn key(&self) -> (BitPath, MergeStage) {
         (self.path, self.stage())
     }
 }
@@ -180,7 +197,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             uid: metadata.st_uid(),
             gid: metadata.st_gid(),
             filesize: metadata.st_size() as u32,
-            hash: Oid::UNKNOWN,
+            oid: Oid::UNKNOWN,
             flags: BitIndexEntryFlags::with_path_len(relative.len()),
         })
     }
@@ -212,8 +229,15 @@ impl PartialOrd for BitIndexEntry {
     }
 }
 
+// this impl is inconsistent with Eq, but not sure what to do about it..
 impl Ord for BitIndexEntry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.path.cmp(&other.path).then_with(|| self.stage().cmp(&other.stage()))
+    }
+}
+
+impl BitOrd for BitIndexEntry {
+    fn bit_cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.path.cmp(&other.path).then_with(|| self.stage().cmp(&other.stage()))
     }
 }
@@ -225,6 +249,8 @@ impl Ord for BitIndexEntry {
 // what is name really? probably path?
 // probably doesn't really matter and is fine to just default flags to 0
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
+// TODO revisit this if a less random arby impl is required
+#[cfg_attr(test, derive(BitArbitrary))]
 pub struct BitIndexEntryFlags(u16);
 
 impl Debug for BitIndexEntryFlags {

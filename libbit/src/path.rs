@@ -18,21 +18,21 @@ use std::str::pattern::Pattern;
 // since its used so much, this will also lend itself to faster comparisons as
 // its now just an integer compare
 #[derive(Eq, PartialEq, Clone, Copy, Hash)]
-pub struct BitPath(u32);
+pub struct BitPath(u32, #[cfg(debug_assertions)] &'static str);
 
 pub type BitFileStream = impl BufReadSeek;
 
 impl BitPath {
-    pub(crate) const fn new(u: u32) -> Self {
-        Self(u)
-    }
-
-    pub fn empty() -> Self {
-        Self::intern("")
+    pub(crate) const fn new(u: u32, #[cfg(debug_assertions)] s: &'static str) -> Self {
+        Self(
+            u,
+            #[cfg(debug_assertions)]
+            s,
+        )
     }
 
     pub fn is_empty(self) -> bool {
-        self == Self::empty()
+        self == Self::EMPTY
     }
 
     pub fn index(self) -> u32 {
@@ -47,6 +47,10 @@ impl BitPath {
 
     pub fn with_extension(self, ext: impl AsRef<OsStr>) -> Self {
         Self::intern(self.as_path().with_extension(ext))
+    }
+
+    pub fn parent(self) -> Option<Self> {
+        self.as_path().parent().map(Self::intern)
     }
 
     /// adds trailing slash which is crucial for correct comparison ordering
@@ -96,8 +100,8 @@ impl BitPath {
 
     /// similar to `[BitPath::components](crate::path::BitPath::components)`
     /// foo/bar/baz -> [foo, foo/bar, foo/bar/baz]
-    pub fn accumulative_components(self) -> impl Iterator<Item = BitPath> {
-        self.components().iter().scan(BitPath::intern(""), |ps, p| {
+    pub fn cumulative_components(self) -> impl Iterator<Item = BitPath> {
+        self.components().iter().scan(BitPath::EMPTY, |ps, p| {
             *ps = ps.join(p);
             Some(*ps)
         })
@@ -170,7 +174,7 @@ impl<'a> From<&'a str> for BitPath {
 impl Deref for BitPath {
     type Target = Path;
 
-    fn deref(&self) -> &Self::Target {
+    fn deref(&self) -> &'static Self::Target {
         self.as_path()
     }
 }
@@ -242,22 +246,21 @@ impl Ord for BitPath {
     // 		return 1;
     // 	return 0;
     //
-    // IMPORTANT: directories must have a trailing ascii character character > '/')
-    // `/` messes with the assertion
-    // for this ordering to be correct
-    // I think we'd rather not deal with the trailing slash here
-    // as we don't have a better way than reading the path for its type which seems like a waste
-    // when the caller is sometimes able to do it
-    //
-    // we must have a some information about whether the path is a directory or not
-    // as "a" < "a.ext" < "a/" (where the "a/" may not actually have the trailing slash)
+    /// *IMPORTANT*: directories must have a trailing ascii character character > '/') for this ordering to be correct
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // doesn't make sense to compare relative with absolute and vice versa
-        assert_eq!(self.is_relative(), other.is_relative());
+        debug_assert_eq!(self.is_relative(), other.is_relative());
+        Self::path_cmp(self.as_str(), other.as_str())
+    }
+}
 
+impl BitPath {
+    pub fn path_cmp(a: &str, b: &str) -> std::cmp::Ordering {
         // files with the same subpath should come before directories
-        let minlen = std::cmp::min(self.len(), other.len());
-        self[..minlen].cmp(&other[..minlen]).then_with(|| self.len().cmp(&other.len()))
+        let m = a.len();
+        let n = b.len();
+        let minlen = std::cmp::min(m, n);
+        a[..minlen].cmp(&b[..minlen]).then_with(|| m.cmp(&n))
     }
 }
 

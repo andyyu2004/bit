@@ -30,6 +30,12 @@ impl<'a> From<&'a str> for SHA1Hash {
 }
 
 impl SHA1Hash {
+    /// hash of an empty file
+    // "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    pub const EMPTY_BLOB: Self = Self([
+        0xe6, 0x9d, 0xe2, 0x9b, 0xb2, 0xd1, 0xd6, 0x43, 0x4b, 0x8b, 0x29, 0xae, 0x77, 0x5a, 0xd8,
+        0xc2, 0xe4, 0x8c, 0x53, 0x91,
+    ]);
     /// this represents an unknown hash
     // didn't find anywhere that SHA1 can't return 0
     // but libgit2 also uses this special value
@@ -127,7 +133,7 @@ pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> SHA1Hash {
     SHA1Hash::new(hasher.finalize().into())
 }
 
-pub fn hash_obj(obj: &impl BitObj) -> BitResult<SHA1Hash> {
+pub fn hash_obj<O: BitObj + ?Sized>(obj: &O) -> BitResult<SHA1Hash> {
     let bytes = obj.serialize_with_headers()?;
     Ok(hash_bytes(bytes.as_slice()))
 }

@@ -1,7 +1,7 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndex;
-use crate::iter::BitEntryIterator;
-use crate::obj::Tree;
+use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
+use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use itertools::Itertools;
@@ -47,12 +47,6 @@ impl Display for Pathspec {
     }
 }
 
-impl<'r> BitRepo<'r> {
-    pub fn match_worktree_with(self, pathspec: &Pathspec) -> BitResult<impl BitEntryIterator + 'r> {
-        pathspec.match_worktree(self)
-    }
-}
-
 impl Pathspec {
     // prefix is the section up to the first unescaped wildcard symbol
     fn find_prefix_end(s: &str) -> Option<usize> {
@@ -65,24 +59,24 @@ impl Pathspec {
         None
     }
 
-    pub fn match_worktree<'r>(self, repo: BitRepo<'r>) -> BitResult<impl BitEntryIterator + 'r> {
-        self.match_iterator(repo.worktree_iter()?)
+    pub fn match_worktree<'r>(self, index: &BitIndex<'r>) -> BitResult<impl BitEntryIterator + 'r> {
+        self.match_entry_iterator(index.worktree_iter()?)
     }
 
     pub fn match_index(self, index: &BitIndex<'_>) -> BitResult<impl BitEntryIterator> {
-        self.match_iterator(index.iter())
+        self.match_entry_iterator(index.iter())
     }
 
     pub fn match_tree<'r>(
         &self,
         repo: BitRepo<'r>,
-        tree: &Tree,
+        oid: Oid,
     ) -> BitResult<impl BitEntryIterator + 'r> {
-        self.match_iterator(repo.tree_entry_iter(tree)?)
+        self.match_entry_iterator(repo.tree_entry_iter(oid)?)
     }
 
     pub fn match_head<'r>(&self, repo: BitRepo<'r>) -> BitResult<impl BitEntryIterator + 'r> {
-        self.match_iterator(repo.head_iter()?)
+        self.match_entry_iterator(repo.head_iter()?)
     }
 
     // braindead implementation for now
@@ -90,7 +84,14 @@ impl Pathspec {
         path.as_ref().starts_with(self.prefix)
     }
 
-    fn match_iterator(self, iterator: impl BitEntryIterator) -> BitResult<impl BitEntryIterator> {
+    pub fn match_tree_iter(self, iterator: impl BitTreeIterator) -> impl BitTreeIterator {
+        iterator.filter(move |entry| Ok(self.matches_path(entry.path())))
+    }
+
+    fn match_entry_iterator(
+        self,
+        iterator: impl BitEntryIterator,
+    ) -> BitResult<impl BitEntryIterator> {
         Ok(iterator.filter(move |entry| Ok(self.matches_path(entry.path))))
     }
 

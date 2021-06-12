@@ -1,16 +1,6 @@
 use crate::error::BitResult;
-use crate::iter::TreeIterator;
-use crate::obj::FileMode;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
-
-macro_rules! check_next {
-    ($next:expr => $path:literal:$mode:expr) => {
-        let entry = $next?.unwrap();
-        assert_eq!(entry.path, $path);
-        assert_eq!(entry.mode, $mode);
-    };
-}
 
 #[test]
 fn test_head_iterator() -> BitResult<()> {
@@ -32,51 +22,61 @@ fn test_head_iterator() -> BitResult<()> {
 }
 
 #[test]
-fn test_tree_iterator_step_over() -> BitResult<()> {
-    BitRepo::with_sample_repo(|repo| {
-        let mut iter = repo.head_tree_iter()?;
-        check_next!(iter.next() => "bar":FileMode::REG);
-        check_next!(iter.over() => "dir":FileMode::DIR);
-        check_next!(iter.over() => "foo": FileMode::REG);
-        assert_eq!(iter.next()?, None);
-        Ok(())
-    })
-}
-
-#[test]
-fn test_tree_iterator_peekable() -> BitResult<()> {
-    BitRepo::with_sample_repo(|repo| {
-        let mut iter = repo.head_tree_iter()?;
-        check_next!(iter.peek() => "bar":FileMode::REG);
-        check_next!(iter.next() => "bar":FileMode::REG);
-        check_next!(iter.over() => "dir":FileMode::DIR);
-        check_next!(iter.over() => "foo": FileMode::REG);
-        assert_eq!(iter.next()?, None);
-        Ok(())
-    })
-}
-
-#[test]
-fn test_tree_iterator_peekable_step_over_peeked() -> BitResult<()> {
-    BitRepo::with_sample_repo(|repo| {
-        let mut iter = repo.head_tree_iter()?;
-        check_next!(iter.peek() => "bar":FileMode::REG);
-        // remember peeked value
-        check_next!(iter.over() => "bar": FileMode::REG);
-        check_next!(iter.over() => "dir":FileMode::DIR);
-        check_next!(iter.over() => "foo": FileMode::REG);
-        assert_eq!(iter.next()?, None);
-        Ok(())
-    })
-}
-
-#[test]
 fn test_worktree_iterator_reads_symlinks() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        touch!(repo: "foo");
-        symlink!(repo: "foo" <- "link");
-        let entries = repo.worktree_iter()?.collect::<Vec<_>>()?;
-        assert_eq!(entries.len(), 2);
-        Ok(())
+        repo.with_index(|index| {
+            touch!(repo: "foo");
+            symlink!(repo: "foo" <- "link");
+            let entries = index.worktree_iter()?.collect::<Vec<_>>()?;
+            assert_eq!(entries.len(), 2);
+            Ok(())
+        })
+    })
+}
+
+#[test]
+fn test_simple_root_gitignore_file() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        repo.with_index(|index| {
+            gitignore!(repo: {
+                "ignore"
+            });
+            touch!(repo: "ignore");
+            let entries = index.worktree_iter()?.collect::<Vec<_>>()?;
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].path, ".gitignore");
+            Ok(())
+        })
+    })
+}
+
+#[test]
+fn test_root_gitignore_ignore_self() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        repo.with_index(|index| {
+            gitignore!(repo: {
+                ".gitignore"
+            });
+            assert_eq!(index.worktree_iter()?.count()?, 0);
+            Ok(())
+        })
+    })
+}
+
+#[test]
+fn test_simple_root_gitignore_ignore_directory() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        repo.with_index(|index| {
+            gitignore!(repo: {
+                "ignore"
+                ".gitignore"
+            });
+            mkdir!(repo: "ignore");
+            touch!(repo: "ignore/a");
+            touch!(repo: "ignore/b");
+            touch!(repo: "ignore/c");
+            assert_eq!(index.worktree_iter()?.count()?, 0);
+            Ok(())
+        })
     })
 }

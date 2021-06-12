@@ -1,5 +1,5 @@
 use crate::error::{BitError, BitResult, BitResultExt};
-use crate::hash;
+
 use crate::iter::DirIter;
 use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, Oid, PartialOid};
@@ -137,13 +137,13 @@ impl BitLooseObjDb {
         self.objects_path.join(dir).join(file)
     }
 
-    fn locate_obj(&self, id: BitId) -> BitResult<BitPath> {
-        let hash = self.expand_id(id)?;
-        let path = self.obj_path(hash);
-        if path.exists() { Ok(path) } else { Err(anyhow!(BitError::ObjectNotFound(hash.into()))) }
+    fn locate_obj(&self, id: impl Into<BitId>) -> BitResult<BitPath> {
+        let oid = self.expand_id(id.into())?;
+        let path = self.obj_path(oid);
+        if path.exists() { Ok(path) } else { Err(anyhow!(BitError::ObjectNotFound(oid.into()))) }
     }
 
-    fn read_stream(&self, id: BitId) -> BitResult<impl BufRead> {
+    fn read_stream(&self, id: impl Into<BitId>) -> BitResult<impl BufRead> {
         let reader = File::open(self.locate_obj(id)?)?;
         Ok(BufReader::new(ZlibDecoder::new(reader)))
     }
@@ -152,8 +152,11 @@ impl BitLooseObjDb {
 impl BitObjDbBackend for BitLooseObjDb {
     fn read(&self, id: BitId) -> BitResult<BitObjKind> {
         trace!("BitLooseObjDb::read(id: {})", id);
-        let mut stream = self.read_stream(id)?;
-        obj::read_obj(&mut stream)
+        let oid = self.expand_id(id)?;
+        let mut stream = self.read_stream(oid)?;
+        let obj = obj::read_obj(&mut stream)?;
+        obj.set_oid(oid);
+        Ok(obj)
     }
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
@@ -163,24 +166,23 @@ impl BitObjDbBackend for BitLooseObjDb {
 
     fn write(&self, obj: &dyn BitObj) -> BitResult<Oid> {
         let bytes = obj.serialize_with_headers()?;
-        let hash = hash::hash_bytes(&bytes);
-        let path = self.obj_path(hash);
+        let oid = obj.oid();
+        let path = self.obj_path(oid);
 
-        #[cfg(debug_assertions)]
         if path.as_path().exists() {
+            #[cfg(debug_assertions)]
             {
                 let mut buf = vec![];
                 ZlibDecoder::new(File::open(path)?).read_to_end(&mut buf)?;
                 assert_eq!(buf, bytes, "same hash, different contents :O");
             }
-            return Ok(hash);
+        } else {
+            Lockfile::with_mut(&path, LockfileFlags::SET_READONLY, |lockfile| {
+                Ok(ZlibEncoder::new(lockfile, Compression::default()).write_all(&bytes)?)
+            })?;
         }
 
-        Lockfile::with_mut(&path, LockfileFlags::SET_READONLY, |lockfile| {
-            Ok(ZlibEncoder::new(lockfile, Compression::default()).write_all(&bytes)?)
-        })?;
-
-        Ok(hash)
+        Ok(oid)
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {

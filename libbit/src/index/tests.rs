@@ -1,11 +1,69 @@
 use super::*;
 use crate::error::BitGenericError;
+use crate::iter::BitEntry;
 use crate::obj::Treeish;
 use crate::path::BitPath;
+use fallible_iterator::FallibleIterator;
 use itertools::Itertools;
+use quickcheck::Arbitrary;
+use rand::Rng;
 use std::fs::File;
 use std::io::BufReader;
 use std::str::FromStr;
+
+impl Arbitrary for BitIndexEntries {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        // can't derive arbitrary as the key will not match the actual entry
+        Vec::<BitIndexEntry>::arbitrary(g).into_iter().collect()
+    }
+}
+
+impl Arbitrary for BitTreeCache {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        Self::arbitrary_depth_limited(g, rand::thread_rng().gen_range(0..30))
+    }
+}
+
+impl Arbitrary for BitIndexEntry {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        let path = BitPath::arbitrary(g);
+        let flags = BitIndexEntryFlags::with_path_len(path.len());
+        Self {
+            ctime: Arbitrary::arbitrary(g),
+            mtime: Arbitrary::arbitrary(g),
+            device: Arbitrary::arbitrary(g),
+            inode: Arbitrary::arbitrary(g),
+            mode: Arbitrary::arbitrary(g),
+            uid: Arbitrary::arbitrary(g),
+            gid: Arbitrary::arbitrary(g),
+            filesize: Arbitrary::arbitrary(g),
+            oid: Arbitrary::arbitrary(g),
+            flags,
+            path,
+        }
+    }
+}
+
+impl BitTreeCache {
+    fn arbitrary_depth_limited(g: &mut quickcheck::Gen, size: u8) -> Self {
+        let children = if size == 0 {
+            vec![]
+        } else {
+            (0..rand::thread_rng().gen_range(0..5))
+                .map(|_| Self::arbitrary_depth_limited(g, size / 2))
+                .collect_vec()
+        };
+
+        Self {
+            children,
+            path: Arbitrary::arbitrary(g),
+            // just test non-negative numbers
+            // otherwise will generate nonzero oid with negative entry_count and stuff will go wrong
+            entry_count: u16::arbitrary(g) as isize,
+            oid: Arbitrary::arbitrary(g),
+        }
+    }
+}
 
 impl<'r> BitRepo<'r> {
     pub fn index_add(
@@ -18,7 +76,7 @@ impl<'r> BitRepo<'r> {
     // creates an empty repository in a temporary directory and initializes it
     pub fn with_empty_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         let basedir = tempfile::tempdir()?;
-        BitRepo::init_load(&basedir, f)
+        BitRepo::init_load(basedir.into_path(), f)
     }
 }
 
@@ -26,8 +84,23 @@ impl<'r> BitIndex<'r> {
     #[cfg(test)]
     pub fn add_str(&mut self, s: &str) -> BitResult<()> {
         let pathspec = s.parse::<Pathspec>()?;
-        self.repo.match_worktree_with(&pathspec)?.for_each(|entry| self.add_entry(entry))
+        pathspec.match_worktree(self)?.for_each(|entry| self.add_entry(entry))
     }
+}
+
+#[quickcheck]
+fn test_bit_index_entry_serialize_and_deserialize(index_entry: BitIndexEntry) -> BitResult<()> {
+    test_serde!(index_entry)
+}
+
+#[quickcheck]
+fn test_bit_tree_cache_serialize_and_deserialize(tree_cache: BitTreeCache) -> BitResult<()> {
+    test_serde!(tree_cache)
+}
+
+#[quickcheck]
+fn test_bit_index_serialize_and_deserialize(index: BitIndexInner) -> BitResult<()> {
+    test_serde!(index)
 }
 
 #[test]
@@ -62,6 +135,7 @@ fn test_add_symlink() -> BitResult<()> {
         })
     })
 }
+
 #[test]
 fn test_parse_large_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
@@ -82,7 +156,7 @@ fn test_index_add_directory() -> BitResult<()> {
         repo.with_index_mut(|index| {
             index.add_str("dir")?;
             assert_eq!(index.len(), 3);
-            let mut iterator = index.entries.values();
+            let mut iterator = index.entries().values();
             assert_eq!(iterator.next().unwrap().path, "dir/a");
             assert_eq!(iterator.next().unwrap().path, "dir/b");
             assert_eq!(iterator.next().unwrap().path, "dir/c/d");
@@ -128,7 +202,7 @@ fn index_file_directory_collision() -> BitResult<()> {
             index.add_str("a")?;
 
             assert_eq!(index.len(), 1);
-            let mut iterator = index.entries.values();
+            let mut iterator = index.entries().values();
             assert_eq!(iterator.next().unwrap().path, "a/somefile");
             Ok(())
         })
@@ -160,7 +234,7 @@ fn index_nested_file_directory_collision() -> BitResult<()> {
 
         repo.with_index_mut(|index| {
             assert_eq!(index.len(), 2);
-            let mut iterator = index.entries.values();
+            let mut iterator = index.entries().values();
             assert_eq!(iterator.next().unwrap().path, "bar");
             assert_eq!(iterator.next().unwrap().path, "foo/bar/baz");
             Ok(())
@@ -199,7 +273,7 @@ fn index_directory_file_collision() -> BitResult<()> {
             index.add_str("foo")?;
 
             assert_eq!(index.len(), 1);
-            let mut iter = index.entries.values();
+            let mut iter = index.entries().values();
             assert_eq!(iter.next().unwrap().path, "foo");
             Ok(())
         })
@@ -211,8 +285,14 @@ fn test_status_staged_deleted_files() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         rm!(repo: "foo");
         bit_add_all!(repo);
+        dbg_entry_iter!(repo.tree_iter(repo.head_tree_oid()?));
+        repo.with_index(|index| {
+            dbg_entry_iter!(index.tree_iter());
+            Ok(())
+        })?;
         let diff = repo.diff_head_index(Pathspec::MATCH_ALL)?;
         assert!(diff.new.is_empty());
+        dbg!(&diff.modified);
         assert!(diff.modified.is_empty());
         assert_eq!(diff.deleted.len(), 1);
         assert_eq!(diff.deleted[0].path, "foo");
@@ -228,7 +308,7 @@ fn test_stage_deleted_file() -> BitResult<()> {
         bit_add_all!(repo);
         rm!(repo: "foo");
         bit_add_all!(repo);
-        assert!(repo.with_index(|index| Ok(index.entries.is_empty()))?);
+        assert!(repo.with_index(|index| Ok(index.entries().is_empty()))?);
         Ok(())
     })
 }
@@ -285,7 +365,7 @@ fn parse_small_index() -> BitResult<()> {
             flags: BitIndexEntryFlags::new(12),
             path: BitPath::intern("dir/test.txt"),
             mode: FileMode::REG,
-            hash: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
+            oid: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
         },
         BitIndexEntry {
             ctime: Timespec::new(1613643244, 672563537),
@@ -298,12 +378,13 @@ fn parse_small_index() -> BitResult<()> {
             flags: BitIndexEntryFlags::new(8),
             path: BitPath::intern("test.txt"),
             mode: FileMode::REG,
-            hash: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
+            oid: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
         },
     ]
-    .into();
+    .into_iter()
+    .collect();
 
-    let expected_index = BitIndexInner::new(entries, vec![]);
+    let expected_index = BitIndexInner::new(entries, None, None);
 
     assert_eq!(expected_index, index);
     Ok(())
@@ -335,7 +416,7 @@ fn parse_index_header() -> BitResult<()> {
 #[test]
 fn bit_index_build_tree_test() -> BitResult<()> {
     BitRepo::find("tests/repos/indextest", |repo| {
-        let tree = repo.with_index(|index| index.build_tree())?;
+        let tree = repo.with_index(|index| index.write_tree())?;
         let entries = tree.entries.into_iter().collect_vec();
         assert_eq!(entries[0].path, "dir");
         assert_eq!(entries[0].mode, FileMode::DIR);
@@ -348,21 +429,30 @@ fn bit_index_build_tree_test() -> BitResult<()> {
         assert_eq!(entries[4].path, "zs");
         assert_eq!(entries[4].mode, FileMode::DIR);
 
-        let dir2_tree = repo.read_obj(entries[1].hash)?.into_tree()?;
+        let dir2_tree = repo.read_obj(entries[1].oid)?.into_tree()?;
         let dir2_tree_entries = dir2_tree.entries.into_iter().collect_vec();
         assert_eq!(dir2_tree_entries[0].path, "dir2.txt");
         assert_eq!(dir2_tree_entries[1].path, "nested");
 
-        let mut nested_tree = repo.read_obj(dir2_tree_entries[1].hash)?.into_tree()?;
+        let mut nested_tree = repo.read_obj(dir2_tree_entries[1].oid)?.into_tree()?;
         let coolfile_entry = nested_tree.entries.pop_first().unwrap();
         assert!(nested_tree.entries.is_empty());
         assert_eq!(coolfile_entry.path, "coolfile.txt");
 
-        let coolfile_blob = repo.read_obj(coolfile_entry.hash)?.into_blob();
+        let coolfile_blob = repo.read_obj(coolfile_entry.oid)?.into_blob();
         assert_eq!(coolfile_blob.bytes, b"coolfile contents!");
 
-        let test_txt_blob = repo.read_obj(entries[3].hash)?.into_blob();
+        let test_txt_blob = repo.read_obj(entries[3].oid)?.into_blob();
         assert_eq!(test_txt_blob.bytes, b"hello\n");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_index_add_writes_obj_to_objects_dir() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "foo");
+        assert!(repo.obj_exists(Oid::EMPTY_BLOB)?);
         Ok(())
     })
 }

@@ -1,4 +1,4 @@
-use super::{Tree, Treeish};
+use super::{BitObjShared, Tree, Treeish};
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObj, BitObjType, Oid};
 use crate::repo::BitRepo;
@@ -14,6 +14,7 @@ use std::str::FromStr;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
+    pub(crate) obj: BitObjShared,
     pub(crate) tree: Oid,
     pub(crate) author: BitSignature,
     pub(crate) committer: BitSignature,
@@ -63,6 +64,35 @@ impl Commit {
     pub fn tree(&self) -> Oid {
         self.tree
     }
+
+    pub fn new(
+        tree: Oid,
+        parent: Option<Oid>,
+        message: CommitMessage,
+        author: BitSignature,
+        committer: BitSignature,
+    ) -> Self {
+        Self::new_with_gpg(tree, parent, message, author, committer, None)
+    }
+
+    pub fn new_with_gpg(
+        tree: Oid,
+        parent: Option<Oid>,
+        message: CommitMessage,
+        author: BitSignature,
+        committer: BitSignature,
+        gpgsig: Option<String>,
+    ) -> Self {
+        Self {
+            obj: BitObjShared::new(BitObjType::Commit),
+            tree,
+            author,
+            committer,
+            message,
+            parent,
+            gpgsig,
+        }
+    }
 }
 
 impl<'r> BitRepo<'r> {
@@ -75,7 +105,7 @@ impl<'r> BitRepo<'r> {
         // TODO validate hashes of parent and tree
         let author = self.user_signature()?;
         let committer = author.clone();
-        Ok(Commit { tree, parent, message, author, committer, gpgsig: None })
+        Ok(Commit::new(tree, parent, message, author, committer))
     }
 
     pub fn read_commit_msg(&self) -> BitResult<CommitMessage> {
@@ -99,7 +129,7 @@ impl<'r> BitRepo<'r> {
         if msg.is_empty() {
             bail!("aborting commit due to empty commit message");
         }
-        Ok(CommitMessage::from_str(&msg)?)
+        CommitMessage::from_str(&msg)
     }
 }
 
@@ -178,15 +208,12 @@ impl DeserializeSized for Commit {
         let author = attrs["author"].parse().unwrap();
         let committer = attrs["committer"].parse().unwrap();
         let gpgsig = attrs.get("gpgsig").map(|sig| sig.to_owned());
-        Ok(Self { tree, parent, author, committer, message, gpgsig })
+        Ok(Self::new_with_gpg(tree, parent, message, author, committer, gpgsig))
     }
 }
 
 impl BitObj for Commit {
-    fn obj_ty(&self) -> BitObjType {
-        BitObjType::Commit
+    fn obj_shared(&self) -> &BitObjShared {
+        &self.obj
     }
 }
-
-#[cfg(test)]
-mod tests;

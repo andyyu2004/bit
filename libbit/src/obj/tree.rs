@@ -1,12 +1,13 @@
-use super::FileMode;
+use super::{BitObjShared, FileMode};
+use crate::core::BitOrd;
 use crate::error::BitResult;
+use crate::index::BitIndexEntry;
 use crate::io::BufReadExt;
 use crate::obj::{BitObj, BitObjType, Oid};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::tls;
 use crate::util;
-use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
@@ -41,36 +42,36 @@ impl Display for TreeEntry {
         if f.alternate() {
             write!(f, "{} {}\0{}", self.mode, self.path, unsafe {
                 // SAFETY we're just printing this out and not using it anywhere
-                std::str::from_utf8_unchecked(self.hash.as_ref())
+                std::str::from_utf8_unchecked(self.oid.as_ref())
             })
         } else {
             let obj_type = self.mode.infer_obj_type();
             debug_assert_eq!(
                 obj_type,
-                tls::with_repo(|repo| repo.read_obj_header(self.hash).unwrap().obj_type)
+                tls::with_repo(|repo| repo.read_obj_header(self.oid).unwrap().obj_type)
             );
-            write!(f, "{} {} {}\t{}", self.mode, obj_type, self.hash, self.path)
+            write!(f, "{} {} {}\t{}", self.mode, obj_type, self.oid, self.path)
         }
     }
 }
 
-#[derive(PartialEq, Debug, Default, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Tree {
+    obj: BitObjShared,
     pub entries: BTreeSet<TreeEntry>,
 }
 
-// impl IntoIterator for Tree {
-//     type IntoIter = ();
-//     type Item;
-//     fn into_iter(self) -> Self::IntoIter {
-//         todo!()
-//     }
-// }
-// impl Tree {
-//     pub fn iter(&self) -> impl BitIterator {
-//         todo!()
-//     }
-// }
+impl Tree {
+    pub fn new(entries: BTreeSet<TreeEntry>) -> Self {
+        Self { obj: BitObjShared::new(BitObjType::Tree), entries }
+    }
+}
+
+impl Default for Tree {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
 
 impl Serialize for Tree {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
@@ -95,21 +96,22 @@ impl DeserializeSized for Tree {
         while !r.is_at_eof()? {
             let entry = TreeEntry::deserialize(r)?;
             #[cfg(debug_assertions)]
-            v.push(entry.clone());
+            v.push(entry);
             tree.entries.insert(entry);
         }
 
         // these debug assertions are checking that the btreeset ordering
         // is consistent with the order of the tree entries on disk
+        // NOTE: this cfg is actually required as `debug_assert` only uses `if (cfg!(debug_assertions))`
         #[cfg(debug_assertions)]
-        assert_eq!(tree.entries.iter().cloned().collect::<Vec<_>>(), v);
+        debug_assert_eq!(tree.entries.iter().cloned().collect::<Vec<_>>(), v);
         Ok(tree)
     }
 }
 
 impl BitObj for Tree {
-    fn obj_ty(&self) -> BitObjType {
-        BitObjType::Tree
+    fn obj_shared(&self) -> &BitObjShared {
+        &self.obj
     }
 }
 
@@ -117,17 +119,37 @@ impl BitObj for Tree {
 pub struct TreeEntry {
     pub mode: FileMode,
     pub path: BitPath,
-    pub hash: Oid,
+    pub oid: Oid,
+}
+
+// provide explicit impl on references to avoid some unnecessary copying
+impl<'a> From<&'a BitIndexEntry> for TreeEntry {
+    fn from(entry: &'a BitIndexEntry) -> Self {
+        Self { mode: entry.mode, path: entry.path, oid: entry.oid }
+    }
+}
+
+impl From<BitIndexEntry> for TreeEntry {
+    fn from(entry: BitIndexEntry) -> Self {
+        let BitIndexEntry { mode, path, oid, .. } = entry;
+        Self { mode, path, oid }
+    }
 }
 
 impl PartialOrd for TreeEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for TreeEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.sort_path().cmp(&other.sort_path())
+    }
+}
+
+impl BitOrd for TreeEntry {
+    fn bit_cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.sort_path().cmp(&other.sort_path())
     }
 }
@@ -156,8 +178,8 @@ impl Deserialize for TreeEntry {
 
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;
-        let hash = Oid::new(hash_bytes);
-        Ok(Self { mode, path, hash })
+        let oid = Oid::new(hash_bytes);
+        Ok(Self { mode, path, oid })
     }
 }
 
@@ -168,57 +190,7 @@ impl Serialize for TreeEntry {
         writer.write_all(b" ")?;
         write!(writer, "{}", self.path)?;
         writer.write_all(b"\0")?;
-        writer.write_all(self.hash.as_ref())?;
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::test_utils::*;
-    use quickcheck::{Arbitrary, Gen};
-    use quickcheck_macros::quickcheck;
-
-    impl Arbitrary for FileMode {
-        fn arbitrary(_g: &mut Gen) -> Self {
-            Self(0100644)
-        }
-    }
-
-    impl Arbitrary for TreeEntry {
-        fn arbitrary(g: &mut Gen) -> Self {
-            Self {
-                path: BitPath::intern(&generate_sane_string(1..300)),
-                mode: Arbitrary::arbitrary(g),
-                hash: Arbitrary::arbitrary(g),
-            }
-        }
-    }
-
-    impl Arbitrary for Tree {
-        fn arbitrary(g: &mut Gen) -> Self {
-            Self { entries: Arbitrary::arbitrary(g) }
-        }
-    }
-
-    #[quickcheck]
-    fn serialize_then_parse_tree(tree: Tree) -> BitResult<()> {
-        let mut bytes = vec![];
-        tree.serialize(&mut bytes)?;
-        let parsed = Tree::deserialize_sized_unbuffered(bytes.as_slice(), bytes.len() as u64)?;
-        assert_eq!(tree, parsed);
-        Ok(())
-    }
-
-    #[test]
-    fn parse_then_serialize_tree() -> BitResult<()> {
-        // this tree was generated by git
-        let bytes = include_bytes!("../../tests/files/testtree.tree") as &[u8];
-        let tree = Tree::deserialize_sized_unbuffered(bytes, bytes.len() as u64)?;
-        let mut serialized = vec![];
-        tree.serialize(&mut serialized)?;
-        assert_eq!(bytes, serialized);
+        writer.write_all(self.oid.as_ref())?;
         Ok(())
     }
 }

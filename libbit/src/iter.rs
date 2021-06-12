@@ -1,131 +1,35 @@
+mod tree_iter;
+
+pub use tree_iter::*;
+
 use crate::error::{BitGenericError, BitResult};
-use crate::index::BitIndexEntry;
-use crate::obj::{FileMode, Tree, TreeEntry, Treeish};
+use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
+use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
-use fallible_iterator::FallibleIterator;
+use fallible_iterator::{FallibleIterator, Peekable};
+use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
+use rustc_hash::FxHashSet;
 use std::convert::TryFrom;
 use std::path::Path;
+use walkdir::WalkDir;
 
-impl<'r> BitRepo<'r> {
-    pub fn head_tree_iter(self) -> BitResult<TreeIter<'r>> {
-        let tree = self.head_tree()?;
-        Ok(self.tree_iter(&tree))
-    }
-
-    pub fn tree_iter(self, tree: &Tree) -> TreeIter<'r> {
-        TreeIter::new(self, tree)
-    }
+pub trait BitEntry {
+    fn oid(&self) -> Oid;
+    fn path(&self) -> BitPath;
+    fn mode(&self) -> FileMode;
 }
 
+/// wrapper around `TreeIter` that skips the tree entries
 #[derive(Debug)]
-pub struct TreeIter<'r> {
-    repo: BitRepo<'r>,
-    // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself
-    entry_stack: Vec<(BitPath, TreeEntry)>,
-}
-
-impl<'r> TreeIter<'r> {
-    pub fn new(repo: BitRepo<'r>, tree: &Tree) -> Self {
-        Self {
-            repo,
-            entry_stack: tree
-                .entries
-                .iter()
-                .cloned()
-                .rev()
-                .map(|entry| (BitPath::empty(), entry))
-                .collect(),
-        }
-    }
-}
-
-/// tree iterators allow stepping over entire trees (skipping all entries recursively)
-pub trait TreeIterator: BitIterator<TreeEntry> {
-    fn over(&mut self) -> BitResult<Option<TreeEntry>>;
-
-    // seems difficult to provide a peek method just via an adaptor
-    // unclear how to implement peek in terms of `over` and `next`
-    // in particular, if `peek` uses `next`, then all the subdirectories would already
-    // be added to the stack and its awkward to implement `over` after `peek`
-    // similar problems arise with implementing `peek` using `over`
-    // probably better to just let the implementor deal with it
-    // especially as the implementation is probably trivial
-    fn peek(&self) -> BitResult<Option<TreeEntry>>;
-}
-
-impl<'r> FallibleIterator for TreeIter<'r> {
-    type Error = BitGenericError;
-    type Item = TreeEntry;
-
-    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        loop {
-            match self.entry_stack.pop() {
-                Some((base, mut entry)) => match entry.mode {
-                    FileMode::DIR => {
-                        let tree = self.repo.read_obj(entry.hash)?.into_tree()?;
-                        let path = base.join(entry.path);
-                        debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.hash);
-
-                        let entries = tree.entries.into_iter().rev().map(|entry| (path, entry));
-
-                        // if no subentries then we want to yield the directory/tree itself
-                        if entries.is_empty() {
-                            return Ok(Some(TreeEntry { path, ..entry }));
-                        } else {
-                            self.entry_stack.extend(entries);
-                        }
-                    }
-                    FileMode::REG | FileMode::LINK | FileMode::EXEC => {
-                        debug!("TreeIter::next: entry: {:?}", entry);
-                        entry.path = base.join(entry.path);
-                        return Ok(Some(entry));
-                    }
-                    // ignore submodules for now
-                    FileMode::GITLINK => continue,
-                    _ => unreachable!("found unknown filemode `{}`", entry.mode),
-                },
-                None => return Ok(None),
-            }
-        }
-    }
-}
-
-impl<'r> TreeIterator for TreeIter<'r> {
-    fn over(&mut self) -> BitResult<Option<TreeEntry>> {
-        loop {
-            // TODO can dry out this code (with above) if it turns out to be what we want
-            match self.entry_stack.pop() {
-                Some((base, mut entry)) => match entry.mode {
-                    // step over for trees returns the entry but does not recurse into it
-                    FileMode::DIR | FileMode::REG | FileMode::LINK | FileMode::EXEC => {
-                        debug!("HeadIter::over: entry: {:?}", entry);
-                        entry.path = base.join(entry.path);
-                        return Ok(Some(entry));
-                    }
-                    // ignore submodules for now
-                    FileMode::GITLINK => continue,
-                    _ => unreachable!("found unknown filemode `{}`", entry.mode),
-                },
-                None => return Ok(None),
-            }
-        }
-    }
-
-    fn peek(&self) -> BitResult<Option<TreeEntry>> {
-        Ok(self.entry_stack.last().map(|x| x.1))
-    }
-}
-
-#[derive(Debug)]
-struct TreeEntryIter<'r> {
+pub struct TreeEntryIter<'r> {
     tree_iter: TreeIter<'r>,
 }
 
 impl<'r> TreeEntryIter<'r> {
-    pub fn new(repo: BitRepo<'r>, root: &Tree) -> Self {
-        Self { tree_iter: TreeIter::new(repo, root) }
+    pub fn new(repo: BitRepo<'r>, oid: Oid) -> Self {
+        Self { tree_iter: TreeIter::new(repo, oid) }
     }
 }
 
@@ -134,7 +38,15 @@ impl<'r> FallibleIterator for TreeEntryIter<'r> {
     type Item = BitIndexEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        Ok(self.tree_iter.next()?.map(BitIndexEntry::from))
+        // entry iterators only yield non tree entries
+        loop {
+            match self.tree_iter.next()? {
+                Some(TreeIteratorEntry::File(entry)) =>
+                    return Ok(Some(BitIndexEntry::from(entry))),
+                None => return Ok(None),
+                _ => continue,
+            }
+        }
     }
 }
 
@@ -163,36 +75,91 @@ impl FallibleIterator for DirIter {
 
 struct WorktreeIter<'r> {
     repo: BitRepo<'r>,
-    walk: Walk,
+    tracked: FxHashSet<BitPath>,
+    // TODO ignoring all nonroot ignores for now
+    // not sure what the correct collection for this is? some kind of tree where gitignores know their "parent" gitignore?
+    ignore: Vec<Gitignore>,
+    walk: walkdir::IntoIter,
 }
 
 impl<'r> WorktreeIter<'r> {
-    pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
+    pub fn new(index: &BitIndex<'r>) -> BitResult<Self> {
+        let repo = index.repo;
+        // ignoring any gitignore errors for now
+        let ignore = vec![Gitignore::new(repo.workdir.join(".gitignore").as_path()).0];
+        //? we collect it into a hashmap for faster lookup?
+        // not sure if this is actually better than just looking up in the index's entries
+        let tracked = index.entries().keys().map(|(path, _)| path).copied().collect();
+
         Ok(Self {
             repo,
-            walk: WalkBuilder::new(repo.workdir)
-                .sort_by_file_path(|a, b| {
-                    let mut a = BitPath::intern(a);
-                    // see TreeEntry::cmp comments
-                    if a.is_dir() {
-                        a = a.join_trailing_slash();
+            ignore,
+            tracked,
+            walk: WalkDir::new(repo.workdir)
+                .sort_by(|a, b| {
+                    let x = a.path().to_str().unwrap();
+                    let y = b.path().to_str().unwrap();
+
+                    //  for ordering and avoiding allocation where possible
+                    let t = a.file_type().is_dir().then(|| x.to_owned() + "/");
+                    let u = b.file_type().is_dir().then(|| y.to_owned() + "/");
+
+                    match (&t, &u) {
+                        (None, None) => BitPath::path_cmp(x, y),
+                        (None, Some(u)) => BitPath::path_cmp(x, u),
+                        (Some(t), None) => BitPath::path_cmp(t, y),
+                        (Some(t), Some(u)) => BitPath::path_cmp(t, u),
                     }
-                    let mut b = BitPath::intern(b);
-                    if b.is_dir() {
-                        b = b.join_trailing_slash()
-                    }
-                    a.cmp(&b)
                 })
-                .hidden(false)
-                .build(),
+                .into_iter(),
         })
     }
 
     // we need to explicitly ignore our root `.bit/.git` directories
-    fn ignored(&self, path: &Path) -> BitResult<bool> {
-        let path = self.repo.to_relative_path(path)?;
-        let fst_component = path.components()[0];
-        Ok(fst_component == ".bit" || fst_component == ".git")
+    // TODO testing
+    fn is_ignored(&self, path: &Path) -> BitResult<bool> {
+        // should only run this on files?
+        debug_assert!(path.is_file());
+        debug_assert!(path.is_absolute());
+        let relative = self.repo.to_relative_path(path)?;
+
+        if self.tracked.contains(&relative) {
+            return Ok(false);
+        }
+
+        // not ignoring .bit as git doesn't ignore .bit
+        // perhaps we should just consider .bit as a debug directory only?
+        if relative.components().contains(&BitPath::DOT_GIT) {
+            return Ok(true);
+        }
+
+        for ignore in &self.ignore {
+            // TODO we need to not ignore files that are already tracked
+            // where a file is tracked if its in the index
+            // we need a different api for the index
+            // the with_index api is not good
+
+            // TODO the matcher wants a path relative to where the gitignore file is
+            // currently just assuming its the repo root (which all paths are relative to)
+            // `ignore.matched_path` doesn't work here as it doesn't seem to match directories
+            // e.g.
+            // tree! {
+            //     ignoreme {
+            //         a
+            //     }
+            // }
+            //
+            // gitignore! {
+            //     ignoreme
+            // }
+            // path ignoreme/a will not be ignored by `matched_path`
+            // using `matched_path_or_any_parents` for now
+            if ignore.matched_path_or_any_parents(path, false).is_ignore() {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 }
 
@@ -203,10 +170,12 @@ impl FallibleIterator for WorktreeIter<'_> {
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
         // ignore directories
         let direntry = loop {
+            // TODO can we ignore .git, its a waste of time travering that directory just to be ignored
             match self.walk.next().transpose()? {
                 Some(entry) => {
                     let path = entry.path();
-                    if !path.is_dir() && !self.ignored(path)? {
+                    let is_dir = path.is_dir();
+                    if !is_dir && !self.is_ignored(path)? {
                         break entry;
                     }
                 }
@@ -222,21 +191,23 @@ pub trait BitEntryIterator = BitIterator<BitIndexEntry>;
 
 pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 
-impl<'r> BitRepo<'r> {
-    pub fn worktree_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
+impl<'r> BitIndex<'r> {
+    pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("worktree_iter()");
-        WorktreeIter::new(self)
+        WorktreeIter::new(&self)
     }
+}
 
-    pub fn tree_entry_iter(self, tree: &Tree) -> BitResult<impl BitEntryIterator + 'r> {
-        trace!("tree_entry_iter()");
-        Ok(TreeEntryIter::new(self, tree))
+impl<'r> BitRepo<'r> {
+    pub fn tree_entry_iter(self, oid: Oid) -> BitResult<impl BitEntryIterator + 'r> {
+        trace!("tree_entry_iter(oid: {})", oid);
+        Ok(TreeEntryIter::new(self, oid))
     }
 
     pub fn head_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
         trace!("head_iter()");
-        let tree = self.head_tree()?;
-        self.tree_entry_iter(&tree)
+        let oid = self.head_tree_oid()?;
+        self.tree_entry_iter(oid)
     }
 }
 
@@ -247,3 +218,5 @@ impl<I: BitEntryIterator> BitIteratorExt for I {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tree_iter_tests;

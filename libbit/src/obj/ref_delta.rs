@@ -1,4 +1,4 @@
-use super::{BitObj, BitObjType, Oid};
+use super::{BitObj, BitObjShared, BitObjType, Oid};
 use crate::delta::Delta;
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt};
@@ -7,6 +7,7 @@ use std::io::prelude::*;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct RefDelta {
+    obj: BitObjShared,
     pub base_oid: Oid,
     pub delta: Delta,
 }
@@ -24,12 +25,13 @@ impl DeserializeSized for RefDelta {
     {
         let base_oid = reader.read_oid()?;
         let delta = Delta::deserialize_sized(&mut reader.as_zlib_decode_stream(), delta_size)?;
-        Ok(Self { base_oid, delta })
+        let obj = BitObjShared::new(BitObjType::RefDelta);
+        Ok(Self { obj, base_oid, delta })
     }
 }
 
 impl BitObj for RefDelta {
-    fn obj_ty(&self) -> BitObjType {
-        BitObjType::RefDelta
+    fn obj_shared(&self) -> &BitObjShared {
+        &self.obj
     }
 }

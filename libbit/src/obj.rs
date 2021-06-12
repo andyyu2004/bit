@@ -15,8 +15,9 @@ pub use tree::{Tree, TreeEntry, Treeish};
 use self::ofs_delta::OfsDelta;
 use self::ref_delta::RefDelta;
 use crate::error::{BitGenericError, BitResult};
-use crate::io::ReadExt;
+use crate::io::{BufReadExt, ReadExt};
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
+use std::cell::Cell;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
 use std::io::{BufRead, BufReader, Write};
@@ -41,6 +42,7 @@ impl Display for BitObjKind {
 // 100644 normal
 // 100755 executable
 // 40000 directory
+// TODO make this an enum
 #[derive(Copy, PartialEq, Eq, Clone)]
 pub struct FileMode(u32);
 
@@ -109,7 +111,7 @@ impl FileMode {
         self.0 & Self::IFFMT == mask
     }
 
-    pub fn is_dir(self) -> bool {
+    pub fn is_tree(self) -> bool {
         self.is_type(Self::IFDIR)
     }
 
@@ -221,17 +223,31 @@ impl Deserialize for BitObjKind {
 
 // very boring impl which just delegates to the inner type
 impl BitObj for BitObjKind {
-    // TODO this is kinda dumb
-    // try make this method unnecssary
-    fn obj_ty(&self) -> BitObjType {
+    fn obj_shared(&self) -> &BitObjShared {
         match self {
-            BitObjKind::Blob(blob) => blob.obj_ty(),
-            BitObjKind::Commit(commit) => commit.obj_ty(),
-            BitObjKind::Tree(tree) => tree.obj_ty(),
-            BitObjKind::Tag(tag) => tag.obj_ty(),
-            BitObjKind::OfsDelta(ofs_delta) => ofs_delta.obj_ty(),
-            BitObjKind::RefDelta(ref_delta) => ref_delta.obj_ty(),
+            BitObjKind::Blob(blob) => blob.obj_shared(),
+            BitObjKind::Commit(commit) => commit.obj_shared(),
+            BitObjKind::Tree(tree) => tree.obj_shared(),
+            BitObjKind::Tag(tag) => tag.obj_shared(),
+            BitObjKind::OfsDelta(ofs_delta) => ofs_delta.obj_shared(),
+            BitObjKind::RefDelta(ref_delta) => ref_delta.obj_shared(),
         }
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct BitObjShared {
+    oid: Cell<Oid>,
+    ty: BitObjType,
+}
+
+impl BitObjShared {
+    pub fn with_oid(ty: BitObjType, oid: Oid) -> Self {
+        Self { ty, oid: Cell::new(oid) }
+    }
+
+    pub fn new(ty: BitObjType) -> Self {
+        Self { ty, oid: Cell::new(Oid::UNKNOWN) }
     }
 }
 
@@ -240,8 +256,31 @@ impl BitObj for BitObjKind {
 // print user facing content that may not be pretty
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
+// implmentors of BitObj must never be mutated otherwise their `Oid` will be wrong
 pub trait BitObj: Serialize + DeserializeSized + Debug {
-    fn obj_ty(&self) -> BitObjType;
+    fn obj_shared(&self) -> &BitObjShared;
+
+    fn obj_ty(&self) -> BitObjType {
+        self.obj_shared().ty
+    }
+
+    fn oid(&self) -> Oid {
+        let oid_cell = &self.obj_shared().oid;
+        let mut oid = oid_cell.get();
+        // should this ever occur assuming every calls set_oid correctly?
+        // i.e. is this a bug
+        if oid.is_unknown() {
+            oid = crate::hash::hash_obj(self).expect("shouldn't really fail");
+            oid_cell.set(oid);
+        }
+        oid
+    }
+
+    // not a fan of this api, very prone to just not setting it and then requiring an unnessary hash of the object,
+    //  and we have to set it from places that are a bit weird?
+    fn set_oid(&self, oid: Oid) {
+        self.obj_shared().oid.set(oid)
+    }
 
     /// serialize objects append on the header of `type len`
     fn serialize_with_headers(&self) -> BitResult<Vec<u8>> {
@@ -289,7 +328,7 @@ impl Display for BitObjType {
 }
 
 impl FromStr for BitObjType {
-    type Err = String;
+    type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -297,29 +336,15 @@ impl FromStr for BitObjType {
             "tree" => Ok(BitObjType::Tree),
             "tag" => Ok(BitObjType::Tag),
             "blob" => Ok(BitObjType::Blob),
-            _ => Err(format!("unknown bit object type `{}`", s)),
+            _ => bail!("unknown bit object type `{}`", s),
         }
     }
 }
 
 pub(crate) fn read_obj_header(reader: &mut impl BufRead) -> BitResult<BitObjHeader> {
-    let obj_type = read_obj_type_str(reader)?;
-    let size = read_obj_size(reader)?;
+    let obj_type = reader.read_ascii_str(0x20)?;
+    let size = reader.read_ascii_num(0x00)? as u64;
     Ok(BitObjHeader { obj_type, size })
-}
-
-fn read_obj_type_str(reader: &mut impl BufRead) -> BitResult<BitObjType> {
-    let mut buf = vec![];
-    let i = reader.read_until(0x20, &mut buf)?;
-    Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
-}
-
-/// assumes <type> has been read already
-fn read_obj_size(reader: &mut impl BufRead) -> BitResult<u64> {
-    let mut buf = vec![];
-    let i = reader.read_until(0x00, &mut buf)?;
-    let size = std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap();
-    Ok(size)
 }
 
 #[cfg(test)]
@@ -347,4 +372,8 @@ pub(crate) fn read_obj(reader: &mut impl BufRead) -> BitResult<BitObjKind> {
 }
 
 #[cfg(test)]
+mod commit_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tree_tests;

@@ -1,6 +1,5 @@
 use crate::error::BitResult;
-use crate::hash;
-use crate::obj::{BitObjKind, BitObjType, Blob, Oid};
+use crate::obj::{BitObj, BitObjKind, BitObjType, Blob, Oid};
 use crate::repo::BitRepo;
 use std::fs::File;
 use std::io::BufReader;
@@ -33,6 +32,6 @@ impl<'r> BitRepo<'r> {
             BitObjType::RefDelta => todo!(),
         };
 
-        if opts.do_write { self.write_obj(&object) } else { hash::hash_obj(&object) }
+        if opts.do_write { self.write_obj(&object) } else { Ok(object.oid()) }
     }
 }

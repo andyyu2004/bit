@@ -1,16 +1,15 @@
+use super::*;
 use crate::obj::Oid;
 use crate::path::BitPath;
-use std::collections::BTreeSet;
-
-use super::*;
 use quickcheck_macros::quickcheck;
+use std::collections::BTreeSet;
 
 #[test]
 fn test_tree_entry_ordering() {
     let mut entries = BTreeSet::new();
-    let dir = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar"), hash: Oid::UNKNOWN };
+    let dir = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar"), oid: Oid::UNKNOWN };
     let file =
-        TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), hash: Oid::UNKNOWN };
+        TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), oid: Oid::UNKNOWN };
     entries.insert(dir);
     entries.insert(file);
     // files come first
@@ -39,19 +38,18 @@ fn invalid_obj_read_wrong_size() {
 }
 
 #[test]
-#[should_panic]
 fn invalid_obj_read_unknown_obj_ty() {
     let mut bytes = vec![];
     bytes.extend(b"weirdobjty ");
     bytes.extend(b"12\0");
     bytes.extend(b"abcd1234xywz");
 
-    let _ = read_obj_unbuffered(bytes.as_slice());
+    assert!(read_obj_unbuffered(bytes.as_slice()).is_err())
 }
 
 #[test]
 fn write_read_blob_obj() -> BitResult<()> {
-    let bit_obj = BitObjKind::Blob(Blob { bytes: b"hello".to_vec() });
+    let bit_obj = BitObjKind::Blob(Blob::new(b"hello".to_vec()));
     let bytes = bit_obj.serialize_with_headers()?;
     let parsed_bit_obj = read_obj_unbuffered(bytes.as_slice()).unwrap();
     assert_eq!(bit_obj, parsed_bit_obj);
@@ -60,7 +58,7 @@ fn write_read_blob_obj() -> BitResult<()> {
 
 #[quickcheck]
 fn read_write_blob_obj_preserves_bytes(bytes: Vec<u8>) -> BitResult<()> {
-    let bit_obj = BitObjKind::Blob(Blob { bytes });
+    let bit_obj = BitObjKind::Blob(Blob::new(bytes));
     let serialized = bit_obj.serialize_with_headers()?;
     let parsed_bit_obj = read_obj_unbuffered(serialized.as_slice()).unwrap();
     assert_eq!(bit_obj, parsed_bit_obj);

@@ -30,8 +30,8 @@ impl Cmd for BitDiffCliOpts {
         let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
         let status = if let Some(r) = self.staged {
             let r = r.unwrap_or(BitRef::HEAD);
-            let tree = r.resolve_to_tree(repo)?;
-            repo.diff_tree_index(&tree, pathspec)?
+            let oid = r.fully_resolve(repo)?;
+            repo.diff_tree_index(oid, pathspec)?
         } else {
             repo.diff_index_worktree(pathspec)?
         };
@@ -65,11 +65,11 @@ impl Cmd for BitDiffCliOpts {
 
         impl<'r> DiffFormatter<'r> {
             fn read_blob(&self, entry: &BitIndexEntry) -> BitResult<String> {
-                if entry.hash.is_known() {
+                if entry.oid.is_known() {
                     // TODO diffing binary files?
                     // currently the tostring impl will return the same thing
                     // so if we textually diff it it won't show anything
-                    Ok(self.repo.read_obj(entry.hash)?.into_blob().to_string())
+                    Ok(self.repo.read_obj(entry.oid)?.into_blob().to_string())
                 } else {
                     let absolute_path = self.repo.normalize(entry.path)?;
                     Ok(std::fs::read_to_string(absolute_path)?)
@@ -78,7 +78,7 @@ impl Cmd for BitDiffCliOpts {
         }
 
         impl<'r> Apply for DiffFormatter<'r> {
-            fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
+            fn on_created(&mut self, _new: &BitIndexEntry) -> BitResult<()> {
                 todo!()
             }
 
@@ -95,7 +95,7 @@ impl Cmd for BitDiffCliOpts {
                 Ok(())
             }
 
-            fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+            fn on_deleted(&mut self, _old: &BitIndexEntry) -> BitResult<()> {
                 todo!()
             }
         }

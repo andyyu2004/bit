@@ -1,18 +1,19 @@
 use super::*;
 use crate::refs::{BitRef, SymbolicRef};
+use crate::repo::BitRepo;
 use crate::test_utils::*;
 use quickcheck::{Arbitrary, Gen};
 
 impl Arbitrary for Commit {
     fn arbitrary(g: &mut Gen) -> Self {
-        Self {
-            tree: Arbitrary::arbitrary(g),
-            parent: Arbitrary::arbitrary(g),
-            author: Arbitrary::arbitrary(g),
-            committer: Arbitrary::arbitrary(g),
-            gpgsig: Some(generate_sane_string(100..300)),
-            message: Arbitrary::arbitrary(g),
-        }
+        Self::new_with_gpg(
+            Arbitrary::arbitrary(g),
+            Arbitrary::arbitrary(g),
+            Arbitrary::arbitrary(g),
+            Arbitrary::arbitrary(g),
+            Arbitrary::arbitrary(g),
+            Some(generate_sane_string_with_newlines(100..300)),
+        )
     }
 }
 
@@ -49,7 +50,7 @@ fn test_parse_commit_message_with_trailing_newline_in_message() {
 #[test]
 fn test_parse_and_display_commit_message() -> BitResult<()> {
     for _ in 0..100 {
-        let s = generate_sane_string(1..100);
+        let s = generate_sane_string_with_newlines(1..100);
         let msg = CommitMessage::from_str(&s)?;
         let t = msg.to_string();
         assert_eq!(s, t);
@@ -74,7 +75,7 @@ fn test_new_commit_moves_branch_not_head() -> BitResult<()> {
 
 #[test]
 fn parse_commit() -> BitResult<()> {
-    let bytes = include_bytes!("../../../tests/files/testcommitsingleline.commit") as &[u8];
+    let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit") as &[u8];
     let commit = Commit::deserialize_from_slice(bytes)?;
     assert_eq!(hex::encode(commit.tree), "d8329fc1cc938780ffdd9f94e0d364e0ea74f579");
     // assert_eq!(&commit.author, "Scott Chacon <schacon@gmail.com> 1243040974 -0700");
@@ -86,7 +87,7 @@ fn parse_commit() -> BitResult<()> {
 
 #[test]
 fn parse_commit_with_multi_line_attr() -> BitResult<()> {
-    let bytes = include_bytes!("../../../tests/files/testcommitmultiline.commit");
+    let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
     let commit = Commit::deserialize_from_slice(bytes.as_slice())?;
     let gpgsig = r#"-----BEGIN PGP SIGNATURE-----
 iQIzBAABCAAdFiEExwXquOM8bWb4Q2zVGxM2FxoLkGQFAlsEjZQACgkQGxM2FxoL
@@ -119,7 +120,7 @@ fn serialize_then_parse_commit(commit: Commit) -> BitResult<()> {
 
 #[test]
 fn parse_commit_then_serialize_multiline() -> BitResult<()> {
-    let bytes = include_bytes!("../../../tests/files/testcommitmultiline.commit");
+    let bytes = include_bytes!("../../tests/files/testcommitmultiline.commit");
     let commit = Commit::deserialize_from_slice(bytes.as_slice())?;
 
     let mut buf = vec![];
@@ -130,7 +131,7 @@ fn parse_commit_then_serialize_multiline() -> BitResult<()> {
 
 #[test]
 fn parse_commit_then_serialize_single_line() -> BitResult<()> {
-    let bytes = include_bytes!("../../../tests/files/testcommitsingleline.commit");
+    let bytes = include_bytes!("../../tests/files/testcommitsingleline.commit");
     let commit = Commit::deserialize_from_slice(bytes.as_slice())?;
 
     println!("{}", commit);

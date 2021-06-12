@@ -4,6 +4,10 @@ use crate::obj;
 
 impl<'r> BitRepo<'r> {
     /// be careful when deleting `rm foo` as the symlink points at it
+    /// WARNING: be very careful when changing this sample repo,
+    /// it's probably better to create another repo based on this one
+    /// as many tests depend on this
+    /// WARNING: for some reason the symlink seems to change hashes every run so do not use this if you are testing hashes
     pub fn with_sample_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {
             touch!(repo: "foo");
@@ -16,6 +20,23 @@ impl<'r> BitRepo<'r> {
             touch!(repo: "dir/bar.l");
             touch!(repo: "dir/bar/qux");
             symlink!(repo: "bar" <- "dir/link");
+
+            bit_commit_all!(repo);
+            f(repo)
+        })
+    }
+
+    pub fn with_sample_repo_no_sym<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
+        Self::with_empty_repo(|repo| {
+            touch!(repo: "foo");
+            touch!(repo: "bar");
+            mkdir!(repo: "dir");
+            bit_commit_all!(repo);
+
+            mkdir!(repo: "dir/bar");
+            touch!(repo: "dir/baz");
+            touch!(repo: "dir/bar.l");
+            touch!(repo: "dir/bar/qux");
 
             bit_commit_all!(repo);
             f(repo)

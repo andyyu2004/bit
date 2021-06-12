@@ -1,5 +1,5 @@
 use crate::error::{BitError, BitResult};
-use crate::obj::Oid;
+use crate::obj::{BitObj, Oid};
 use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind};
 use crate::repo::BitRepo;
@@ -38,7 +38,8 @@ impl<'r> BitRepo<'r> {
             // TODO also check for untracked files and show those and suggest adding them
         }
 
-        let (oid, commit) = self.commit_tree(parent, msg, tree)?;
+        let commit = self.commit_tree(parent, msg, tree)?;
+        let oid = commit.oid();
 
         // TODO print status of commit
         // include initial commit if it is one
@@ -52,7 +53,7 @@ impl<'r> BitRepo<'r> {
             },
         };
 
-        self.update_ref(sym, oid, cause.clone())?;
+        self.update_ref(sym, oid, cause)?;
         Ok(oid)
     }
 }

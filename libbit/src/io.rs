@@ -1,3 +1,4 @@
+use crate::error::BitGenericError;
 use crate::hash::SHA1Hash;
 use crate::obj::Oid;
 use crate::path::BitPath;
@@ -5,8 +6,10 @@ use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
 use sha1::{digest::Output, Digest};
+use std::fmt::Display;
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
+use std::str::FromStr;
 
 // all big-endian
 pub(crate) trait ReadExt: Read {
@@ -246,6 +249,20 @@ pub trait BufReadExt: BufRead {
         self.read_null_terminated()
     }
 
+    /// read the bytes upto `sep` parsing as a base10 ascii numberj
+    fn read_ascii_num(&mut self, sep: u8) -> BitResult<i64> {
+        let mut buf = vec![];
+        let i = self.read_until(sep, &mut buf)?;
+        Ok(std::str::from_utf8(&buf[..i - 1]).unwrap().parse().unwrap())
+    }
+
+    /// read the bytes upto `sep` parsing as an ascii str
+    fn read_ascii_str<T: FromStr<Err = BitGenericError>>(&mut self, sep: u8) -> BitResult<T> {
+        let mut buf = vec![];
+        let i = self.read_until(sep, &mut buf)?;
+        std::str::from_utf8(&buf[..i - 1]).unwrap().parse()
+    }
+
     fn read_null_terminated<T: Deserialize>(&mut self) -> BitResult<T> {
         let mut buf = vec![];
         self.read_until(0, &mut buf)?;
@@ -262,12 +279,21 @@ impl<R: BufRead + ?Sized> BufReadExt for R {
 }
 
 pub trait WriteExt: Write {
+    fn write_u8(&mut self, u: u8) -> io::Result<()> {
+        self.write_all(std::slice::from_ref(&u))
+    }
+
     fn write_u16(&mut self, u: u16) -> io::Result<()> {
         self.write_all(&u.to_be_bytes())
     }
 
     fn write_u32(&mut self, u: u32) -> io::Result<()> {
         self.write_all(&u.to_be_bytes())
+    }
+
+    fn write_ascii_num(&mut self, i: impl Display, sep: u8) -> io::Result<()> {
+        self.write_all(i.to_string().as_bytes())?;
+        self.write_u8(sep)
     }
 
     fn write_timespec(&mut self, t: Timespec) -> io::Result<()> {
@@ -279,8 +305,24 @@ pub trait WriteExt: Write {
         self.write_all(&u.to_be_bytes())
     }
 
-    fn write_bit_hash(&mut self, hash: &Oid) -> io::Result<()> {
-        self.write_all(hash.as_bytes())
+    fn write_null_terminated_path(&mut self, path: BitPath) -> io::Result<()> {
+        self.write_all(path.as_bytes())?;
+        self.write_u8(0)?;
+        Ok(())
+    }
+
+    fn write_oid(&mut self, oid: Oid) -> io::Result<()> {
+        self.write_all(oid.as_bytes())
+    }
+
+    /// write `data` prefixed by its serialized size in bytes as a u32
+    fn write_with_size(&mut self, data: impl Serialize) -> BitResult<()> {
+        let mut buf = vec![];
+        data.serialize(&mut buf)?;
+
+        self.write_u32(buf.len() as u32)?;
+        self.write_all(&buf)?;
+        Ok(())
     }
 }
 

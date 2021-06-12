@@ -43,7 +43,7 @@ impl<'r> BitRepo<'r> {
         match rev {
             Revspec::Ref(r) => self.fully_resolve_ref(*r),
             Revspec::Partial(prefix) => self.expand_prefix(*prefix),
-            Revspec::Parent(inner) => self.resolve_rev_inner(inner).and_then(|oid| get_parent(oid)),
+            Revspec::Parent(inner) => self.resolve_rev_inner(inner).and_then(get_parent),
             Revspec::Ancestor(rev, n) =>
                 (0..*n).try_fold(self.resolve_rev_inner(rev)?, |oid, _| get_parent(oid)),
         }

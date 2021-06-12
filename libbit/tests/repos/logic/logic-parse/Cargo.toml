@@ -1,0 +1,15 @@
+[package]
+name = "logic-parse"
+version = "0.1.0"
+authors = ["Andy Yu <andyyu2004@gmail.com>"]
+edition = "2018"
+
+[build-dependencies] 
+lalrpop = "0.19.3"
+
+[dependencies]
+util = { path = "../logic-util" }
+lalrpop-util = "0.19.2"
+regex = "1"
+rustc-hash = "1"
+typed-arena = "2.0.1"

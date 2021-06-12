@@ -34,6 +34,9 @@ extern crate num_derive;
 extern crate scoped_tls;
 
 #[macro_use]
+extern crate bit_derive;
+
+#[macro_use]
 extern crate anyhow;
 
 #[cfg(test)]
@@ -45,6 +48,9 @@ extern crate log;
 
 #[macro_use]
 mod macros;
+
+#[macro_use]
+mod debug;
 
 pub mod cmd;
 pub mod config;
@@ -61,6 +67,7 @@ pub mod rev;
 pub mod status;
 pub mod xdiff;
 
+mod core;
 mod delta;
 mod interner;
 mod io;
