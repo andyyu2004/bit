@@ -190,7 +190,7 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
                 let subtree = self.build_tree(&nxt_path, 1 + depth)?;
                 assert!(entries.insert(TreeEntry {
                     path: segment,
-                    mode: FileMode::DIR,
+                    mode: FileMode::TREE,
                     oid: subtree.oid()
                 }));
             }

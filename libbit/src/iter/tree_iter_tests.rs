@@ -5,9 +5,9 @@ use crate::pathspec::Pathspec;
 fn test_tree_iterator_step_over() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let mut iter = repo.head_tree_iter()?;
-        check_next!(iter.next() => "":FileMode::DIR);
+        check_next!(iter.next() => "":FileMode::TREE);
         check_next!(iter.next() => "bar":FileMode::REG);
-        check_next!(iter.over() => "dir":FileMode::DIR);
+        check_next!(iter.over() => "dir":FileMode::TREE);
         check_next!(iter.over() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
         Ok(())
@@ -18,11 +18,11 @@ fn test_tree_iterator_step_over() -> BitResult<()> {
 fn test_tree_iterator_peekable() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let mut iter = repo.head_tree_iter()?;
-        check_next!(iter.peek() => "":FileMode::DIR);
-        check_next!(iter.next() => "":FileMode::DIR);
+        check_next!(iter.peek() => "":FileMode::TREE);
+        check_next!(iter.next() => "":FileMode::TREE);
         check_next!(iter.peek() => "bar":FileMode::REG);
         check_next!(iter.next() => "bar":FileMode::REG);
-        check_next!(iter.over() => "dir":FileMode::DIR);
+        check_next!(iter.over() => "dir":FileMode::TREE);
         check_next!(iter.next() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
         assert_eq!(iter.peek()?, None);
@@ -34,11 +34,11 @@ fn test_tree_iterator_peekable() -> BitResult<()> {
 fn test_tree_iterator_peekable_step_over_peeked() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let mut iter = repo.head_tree_iter()?;
-        check_next!(iter.next() => "":FileMode::DIR);
+        check_next!(iter.next() => "":FileMode::TREE);
         check_next!(iter.peek() => "bar":FileMode::REG);
         // remembers peeked value
         check_next!(iter.over() => "bar": FileMode::REG);
-        check_next!(iter.over() => "dir":FileMode::DIR);
+        check_next!(iter.over() => "dir":FileMode::TREE);
         check_next!(iter.over() => "foo": FileMode::REG);
         assert_eq!(iter.next()?, None);
         Ok(())
@@ -50,7 +50,7 @@ fn test_index_tree_iterator_step_over_root() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
-            check_next!(iter.over() => "":FileMode::DIR);
+            check_next!(iter.over() => "":FileMode::TREE);
             assert!(iter.next()?.is_none());
             Ok(())
         })
@@ -62,12 +62,12 @@ fn test_index_tree_iterator_step_over() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
-            check_next!(iter.next() => "":FileMode::DIR);
-            check_next!(iter.over() => "dir":FileMode::DIR);
-            check_next!(iter.over() => "dir2":FileMode::DIR);
+            check_next!(iter.next() => "":FileMode::TREE);
+            check_next!(iter.over() => "dir":FileMode::TREE);
+            check_next!(iter.over() => "dir2":FileMode::TREE);
             check_next!(iter.over() => "exec":FileMode::EXEC);
             check_next!(iter.over() => "test.txt":FileMode::REG);
-            check_next!(iter.over() => "zs":FileMode::DIR);
+            check_next!(iter.over() => "zs":FileMode::TREE);
             Ok(())
         })
     })
@@ -78,21 +78,21 @@ fn test_index_tree_iterator_peek() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
-            check_next!(iter.peek() => "":FileMode::DIR);
-            check_next!(iter.peek() => "":FileMode::DIR);
-            check_next!(iter.next() => "":FileMode::DIR);
-            check_next!(iter.peek() => "dir":FileMode::DIR);
-            check_next!(iter.next() => "dir":FileMode::DIR);
+            check_next!(iter.peek() => "":FileMode::TREE);
+            check_next!(iter.peek() => "":FileMode::TREE);
+            check_next!(iter.next() => "":FileMode::TREE);
+            check_next!(iter.peek() => "dir":FileMode::TREE);
+            check_next!(iter.next() => "dir":FileMode::TREE);
             check_next!(iter.next() => "dir/test.txt":FileMode::REG);
-            check_next!(iter.peek() => "dir2":FileMode::DIR);
-            check_next!(iter.peek() => "dir2":FileMode::DIR);
-            check_next!(iter.next() => "dir2":FileMode::DIR);
+            check_next!(iter.peek() => "dir2":FileMode::TREE);
+            check_next!(iter.peek() => "dir2":FileMode::TREE);
+            check_next!(iter.next() => "dir2":FileMode::TREE);
             check_next!(iter.next() => "dir2/dir2.txt":FileMode::REG);
-            check_next!(iter.next() => "dir2/nested":FileMode::DIR);
+            check_next!(iter.next() => "dir2/nested":FileMode::TREE);
             check_next!(iter.next() => "dir2/nested/coolfile.txt":FileMode::REG);
             check_next!(iter.next() => "exec":FileMode::EXEC);
             check_next!(iter.next() => "test.txt":FileMode::REG);
-            check_next!(iter.next() => "zs":FileMode::DIR);
+            check_next!(iter.next() => "zs":FileMode::TREE);
             check_next!(iter.next() => "zs/one.txt":FileMode::REG);
             assert_eq!(iter.peek()?, None);
             assert_eq!(iter.next()?, None);
@@ -143,13 +143,13 @@ fn test_tree_tree_iterator_step_over_multiple_nested() -> BitResult<()> {
         };
 
         let mut iter = repo.tree_iter(oid);
-        check_next!(iter.next() => "":FileMode::DIR);
-        check_next!(iter.next() => "outer":FileMode::DIR);
-        check_next!(iter.over() => "outer/a":FileMode::DIR);
-        check_next!(iter.next() => "outer/b":FileMode::DIR);
-        check_next!(iter.over() => "outer/b/c":FileMode::DIR);
+        check_next!(iter.next() => "":FileMode::TREE);
+        check_next!(iter.next() => "outer":FileMode::TREE);
+        check_next!(iter.over() => "outer/a":FileMode::TREE);
+        check_next!(iter.next() => "outer/b":FileMode::TREE);
+        check_next!(iter.over() => "outer/b/c":FileMode::TREE);
         check_next!(iter.over() => "outer/b/d":FileMode::REG);
-        check_next!(iter.over() => "outer/c":FileMode::DIR);
+        check_next!(iter.over() => "outer/c":FileMode::TREE);
         Ok(())
     })
 }
@@ -177,11 +177,11 @@ fn test_tree_tree_iterator_step_over_multiple() -> BitResult<()> {
         // this only tests `next` and not `peek` or `over`
         // we only compare paths as comparing modes is a bit pointless, and the the index may correctly have unknown oids
         let mut iter = repo.tree_iter(oid);
-        check_next!(iter.next() => "":FileMode::DIR);
-        check_next!(iter.over() => "dir0":FileMode::DIR);
-        check_next!(iter.over() => "dir1":FileMode::DIR);
-        check_next!(iter.over() => "dir2":FileMode::DIR);
-        check_next!(iter.over() => "dir3":FileMode::DIR);
+        check_next!(iter.next() => "":FileMode::TREE);
+        check_next!(iter.over() => "dir0":FileMode::TREE);
+        check_next!(iter.over() => "dir1":FileMode::TREE);
+        check_next!(iter.over() => "dir2":FileMode::TREE);
+        check_next!(iter.over() => "dir3":FileMode::TREE);
         Ok(())
     })
 }
@@ -255,16 +255,16 @@ fn test_index_tree_iterator_next() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
-            check_next!(iter.next() => "": FileMode::DIR);
-            check_next!(iter.next() => "dir": FileMode::DIR);
+            check_next!(iter.next() => "": FileMode::TREE);
+            check_next!(iter.next() => "dir": FileMode::TREE);
             check_next!(iter.next() => "dir/test.txt": FileMode::REG);
-            check_next!(iter.next() => "dir2": FileMode::DIR);
+            check_next!(iter.next() => "dir2": FileMode::TREE);
             check_next!(iter.next() => "dir2/dir2.txt": FileMode::REG);
-            check_next!(iter.next() => "dir2/nested": FileMode::DIR);
+            check_next!(iter.next() => "dir2/nested": FileMode::TREE);
             check_next!(iter.next() => "dir2/nested/coolfile.txt": FileMode::REG);
             check_next!(iter.next() => "exec": FileMode::EXEC);
             check_next!(iter.next() => "test.txt": FileMode::REG);
-            check_next!(iter.next() => "zs": FileMode::DIR);
+            check_next!(iter.next() => "zs": FileMode::TREE);
             check_next!(iter.next() => "zs/one.txt": FileMode::REG);
             Ok(())
         })
@@ -296,10 +296,10 @@ fn test_index_tree_iterator_on_logic_repo_index() -> BitResult<()> {
             let pathspec = "logic-ir".parse::<Pathspec>()?;
             let mut iter = pathspec.match_tree_iter(index.tree_iter());
             dbg!(index.entries().keys().map(|(entry, _)| entry).collect::<Vec<_>>());
-            check_next!(iter.next() => "logic-ir":FileMode::DIR);
+            check_next!(iter.next() => "logic-ir":FileMode::TREE);
             check_next!(iter.next() => "logic-ir/Cargo.toml":FileMode::REG);
-            check_next!(iter.next() => "logic-ir/src":FileMode::DIR);
-            check_next!(iter.next() => "logic-ir/src/ast_lowering":FileMode::DIR);
+            check_next!(iter.next() => "logic-ir/src":FileMode::TREE);
+            check_next!(iter.next() => "logic-ir/src/ast_lowering":FileMode::TREE);
             check_next!(iter.next() => "logic-ir/src/ast_lowering/mod.rs":FileMode::REG);
             check_next!(iter.next() => "logic-ir/src/debug.rs":FileMode::REG);
             Ok(())
@@ -312,11 +312,11 @@ fn test_index_tree_iterator_filter() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter().filter(|entry| Ok(entry.path().starts_with("dir2")));
-            check_next!(iter.peek() => "dir2": FileMode::DIR);
-            check_next!(iter.next() => "dir2": FileMode::DIR);
+            check_next!(iter.peek() => "dir2": FileMode::TREE);
+            check_next!(iter.next() => "dir2": FileMode::TREE);
             check_next!(iter.next() => "dir2/dir2.txt": FileMode::REG);
-            check_next!(iter.peek() => "dir2/nested": FileMode::DIR);
-            check_next!(iter.over() => "dir2/nested": FileMode::DIR);
+            check_next!(iter.peek() => "dir2/nested": FileMode::TREE);
+            check_next!(iter.over() => "dir2/nested": FileMode::TREE);
             assert!(iter.next()?.is_none());
             Ok(())
         })

@@ -419,15 +419,15 @@ fn bit_index_build_tree_test() -> BitResult<()> {
         let tree = repo.with_index(|index| index.write_tree())?;
         let entries = tree.entries.into_iter().collect_vec();
         assert_eq!(entries[0].path, "dir");
-        assert_eq!(entries[0].mode, FileMode::DIR);
+        assert_eq!(entries[0].mode, FileMode::TREE);
         assert_eq!(entries[1].path, "dir2");
-        assert_eq!(entries[1].mode, FileMode::DIR);
+        assert_eq!(entries[1].mode, FileMode::TREE);
         assert_eq!(entries[2].path, "exec");
         assert_eq!(entries[2].mode, FileMode::EXEC);
         assert_eq!(entries[3].path, "test.txt");
         assert_eq!(entries[3].mode, FileMode::REG);
         assert_eq!(entries[4].path, "zs");
-        assert_eq!(entries[4].mode, FileMode::DIR);
+        assert_eq!(entries[4].mode, FileMode::TREE);
 
         let dir2_tree = repo.read_obj(entries[1].oid)?.into_tree()?;
         let dir2_tree_entries = dir2_tree.entries.into_iter().collect_vec();

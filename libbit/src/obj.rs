@@ -45,7 +45,7 @@ impl Display for BitObjKind {
 #[repr(u32)]
 pub enum FileMode {
     // TODO rename to tree
-    DIR     = 0o40000,
+    TREE     = 0o40000,
     REG     = 0o100644,
     EXEC    = 0o100755,
     LINK    = 0o120000,
@@ -75,7 +75,7 @@ impl FileMode {
     }
 
     pub fn is_tree(self) -> bool {
-        matches!(self, FileMode::DIR)
+        matches!(self, FileMode::TREE)
     }
 
     pub fn new(u: u32) -> Self {
@@ -86,7 +86,7 @@ impl FileMode {
         if metadata.file_type().is_symlink() {
             Self::LINK
         } else if metadata.is_dir() {
-            Self::DIR
+            Self::TREE
         } else {
             let permissions = metadata.permissions();
             let is_executable = permissions.mode() & 0o111;
@@ -96,7 +96,7 @@ impl FileMode {
 
     pub fn infer_obj_type(self) -> BitObjType {
         match self {
-            Self::DIR => BitObjType::Tree,
+            Self::TREE => BitObjType::Tree,
             Self::EXEC | Self::REG | Self::LINK => BitObjType::Blob,
             _ => unreachable!("invalid filemode for obj {}", self),
         }

@@ -365,7 +365,7 @@ macro_rules! file_entry {
 macro_rules! dir_entry {
     ($path:expr, $tree:expr) => {{
         let oid = crate::tls::with_repo(|repo| repo.write_obj(&$tree)).unwrap();
-        crate::obj::TreeEntry { oid, path: $path.into(), mode: crate::obj::FileMode::DIR }
+        crate::obj::TreeEntry { oid, path: $path.into(), mode: crate::obj::FileMode::TREE }
     }};
 }
 
@@ -453,7 +453,7 @@ fn test_tree_macro() -> crate::error::BitResult<()> {
                 TreeEntry {
                     oid: "94b2978d84f4cbb7449c092255b38a1e1b40da42".into() ,
                     path: "bar".into(),
-                    mode: FileMode::DIR
+                    mode: FileMode::TREE
                 },
             }
         );

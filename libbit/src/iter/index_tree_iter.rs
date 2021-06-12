@@ -5,7 +5,7 @@ pub struct IndexTreeIter<'a, 'r> {
     entry_iter: Peekable<IndexEntryIterator>,
     // pseudotrees that have been yielded
     pseudotrees: FxHashSet<BitPath>,
-    peeked: Option<TreeIteratorEntry>,
+    peeked: Option<BitIndexEntry>,
 }
 
 impl<'a, 'r> IndexTreeIter<'a, 'r> {
@@ -18,37 +18,36 @@ impl<'a, 'r> IndexTreeIter<'a, 'r> {
         }
     }
 
-    fn create_pseudotree(&self, path: BitPath) -> TreeIteratorEntry {
+    fn create_pseudotree(&self, path: BitPath) -> BitIndexEntry {
         let oid = self
             .index
             .tree_cache()
             .and_then(|cache| cache.find_valid_child(path))
             .map(|child| child.oid)
             .unwrap_or(Oid::UNKNOWN);
-        TreeIteratorEntry::Tree(TreeEntry { mode: FileMode::DIR, path, oid })
+        TreeEntry { mode: FileMode::TREE, path, oid }.into()
     }
 
-    fn step_over_tree(&mut self, tree_entry: TreeEntry) -> BitResult<Option<TreeIteratorEntry>> {
+    fn step_over_tree(&mut self, entry: BitIndexEntry) -> BitResult<Option<BitIndexEntry>> {
         if let Some(tree_cache) =
-            self.index.tree_cache().and_then(|cache| cache.find_valid_child(tree_entry.path))
+            self.index.tree_cache().and_then(|cache| cache.find_valid_child(entry.path))
         {
             // for `n` entries we want to call next `n` times which is what `nth(n-1)` will do
             // we must call `nth` on the inner iterator as that is what `entry_count` corresponds to
             self.entry_iter.nth(tree_cache.entry_count as usize - 1)?;
         } else {
             // step over this tree by stepping over each of its children
-            while self.peek()?.map(|next| next.path().starts_with(tree_entry.path)).unwrap_or(false)
-            {
+            while self.peek()?.map(|next| next.path().starts_with(entry.path)).unwrap_or(false) {
                 self.over()?;
             }
         }
-        Ok(Some(TreeIteratorEntry::Tree(tree_entry)))
+        Ok(Some(entry))
     }
 }
 
 impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
     type Error = BitGenericError;
-    type Item = TreeIteratorEntry;
+    type Item = BitIndexEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
         // we do want to yield the root tree
@@ -70,7 +69,7 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
                     }
                 }
                 self.entry_iter.next()?;
-                Ok(Some(TreeIteratorEntry::File(entry)))
+                Ok(Some(entry))
             }
             None => Ok(None),
         }
@@ -89,9 +88,10 @@ impl<'a, 'r> BitTreeIterator for IndexTreeIter<'a, 'r> {
 
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
         match self.next()? {
-            Some(entry) => match entry {
-                TreeIteratorEntry::Tree(tree) => self.step_over_tree(tree),
-                TreeIteratorEntry::File(entry) => Ok(Some(TreeIteratorEntry::File(entry))),
+            Some(entry) => match entry.mode() {
+                FileMode::TREE => self.step_over_tree(entry),
+                mode if mode.is_file() => Ok(Some(entry)),
+                _ => unreachable!(),
             },
             None => Ok(None),
         }

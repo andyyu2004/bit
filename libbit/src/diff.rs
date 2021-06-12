@@ -3,8 +3,8 @@
 use crate::core::BitOrd;
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
-use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator, TreeIteratorEntry};
-use crate::obj::{BitObj, Oid};
+use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
+use crate::obj::{BitObj, FileMode, Oid};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
@@ -31,11 +31,11 @@ pub trait DiffBuilder<'r>: Differ<'r> {
 
 pub trait TreeDiffer<'r> {
     /// unmatched new entry
-    fn on_created(&mut self, new: TreeIteratorEntry) -> BitResult<()>;
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()>;
     /// called when two entries are matched (could possibly be the same entry)
-    fn on_match(&mut self, old: TreeIteratorEntry, new: TreeIteratorEntry) -> BitResult<()>;
+    fn on_match(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
     /// unmatched old entry
-    fn on_deleted(&mut self, old: TreeIteratorEntry) -> BitResult<()>;
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()>;
 }
 
 // TODO this is actually now specific to worktree index diffs
@@ -165,66 +165,59 @@ where
     I: BitTreeIterator,
     J: BitTreeIterator,
 {
-    fn on_created(&mut self, new: TreeIteratorEntry) -> BitResult<()> {
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_created(new: {})", new.path());
-        match new {
-            TreeIteratorEntry::Tree(..) => self.new_iter.collect_over_tree(&mut self.diff.new),
-            TreeIteratorEntry::File(file) => {
-                self.diff.new.push(file);
-                self.new_iter.next()?;
-                Ok(())
-            }
+        if new.is_tree() {
+            self.new_iter.collect_over_tree(&mut self.diff.new)
+        } else {
+            self.diff.new.push(new);
+            self.new_iter.next()?;
+            Ok(())
         }
     }
 
-    fn on_match(&mut self, old: TreeIteratorEntry, new: TreeIteratorEntry) -> BitResult<()> {
+    fn on_match(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_match(path: {})", new.path());
         // one of the oid's may be unknown due to being a pseudotree
         debug_assert!(old.oid().is_known() || new.oid().is_known());
-        match (old, new) {
-            (TreeIteratorEntry::Tree(a), TreeIteratorEntry::Tree(b)) if a == b => {
+        match (old.mode(), new.mode()) {
+            (FileMode::TREE, FileMode::TREE) if old == new => {
                 // if hashes match and both are directories we can step over them
                 self.old_iter.over()?;
                 self.new_iter.over()?;
             }
-            (TreeIteratorEntry::File(a), TreeIteratorEntry::File(b)) if a.oid() == b.oid() => {
-                debug_assert!(a.oid().is_known() && b.oid().is_known());
+            (FileMode::TREE, FileMode::TREE) => {
                 self.old_iter.next()?;
                 self.new_iter.next()?;
             }
-            (TreeIteratorEntry::Tree(_), TreeIteratorEntry::File(_)) => {
-                // TODO write test cases for these cases
-                self.old_iter.next()?;
-                todo!("probably wrong");
-            }
-            (TreeIteratorEntry::File(_), TreeIteratorEntry::Tree(_)) => {
-                self.new_iter.next()?;
-                todo!("probably wrong");
-            }
-            (TreeIteratorEntry::Tree(_), TreeIteratorEntry::Tree(_)) => {
+            _ if old.is_file() && new.is_file() && old.oid() == new.oid() => {
+                debug_assert!(old.oid().is_known() && new.oid().is_known());
                 self.old_iter.next()?;
                 self.new_iter.next()?;
             }
-            (TreeIteratorEntry::File(a), TreeIteratorEntry::File(b)) => {
-                self.diff.modified.push((a, b));
+            _ => {
+                debug_assert!(
+                    old.is_file() && new.is_file(),
+                    "todo cases comparsing tree to non tree"
+                );
+                self.diff.modified.push((old, new));
                 self.old_iter.next()?;
                 self.new_iter.next()?;
             }
-        }
+        };
 
         Ok(())
     }
 
-    fn on_deleted(&mut self, old: TreeIteratorEntry) -> BitResult<()> {
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_deleted(old: {})", old.path());
         // TODO refactor out shared code
-        match old {
-            TreeIteratorEntry::Tree(..) => self.old_iter.collect_over_tree(&mut self.diff.deleted),
-            TreeIteratorEntry::File(file) => {
-                self.diff.deleted.push(file);
-                self.old_iter.next()?;
-                Ok(())
-            }
+        if old.is_tree() {
+            self.old_iter.collect_over_tree(&mut self.diff.deleted)
+        } else {
+            self.diff.deleted.push(old);
+            self.old_iter.next()?;
+            Ok(())
         }
     }
 }

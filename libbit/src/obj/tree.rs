@@ -161,7 +161,7 @@ impl TreeEntry {
     // we fix this by appending appending a slash
 
     fn sort_path(&self) -> BitPath {
-        if self.mode == FileMode::DIR { self.path.join_trailing_slash() } else { self.path }
+        if self.mode == FileMode::TREE { self.path.join_trailing_slash() } else { self.path }
     }
 }
 

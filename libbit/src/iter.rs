@@ -50,11 +50,10 @@ impl<'r> FallibleIterator for TreeEntryIter<'r> {
     type Item = BitIndexEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        // entry iterators only yield non tree entries
+        // entry iterators only yield non-tree entries
         loop {
             match self.tree_iter.next()? {
-                Some(TreeIteratorEntry::File(entry)) =>
-                    return Ok(Some(BitIndexEntry::from(entry))),
+                Some(entry) if entry.is_file() => return Ok(Some(BitIndexEntry::from(entry))),
                 None => return Ok(None),
                 _ => continue,
             }

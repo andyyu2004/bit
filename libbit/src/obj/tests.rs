@@ -7,9 +7,9 @@ use std::collections::BTreeSet;
 #[test]
 fn test_tree_entry_ordering() {
     let mut entries = BTreeSet::new();
-    let dir = TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar"), oid: Oid::UNKNOWN };
+    let dir = TreeEntry { mode: FileMode::TREE, path: BitPath::intern("bar"), oid: Oid::UNKNOWN };
     let file =
-        TreeEntry { mode: FileMode::DIR, path: BitPath::intern("bar.ext"), oid: Oid::UNKNOWN };
+        TreeEntry { mode: FileMode::TREE, path: BitPath::intern("bar.ext"), oid: Oid::UNKNOWN };
     entries.insert(dir);
     entries.insert(file);
     // files come first
