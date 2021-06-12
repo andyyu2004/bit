@@ -133,7 +133,7 @@ impl<'r> WorktreeIter<'r> {
             return Ok(true);
         }
 
-        for file in &self.ignore {
+        for ignore in &self.ignore {
             // TODO we need to not ignore files that are already tracked
             // where a file is tracked if its in the index
             // we need a different api for the index
@@ -141,7 +141,20 @@ impl<'r> WorktreeIter<'r> {
 
             // TODO the matcher wants a path relative to where the gitignore file is
             // currently just assuming its the repo root (which all paths are relative to)
-            if file.matched(relative, false).is_ignore() {
+            // `ignore.matched_path` doesn't work here as it doesn't seem to match directories
+            // e.g.
+            // tree! {
+            //     ignoreme {
+            //         a
+            //     }
+            // }
+            //
+            // gitignore! {
+            //     ignoreme
+            // }
+            // path ignoreme/a will not be ignored by `matched_path`
+            // using `matched_path_or_any_parents` for now
+            if ignore.matched_path_or_any_parents(path, false).is_ignore() {
                 return Ok(true);
             }
         }
@@ -157,6 +170,7 @@ impl FallibleIterator for WorktreeIter<'_> {
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
         // ignore directories
         let direntry = loop {
+            // TODO can we ignore .git, its a waste of time travering that directory just to be ignored
             match self.walk.next().transpose()? {
                 Some(entry) => {
                     let path = entry.path();

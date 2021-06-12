@@ -178,6 +178,17 @@ macro_rules! bit_add {
     };
 }
 
+macro_rules! gitignore {
+    ($repo:ident: { $($glob:literal)* }) => {{
+        // obviously very inefficient way to write to a file but should be fine for small tests
+        touch!($repo: ".gitignore");
+        $({
+            modify!($repo: ".gitignore" << $glob);
+            modify!($repo: ".gitignore" << "\n");
+        })*
+    }};
+}
+
 macro_rules! touch {
     ($repo:ident: $path:expr) => {
         std::fs::File::create($repo.workdir.join($path))?
@@ -232,7 +243,7 @@ macro_rules! modify {
         file.write_all($content.as_ref())?;
         file.sync_all()?
     };
-    ($repo:ident: $path:literal << $content:expr) => {
+    ($repo:ident: $path:literal << $content:expr) => {{
         #[allow(unused_imports)]
         use std::io::prelude::*;
         let mut file = std::fs::File::with_options()
@@ -241,7 +252,7 @@ macro_rules! modify {
             .open($repo.workdir.join($path))?;
         file.write_all($content.as_ref())?;
         file.sync_all()?;
-    };
+    }};
     ($repo:ident: $path:literal) => {
         #[allow(unused_imports)]
         use std::io::prelude::*;
