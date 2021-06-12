@@ -68,13 +68,17 @@ fn test_diff_tree_to_tree_deleted() -> BitResult<()> {
     })
 }
 
+// expected output from `bit status`:
+// modified:   logic-ir/src/tls.rs
 #[test]
-fn test_diff_head_index_todo_name() -> BitResult<()> {
+fn test_diff_head_index_on_logic_repo() -> BitResult<()> {
     BitRepo::find(repos_dir!("logic"), |repo| {
-        dbg!(repo.workdir);
         let pathspec = "logic-ir".parse()?;
         let diff = repo.diff_head_index(pathspec)?;
-        dbg!(&diff);
+        assert!(diff.new.is_empty());
+        assert!(diff.deleted.is_empty());
+        assert_eq!(diff.modified.len(), 1);
+
         Ok(())
     })
 }
