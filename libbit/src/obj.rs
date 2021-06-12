@@ -15,7 +15,7 @@ pub use tree::{Tree, TreeEntry, Treeish};
 use self::ofs_delta::OfsDelta;
 use self::ref_delta::RefDelta;
 use crate::error::{BitGenericError, BitResult};
-use crate::io::{BufReadExt, ReadExt, WriteExt};
+use crate::io::{BufReadExt, ReadExt};
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use std::cell::Cell;
 use std::fmt::{self, Debug, Display, Formatter};

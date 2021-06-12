@@ -4,7 +4,7 @@ use crate::core::BitOrd;
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator, TreeIteratorEntry};
-use crate::obj::{BitObj, Oid, Tree, TreeEntry};
+use crate::obj::{BitObj, Oid};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
@@ -330,7 +330,6 @@ impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
     type Diff = WorkspaceDiff;
 
     fn build_diff(mut self) -> BitResult<WorkspaceDiff> {
-        let repo = self.repo;
         let index_iter = self.pathspec.match_index(self.index)?;
         let worktree_iter = self.pathspec.match_worktree(self.index)?;
         GenericDiffer::run(&mut self, index_iter, worktree_iter)?;

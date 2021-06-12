@@ -3,7 +3,7 @@ use fallible_iterator::FallibleIterator;
 use crate::error::BitResult;
 use crate::iter::BitEntry;
 use crate::obj::FileMode;
-use crate::pathspec::Pathspec;
+
 use crate::repo::BitRepo;
 
 #[test]

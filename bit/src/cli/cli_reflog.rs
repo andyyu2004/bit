@@ -37,7 +37,7 @@ impl Cmd for BitReflogCliOpts {
 }
 
 impl Cmd for BitReflogShowOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, _repo: BitRepo<'_>) -> BitResult<()> {
         todo!()
     }
 }

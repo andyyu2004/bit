@@ -1,4 +1,4 @@
-use super::{BitObj, BitObjShared, BitObjType};
+use super::{BitObj, BitObjShared};
 use crate::error::BitResult;
 use crate::serialize::{Deserialize, Serialize};
 use std::io::prelude::*;

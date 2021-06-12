@@ -78,7 +78,7 @@ impl Cmd for BitDiffCliOpts {
         }
 
         impl<'r> Apply for DiffFormatter<'r> {
-            fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
+            fn on_created(&mut self, _new: &BitIndexEntry) -> BitResult<()> {
                 todo!()
             }
 
@@ -95,7 +95,7 @@ impl Cmd for BitDiffCliOpts {
                 Ok(())
             }
 
-            fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+            fn on_deleted(&mut self, _old: &BitIndexEntry) -> BitResult<()> {
                 todo!()
             }
         }
