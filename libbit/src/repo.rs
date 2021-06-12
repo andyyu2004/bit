@@ -277,7 +277,7 @@ impl<'r> BitRepo<'r> {
             _ => return Ok(Tree::default()),
         };
         let commit = self.read_obj(oid)?.into_commit();
-        Ok(self.read_obj(commit.tree())?.into_tree()?)
+        self.read_obj(commit.tree())?.into_tree()
     }
 
     /// gets the oid of the tree belonging to the HEAD commit

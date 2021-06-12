@@ -297,7 +297,7 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
                 self.entry_iter.next()?;
                 Ok(Some(TreeIteratorEntry::File(entry)))
             }
-            None => return Ok(None),
+            None => Ok(None),
         }
     }
 }
@@ -318,7 +318,7 @@ impl<'a, 'r> BitTreeIterator for IndexTreeIter<'a, 'r> {
                 TreeIteratorEntry::Tree(tree) => self.step_over_tree(tree),
                 TreeIteratorEntry::File(entry) => Ok(Some(TreeIteratorEntry::File(entry))),
             },
-            None => return Ok(None),
+            None => Ok(None),
         }
     }
 }

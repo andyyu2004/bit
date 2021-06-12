@@ -53,7 +53,7 @@ impl<'r> BitRepo<'r> {
             },
         };
 
-        self.update_ref(sym, oid, cause.clone())?;
+        self.update_ref(sym, oid, cause)?;
         Ok(oid)
     }
 }

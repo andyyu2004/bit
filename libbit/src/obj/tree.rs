@@ -96,7 +96,7 @@ impl DeserializeSized for Tree {
         while !r.is_at_eof()? {
             let entry = TreeEntry::deserialize(r)?;
             #[cfg(debug_assertions)]
-            v.push(entry.clone());
+            v.push(entry);
             tree.entries.insert(entry);
         }
 

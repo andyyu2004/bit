@@ -129,7 +129,7 @@ impl<'r> BitRepo<'r> {
         if msg.is_empty() {
             bail!("aborting commit due to empty commit message");
         }
-        Ok(CommitMessage::from_str(&msg)?)
+        CommitMessage::from_str(&msg)
     }
 }
 

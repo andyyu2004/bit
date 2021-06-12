@@ -47,7 +47,7 @@ pub trait BitRefDbBackend {
     ) -> BitResult<()> {
         // TODO consider caching each reflog that has been read (by holding onto the guard)
         // only necessary if multiple writes will be done successively (such as rebase perhaps)
-        Ok(self.read_reflog(sym)?.append(new_oid, committer, msg))
+        self.read_reflog(sym)?.append(new_oid, committer, msg)
     }
 }
 

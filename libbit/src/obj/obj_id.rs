@@ -73,12 +73,10 @@ impl FromStr for BitId {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() == 40 {
-            Ok(Self::Full(Oid::from_str(s).unwrap()))
-        } else if s.len() < 40 {
-            Ok(Self::Partial(PartialOid::from_str(s).unwrap()))
-        } else {
-            bail!("invalid bit object id: `{}`", s)
+        match s.len().cmp(&40) {
+            std::cmp::Ordering::Less => Ok(Self::Partial(PartialOid::from_str(s).unwrap())),
+            std::cmp::Ordering::Equal => Ok(Self::Full(Oid::from_str(s).unwrap())),
+            std::cmp::Ordering::Greater => bail!("invalid bit object id: `{}`", s),
         }
     }
 }
@@ -97,7 +95,7 @@ pub struct PartialOid {
 
 impl PartialOid {
     // converts `PartialOid` into `Oid` by extending the missing bits with 0x00
-    pub fn into_oid(&self) -> BitResult<Oid> {
+    pub fn into_oid(self) -> BitResult<Oid> {
         Ok(hex::decode(&self.bytes)?.as_slice().read_oid()?)
     }
 
