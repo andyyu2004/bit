@@ -17,7 +17,9 @@ use self::ref_delta::RefDelta;
 use crate::error::{BitGenericError, BitResult};
 use crate::io::{BufReadExt, ReadExt};
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
+use num_enum::TryFromPrimitive;
 use std::cell::Cell;
+use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
 use std::io::{BufRead, BufReader, Write};
@@ -39,16 +41,21 @@ impl Display for BitObjKind {
     }
 }
 
-// 100644 normal
-// 100755 executable
-// 40000 directory
-// TODO make this an enum
-#[derive(Copy, PartialEq, Eq, Clone)]
-pub struct FileMode(u32);
+#[derive(Copy, PartialEq, Eq, Clone, TryFromPrimitive)]
+#[repr(u32)]
+pub enum FileMode {
+    // TODO rename to tree
+    DIR     = 0o40000,
+    REG     = 0o100644,
+    EXEC    = 0o100755,
+    LINK    = 0o120000,
+    GITLINK = 0o160000,
+}
 
 impl Display for FileMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if f.alternate() { write!(f, "{:o}", self.0) } else { write!(f, "{:06o}", self.0) }
+        let n = self.as_u32();
+        if f.alternate() { write!(f, "{:o}", n) } else { write!(f, "{:06o}", n) }
     }
 }
 
@@ -59,28 +66,20 @@ impl Debug for FileMode {
 }
 
 impl FileMode {
-    pub const DIR: Self = Self(Self::IFDIR);
-    pub const EXEC: Self = Self(Self::IFEXEC);
-    pub const GITLINK: Self = Self(Self::IFGITLINK);
-    /* Directory.  */
-    pub const IFDIR: u32 = 0o40000;
-    /* Executable file.  */
-    // this one is not defined in sysstat.h
-    pub const IFEXEC: u32 = 0o100755;
-    /* These bits determine file type.  */
-    const IFFMT: u32 = 0o170000;
-    // submodules?
-    pub const IFGITLINK: u32 = 0o160000;
-    /* Symbolic link.  */
-    pub const IFLNK: u32 = 0o120000;
-    /* Regular file.  */
-    pub const IFREG: u32 = 0o100644;
-    pub const LINK: Self = Self(Self::IFLNK);
-    pub const REG: Self = Self(Self::IFREG);
+    pub fn as_u32(self) -> u32 {
+        self as u32
+    }
 
-    #[cfg(debug_assertions)]
-    pub fn inner(self) -> u32 {
-        self.0
+    pub fn is_file(self) -> bool {
+        matches!(self, FileMode::EXEC | FileMode::REG | FileMode::LINK)
+    }
+
+    pub fn is_tree(self) -> bool {
+        matches!(self, FileMode::DIR)
+    }
+
+    pub fn new(u: u32) -> Self {
+        Self::try_from(u).unwrap_or_else(|_| panic!("invalid filemode `{}`", u))
     }
 
     pub fn from_metadata(metadata: &Metadata) -> Self {
@@ -95,36 +94,12 @@ impl FileMode {
         }
     }
 
-    pub const fn new(u: u32) -> Self {
-        Self(u)
-    }
-
     pub fn infer_obj_type(self) -> BitObjType {
         match self {
             Self::DIR => BitObjType::Tree,
-            Self::EXEC | Self::REG => BitObjType::Blob,
-            _ => unreachable!("invalid filemode {}", self),
+            Self::EXEC | Self::REG | Self::LINK => BitObjType::Blob,
+            _ => unreachable!("invalid filemode for obj {}", self),
         }
-    }
-
-    pub fn is_type(self, mask: u32) -> bool {
-        self.0 & Self::IFFMT == mask
-    }
-
-    pub fn is_tree(self) -> bool {
-        self.is_type(Self::IFDIR)
-    }
-
-    pub fn is_link(self) -> bool {
-        self.is_type(Self::IFLNK)
-    }
-
-    pub fn is_reg(self) -> bool {
-        self.is_type(Self::IFREG)
-    }
-
-    pub fn as_u32(self) -> u32 {
-        self.0
     }
 }
 
@@ -132,13 +107,7 @@ impl FromStr for FileMode {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mode = Self(u32::from_str_radix(s, 8)?);
-        assert!(
-            mode == Self::DIR || mode == Self::EXEC || mode == Self::REG || mode == Self::LINK,
-            "invalid bit file mode `{}`",
-            mode
-        );
-        Ok(mode)
+        Ok(Self::new(u32::from_str_radix(s, 8)?))
     }
 }
 

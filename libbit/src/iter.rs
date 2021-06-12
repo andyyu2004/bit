@@ -1,6 +1,10 @@
+mod index_tree_iter;
 mod tree_iter;
+mod worktree_tree_iter;
 
+pub use index_tree_iter::IndexTreeIter;
 pub use tree_iter::*;
+pub use worktree_tree_iter::WorktreeTreeIter;
 
 use crate::error::{BitGenericError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
@@ -19,6 +23,14 @@ pub trait BitEntry {
     fn oid(&self) -> Oid;
     fn path(&self) -> BitPath;
     fn mode(&self) -> FileMode;
+
+    fn is_tree(&self) -> bool {
+        self.mode().is_tree()
+    }
+
+    fn is_file(&self) -> bool {
+        self.mode().is_file()
+    }
 }
 
 /// wrapper around `TreeIter` that skips the tree entries

@@ -11,7 +11,7 @@ use crate::error::BitResult;
 use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::{BitEntryIterator, BitTreeIterator, IndexTreeIter};
-use crate::lockfile::{Filelock};
+use crate::lockfile::Filelock;
 use crate::obj::{BitObj, FileMode, Oid, Tree, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
@@ -202,7 +202,7 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
     }
 
     pub fn build(mut self) -> BitResult<Tree> {
-        self.build_tree("", 0)
+        self.build_tree(BitPath::EMPTY, 0)
     }
 }
 

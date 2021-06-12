@@ -6,7 +6,7 @@ use quickcheck_macros::quickcheck;
 
 impl Arbitrary for FileMode {
     fn arbitrary(_g: &mut Gen) -> Self {
-        Self(0100644)
+        Self::new(0o100644)
     }
 }
 

@@ -38,6 +38,7 @@ pub trait TreeDiffer<'r> {
     fn on_deleted(&mut self, old: TreeIteratorEntry) -> BitResult<()>;
 }
 
+// TODO this is actually now specific to worktree index diffs
 pub struct GenericDiffer<'d, 'r, D, I, J>
 where
     D: Differ<'r>,
@@ -140,11 +141,6 @@ where
     J: BitTreeIterator,
 {
     fn build_diff(mut self) -> BitResult<WorkspaceDiff> {
-        // TODO is identical to GenericDiffer::generic_diff
-        // maybe there is a a good way to unify the two
-        // the difference is that subtrees can be skipped in TreeDiffer
-        // but Differ goes through everything as a flat list (as that is the natural representation of the index)
-        // maybe can implement TreeDiffer for IndexIter somehow then everything can use TreeDiffer which would be nice
         trace!("TreeDifferGeneric::build_diff");
         loop {
             let a = self.old_iter.peek()?;
@@ -172,7 +168,7 @@ where
     fn on_created(&mut self, new: TreeIteratorEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_created(new: {})", new.path());
         match new {
-            TreeIteratorEntry::Tree(_) => self.new_iter.collect_over_tree(&mut self.diff.new),
+            TreeIteratorEntry::Tree(..) => self.new_iter.collect_over_tree(&mut self.diff.new),
             TreeIteratorEntry::File(file) => {
                 self.diff.new.push(file);
                 self.new_iter.next()?;
@@ -197,7 +193,7 @@ where
                 self.new_iter.next()?;
             }
             (TreeIteratorEntry::Tree(_), TreeIteratorEntry::File(_)) => {
-                // ignore trees
+                // TODO write test cases for these cases
                 self.old_iter.next()?;
                 todo!("probably wrong");
             }
@@ -223,8 +219,7 @@ where
         trace!("TreeDifferGeneric::on_deleted(old: {})", old.path());
         // TODO refactor out shared code
         match old {
-            TreeIteratorEntry::Tree(_tree) =>
-                self.old_iter.collect_over_tree(&mut self.diff.deleted),
+            TreeIteratorEntry::Tree(..) => self.old_iter.collect_over_tree(&mut self.diff.deleted),
             TreeIteratorEntry::File(file) => {
                 self.diff.deleted.push(file);
                 self.old_iter.next()?;

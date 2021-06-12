@@ -169,8 +169,9 @@ impl Deserialize for TreeEntry {
     fn deserialize(r: &mut impl BufRead) -> BitResult<Self> {
         let mut buf = vec![];
         let i = r.read_until(0x20, &mut buf)?;
-        let mode =
-            FileMode(u32::from_str_radix(std::str::from_utf8(&buf[..i - 1]).unwrap(), 8).unwrap());
+        let mode = FileMode::new(
+            u32::from_str_radix(std::str::from_utf8(&buf[..i - 1]).unwrap(), 8).unwrap(),
+        );
 
         let j = r.read_until(0x00, &mut buf)?;
         // fairly disgusting way of deserializing a path..

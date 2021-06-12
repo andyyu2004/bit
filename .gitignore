@@ -2,3 +2,4 @@ target
 examples
 server*.log
 perf.data*
+flamegraph.svg

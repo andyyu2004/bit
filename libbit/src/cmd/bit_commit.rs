@@ -29,6 +29,7 @@ impl<'r> BitRepo<'r> {
         if tree == head_tree || head_tree.is_unknown() && tree == Oid::EMPTY_TREE {
             let status = self.status(Pathspec::MATCH_ALL)?;
             println!("{}", status);
+            // some of this should go into status itself
             if tree == Oid::EMPTY_TREE {
                 bail!(BitError::EMPTY_COMMIT_EMPTY_WORKTREE)
             } else if status.unstaged.new.is_empty() {
