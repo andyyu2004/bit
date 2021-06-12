@@ -25,17 +25,17 @@ impl<'r> BitRepo<'r> {
         let head_tree = self.head_tree_oid()?;
 
         // don't allow empty commits; also don't currently provide the option to do so as it's not that useful
-        if tree == head_tree {
+        // the rhs of the disjunction checks for the case of an empty initial commit
+        if tree == head_tree || head_tree.is_unknown() && tree == Oid::EMPTY_TREE {
             let status = self.status(Pathspec::MATCH_ALL)?;
             println!("{}", status);
-            if status.unstaged.new.is_empty() {
+            if tree == Oid::EMPTY_TREE {
+                bail!(BitError::EMPTY_COMMIT_EMPTY_WORKTREE)
+            } else if status.unstaged.new.is_empty() {
                 bail!(BitError::EMPTY_COMMIT_CLEAN_WORKTREE)
             } else {
                 bail!(BitError::EMPTY_COMMIT_UNTRACKED_FILES)
             }
-        } else {
-            // TODO initial commit check index entries is empty (or otherwise)?
-            // TODO also check for untracked files and show those and suggest adding them
         }
 
         let commit = self.commit_tree(parent, msg, tree)?;

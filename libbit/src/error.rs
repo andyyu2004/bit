@@ -19,6 +19,8 @@ pub enum BitError {
 
 impl BitError {
     pub const EMPTY_COMMIT_CLEAN_WORKTREE: &'static str = "nothing to commit, working tree clean";
+    pub const EMPTY_COMMIT_EMPTY_WORKTREE: &'static str =
+        "nothing to commit (create/copy files and use `git add` to track";
     pub const EMPTY_COMMIT_UNTRACKED_FILES: &'static str =
         "nothing added to commit but untracked files present (use `bit add` to track)";
 }

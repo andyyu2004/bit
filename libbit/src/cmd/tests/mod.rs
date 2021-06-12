@@ -18,5 +18,5 @@ fn test_initial_empty_commit() {
         Ok(())
     })
     .unwrap_err();
-    assert_eq!(err.to_string(), "nothing to commit (create/copy files and use `bit add` to track)");
+    assert_eq!(err.to_string(), BitError::EMPTY_COMMIT_EMPTY_WORKTREE);
 }
