@@ -13,7 +13,7 @@ pub trait BitTreeIterator: BitIterator<TreeIteratorEntry> {
     fn over(&mut self) -> BitResult<Option<Self::Item>>;
 
     /// same as `self.over` but instead appends all the non-tree entries into a container
-    // this takes a container to append to avoid a separate allocation
+    // this takes a container to append to instead of returning a vec to avoid a separate allocation
     fn collect_over_tree(&mut self, container: &mut Vec<BitIndexEntry>) -> BitResult<()> {
         let tree_entry = self.peek()?.expect("currently expected to not be called when at end");
         // debug_assert_eq!(tree_entry.mode(), FileMode::DIR);
@@ -251,16 +251,6 @@ impl<'a, 'r> IndexTreeIter<'a, 'r> {
             .map(|child| child.oid)
             .unwrap_or(Oid::UNKNOWN);
         TreeIteratorEntry::Tree(TreeEntry { mode: FileMode::DIR, path, oid })
-    }
-
-    fn create_pseudotree_if_required(&self, path: BitPath) -> Option<TreeIteratorEntry> {
-        let oid = self
-            .index
-            .tree_cache()
-            .and_then(|cache| cache.find_valid_child(path))
-            .map(|child| child.oid)
-            .unwrap_or(Oid::UNKNOWN);
-        Some(TreeIteratorEntry::Tree(TreeEntry { mode: FileMode::DIR, path, oid }))
     }
 
     fn step_over_tree(&mut self, tree_entry: TreeEntry) -> BitResult<Option<TreeIteratorEntry>> {
