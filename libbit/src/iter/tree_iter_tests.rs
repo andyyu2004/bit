@@ -1,4 +1,5 @@
 use super::*;
+use crate::pathspec::Pathspec;
 
 #[test]
 fn test_tree_iterator_step_over() -> BitResult<()> {
@@ -58,7 +59,6 @@ fn test_index_tree_iterator_step_over_root() -> BitResult<()> {
 
 #[test]
 fn test_index_tree_iterator_step_over() -> BitResult<()> {
-    // TODO can't actually run these concurrently on the same repo...
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
@@ -266,6 +266,42 @@ fn test_index_tree_iterator_next() -> BitResult<()> {
             check_next!(iter.next() => "test.txt": FileMode::REG);
             check_next!(iter.next() => "zs": FileMode::DIR);
             check_next!(iter.next() => "zs/one.txt": FileMode::REG);
+            Ok(())
+        })
+    })
+}
+// libbit/tests/repos/logic/logic-ir
+// ├── Cargo.toml
+// └── src
+//    ├── ast_lowering
+//    │  └── mod.rs
+//    ├── debug.rs
+//    ├── interned.rs
+//    ├── interner.rs
+//    ├── lib.rs
+//    ├── tls.rs
+//    └── unify.rs
+#[test]
+fn test_index_tree_iterator_on_logic_repo_index() -> BitResult<()> {
+    // in particular, this tests when there are multilevel jumps in the index
+    // if we look at the index, it contains the following entries
+    // logic-ir/Cargo.toml,
+    // logic-ir/src/ast_lowering/mod.rs,
+    // logic-ir/src/debug.rs,
+    //
+    // we must yield pseudotree `logic-ir/src` before `logic-ir/ast_lowering`
+    BitRepo::find(repos_dir!("logic"), |repo| {
+        repo.with_index(|index| {
+            // we just look inside the logic-ir directory to make this test more manageable
+            let pathspec = "logic-ir".parse::<Pathspec>()?;
+            let mut iter = pathspec.match_tree_iter(index.tree_iter());
+            dbg!(index.entries().keys().map(|(entry, _)| entry).collect::<Vec<_>>());
+            check_next!(iter.next() => "logic-ir":FileMode::DIR);
+            check_next!(iter.next() => "logic-ir/Cargo.toml":FileMode::REG);
+            check_next!(iter.next() => "logic-ir/src":FileMode::DIR);
+            check_next!(iter.next() => "logic-ir/src/ast_lowering":FileMode::DIR);
+            check_next!(iter.next() => "logic-ir/src/ast_lowering/mod.rs":FileMode::REG);
+            check_next!(iter.next() => "logic-ir/src/debug.rs":FileMode::REG);
             Ok(())
         })
     })

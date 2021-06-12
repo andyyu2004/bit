@@ -70,7 +70,7 @@ impl BitIndexInner {
     /// removes collisions where there was originally a file but was replaced by a directory
     fn remove_file_dir_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
         //? only removing entries with no merge stage (may need changes)
-        for component in entry.path.accumulative_components() {
+        for component in entry.path.cumulative_components() {
             self.remove_entry((component, MergeStage::None));
         }
         Ok(())

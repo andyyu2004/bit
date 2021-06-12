@@ -26,7 +26,7 @@ fn test_path_components() {
 #[test]
 fn test_path_accumulative_components() {
     let path = p!("foo/bar/baz");
-    let mut components = path.accumulative_components();
+    let mut components = path.cumulative_components();
     assert_eq!(components.next().unwrap(), "foo");
     assert_eq!(components.next().unwrap(), "foo/bar");
     assert_eq!(components.next().unwrap(), "foo/bar/baz");

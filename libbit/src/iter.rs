@@ -85,7 +85,7 @@ struct WorktreeIter<'r> {
 impl<'r> WorktreeIter<'r> {
     pub fn new(index: &BitIndex<'r>) -> BitResult<Self> {
         let repo = index.repo;
-        // ignore any gitignore errors for now
+        // ignoring any gitignore errors for now
         let ignore = vec![Gitignore::new(repo.workdir.join(".gitignore").as_path()).0];
         //? we collect it into a hashmap for faster lookup?
         // not sure if this is actually better than just looking up in the index's entries

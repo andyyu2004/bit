@@ -3,6 +3,7 @@ use fallible_iterator::FallibleIterator;
 use crate::error::BitResult;
 use crate::iter::BitEntry;
 use crate::obj::FileMode;
+use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 
 #[test]
@@ -63,6 +64,17 @@ fn test_diff_tree_to_tree_deleted() -> BitResult<()> {
         assert!(diff.new.is_empty());
         assert!(diff.modified.is_empty());
         assert_eq!(diff.deleted.len(), 2);
+        Ok(())
+    })
+}
+
+#[test]
+fn test_diff_head_index_todo_name() -> BitResult<()> {
+    BitRepo::find(repos_dir!("logic"), |repo| {
+        dbg!(repo.workdir);
+        let pathspec = "logic-ir".parse()?;
+        let diff = repo.diff_head_index(pathspec)?;
+        dbg!(&diff);
         Ok(())
     })
 }

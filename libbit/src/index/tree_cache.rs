@@ -55,7 +55,7 @@ impl BitTreeCache {
     pub fn invalidate_path(&mut self, path: BitPath) {
         self.entry_count = -1;
         // don't do this recursively as each path contains the full path, not just a component
-        for path in path.accumulative_components() {
+        for path in path.cumulative_components() {
             if let Some(child) = self.find_child_mut(path) {
                 child.entry_count = -1;
             }

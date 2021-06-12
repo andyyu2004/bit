@@ -253,6 +253,16 @@ impl<'a, 'r> IndexTreeIter<'a, 'r> {
         TreeIteratorEntry::Tree(TreeEntry { mode: FileMode::DIR, path, oid })
     }
 
+    fn create_pseudotree_if_required(&self, path: BitPath) -> Option<TreeIteratorEntry> {
+        let oid = self
+            .index
+            .tree_cache()
+            .and_then(|cache| cache.find_valid_child(path))
+            .map(|child| child.oid)
+            .unwrap_or(Oid::UNKNOWN);
+        Some(TreeIteratorEntry::Tree(TreeEntry { mode: FileMode::DIR, path, oid }))
+    }
+
     fn step_over_tree(&mut self, tree_entry: TreeEntry) -> BitResult<Option<TreeIteratorEntry>> {
         if let Some(tree_cache) =
             self.index.tree_cache().and_then(|cache| cache.find_valid_child(tree_entry.path))
@@ -288,12 +298,14 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
         match self.entry_iter.peek()? {
             Some(&entry) => {
                 let dir = entry.path().parent().unwrap();
-                if self.pseudotrees.insert(dir) {
-                    Ok(Some(self.create_pseudotree(dir)))
-                } else {
-                    self.entry_iter.next()?;
-                    Ok(Some(TreeIteratorEntry::File(entry)))
+                // we must check for all parents whether a pseudotree has been yielded for that tree
+                for parent in dir.cumulative_components() {
+                    if self.pseudotrees.insert(parent) {
+                        return Ok(Some(self.create_pseudotree(parent)));
+                    }
                 }
+                self.entry_iter.next()?;
+                Ok(Some(TreeIteratorEntry::File(entry)))
             }
             None => return Ok(None),
         }

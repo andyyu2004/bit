@@ -1,0 +1,50 @@
+use crate::ast::*;
+use crate::symbol::Symbol;
+
+grammar;
+
+
+Comma1<T>: Vec<T> = { 
+    <x:T> <xs:("," <T>)*> ","? => {
+        let mut v = vec![x];
+        v.extend(xs);
+        v
+    }
+}
+
+Comma<T>: Vec<T> = { 
+    <v:(<T> ",")*> <e:T?> => match e { 
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+}
+
+pub Program: Program = <(<Item> ".")*> => Program::new(<>);
+
+pub Item: Item = {
+    <Clause> => Item::Clause(<>)
+}
+
+pub Goal: Goal = {
+    <Term> => Goal::Term(<>),
+}
+
+pub Clause: Clause = {
+    "forall" "<" <vars:Comma1<Var>> ">" <clause:Clause> => Clause::Forall(vars, Box::new(clause)),
+    <Term> ":-" <Comma1<Goal>> => Clause::Horn(<>),
+    <Term> => Clause::Horn(<>, vec![]),
+}
+
+pub Var: Var = <v:r"[A-Z]\w*"> => Var::new(Symbol::intern(v));
+pub Atom: Atom = <atom:r"[a-z]\w*"> => Atom::new(Symbol::intern(atom));
+
+pub Term: Term = {
+    <Atom> "(" <Comma1<Term>> ")" => Term::Structure(<>),
+    <Atom> => Term::Atom(<>),
+    <Var> => Term::Var(<>),
+}
+

@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "logic",
+    "logic-core",
+    "logic-error",
+    "logic-engine",
+    "logic-ir",
+    "logic-parse",
+    "logic-util",
+]

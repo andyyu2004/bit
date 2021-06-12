@@ -100,7 +100,7 @@ impl BitPath {
 
     /// similar to `[BitPath::components](crate::path::BitPath::components)`
     /// foo/bar/baz -> [foo, foo/bar, foo/bar/baz]
-    pub fn accumulative_components(self) -> impl Iterator<Item = BitPath> {
+    pub fn cumulative_components(self) -> impl Iterator<Item = BitPath> {
         self.components().iter().scan(BitPath::EMPTY, |ps, p| {
             *ps = ps.join(p);
             Some(*ps)
