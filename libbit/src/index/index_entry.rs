@@ -120,20 +120,6 @@ pub struct BitIndexEntry {
     pub path: BitPath,
 }
 
-impl BitEntry for BitIndexEntry {
-    fn oid(&self) -> Oid {
-        self.oid
-    }
-
-    fn path(&self) -> BitPath {
-        self.path
-    }
-
-    fn mode(&self) -> FileMode {
-        self.mode
-    }
-}
-
 impl From<TreeEntry> for BitIndexEntry {
     fn from(entry: TreeEntry) -> Self {
         // its fine to zero most of these fields as we know the hash, and that is the only thing we
@@ -223,6 +209,20 @@ impl BitIndexEntry {
     }
 }
 
+impl BitEntry for BitIndexEntry {
+    fn oid(&self) -> Oid {
+        self.oid
+    }
+
+    fn path(&self) -> BitPath {
+        self.path
+    }
+
+    fn mode(&self) -> FileMode {
+        self.mode
+    }
+}
+
 impl PartialOrd for BitIndexEntry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
@@ -232,12 +232,6 @@ impl PartialOrd for BitIndexEntry {
 // this impl is inconsistent with Eq, but not sure what to do about it..
 impl Ord for BitIndexEntry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.path.cmp(&other.path).then_with(|| self.stage().cmp(&other.stage()))
-    }
-}
-
-impl BitOrd for BitIndexEntry {
-    fn bit_cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.path.cmp(&other.path).then_with(|| self.stage().cmp(&other.stage()))
     }
 }

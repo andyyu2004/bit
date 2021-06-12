@@ -120,7 +120,7 @@ fn test_tree_iterator_collect_over_non_root() -> BitResult<()> {
 #[test]
 fn test_tree_tree_iterator_step_over_multiple_nested() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        let oid = tree_oid! {
+        let oid = tree! {
             outer {
                 a {
                     x
@@ -158,7 +158,7 @@ fn test_tree_tree_iterator_step_over_multiple_nested() -> BitResult<()> {
 fn test_tree_tree_iterator_step_over_multiple() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         // this tree should match the directory structure below
-        let oid = tree_oid! {
+        let oid = tree! {
             "dir0" {
                 "test.txt"
             }
@@ -215,7 +215,7 @@ fn test_tree_tree_iterator_matches_index_tree_iterator() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         repo.with_index(|index| {
             // this tree should match the directory structure below
-            let oid = tree_oid! {
+            let oid = tree! {
                 "dir" {
                     "test.txt"
                 }

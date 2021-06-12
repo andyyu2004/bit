@@ -46,7 +46,7 @@ fn test_diff_head_prime_to_head() -> BitResult<()> {
 fn test_diff_tree_to_tree_deleted() -> BitResult<()> {
     // TODO test fails
     BitRepo::with_empty_repo(|repo| {
-        let a = tree_oid! {
+        let a = tree! {
             bar
             foo {
                 a
@@ -55,7 +55,7 @@ fn test_diff_tree_to_tree_deleted() -> BitResult<()> {
             qux
         };
 
-        let b = tree_oid! {
+        let b = tree! {
             bar
             qux
         };
@@ -79,6 +79,62 @@ fn test_diff_head_index_on_logic_repo() -> BitResult<()> {
         assert!(diff.deleted.is_empty());
         assert_eq!(diff.modified.len(), 1);
 
+        Ok(())
+    })
+}
+
+#[test]
+fn test_tree_diff_replace_dir_with_file() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let a = tree! {
+            foo {
+                a
+                b
+            }
+        };
+        let b = tree! {
+            foo
+        };
+        let diff = repo.diff_tree_to_tree(a, b)?;
+        assert!(diff.modified.is_empty());
+
+        assert_eq!(diff.new.len(), 1);
+        assert_eq!(diff.new[0].path, "foo");
+
+        assert_eq!(diff.deleted.len(), 2);
+        assert_eq!(diff.deleted[0].path, "foo/a");
+        assert_eq!(diff.deleted[1].path, "foo/b");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_tree_diff_replace_file_with_dir() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let a = tree! {
+            x
+            a
+            foo
+        };
+
+        let b = tree! {
+            a
+            x
+            foo {
+                a
+                b
+            }
+        };
+
+        let diff = repo.diff_tree_to_tree(a, b)?;
+        assert!(diff.modified.is_empty());
+
+        assert_eq!(diff.deleted.len(), 1);
+        assert_eq!(diff.deleted[0].path, "foo");
+
+        assert_eq!(diff.new.len(), 2);
+        assert_eq!(diff.new[0].path, "foo/a");
+        assert_eq!(diff.new[1].path, "foo/b");
         Ok(())
     })
 }

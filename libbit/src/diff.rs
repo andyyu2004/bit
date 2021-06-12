@@ -106,7 +106,7 @@ where
                 (Some(old), Some(new)) => {
                     // there is an old record that no longer has a matching new record
                     // therefore it has been deleted
-                    match old.bit_cmp(new) {
+                    match diff_cmp(old, new) {
                         Ordering::Less => on_deleted!(old),
                         Ordering::Equal => on_modified!(old => new),
                         Ordering::Greater => on_created!(new),
@@ -135,6 +135,12 @@ impl<'r, I, J> TreeDifferGeneric<'r, I, J> {
     }
 }
 
+// comparison function for differs
+// cares about paths first, then modes second
+fn diff_cmp(a: &impl BitEntry, b: &impl BitEntry) -> std::cmp::Ordering {
+    a.path().cmp(&b.path()).then_with(|| a.mode().cmp(&b.mode()))
+}
+
 impl<'r, I, J> TreeDifferGeneric<'r, I, J>
 where
     I: BitTreeIterator,
@@ -149,7 +155,7 @@ where
                 (None, None) => break,
                 (None, Some(new)) => self.on_created(new)?,
                 (Some(old), None) => self.on_deleted(old)?,
-                (Some(old), Some(new)) => match old.bit_cmp(&new) {
+                (Some(old), Some(new)) => match diff_cmp(&old, &new) {
                     Ordering::Less => self.on_deleted(old)?,
                     Ordering::Equal => self.on_match(old, new)?,
                     Ordering::Greater => self.on_created(new)?,
@@ -187,10 +193,12 @@ where
                 self.new_iter.over()?;
             }
             (FileMode::TREE, FileMode::TREE) => {
+                // two trees with non matching oids, then step inside for both
                 self.old_iter.next()?;
                 self.new_iter.next()?;
             }
             _ if old.is_file() && new.is_file() && old.oid() == new.oid() => {
+                // matching files
                 debug_assert!(old.oid().is_known() && new.oid().is_known());
                 self.old_iter.next()?;
                 self.new_iter.next()?;
@@ -198,8 +206,10 @@ where
             _ => {
                 debug_assert!(
                     old.is_file() && new.is_file(),
-                    "todo cases comparsing tree to non tree"
+                    "tree vs nontree should not call `on_match`, check the ordering function.
+                    if two entries have the same path then files should come before directories (as per `diff_cmp`)"
                 );
+                // non matching files
                 self.diff.modified.push((old, new));
                 self.old_iter.next()?;
                 self.new_iter.next()?;
@@ -211,7 +221,6 @@ where
 
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_deleted(old: {})", old.path());
-        // TODO refactor out shared code
         if old.is_tree() {
             self.old_iter.collect_over_tree(&mut self.diff.deleted)
         } else {

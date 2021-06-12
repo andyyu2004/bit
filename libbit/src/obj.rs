@@ -41,14 +41,17 @@ impl Display for BitObjKind {
     }
 }
 
-#[derive(Copy, PartialEq, Eq, Clone, TryFromPrimitive)]
+#[derive(Copy, PartialEq, Eq, Clone, TryFromPrimitive, PartialOrd, Ord)]
 #[repr(u32)]
+// the ordering of variants is significant here as it implements `Ord`
+// we want `TREE` to be ordered after the "file" variants
+// don't know about `GITLINK` yet
 pub enum FileMode {
     // TODO rename to tree
-    TREE     = 0o40000,
     REG     = 0o100644,
     EXEC    = 0o100755,
     LINK    = 0o120000,
+    TREE    = 0o40000,
     GITLINK = 0o160000,
 }
 

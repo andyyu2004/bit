@@ -377,11 +377,11 @@ macro_rules! tree_entry {
         file_entry!($path)
     };
     ($path:literal { $($subtree:tt)* }) => {{
-        let tree = tree!( $($subtree)* );
+        let tree = tree_obj!( $($subtree)* );
         dir_entry!($path, tree)
     }};
     ($path:ident { $($subtree:tt)* }) => {{
-        let tree = tree!( $($subtree)* );
+        let tree = tree_obj!( $($subtree)* );
         dir_entry!(stringify!($path), tree)
     }};
 }
@@ -412,7 +412,8 @@ macro_rules! tree_entries {
     }};
 }
 
-// uses tls to access repo
+/// macro to create a `Tree`
+/// uses tls to access repo, so must be used when inside a repo
 /// grammar
 /// <tree>       ::= { <tree-entry>* }
 /// <tree-entry> ::= <path> | <path> <tree>
@@ -420,16 +421,16 @@ macro_rules! tree_entries {
 /// note the outermost tree doesn't have explicit braces,
 /// its recommended to use the `{}` delimiters for the macro invocation
 /// i.e. tree! { .. } not tree! ( .. ) or tree! [ .. ]
-macro_rules! tree {
+macro_rules! tree_obj {
     ( $($entries:tt)* ) => {
         crate::obj::Tree::new(tree_entries!([] $($entries)* ))
     };
 }
 
-/// same as `tree!` but writes it to the repo and returns the oid
-macro_rules! tree_oid {
+/// same as `tree_obj!` but writes it to the repo and returns the oid
+macro_rules! tree {
     ( $($entries:tt)* ) => {{
-        let tree = tree! { $($entries)* };
+        let tree = tree_obj! { $($entries)* };
         crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap()
     }};
 }
@@ -437,7 +438,7 @@ macro_rules! tree_oid {
 #[test]
 fn test_tree_macro() -> crate::error::BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        assert_eq!(tree! {}, crate::obj::Tree::new(btreeset! {}));
+        assert_eq!(tree_obj! {}, crate::obj::Tree::new(btreeset! {}));
 
         assert_eq!(
             tree_entries!([] foo "bar.l"),
@@ -458,7 +459,7 @@ fn test_tree_macro() -> crate::error::BitResult<()> {
             }
         );
 
-        let tree = tree! {
+        let tree = tree_obj! {
             foo
             bar {
                 baz

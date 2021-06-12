@@ -97,6 +97,7 @@ impl<'r> TreeIter<'r> {
         Self { repo, previous_len: 0, entry_stack }
     }
 }
+
 impl<'r> FallibleIterator for TreeIter<'r> {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
@@ -129,7 +130,6 @@ impl<'r> FallibleIterator for TreeIter<'r> {
                     }
                     // ignore submodules for now
                     FileMode::GITLINK => continue,
-                    _ => unreachable!("found unknown filemode `{}`", entry.mode),
                 },
                 None => return Ok(None),
             }
@@ -138,11 +138,14 @@ impl<'r> FallibleIterator for TreeIter<'r> {
 }
 impl<'r> BitTreeIterator for TreeIter<'r> {
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
-        // TODO does this truncate to previous_len technique always work?
-        // seems dodgy but haven't found a counterexample yet
         match self.next()? {
             Some(entry) => {
                 if entry.mode() == FileMode::TREE {
+                    // we implement stepping over by keeping track of the stack height (in `Self::next`)
+                    // if `next` yields a tree entry we can skip over all the new entries by just throwing away
+                    // all the new entries on the stack
+                    // the `previous_len` is always up to date as we just called `next` which must have run through the
+                    // `FileMode::Tree` path
                     self.entry_stack.truncate(self.previous_len);
                 }
                 Ok(Some(entry))
