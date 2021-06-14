@@ -27,7 +27,9 @@ options.
 
 Clone repository and build using the cargo package manager.
 
+The following should all be performed from within the cloned directory. 
+
 `cargo b --release`
 
 To run, you can either use cargo as above `cargo r --release -- [<bit args>...]`.
-Alternatively, you can install `bit` locally as a binary using `cargo install --path .`.
+Alternatively, you can install `bit` locally as a binary using `cargo install --path bit`.
