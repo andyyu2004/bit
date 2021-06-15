@@ -8,28 +8,34 @@ Wouldn't recommend using this to manipulate your valued repositories yet!
 Currently implements the following commands with a subset of the
 same options as git.
 
-- bit init
-- bit add
-- bit branch
-- bit commit
-- bit hash-object
-- bit cat-file
-- bit log
-- bit ls-files
-- bit commit-tree
-- bit config
-- bit write-tree
+-   bit init
+-   bit add
+-   bit branch
+-   bit commit
+-   bit hash-object
+-   bit cat-file
+-   bit log
+-   bit ls-files
+-   bit commit-tree
+-   bit config
+-   bit write-tree
 
 Run commands and subcommands with the `--help` flag to see all available
 options.
 
 ## Installation
 
+Install that latest rust nightly build using [rustup](https://rustup.rs/).
+
 Clone repository and build using the cargo package manager.
 
-The following should all be performed from within the cloned directory. 
+The following should all be performed from within the cloned directory.
 
 `cargo b --release`
 
 To run, you can either use cargo as above `cargo r --release -- [<bit args>...]`.
 Alternatively, you can install `bit` locally as a binary using `cargo install --path bit`.
+
+# Warning
+
+This has been tested on arch and ubuntu only. I suspect this won't work on windows mostly due to my handling of paths.
