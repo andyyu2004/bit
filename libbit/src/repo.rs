@@ -147,6 +147,29 @@ impl<'r> RepoCtxt<'r> {
 }
 
 impl<'r> BitRepo<'r> {
+    /// returns `None` if the reference does not yet exist
+    // don't think this can be written in terms of `fully_resolve_ref` below
+    // if we were to do something like `fully_resolve_ref().ok()`, then all errors will result in None
+    // which is not quite right
+    pub fn try_fully_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<Option<Oid>> {
+        match self.resolve_ref(reference)? {
+            BitRef::Direct(oid) => Ok(Some(oid)),
+            BitRef::Symbolic(_) => Ok(None),
+        }
+    }
+
+    pub fn partially_resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+        self.refdb()?.partially_resolve(reference.into())
+    }
+
+    pub fn resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+        self.refdb()?.resolve(reference.into())
+    }
+
+    pub fn fully_resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<Oid> {
+        self.refdb()?.fully_resolve(reference.into())
+    }
+
     pub fn default_signature(&self) -> BitResult<BitSignature> {
         todo!()
         // BitSignature { name: self.config, email: , time: () }
@@ -309,7 +332,7 @@ impl<'r> BitRepo<'r> {
 
     pub fn create_branch(self, sym: SymbolicRef, from: SymbolicRef) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
-        let resolved = from.fully_resolve(self)?;
+        let resolved = self.fully_resolve_ref(from)?;
         self.refdb()?.create_branch(sym, resolved.into())
     }
 

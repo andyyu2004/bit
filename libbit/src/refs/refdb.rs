@@ -1,5 +1,5 @@
 use super::{BitRef, BitReflog, SymbolicRef};
-use crate::error::BitResult;
+use crate::error::{BitError, BitResult};
 use crate::lockfile::{Filelock, Lockfile, LockfileFlags};
 use crate::obj::Oid;
 use crate::path::BitPath;
@@ -7,6 +7,7 @@ use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
 
 pub struct BitRefDb<'r> {
     repo: BitRepo<'r>,
@@ -36,8 +37,33 @@ pub trait BitRefDbBackend {
     fn update(&self, sym: SymbolicRef, to: BitRef, cause: RefUpdateCause) -> BitResult<()>;
     fn delete(&self, sym: SymbolicRef) -> BitResult<()>;
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool>;
-
     fn read_reflog(&self, sym: SymbolicRef) -> BitResult<Filelock<BitReflog>>;
+
+    /// partially resolve means resolves the reference one layer
+    /// e.g. HEAD -> refs/heads/master
+    fn partially_resolve(&self, reference: BitRef) -> BitResult<BitRef>;
+
+    /// resolves the reference as much as possible.
+    /// if the symref points to a path that doesn't exist, then the value of the symref itself is returned.
+    /// i.e. if `HEAD` -> `refs/heads/master` which doesn't yet exist, then `refs/heads/master` will be
+    /// returned iff a symbolic ref points at a non-existing branch
+    fn resolve(&self, reference: BitRef) -> BitResult<BitRef> {
+        match self.partially_resolve(reference)? {
+            BitRef::Direct(oid) => Ok(BitRef::Direct(oid)),
+            // avoid infinite loops as partially resolve may return the reference unchanged
+            r @ BitRef::Symbolic(..) if r == reference => Ok(reference),
+            BitRef::Symbolic(sym) => self.resolve(BitRef::Symbolic(sym)),
+        }
+    }
+
+    /// resolves a reference to an oid
+    fn fully_resolve(&self, reference: BitRef) -> BitResult<Oid> {
+        match self.resolve(reference)? {
+            BitRef::Direct(oid) => Ok(oid),
+            BitRef::Symbolic(sym) => bail!(BitError::NonExistentSymRef(sym)),
+        }
+    }
+
     fn log(
         &self,
         sym: SymbolicRef,
@@ -104,6 +130,41 @@ impl<'r> BitRefDbBackend for BitRefDb<'r> {
     fn read_reflog(&self, sym: SymbolicRef) -> BitResult<Filelock<BitReflog>> {
         let path = self.join_log(sym.path);
         Filelock::lock(path)
+    }
+
+    fn partially_resolve(&self, reference: BitRef) -> BitResult<BitRef> {
+        match reference {
+            BitRef::Direct(_) => Ok(reference),
+            BitRef::Symbolic(sym) => {
+                let repo = self.repo;
+                let ref_path = repo.relative_path(sym.path);
+                if !ref_path.exists() {
+                    return Ok(reference);
+                }
+
+                // TODO check second parameter
+                let r = Lockfile::with_readonly(ref_path, LockfileFlags::SET_READONLY, |_| {
+                    let contents = std::fs::read_to_string(ref_path)?;
+                    // symbolic references can be recursive
+                    // i.e. HEAD -> refs/heads/master -> <oid>
+                    BitRef::from_str(contents.trim_end())
+                })?;
+
+                if let BitRef::Direct(oid) = r {
+                    ensure!(
+                        repo.obj_exists(oid)?,
+                        "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
+                        ref_path,
+                        oid,
+                        sym
+                    );
+                }
+
+                debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, r);
+
+                Ok(r)
+            }
+        }
     }
 }
 
