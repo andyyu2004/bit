@@ -41,9 +41,9 @@ impl BitIndexInner {
         self.invalidate_tree_cache_path(entry.path)
     }
 
-    pub fn remove_entry(&mut self, key: (BitPath, MergeStage)) {
+    pub fn remove_entry(&mut self, key @ (path, _): (BitPath, MergeStage)) {
         self.entries.remove(&key);
-        self.invalidate_tree_cache_path(key.0)
+        self.invalidate_tree_cache_path(path)
     }
 
     pub fn invalidate_tree_cache_path(&mut self, path: BitPath) {

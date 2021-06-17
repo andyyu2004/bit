@@ -100,7 +100,7 @@ impl Cmd for BitDiffCliOpts {
             }
         }
 
-        let mut formatter: DiffFormatter = DiffFormatter::new(repo)?;
+        let mut formatter = DiffFormatter::new(repo)?;
         status.apply(&mut formatter)?;
         formatter.pager.wait()?;
         Ok(())
