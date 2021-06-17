@@ -1,12 +1,12 @@
 //! the diff in this module refers to workspace diffs (e.g. tree-to-index, index-to-worktree, tree-to-tree diffs etc)
 
-use crate::core::BitOrd;
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
-use crate::obj::{BitObj, FileMode, Oid};
+use crate::obj::{FileMode, Oid};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
@@ -232,6 +232,16 @@ where
 }
 
 impl<'r> BitRepo<'r> {
+    /// diff the tree belonging to the commit pointed to by `reference` with the index
+    pub fn diff_ref_index(self, reference: BitRef, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
+        let commit_oid = self.try_fully_resolve_ref(reference)?;
+        let tree_oid = match commit_oid {
+            Some(oid) => self.read_obj(oid)?.into_commit().tree(),
+            None => Oid::UNKNOWN,
+        };
+        self.diff_tree_index(tree_oid, pathspec)
+    }
+
     pub fn diff_tree_index(self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         self.with_index_mut(|index| index.diff_tree(tree, pathspec))
     }

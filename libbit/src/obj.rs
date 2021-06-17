@@ -135,7 +135,7 @@ impl Treeish for BitObjKind {
         match self {
             Self::Tree(tree) => Ok(tree),
             // panicking instead of erroring as this should be called only with certainty
-            _ => panic!("expected tree"),
+            _ => panic!("expected tree, found `{}`", self.obj_ty()),
         }
     }
 }
@@ -170,6 +170,10 @@ impl BitObjKind {
             BitObjKind::Blob(blob) => blob,
             _ => panic!("expected blob"),
         }
+    }
+
+    pub fn is_tree(&self) -> bool {
+        matches!(self, Self::Tree(..))
     }
 }
 

@@ -88,6 +88,7 @@ pub struct TreeIter<'r> {
 
 impl<'r> TreeIter<'r> {
     pub fn new(repo: BitRepo<'r>, oid: Oid) -> Self {
+        debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_tree());
         // if the `oid` is unknown then we just want an empty iterator
         let entry_stack = if oid.is_known() {
             vec![(BitPath::EMPTY, TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE })]

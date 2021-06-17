@@ -10,6 +10,9 @@ use std::fmt::{self, Display, Formatter};
 use std::path::Path;
 use std::str::FromStr;
 
+// TODOs
+// check the pathspec is actually within the repository
+
 // pathspec needs to be copy/static due to some lifetimes below
 // or at least its much more convenient this way
 // match_iterator is difficult otherwise

@@ -1,9 +1,7 @@
-use fallible_iterator::FallibleIterator;
-
 use crate::error::BitResult;
-use crate::iter::BitEntry;
 use crate::obj::FileMode;
-
+use crate::pathspec::Pathspec;
+use crate::refs::{BitRef, SymbolicRef};
 use crate::repo::BitRepo;
 
 #[test]
@@ -64,6 +62,20 @@ fn test_diff_tree_to_tree_deleted() -> BitResult<()> {
         assert!(diff.new.is_empty());
         assert!(diff.modified.is_empty());
         assert_eq!(diff.deleted.len(), 2);
+        Ok(())
+    })
+}
+
+// check empty non existent head is considered an empty tree/iterator
+#[test]
+fn test_diff_no_head_with_index() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        touch!(repo: "foo");
+        bit_add_all!(repo);
+        let diff = repo.diff_ref_index(BitRef::HEAD, Pathspec::MATCH_ALL)?;
+        assert!(diff.deleted.is_empty());
+        assert!(diff.modified.is_empty());
+        assert_eq!(diff.new.len(), 1);
         Ok(())
     })
 }

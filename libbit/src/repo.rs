@@ -296,10 +296,6 @@ impl<'r> BitRepo<'r> {
         self.resolve_ref(head)
     }
 
-    pub fn partially_resolve_head(self) -> BitResult<BitRef> {
-        self.read_head()?.partially_resolve(self)
-    }
-
     /// reads the contents of `HEAD`
     /// e.g. if `HEAD` -> `ref: refs/heads/master`
     /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
