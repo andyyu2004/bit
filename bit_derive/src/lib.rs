@@ -2,6 +2,39 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::*;
 
+#[proc_macro_derive(BitObject)]
+pub fn derive_bit_object(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(item as DeriveInput);
+
+    let name = input.ident;
+
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let expanded = match input.data {
+        Data::Enum(data) => {
+            let arms = data.variants.iter().map(|variant| {
+                let name = &variant.ident;
+                quote! {
+                    Self::#name(x) => x.obj_cached(),
+                }
+            });
+
+            quote! {
+                impl #impl_generics crate::obj::BitObject for #name #ty_generics #where_clause {
+                    fn obj_cached(&self) -> &BitObjCached {
+                        match self {
+                            #(#arms)*
+                        }
+                    }
+                }
+            }
+        }
+        Data::Struct(..) | Data::Union(..) => panic!("enums only"),
+    };
+
+    proc_macro::TokenStream::from(expanded)
+}
+
 #[proc_macro_derive(BitArbitrary)]
 pub fn derive_bit_quickcheck(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);

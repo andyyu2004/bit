@@ -123,7 +123,7 @@ fn prop_bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<
         // basically all that it does internally
         let blob = repo.read_obj(hash)?.into_blob();
 
-        assert_eq!(blob.bytes, bytes);
+        assert_eq!(blob.bytes(), bytes);
         Ok(())
     })
 }

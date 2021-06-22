@@ -22,7 +22,7 @@ impl<R: BufRead + Seek> BufReadSeek for R {
 // however, we do wish BitObj to be object safe
 // this is essentially an empty trait when used as a trait object
 pub trait Deserialize {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized;
 
@@ -30,7 +30,7 @@ pub trait Deserialize {
     where
         Self: Sized,
     {
-        Self::deserialize(&mut BufReader::new(reader))
+        Self::deserialize(BufReader::new(reader))
     }
 }
 
@@ -43,7 +43,7 @@ pub trait Deserialize {
 /// For example, in [crate::obj::RefDelta] and [crate::obj::OfsDelta], the size parameter is interpreted
 /// as the size of the delta not not including the offset/baseoid.
 pub trait DeserializeSized {
-    fn deserialize_sized(reader: &mut impl BufRead, size: u64) -> BitResult<Self>
+    fn deserialize_sized(reader: impl BufRead, size: u64) -> BitResult<Self>
     where
         Self: Sized;
 
@@ -58,12 +58,12 @@ pub trait DeserializeSized {
     where
         Self: Sized,
     {
-        Self::deserialize_sized(&mut BufReader::new(reader), size)
+        Self::deserialize_sized(BufReader::new(reader), size)
     }
 }
 
 impl<D: Deserialize> DeserializeSized for D {
-    fn deserialize_sized(reader: &mut impl BufRead, _size: u64) -> BitResult<Self>
+    fn deserialize_sized(reader: impl BufRead, _size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {

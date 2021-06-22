@@ -1,4 +1,4 @@
-use super::{BitObj, BitObjShared, BitObjType};
+use super::{BitObjCached, BitObject};
 use crate::delta::Delta;
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt};
@@ -7,7 +7,7 @@ use std::io::prelude::*;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct OfsDelta {
-    obj: BitObjShared,
+    obj: BitObjCached,
     pub offset: u64,
     pub delta: Delta,
 }
@@ -19,19 +19,20 @@ impl Serialize for OfsDelta {
 }
 
 impl DeserializeSized for OfsDelta {
-    fn deserialize_sized(reader: &mut impl BufRead, delta_size: u64) -> BitResult<Self>
+    fn deserialize_sized(mut reader: impl BufRead, delta_size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {
-        let offset = reader.read_offset()?;
-        let delta = Delta::deserialize_sized(&mut reader.as_zlib_decode_stream(), delta_size)?;
-        let obj = BitObjShared::new(BitObjType::OfsDelta);
-        Ok(Self { obj, offset, delta })
+        let _offset = reader.read_offset()?;
+        let _delta = Delta::deserialize_sized(&mut reader.as_zlib_decode_stream(), delta_size)?;
+        todo!()
+        // let obj = BitObjCached::new(BitObjType::OfsDelta);
+        // Ok(Self { obj, offset, delta })
     }
 }
 
-impl BitObj for OfsDelta {
-    fn obj_shared(&self) -> &BitObjShared {
+impl BitObject for OfsDelta {
+    fn obj_cached(&self) -> &BitObjCached {
         &self.obj
     }
 }

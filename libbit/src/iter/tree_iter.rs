@@ -115,7 +115,8 @@ impl<'r> FallibleIterator for TreeIter<'r> {
                         self.previous_len = self.entry_stack.len();
                         self.entry_stack.extend(
                             tree.entries
-                                .into_iter()
+                                .iter()
+                                .copied()
                                 .rev()
                                 // TODO we have to filter out here for now otherwise peek may blow up
                                 .filter(|entry| entry.mode != FileMode::GITLINK)

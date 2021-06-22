@@ -1,5 +1,6 @@
 use crate::error::BitResult;
-use crate::obj::{BitObj, BitObjKind, BitObjType, Blob, Oid};
+use crate::hash;
+use crate::obj::{BitObjType, MutableBlob, Oid, WritableObject};
 use crate::repo::BitRepo;
 use std::fs::File;
 use std::io::BufReader;
@@ -21,17 +22,19 @@ impl<'r> BitRepo<'r> {
 
     pub fn hash_object(&self, opts: BitHashObjectOpts) -> BitResult<Oid> {
         let path = opts.path.canonicalize()?;
-        let reader = &mut BufReader::new(File::open(&path)?);
-        let object = match opts.objtype {
+        let reader = BufReader::new(File::open(&path)?);
+        let obj = match opts.objtype {
             BitObjType::Tree => todo!(),
             BitObjType::Tag => todo!(),
             BitObjType::Commit => todo!(),
             //BitObjKind::Commit(Commit::deserialize_to_end(reader)?),
-            BitObjType::Blob => BitObjKind::Blob(Blob::from_reader(reader)?),
+            BitObjType::Blob => Box::new(MutableBlob::from_reader(reader)?),
             BitObjType::OfsDelta => todo!(),
             BitObjType::RefDelta => todo!(),
         };
 
-        if opts.do_write { self.write_obj(&object) } else { Ok(object.oid()) }
+        let obj: &dyn WritableObject = obj.as_ref();
+
+        if opts.do_write { self.write_obj(obj) } else { hash::hash_obj(obj) }
     }
 }

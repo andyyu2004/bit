@@ -1,8 +1,9 @@
 use crate::error::{BitError, BitResult, BitResultExt};
-
+use crate::hash;
 use crate::iter::DirIter;
 use crate::lockfile::{Lockfile, LockfileFlags};
-use crate::obj::{self, BitId, BitObj, BitObjHeader, BitObjKind, Oid, PartialOid};
+use crate::obj;
+use crate::obj::*;
 use crate::pack::Pack;
 use crate::path::BitPath;
 use arrayvec::ArrayVec;
@@ -72,9 +73,13 @@ impl BitObjDbBackend for BitObjDb {
 
     backend_method!(read_header: BitId => BitObjHeader);
 
-    backend_method!(write: &dyn BitObj => Oid);
+    backend_method!(write: &dyn WritableObject => Oid);
 
     backend_method!(expand_prefix: PartialOid => Oid);
+
+    fn read_raw(&self, _id: BitId) -> BitResult<BitOdbRawObj<BitFileStream>> {
+        todo!()
+    }
 
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
         //? better way to write this?
@@ -94,9 +99,14 @@ impl BitObjDbBackend for BitObjDb {
 }
 
 pub trait BitObjDbBackend {
-    fn read(&self, id: BitId) -> BitResult<BitObjKind>;
+    fn read(&self, id: BitId) -> BitResult<BitObjKind> {
+        trace!("BitLooseObjDb::read(id: {})", id);
+        self.read_raw(id).and_then(BitObjKind::from_odb_obj)
+    }
+
+    fn read_raw(&self, id: BitId) -> BitResult<BitOdbRawObj<BitFileStream>>;
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader>;
-    fn write(&self, obj: &dyn BitObj) -> BitResult<Oid>;
+    fn write(&self, obj: &dyn WritableObject) -> BitResult<Oid>;
     fn exists(&self, id: BitId) -> BitResult<bool>;
     /// return a vector of oids that have a matching prefix
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>>;
@@ -143,20 +153,30 @@ impl BitLooseObjDb {
         if path.exists() { Ok(path) } else { Err(anyhow!(BitError::ObjectNotFound(oid.into()))) }
     }
 
-    fn read_stream(&self, id: impl Into<BitId>) -> BitResult<impl BufRead> {
+    fn read_stream(&self, id: impl Into<BitId>) -> BitResult<BitFileStream> {
         let reader = File::open(self.locate_obj(id)?)?;
         Ok(BufReader::new(ZlibDecoder::new(reader)))
     }
 }
 
+type BitFileStream = impl BufRead;
+
 impl BitObjDbBackend for BitLooseObjDb {
-    fn read(&self, id: BitId) -> BitResult<BitObjKind> {
-        trace!("BitLooseObjDb::read(id: {})", id);
+    // fn read(&self, id: BitId) -> BitResult<BitObjKind> {
+    //     trace!("BitLooseObjDb::read(id: {})", id);
+    //     let oid = self.expand_id(id)?;
+    //     let mut stream = self.read_stream(oid)?;
+    //     let obj = obj::read_obj(&mut stream)?;
+    //     // obj.set_oid(oid);
+    //     Ok(obj)
+    // }
+
+    fn read_raw(&self, id: BitId) -> BitResult<BitOdbRawObj<BitFileStream>> {
+        trace!("BitLooseObjDb::read_raw(id: {})", id);
         let oid = self.expand_id(id)?;
         let mut stream = self.read_stream(oid)?;
-        let obj = obj::read_obj(&mut stream)?;
-        obj.set_oid(oid);
-        Ok(obj)
+        let BitObjHeader { obj_type, size } = obj::read_obj_header(&mut stream)?;
+        Ok(BitOdbRawObj::new(oid, obj_type, size, stream))
     }
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
@@ -164,9 +184,9 @@ impl BitObjDbBackend for BitLooseObjDb {
         obj::read_obj_header(&mut stream)
     }
 
-    fn write(&self, obj: &dyn BitObj) -> BitResult<Oid> {
+    fn write(&self, obj: &dyn WritableObject) -> BitResult<Oid> {
         let bytes = obj.serialize_with_headers()?;
-        let oid = obj.oid();
+        let oid = hash::hash_bytes(&bytes);
         let path = self.obj_path(oid);
 
         if path.as_path().exists() {
@@ -263,6 +283,10 @@ impl BitObjDbBackend for BitPackedObjDb {
         bail!(BitError::ObjectNotFound(id))
     }
 
+    fn read_raw(&self, _id: BitId) -> BitResult<BitOdbRawObj<BitFileStream>> {
+        todo!()
+    }
+
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
         let oid = self.expand_id(id)?;
         for pack in self.packs.borrow_mut().iter_mut() {
@@ -271,7 +295,7 @@ impl BitObjDbBackend for BitPackedObjDb {
         bail!(BitError::ObjectNotFound(id))
     }
 
-    fn write(&self, _obj: &dyn BitObj) -> BitResult<Oid> {
+    fn write(&self, _obj: &dyn WritableObject) -> BitResult<Oid> {
         panic!("writing directly to pack backend")
     }
 

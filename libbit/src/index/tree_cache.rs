@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::obj::{BitObj, BitObjKind, Oid, Tree};
+use crate::obj::{BitObjKind, BitObject, Oid, Tree};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -124,11 +124,11 @@ impl Serialize for BitTreeCache {
 }
 
 impl Deserialize for BitTreeCache {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
-        let tree_cache = Self::deserialize_inner(reader)?;
+        let tree_cache = Self::deserialize_inner(&mut reader)?;
         assert!(reader.is_at_eof()?);
         Ok(tree_cache)
     }

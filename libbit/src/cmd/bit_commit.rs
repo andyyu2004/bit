@@ -1,5 +1,5 @@
 use crate::error::{BitError, BitResult};
-use crate::obj::{BitObj, Oid};
+use crate::obj::Oid;
 use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind};
 use crate::repo::BitRepo;
@@ -39,14 +39,14 @@ impl<'r> BitRepo<'r> {
             }
         }
 
-        let commit = self.commit_tree(parent, msg, tree)?;
-        let oid = commit.oid();
+        let oid = self.commit_tree(parent, msg, tree)?;
+        let commit = self.read_obj(oid)?.into_commit();
 
         // TODO print status of commit
         // include initial commit if it is one
         // probably amend too (check with git)
         let cause = RefUpdateCause::Commit {
-            subject: commit.message.subject,
+            subject: commit.message.subject.to_owned(),
             kind: if head_tree.is_known() {
                 RefUpdateCommitKind::Normal
             } else {

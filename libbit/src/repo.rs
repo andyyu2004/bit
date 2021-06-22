@@ -1,11 +1,13 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndex;
-use crate::obj::{BitId, BitObj, BitObjHeader, BitObjKind, Blob, Oid, PartialOid, Tree, Treeish};
+use crate::obj::{
+    BitId, BitObjHeader, BitObjKind, MutableBlob, Oid, PartialOid, Tree, Treeish, WritableObject
+};
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
 use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, SymbolicRef};
 use crate::signature::BitSignature;
-use crate::tls;
+use crate::{hash, tls};
 use anyhow::Context;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
@@ -346,7 +348,7 @@ impl<'r> BitRepo<'r> {
     }
 
     /// writes `obj` into the object store returning its full hash
-    pub fn write_obj(&self, obj: &dyn BitObj) -> BitResult<Oid> {
+    pub fn write_obj(&self, obj: &dyn WritableObject) -> BitResult<Oid> {
         self.odb()?.write(obj)
     }
 
@@ -366,20 +368,19 @@ impl<'r> BitRepo<'r> {
         self.odb()?.read_header(id.into())
     }
 
-    pub fn get_blob(&self, path: BitPath) -> BitResult<Blob> {
+    pub fn get_blob(&self, path: BitPath) -> BitResult<MutableBlob> {
         let path = self.normalize(path)?;
         let bytes = path.read_to_vec()?;
-        Ok(Blob::new(bytes))
+        Ok(MutableBlob::new(bytes))
     }
 
-    pub fn write_blob(&self, path: BitPath) -> BitResult<Blob> {
+    pub fn write_blob(&self, path: BitPath) -> BitResult<Oid> {
         let blob = self.get_blob(path)?;
-        self.write_obj(&blob)?;
-        Ok(blob)
+        self.write_obj(&blob)
     }
 
     pub fn hash_blob(&self, path: BitPath) -> BitResult<Oid> {
-        self.get_blob(path).map(|blob| blob.oid())
+        self.get_blob(path).and_then(|blob| hash::hash_obj(&blob))
     }
 
     /// converts relative_paths to absolute paths

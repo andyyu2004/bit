@@ -1,7 +1,8 @@
-use super::{BitObjShared, Tree, Treeish};
+use super::{BitObjCached, ImmutableBitObject, Tree, Treeish, WritableObject};
 use crate::error::{BitGenericError, BitResult};
-use crate::obj::{BitObj, BitObjType, Oid};
-use crate::repo::BitRepo;
+use crate::obj::{BitObjType, BitObject, Oid};
+use crate::odb::BitObjDbBackend;
+use crate::repo::{BitRepo, Repo};
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
 use crate::tls;
@@ -9,12 +10,33 @@ use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
+use std::ops::Deref;
 use std::process::Command;
 use std::str::FromStr;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
-    pub(crate) obj: BitObjShared,
+    cached: BitObjCached,
+    inner: MutableCommit,
+}
+
+impl Commit {
+    /// Get a reference to the commit's tree.
+    pub fn tree(&self) -> Oid {
+        self.tree
+    }
+}
+
+impl Deref for Commit {
+    type Target = MutableCommit;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct MutableCommit {
     pub(crate) tree: Oid,
     pub(crate) author: BitSignature,
     pub(crate) committer: BitSignature,
@@ -59,12 +81,7 @@ impl Treeish for Commit {
     }
 }
 
-impl Commit {
-    /// Get a reference to the commit's tree.
-    pub fn tree(&self) -> Oid {
-        self.tree
-    }
-
+impl MutableCommit {
     pub fn new(
         tree: Oid,
         parent: Option<Oid>,
@@ -83,29 +100,23 @@ impl Commit {
         committer: BitSignature,
         gpgsig: Option<String>,
     ) -> Self {
-        Self {
-            obj: BitObjShared::new(BitObjType::Commit),
-            tree,
-            author,
-            committer,
-            message,
-            parent,
-            gpgsig,
-        }
+        Self { tree, author, committer, message, parent, gpgsig }
     }
 }
 
 impl<'r> BitRepo<'r> {
+    /// create and write commit to odb
     pub fn mk_commit(
         &self,
         tree: Oid,
         message: CommitMessage,
         parent: Option<Oid>,
-    ) -> BitResult<Commit> {
+    ) -> BitResult<Oid> {
         // TODO validate hashes of parent and tree
         let author = self.user_signature()?;
         let committer = author.clone();
-        Ok(Commit::new(tree, parent, message, author, committer))
+        let commit = MutableCommit::new(tree, parent, message, author, committer);
+        self.odb()?.write(&commit)
     }
 
     pub fn read_commit_msg(&self) -> BitResult<CommitMessage> {
@@ -141,7 +152,13 @@ impl Display for Commit {
     }
 }
 
-impl Serialize for Commit {
+impl WritableObject for MutableCommit {
+    fn obj_ty(&self) -> BitObjType {
+        BitObjType::Commit
+    }
+}
+
+impl Serialize for MutableCommit {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         // adds the required spaces for multiline strings
         macro_rules! w {
@@ -166,8 +183,8 @@ impl Serialize for Commit {
     }
 }
 
-impl DeserializeSized for Commit {
-    fn deserialize_sized(r: &mut impl BufRead, size: u64) -> BitResult<Self> {
+impl DeserializeSized for MutableCommit {
+    fn deserialize_sized(r: impl BufRead, size: u64) -> BitResult<Self> {
         let mut lines = r.take(size).lines();
         let mut attrs = HashMap::new();
 
@@ -212,8 +229,16 @@ impl DeserializeSized for Commit {
     }
 }
 
-impl BitObj for Commit {
-    fn obj_shared(&self) -> &BitObjShared {
-        &self.obj
+impl BitObject for Commit {
+    fn obj_cached(&self) -> &BitObjCached {
+        &self.cached
+    }
+}
+
+impl ImmutableBitObject for Commit {
+    type Mutable = MutableCommit;
+
+    fn from_mutable(cached: BitObjCached, inner: Self::Mutable) -> Self {
+        Self { cached, inner }
     }
 }

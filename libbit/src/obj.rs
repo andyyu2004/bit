@@ -6,25 +6,85 @@ mod ref_delta;
 mod tag;
 mod tree;
 
-pub use blob::Blob;
+pub use blob::*;
 pub use commit::*;
 pub use obj_id::*;
-pub use tag::Tag;
-pub use tree::{Tree, TreeEntry, Treeish};
+pub use tag::*;
+pub use tree::*;
 
 use self::ofs_delta::OfsDelta;
 use self::ref_delta::RefDelta;
+use crate::delta::Delta;
 use crate::error::{BitGenericError, BitResult};
-use crate::io::{BufReadExt, ReadExt};
-use crate::serialize::{Deserialize, DeserializeSized, Serialize};
+use crate::io::BufReadExt;
+use crate::serialize::{DeserializeSized, Serialize};
 use num_enum::TryFromPrimitive;
-use std::cell::Cell;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
+
+#[derive(PartialEq)]
+pub struct BitObjRaw {
+    pub obj_type: BitObjType,
+    pub bytes: Vec<u8>,
+}
+
+impl BitObjRaw {
+    pub fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
+        trace!("BitObjRaw::expand_with_delta(..)");
+        //? is it guaranteed that the (expanded) base of a delta is of the same type?
+        let &Self { obj_type, ref bytes } = self;
+        Ok(Self { obj_type, bytes: delta.expand(bytes)? })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BitObjCached {
+    oid: Oid,
+    // cached from object header
+    obj_type: BitObjType,
+    // cached from object header
+    size: u64,
+}
+
+impl BitObjCached {
+    pub fn new(oid: Oid, obj_type: BitObjType, size: u64) -> Self {
+        Self { oid, obj_type, size }
+    }
+
+    pub fn oid(&self) -> Oid {
+        self.oid
+    }
+
+    pub fn obj_type(&self) -> BitObjType {
+        self.obj_type
+    }
+
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+}
+
+#[derive(Debug)]
+pub struct BitOdbRawObj<S: BufRead> {
+    cached: BitObjCached,
+    stream: S,
+}
+
+impl<S: BufRead> BitOdbRawObj<S> {
+    pub fn new(oid: Oid, obj_type: BitObjType, size: u64, stream: S) -> Self {
+        Self { stream, cached: BitObjCached { oid, size, obj_type } }
+    }
+}
+
+impl Debug for BitObjRaw {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.obj_type)
+    }
+}
 
 impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -47,7 +107,6 @@ impl Display for BitObjKind {
 // we want `TREE` to be ordered after the "file" variants
 // don't know about `GITLINK` yet
 pub enum FileMode {
-    // TODO rename to tree
     REG     = 0o100644,
     EXEC    = 0o100755,
     LINK    = 0o120000,
@@ -120,7 +179,7 @@ pub struct BitObjHeader {
     pub size: u64,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, BitObject)]
 pub enum BitObjKind {
     Blob(Blob),
     Commit(Commit),
@@ -143,20 +202,20 @@ impl Treeish for BitObjKind {
 impl BitObjKind {
     /// deserialize into a `BitObjKind` given an object type and "size"
     /// (this is similar to [crate::serialize::DeserializeSized])
-    pub fn deserialize_as(
-        contents: &mut impl BufRead,
-        obj_ty: BitObjType,
-        size: u64,
-    ) -> BitResult<Self> {
-        match obj_ty {
-            BitObjType::Commit => Commit::deserialize_sized(contents, size).map(Self::Commit),
-            BitObjType::Tree => Tree::deserialize_sized(contents, size).map(Self::Tree),
-            BitObjType::Blob => Blob::deserialize_sized(contents, size).map(Self::Blob),
-            BitObjType::Tag => Tag::deserialize(contents).map(Self::Tag),
-            BitObjType::OfsDelta => OfsDelta::deserialize_sized(contents, size).map(Self::OfsDelta),
-            BitObjType::RefDelta => RefDelta::deserialize_sized(contents, size).map(Self::RefDelta),
-        }
-    }
+    // pub fn deserialize_as(
+    //     contents: impl BufRead,
+    //     obj_ty: BitObjType,
+    //     size: u64,
+    // ) -> BitResult<Self> {
+    //     match obj_ty {
+    //         BitObjType::Commit => Commit::deserialize_sized(contents, size).map(Self::Commit),
+    //         BitObjType::Tree => Tree::deserialize_sized(contents, size).map(Self::Tree),
+    //         BitObjType::Blob => Blob::deserialize_sized(contents, size).map(Self::Blob),
+    //         BitObjType::Tag => Tag::deserialize(contents).map(Self::Tag),
+    //         BitObjType::OfsDelta => OfsDelta::deserialize_sized(contents, size).map(Self::OfsDelta),
+    //         BitObjType::RefDelta => RefDelta::deserialize_sized(contents, size).map(Self::RefDelta),
+    //     }
+    // }
 
     pub fn into_commit(self) -> Commit {
         match self {
@@ -175,6 +234,26 @@ impl BitObjKind {
     pub fn is_tree(&self) -> bool {
         matches!(self, Self::Tree(..))
     }
+
+    pub fn new(cached: BitObjCached, reader: impl BufRead) -> BitResult<Self> {
+        match cached.obj_type {
+            BitObjType::Commit => Commit::new(cached, reader).map(Self::Commit),
+            BitObjType::Tree => Tree::new(cached, reader).map(Self::Tree),
+            BitObjType::Blob => Blob::new(cached, reader).map(Self::Blob),
+            BitObjType::Tag => Tag::new(cached, reader).map(Self::Tag),
+            // try and eliminate these two cases when not in a packfile context
+            BitObjType::OfsDelta => todo!(),
+            BitObjType::RefDelta => todo!(),
+        }
+    }
+
+    pub fn from_slice(cached: BitObjCached, slice: &[u8]) -> BitResult<Self> {
+        Self::new(cached, BufReader::new(slice))
+    }
+
+    pub fn from_odb_obj(odb_obj: BitOdbRawObj<impl BufRead>) -> BitResult<Self> {
+        Self::new(odb_obj.cached, odb_obj.stream)
+    }
 }
 
 impl Serialize for BitObjKind {
@@ -190,40 +269,18 @@ impl Serialize for BitObjKind {
     }
 }
 
-// NOTE! this includes reading the object header
-impl Deserialize for BitObjKind {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self> {
-        self::read_obj(reader)
-    }
-}
+pub trait WritableObject: Serialize {
+    fn obj_ty(&self) -> BitObjType;
 
-// very boring impl which just delegates to the inner type
-impl BitObj for BitObjKind {
-    fn obj_shared(&self) -> &BitObjShared {
-        match self {
-            BitObjKind::Blob(blob) => blob.obj_shared(),
-            BitObjKind::Commit(commit) => commit.obj_shared(),
-            BitObjKind::Tree(tree) => tree.obj_shared(),
-            BitObjKind::Tag(tag) => tag.obj_shared(),
-            BitObjKind::OfsDelta(ofs_delta) => ofs_delta.obj_shared(),
-            BitObjKind::RefDelta(ref_delta) => ref_delta.obj_shared(),
-        }
-    }
-}
-
-#[derive(PartialEq, Clone, Debug)]
-pub struct BitObjShared {
-    oid: Cell<Oid>,
-    ty: BitObjType,
-}
-
-impl BitObjShared {
-    pub fn with_oid(ty: BitObjType, oid: Oid) -> Self {
-        Self { ty, oid: Cell::new(oid) }
-    }
-
-    pub fn new(ty: BitObjType) -> Self {
-        Self { ty, oid: Cell::new(Oid::UNKNOWN) }
+    /// serialize objects append on the header of `type len`
+    fn serialize_with_headers(&self) -> BitResult<Vec<u8>> {
+        let mut buf = vec![];
+        write!(buf, "{} ", self.obj_ty())?;
+        let mut bytes = vec![];
+        self.serialize(&mut bytes)?;
+        write!(buf, "{}\0", bytes.len())?;
+        buf.extend_from_slice(&bytes);
+        Ok(buf)
     }
 }
 
@@ -233,41 +290,29 @@ impl BitObjShared {
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
 // implmentors of BitObj must never be mutated otherwise their `Oid` will be wrong
-pub trait BitObj: Serialize + DeserializeSized + Debug {
-    fn obj_shared(&self) -> &BitObjShared;
+pub trait BitObject {
+    fn obj_cached(&self) -> &BitObjCached;
 
     fn obj_ty(&self) -> BitObjType {
-        self.obj_shared().ty
+        self.obj_cached().obj_type
     }
 
     fn oid(&self) -> Oid {
-        let oid_cell = &self.obj_shared().oid;
-        let mut oid = oid_cell.get();
-        // should this ever occur assuming every calls set_oid correctly?
-        // i.e. is this a bug
-        if oid.is_unknown() {
-            oid = crate::hash::hash_obj(self).expect("shouldn't really fail");
-            oid_cell.set(oid);
-        }
-        oid
+        self.obj_cached().oid
+    }
+}
+
+pub trait ImmutableBitObject {
+    type Mutable: DeserializeSized;
+
+    fn new(cached: BitObjCached, reader: impl BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Ok(Self::from_mutable(cached, Self::Mutable::deserialize_sized(reader, cached.size)?))
     }
 
-    // not a fan of this api, very prone to just not setting it and then requiring an unnessary hash of the object,
-    //  and we have to set it from places that are a bit weird?
-    fn set_oid(&self, oid: Oid) {
-        self.obj_shared().oid.set(oid)
-    }
-
-    /// serialize objects append on the header of `type len`
-    fn serialize_with_headers(&self) -> BitResult<Vec<u8>> {
-        let mut buf = vec![];
-        write!(buf, "{} ", self.obj_ty())?;
-        let mut bytes = vec![];
-        self.serialize(&mut bytes)?;
-        write!(buf, "{}\0", bytes.len())?;
-        buf.write_all(&bytes)?;
-        Ok(buf)
-    }
+    fn from_mutable(cached: BitObjCached, inner: Self::Mutable) -> Self;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
@@ -317,34 +362,10 @@ impl FromStr for BitObjType {
     }
 }
 
-pub(crate) fn read_obj_header(reader: &mut impl BufRead) -> BitResult<BitObjHeader> {
+pub(crate) fn read_obj_header(mut reader: impl BufRead) -> BitResult<BitObjHeader> {
     let obj_type = reader.read_ascii_str(0x20)?;
     let size = reader.read_ascii_num(0x00)? as u64;
     Ok(BitObjHeader { obj_type, size })
-}
-
-#[cfg(test)]
-pub(crate) fn read_obj_unbuffered(reader: impl std::io::Read) -> BitResult<BitObjKind> {
-    read_obj(&mut BufReader::new(reader))
-}
-
-/// format: <type>0x20<size>0x00<content>
-pub(crate) fn read_obj(reader: &mut impl BufRead) -> BitResult<BitObjKind> {
-    let header = read_obj_header(reader)?;
-    let buf = reader.read_to_vec()?;
-    let contents = buf.as_slice();
-    assert_eq!(contents.len() as u64, header.size);
-    let contents = &mut BufReader::new(contents);
-    let size = header.size as u64;
-
-    Ok(match header.obj_type {
-        BitObjType::Commit => BitObjKind::Commit(Commit::deserialize_sized(contents, size)?),
-        BitObjType::Tree => BitObjKind::Tree(Tree::deserialize_sized(contents, size)?),
-        BitObjType::Blob => BitObjKind::Blob(Blob::deserialize_sized(contents, size)?),
-        BitObjType::Tag => todo!(),
-        BitObjType::OfsDelta => todo!(),
-        BitObjType::RefDelta => todo!(),
-    })
 }
 
 #[cfg(test)]

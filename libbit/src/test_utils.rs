@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::obj::{BitObj, BitObjKind, FileMode, Oid, Tree, TreeEntry};
+use crate::obj::{BitObjKind, BitObject, FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use rand::Rng;
@@ -65,11 +65,12 @@ impl Display for DebugTree {
 
 impl BitRepo<'_> {
     // get a view of the entire recursive tree structure
-    pub fn debug_tree(self, tree: &Tree) -> BitResult<DebugTree> {
-        self.debug_tree_internal(tree, BitPath::EMPTY)
+    pub fn debug_tree(self, oid: Oid) -> BitResult<DebugTree> {
+        self.debug_tree_internal(oid, BitPath::EMPTY)
     }
 
-    fn debug_tree_internal(self, tree: &Tree, path: BitPath) -> BitResult<DebugTree> {
+    fn debug_tree_internal(self, oid: Oid, path: BitPath) -> BitResult<DebugTree> {
+        let tree = self.read_obj(oid)?.into_tree()?;
         let mut entries = Vec::with_capacity(tree.entries.len());
         for &entry in &tree.entries {
             let path = path.join(entry.path);
@@ -77,7 +78,7 @@ impl BitRepo<'_> {
             let dbg_entry = match self.read_obj(entry.oid)? {
                 BitObjKind::Blob(..) => DebugTreeEntry::File(entry),
                 BitObjKind::Tree(tree) =>
-                    DebugTreeEntry::Tree(self.debug_tree_internal(&tree, path)?),
+                    DebugTreeEntry::Tree(self.debug_tree_internal(tree.oid(), path)?),
                 _ => unreachable!(),
             };
             entries.push(dbg_entry);
@@ -276,7 +277,7 @@ macro_rules! hash_symlink {
         let path = readlink!($repo: $path);
         let bytes = path.to_str().unwrap().as_bytes();
         // needs the obj header which is why we wrap it in blob
-        crate::hash::hash_obj(&Blob::new(bytes.to_vec()))?
+        crate::hash::hash_obj(&MutableBlob::new(bytes.to_vec()))?
     }};
 }
 
@@ -357,7 +358,8 @@ macro_rules! parse_rev {
 macro_rules! file_entry {
     ($path:expr) => {{
         let oid =
-            crate::tls::with_repo(|repo| repo.write_obj(&$crate::obj::Blob::new(vec![]))).unwrap();
+            crate::tls::with_repo(|repo| repo.write_obj(&$crate::obj::MutableBlob::new(vec![])))
+                .unwrap();
         crate::obj::TreeEntry { oid, path: $path.into(), mode: $crate::obj::FileMode::REG }
     }};
 }
@@ -423,7 +425,7 @@ macro_rules! tree_entries {
 /// i.e. tree! { .. } not tree! ( .. ) or tree! [ .. ]
 macro_rules! tree_obj {
     ( $($entries:tt)* ) => {
-        crate::obj::Tree::new(tree_entries!([] $($entries)* ))
+        crate::obj::MutableTree::new(tree_entries!([] $($entries)* ))
     };
 }
 
@@ -438,7 +440,7 @@ macro_rules! tree {
 #[test]
 fn test_tree_macro() -> crate::error::BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        assert_eq!(tree_obj! {}, crate::obj::Tree::new(btreeset! {}));
+        assert_eq!(tree_obj! {}, crate::obj::MutableTree::new(btreeset! {}));
 
         assert_eq!(
             tree_entries!([] foo "bar.l"),
@@ -459,7 +461,7 @@ fn test_tree_macro() -> crate::error::BitResult<()> {
             }
         );
 
-        let tree = tree_obj! {
+        let tree = tree! {
             foo
             bar {
                 baz
@@ -470,7 +472,7 @@ fn test_tree_macro() -> crate::error::BitResult<()> {
             "qux"
         };
 
-        let debug_tree = repo.debug_tree(&tree)?;
+        let debug_tree = repo.debug_tree(tree)?;
         let expected_debug_tree = DebugTree {
             path: BitPath::EMPTY,
             oid: "957fd7abc8b9f5af6700b54f6ef510017fcfe44b".into(),

@@ -22,27 +22,6 @@ const OFFSET_SIZE: u64 = 4;
 /// maximum 31 bit number (highest bit represents it uses a large offset in the EXT layer)
 const MAX_OFFSET: u32 = 0x7fffffff;
 
-#[derive(PartialEq)]
-pub struct BitObjRaw {
-    obj_type: BitObjType,
-    bytes: Vec<u8>,
-}
-
-impl BitObjRaw {
-    pub fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
-        trace!("BitObjRaw::expand_with_delta(..)");
-        //? is it guaranteed that the (expanded) base of a delta is of the same type?
-        let &Self { obj_type, ref bytes } = self;
-        Ok(Self { obj_type, bytes: delta.expand(bytes)? })
-    }
-}
-
-impl Debug for BitObjRaw {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.obj_type)
-    }
-}
-
 // all the bytes of the delta in `Self::Ofs` and `Self::Ref` should be zlib-inflated already
 #[derive(PartialEq)]
 pub enum BitObjRawKind {
@@ -187,22 +166,16 @@ impl Pack {
     pub fn read_obj(&mut self, oid: Oid) -> BitResult<BitObjKind> {
         trace!("read_obj(oid: {}) ", oid);
         let raw = self.read_obj_raw(oid)?;
-        let obj = BitObjKind::from_raw(raw)?;
-        obj.set_oid(oid);
+        let obj = BitObjKind::from_raw(oid, raw)?;
+        // obj.set_oid(oid);
         Ok(obj)
     }
 }
 
 impl BitObjKind {
-    pub fn from_raw(raw: BitObjRaw) -> BitResult<Self> {
-        match raw.obj_type {
-            BitObjType::Commit => Commit::deserialize_from_slice(&raw.bytes[..]).map(Self::Commit),
-            BitObjType::Tree => Tree::deserialize_from_slice(&raw.bytes[..]).map(Self::Tree),
-            BitObjType::Blob => Blob::deserialize_from_slice(&raw.bytes[..]).map(Self::Blob),
-            BitObjType::Tag => Tag::deserialize_from_slice(&raw.bytes[..]).map(Self::Tag),
-            BitObjType::OfsDelta | BitObjType::RefDelta =>
-                unreachable!("found unexpanded raw object"),
-        }
+    pub fn from_raw(oid: Oid, raw: BitObjRaw) -> BitResult<Self> {
+        let cached = BitObjCached::new(oid, raw.obj_type, raw.bytes.len() as u64);
+        Self::from_slice(cached, &raw.bytes)
     }
 }
 
@@ -353,11 +326,11 @@ impl<R> DerefMut for PackIndexReader<R> {
 }
 
 impl Deserialize for PackIndex {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
-        let mut r = HashReader::new_sha1(reader);
+        let mut r = HashReader::new_sha1(&mut reader);
         Self::parse_header(&mut r)?;
         let fanout = r.read_array::<u32, FANOUT_ENTRYC>()?;
         // the last value of the layer 1 fanout table is the number of
@@ -384,7 +357,7 @@ impl Deserialize for PackIndex {
 pub struct Packfile {}
 
 impl PackIndex {
-    fn parse_header(reader: &mut impl BufRead) -> BitResult<()> {
+    fn parse_header(mut reader: impl BufRead) -> BitResult<()> {
         let magic = reader.read_u32()?;
         ensure_eq!(magic, PACK_IDX_MAGIC, "invalid pack index signature");
         let version = reader.read_u32()?;
@@ -399,7 +372,7 @@ pub struct PackfileReader<R> {
 }
 
 impl Packfile {
-    fn parse_header(reader: &mut impl BufRead) -> BitResult<u32> {
+    fn parse_header(mut reader: impl BufRead) -> BitResult<u32> {
         let sig = reader.read_array::<u8, 4>()?;
         ensure_eq!(&sig, b"PACK", "invalid packfile header");
         let version = reader.read_u32()?;

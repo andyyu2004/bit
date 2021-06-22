@@ -1,9 +1,9 @@
-use super::{BitObjShared, FileMode};
+use super::{BitObjCached, FileMode, ImmutableBitObject, WritableObject};
 use crate::core::BitOrd;
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::io::BufReadExt;
-use crate::obj::{BitObj, BitObjType, Oid};
+use crate::obj::{BitObjType, BitObject, Oid};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::tls;
@@ -11,6 +11,7 @@ use crate::util;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
+use std::ops::Deref;
 
 pub trait Treeish {
     fn into_tree(self) -> BitResult<Tree>;
@@ -57,23 +58,54 @@ impl Display for TreeEntry {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Tree {
-    obj: BitObjShared,
-    pub entries: BTreeSet<TreeEntry>,
+    cached: BitObjCached,
+    inner: MutableTree,
 }
 
 impl Tree {
-    pub fn new(entries: BTreeSet<TreeEntry>) -> Self {
-        Self { obj: BitObjShared::new(BitObjType::Tree), entries }
+    pub const EMPTY_SIZE: u64 = 0;
+
+    #[cfg(test)]
+    pub fn into_mutable(self) -> MutableTree {
+        self.inner
     }
 }
 
 impl Default for Tree {
     fn default() -> Self {
+        Self {
+            cached: BitObjCached::new(Oid::EMPTY_TREE, BitObjType::Tree, Self::EMPTY_SIZE),
+            inner: MutableTree::default(),
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct MutableTree {
+    pub entries: BTreeSet<TreeEntry>,
+}
+
+impl Deref for Tree {
+    type Target = MutableTree;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl MutableTree {
+    pub fn new(entries: BTreeSet<TreeEntry>) -> Self {
+        Self { entries }
+    }
+}
+
+impl Default for MutableTree {
+    fn default() -> Self {
         Self::new(Default::default())
     }
 }
 
-impl Serialize for Tree {
+impl Serialize for MutableTree {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         for entry in &self.entries {
             entry.serialize(writer)?;
@@ -82,19 +114,19 @@ impl Serialize for Tree {
     }
 }
 
-impl DeserializeSized for Tree {
-    fn deserialize_sized(r: &mut impl BufRead, size: u64) -> BitResult<Self>
+impl DeserializeSized for MutableTree {
+    fn deserialize_sized(r: impl BufRead, size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {
-        let r = &mut r.take(size);
+        let mut r = r.take(size);
 
         let mut tree = Self::default();
         #[cfg(debug_assertions)]
         let mut v = vec![];
 
         while !r.is_at_eof()? {
-            let entry = TreeEntry::deserialize(r)?;
+            let entry = TreeEntry::deserialize(&mut r)?;
             #[cfg(debug_assertions)]
             v.push(entry);
             tree.entries.insert(entry);
@@ -109,9 +141,23 @@ impl DeserializeSized for Tree {
     }
 }
 
-impl BitObj for Tree {
-    fn obj_shared(&self) -> &BitObjShared {
-        &self.obj
+impl WritableObject for MutableTree {
+    fn obj_ty(&self) -> BitObjType {
+        BitObjType::Tree
+    }
+}
+
+impl BitObject for Tree {
+    fn obj_cached(&self) -> &BitObjCached {
+        &self.cached
+    }
+}
+
+impl ImmutableBitObject for Tree {
+    type Mutable = MutableTree;
+
+    fn from_mutable(cached: BitObjCached, inner: Self::Mutable) -> Self {
+        Self { cached, inner }
     }
 }
 
@@ -166,7 +212,7 @@ impl TreeEntry {
 }
 
 impl Deserialize for TreeEntry {
-    fn deserialize(r: &mut impl BufRead) -> BitResult<Self> {
+    fn deserialize(mut r: impl BufRead) -> BitResult<Self> {
         let mut buf = vec![];
         let i = r.read_until(0x20, &mut buf)?;
         let mode = FileMode::new(

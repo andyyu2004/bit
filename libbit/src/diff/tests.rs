@@ -1,7 +1,7 @@
 use crate::error::BitResult;
 use crate::obj::FileMode;
 use crate::pathspec::Pathspec;
-use crate::refs::{BitRef, SymbolicRef};
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
 
 #[test]

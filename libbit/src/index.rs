@@ -12,7 +12,7 @@ use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::{BitEntryIterator, BitTreeIterator, IndexTreeIter};
 use crate::lockfile::Filelock;
-use crate::obj::{BitObj, FileMode, Oid, Tree, TreeEntry};
+use crate::obj::{BitObject, FileMode, MutableTree, Oid, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
@@ -86,7 +86,7 @@ impl<'r> BitIndex<'r> {
     }
 
     /// builds a tree object from the current index entries and writes it and all subtrees to disk
-    pub fn write_tree(&self) -> BitResult<Tree> {
+    pub fn write_tree(&self) -> BitResult<Oid> {
         if self.has_conflicts() {
             bail!("cannot write-tree an an index that is not fully merged");
         }
@@ -102,8 +102,7 @@ impl<'r> BitIndex<'r> {
     pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
 
-        let blob = self.repo.write_blob(entry.path)?;
-        entry.oid = blob.oid();
+        entry.oid = self.repo.write_blob(entry.path)?;
         assert!(entry.oid.is_known());
         self.insert_entry(entry);
         Ok(())
@@ -165,7 +164,7 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
         Self { index, repo: index.repo, index_entries: index.std_iter().peekable() }
     }
 
-    fn build_tree(&mut self, current_index_dir: impl AsRef<Path>, depth: usize) -> BitResult<Tree> {
+    fn build_tree(&mut self, current_index_dir: impl AsRef<Path>, depth: usize) -> BitResult<Oid> {
         let mut entries = BTreeSet::new();
         let current_index_dir = current_index_dir.as_ref();
         while let Some(next_entry) = self.index_entries.peek() {
@@ -191,17 +190,15 @@ impl<'a, 'r> TreeBuilder<'a, 'r> {
                 assert!(entries.insert(TreeEntry {
                     path: segment,
                     mode: FileMode::TREE,
-                    oid: subtree.oid()
+                    oid: subtree,
                 }));
             }
         }
 
-        let tree = Tree::new(entries);
-        self.repo.write_obj(&tree)?;
-        Ok(tree)
+        self.repo.write_obj(&MutableTree::new(entries))
     }
 
-    pub fn build(mut self) -> BitResult<Tree> {
+    pub fn build(mut self) -> BitResult<Oid> {
         self.build_tree(BitPath::EMPTY, 0)
     }
 }
@@ -267,7 +264,7 @@ impl Display for MergeStage {
 }
 
 impl BitIndexInner {
-    fn parse_header(r: &mut impl BufRead) -> BitResult<BitIndexHeader> {
+    fn parse_header(mut r: impl BufRead) -> BitResult<BitIndexHeader> {
         let mut signature = [0u8; 4];
         r.read_exact(&mut signature)?;
         assert_eq!(&signature, BIT_INDEX_HEADER_SIG);

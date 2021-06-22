@@ -1,5 +1,4 @@
 use super::*;
-use crate::core::BitOrd;
 use crate::error::BitGenericError;
 use crate::io::BufReadExt;
 use crate::iter::BitEntry;
@@ -55,7 +54,7 @@ impl Serialize for BitIndexEntry {
 }
 
 impl Deserialize for BitIndexEntry {
-    fn deserialize(r: &mut impl BufRead) -> BitResult<BitIndexEntry> {
+    fn deserialize(mut r: impl BufRead) -> BitResult<BitIndexEntry> {
         let ctime = r.read_timespec()?;
         let mtime = r.read_timespec()?;
         let device = r.read_u32()?;

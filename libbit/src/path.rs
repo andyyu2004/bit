@@ -218,7 +218,7 @@ impl Display for BitPath {
 }
 
 impl Deserialize for BitPath {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

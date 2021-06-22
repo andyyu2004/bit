@@ -64,7 +64,7 @@ pub enum DeltaOp {
 }
 
 impl Deserialize for DeltaOp {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -89,7 +89,7 @@ impl Deserialize for DeltaOp {
 }
 
 impl DeserializeSized for Delta {
-    fn deserialize_sized(r: &mut impl BufRead, size: u64) -> BitResult<Self>
+    fn deserialize_sized(mut r: impl BufRead, size: u64) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -101,12 +101,12 @@ impl DeserializeSized for Delta {
             source_size,
             target_size
         );
-        let r = &mut r.take(size);
+        let mut r = r.take(size);
         //? size is definitely an overestimate but maybe its fine
         let mut ops = Vec::with_capacity(size as usize);
 
         while !r.is_at_eof()? {
-            ops.push(DeltaOp::deserialize(r)?);
+            ops.push(DeltaOp::deserialize(&mut r)?);
         }
 
         Ok(Self { source_size, target_size, ops })

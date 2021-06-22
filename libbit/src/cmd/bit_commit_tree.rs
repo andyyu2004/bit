@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::obj::{BitObj, Commit, CommitMessage, Oid};
+use crate::obj::{CommitMessage, Oid};
 use crate::repo::BitRepo;
 use std::str::FromStr;
 
@@ -10,8 +10,8 @@ impl<'r> BitRepo<'r> {
         message: Option<String>,
         tree: Oid,
     ) -> BitResult<()> {
-        let commit = self.commit_tree(parent, message, tree)?;
-        println!("{}", commit.oid());
+        let oid = self.commit_tree(parent, message, tree)?;
+        println!("{}", oid);
         Ok(())
     }
 
@@ -20,14 +20,12 @@ impl<'r> BitRepo<'r> {
         parent: Option<Oid>,
         message: Option<String>,
         tree: Oid,
-    ) -> BitResult<Commit> {
+    ) -> BitResult<Oid> {
         let message = match &message {
             Some(msg) => CommitMessage::from_str(msg),
             None => self.read_commit_msg(),
         }?;
 
-        let commit = self.mk_commit(tree, message, parent)?;
-        self.write_obj(&commit)?;
-        Ok(commit)
+        self.mk_commit(tree, message, parent)
     }
 }

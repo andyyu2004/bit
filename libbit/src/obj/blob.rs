@@ -1,14 +1,34 @@
-use super::{BitObj, BitObjShared, BitObjType};
+use super::{BitObjCached, BitObjType, BitObject, ImmutableBitObject, WritableObject};
 use crate::error::BitResult;
 use crate::io::ReadExt;
 use crate::serialize::{DeserializeSized, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
+use std::ops::Deref;
 
 #[derive(PartialEq, Debug)]
 pub struct Blob {
-    obj: BitObjShared,
-    pub bytes: Vec<u8>,
+    cached: BitObjCached,
+    inner: MutableBlob,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct MutableBlob {
+    bytes: Vec<u8>,
+}
+
+impl Deref for Blob {
+    type Target = MutableBlob;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl WritableObject for MutableBlob {
+    fn obj_ty(&self) -> BitObjType {
+        super::BitObjType::Blob
+    }
 }
 
 impl Display for Blob {
@@ -20,32 +40,44 @@ impl Display for Blob {
     }
 }
 
-impl Blob {
+impl MutableBlob {
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self { bytes }
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
     pub fn from_reader<R: Read>(mut reader: R) -> BitResult<Self> {
         Ok(Self::new(reader.read_to_vec()?))
     }
-
-    pub fn new(bytes: Vec<u8>) -> Self {
-        Self { bytes, obj: BitObjShared::new(BitObjType::Blob) }
-    }
 }
 
-impl Serialize for Blob {
+impl Serialize for MutableBlob {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         writer.write_all(&self.bytes)?;
         Ok(())
     }
 }
 
-impl DeserializeSized for Blob {
-    fn deserialize_sized(reader: &mut impl BufRead, size: u64) -> BitResult<Self> {
+impl DeserializeSized for MutableBlob {
+    fn deserialize_sized(reader: impl BufRead, size: u64) -> BitResult<Self> {
         let bytes = reader.take(size).read_to_vec()?;
         Ok(Self::new(bytes))
     }
 }
 
-impl BitObj for Blob {
-    fn obj_shared(&self) -> &BitObjShared {
-        &self.obj
+impl BitObject for Blob {
+    fn obj_cached(&self) -> &BitObjCached {
+        &self.cached
+    }
+}
+
+impl ImmutableBitObject for Blob {
+    type Mutable = MutableBlob;
+
+    fn from_mutable(cached: BitObjCached, inner: Self::Mutable) -> Self {
+        Self { cached, inner }
     }
 }

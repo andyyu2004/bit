@@ -154,7 +154,7 @@ impl<R: Read + ?Sized> ReadExt for R {
 }
 
 impl Deserialize for u64 {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -163,7 +163,7 @@ impl Deserialize for u64 {
 }
 
 impl Deserialize for u8 {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -172,7 +172,7 @@ impl Deserialize for u8 {
 }
 
 impl Deserialize for u32 {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -181,7 +181,7 @@ impl Deserialize for u32 {
 }
 
 impl Deserialize for Oid {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -190,7 +190,7 @@ impl Deserialize for Oid {
 }
 
 impl Deserialize for Vec<u8> {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -219,7 +219,7 @@ pub trait BufReadExtSized: BufRead + Sized {
         // let mut xs: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
         let mut xs: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
         for i in 0..N {
-            xs[i] = MaybeUninit::new(T::deserialize(self)?);
+            xs[i] = MaybeUninit::new(T::deserialize(&mut *self)?);
         }
         // shouldn't be necessary to forget since everything is MaybeUninit in xs?
         // std::mem::forget();
@@ -233,7 +233,7 @@ pub trait BufReadExtSized: BufRead + Sized {
     }
 
     fn read_vec<T: Deserialize>(&mut self, n: usize) -> BitResult<Vec<T>> {
-        (0..n).map(|_| T::deserialize(self)).collect::<Result<_, _>>()
+        (0..n).map(|_| T::deserialize(&mut *self)).collect::<Result<_, _>>()
     }
 }
 
@@ -267,7 +267,7 @@ pub trait BufReadExt: BufRead {
         let mut buf = vec![];
         self.read_until(0, &mut buf)?;
         // ignore the null character
-        T::deserialize(&mut BufReader::new(&buf[..buf.len() - 1]))
+        T::deserialize(BufReader::new(&buf[..buf.len() - 1]))
     }
 
     fn is_at_eof(&mut self) -> io::Result<bool> {

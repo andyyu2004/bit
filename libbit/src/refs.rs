@@ -1,8 +1,8 @@
 mod refdb;
 mod reflog;
 
-use crate::error::{BitError, BitGenericError, BitResult};
-use crate::lockfile::{Lockfile, LockfileFlags};
+use crate::error::{BitGenericError, BitResult};
+
 use crate::obj::{BitObjKind, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -70,7 +70,7 @@ impl Serialize for BitRef {
 }
 
 impl Deserialize for BitRef {
-    fn deserialize(reader: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

@@ -207,7 +207,7 @@ impl<T: Serialize + Deserialize + Default> Filelock<T> {
     pub fn lock_with_flags(path: impl AsRef<Path>, flags: LockfileFlags) -> BitResult<Self> {
         let mut lockfile = Lockfile::open(path, flags)?;
         let data = match &mut lockfile.file {
-            Some(file) => T::deserialize(&mut BufReader::new(file))?,
+            Some(file) => T::deserialize(BufReader::new(file))?,
             None => T::default(),
         };
         Ok(Filelock { lockfile, data, dirty: false, rolled_back: Cell::new(false) })

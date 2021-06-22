@@ -144,7 +144,7 @@ impl Serialize for BitIndexInner {
 }
 
 impl Deserialize for BitIndexInner {
-    fn deserialize(r: &mut impl BufRead) -> BitResult<Self>
+    fn deserialize(mut r: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {

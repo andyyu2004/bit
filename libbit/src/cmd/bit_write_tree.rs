@@ -9,9 +9,8 @@ impl<'r> BitRepo<'r> {
         Ok(())
     }
 
+    /// create a tree from the index
     pub fn write_tree(&self) -> BitResult<Oid> {
-        let tree = self.with_index(|index| index.write_tree())?;
-        let oid = self.write_obj(&tree)?;
-        Ok(oid)
+        self.with_index(|index| index.write_tree())
     }
 }

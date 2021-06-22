@@ -1,6 +1,5 @@
 use super::*;
 use crate::error::BitGenericError;
-use crate::iter::BitEntry;
 use crate::obj::Treeish;
 use crate::path::BitPath;
 use fallible_iterator::FallibleIterator;
@@ -261,6 +260,7 @@ fn index_directory_file_collision() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         repo.with_index_mut(|index| {
             let foo = repo.workdir.join("foo");
+            // TODO can rewrite this using macros
             std::fs::create_dir(foo)?;
             File::create(foo.join("a"))?;
             File::create(foo.join("b"))?;
@@ -292,7 +292,6 @@ fn test_status_staged_deleted_files() -> BitResult<()> {
         })?;
         let diff = repo.diff_head_index(Pathspec::MATCH_ALL)?;
         assert!(diff.new.is_empty());
-        dbg!(&diff.modified);
         assert!(diff.modified.is_empty());
         assert_eq!(diff.deleted.len(), 1);
         assert_eq!(diff.deleted[0].path, "foo");
@@ -393,7 +392,7 @@ fn parse_small_index() -> BitResult<()> {
 #[test]
 fn parse_index_header() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
-    let header = BitIndexInner::parse_header(&mut BufReader::new(bytes))?;
+    let header = BitIndexInner::parse_header(BufReader::new(bytes))?;
     assert_eq!(
         header,
         BitIndexHeader { signature: [b'D', b'I', b'R', b'C'], version: 2, entryc: 0x1f }
@@ -416,8 +415,10 @@ fn parse_index_header() -> BitResult<()> {
 #[test]
 fn bit_index_build_tree_test() -> BitResult<()> {
     BitRepo::find("tests/repos/indextest", |repo| {
-        let tree = repo.with_index(|index| index.write_tree())?;
-        let entries = tree.entries.into_iter().collect_vec();
+        let oid = repo.with_index(|index| index.write_tree())?;
+        let tree = repo.read_obj(oid)?.into_tree()?;
+
+        let entries = tree.entries.iter().collect_vec();
         assert_eq!(entries[0].path, "dir");
         assert_eq!(entries[0].mode, FileMode::TREE);
         assert_eq!(entries[1].path, "dir2");
@@ -430,20 +431,20 @@ fn bit_index_build_tree_test() -> BitResult<()> {
         assert_eq!(entries[4].mode, FileMode::TREE);
 
         let dir2_tree = repo.read_obj(entries[1].oid)?.into_tree()?;
-        let dir2_tree_entries = dir2_tree.entries.into_iter().collect_vec();
+        let dir2_tree_entries = dir2_tree.entries.iter().collect_vec();
         assert_eq!(dir2_tree_entries[0].path, "dir2.txt");
         assert_eq!(dir2_tree_entries[1].path, "nested");
 
-        let mut nested_tree = repo.read_obj(dir2_tree_entries[1].oid)?.into_tree()?;
+        let mut nested_tree = repo.read_obj(dir2_tree_entries[1].oid)?.into_tree()?.into_mutable();
         let coolfile_entry = nested_tree.entries.pop_first().unwrap();
         assert!(nested_tree.entries.is_empty());
         assert_eq!(coolfile_entry.path, "coolfile.txt");
 
         let coolfile_blob = repo.read_obj(coolfile_entry.oid)?.into_blob();
-        assert_eq!(coolfile_blob.bytes, b"coolfile contents!");
+        assert_eq!(coolfile_blob.bytes(), b"coolfile contents!");
 
         let test_txt_blob = repo.read_obj(entries[3].oid)?.into_blob();
-        assert_eq!(test_txt_blob.bytes, b"hello\n");
+        assert_eq!(test_txt_blob.bytes(), b"hello\n");
         Ok(())
     })
 }
