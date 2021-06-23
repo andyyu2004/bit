@@ -74,7 +74,7 @@ fn test_read_type_and_size_from_offset_in_pack() -> BitResult<()> {
     let mut pack = pack()?;
     let (_crc, offset) = pack.idx_reader().find_oid_crc_offset(*HEAD_OID)?;
     let header = pack.pack_reader().read_header_from_offset(offset)?;
-    assert_eq!(header.obj_type, BitObjType::Commit);
+    assert_eq!(header.obj_type, BitPackObjType::Commit);
     assert_eq!(header.size, 215);
     Ok(())
 }

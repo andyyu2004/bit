@@ -12,9 +12,6 @@ pub use obj_id::*;
 pub use tag::*;
 pub use tree::*;
 
-use self::ofs_delta::OfsDelta;
-use self::ref_delta::RefDelta;
-use crate::delta::Delta;
 use crate::error::{BitGenericError, BitResult};
 use crate::io::BufReadExt;
 use crate::serialize::{DeserializeSized, Serialize};
@@ -22,23 +19,14 @@ use num_enum::TryFromPrimitive;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Cursor, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
 
 #[derive(PartialEq)]
-pub struct BitObjRaw {
+pub struct BitPackObjRaw {
     pub obj_type: BitObjType,
     pub bytes: Vec<u8>,
-}
-
-impl BitObjRaw {
-    pub fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
-        trace!("BitObjRaw::expand_with_delta(..)");
-        //? is it guaranteed that the (expanded) base of a delta is of the same type?
-        let &Self { obj_type, ref bytes } = self;
-        Ok(Self { obj_type, bytes: delta.expand(bytes)? })
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,19 +56,23 @@ impl BitObjCached {
     }
 }
 
-#[derive(Debug)]
-pub struct BitOdbRawObj<S: BufRead> {
+pub struct BitRawObj {
     cached: BitObjCached,
-    stream: S,
+    stream: Box<dyn BufRead>,
 }
 
-impl<S: BufRead> BitOdbRawObj<S> {
-    pub fn new(oid: Oid, obj_type: BitObjType, size: u64, stream: S) -> Self {
+impl BitRawObj {
+    pub fn new(oid: Oid, obj_type: BitObjType, size: u64, stream: Box<dyn BufRead>) -> Self {
         Self { stream, cached: BitObjCached { oid, size, obj_type } }
+    }
+
+    pub fn from_raw_pack_obj(oid: Oid, raw: BitPackObjRaw) -> Self {
+        let cached = BitObjCached::new(oid, raw.obj_type, raw.bytes.len() as u64);
+        Self { cached, stream: Box::new(Cursor::new(raw.bytes)) }
     }
 }
 
-impl Debug for BitObjRaw {
+impl Debug for BitPackObjRaw {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.obj_type)
     }
@@ -95,8 +87,6 @@ impl Display for BitObjKind {
             BitObjKind::Commit(commit) => Display::fmt(&commit, f),
             BitObjKind::Tree(tree) => Display::fmt(&tree, f),
             BitObjKind::Tag(_) => todo!(),
-            BitObjKind::OfsDelta(_) => todo!(),
-            BitObjKind::RefDelta(_) => todo!(),
         }
     }
 }
@@ -185,8 +175,6 @@ pub enum BitObjKind {
     Commit(Commit),
     Tree(Tree),
     Tag(Tag),
-    OfsDelta(OfsDelta),
-    RefDelta(RefDelta),
 }
 
 impl Treeish for BitObjKind {
@@ -241,9 +229,6 @@ impl BitObjKind {
             BitObjType::Tree => Tree::new(cached, reader).map(Self::Tree),
             BitObjType::Blob => Blob::new(cached, reader).map(Self::Blob),
             BitObjType::Tag => Tag::new(cached, reader).map(Self::Tag),
-            // try and eliminate these two cases when not in a packfile context
-            BitObjType::OfsDelta => todo!(),
-            BitObjType::RefDelta => todo!(),
         }
     }
 
@@ -251,8 +236,8 @@ impl BitObjKind {
         Self::new(cached, BufReader::new(slice))
     }
 
-    pub fn from_odb_obj(odb_obj: BitOdbRawObj<impl BufRead>) -> BitResult<Self> {
-        Self::new(odb_obj.cached, odb_obj.stream)
+    pub fn from_raw(raw: BitRawObj) -> BitResult<Self> {
+        Self::new(raw.cached, raw.stream)
     }
 }
 
@@ -263,8 +248,6 @@ impl Serialize for BitObjKind {
             BitObjKind::Commit(commit) => commit.serialize(writer),
             BitObjKind::Tree(tree) => tree.serialize(writer),
             BitObjKind::Tag(tag) => tag.serialize(writer),
-            BitObjKind::OfsDelta(ofs_delta) => ofs_delta.serialize(writer),
-            BitObjKind::RefDelta(ref_delta) => ref_delta.serialize(writer),
         }
     }
 }
@@ -272,7 +255,7 @@ impl Serialize for BitObjKind {
 pub trait WritableObject: Serialize {
     fn obj_ty(&self) -> BitObjType;
 
-    /// serialize objects append on the header of `type len`
+    /// serialize objects with the header of `<type> <size>\0`
     fn serialize_with_headers(&self) -> BitResult<Vec<u8>> {
         let mut buf = vec![];
         write!(buf, "{} ", self.obj_ty())?;
@@ -317,21 +300,10 @@ pub trait ImmutableBitObject {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum BitObjType {
-    Commit   = 1,
-    Tree     = 2,
-    Blob     = 3,
-    Tag      = 4,
-    OfsDelta = 6,
-    RefDelta = 7,
-}
-
-impl BitObjType {
-    pub fn is_delta(self) -> bool {
-        match self {
-            BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag => false,
-            BitObjType::OfsDelta | BitObjType::RefDelta => true,
-        }
-    }
+    Commit = 1,
+    Tree   = 2,
+    Blob   = 3,
+    Tag    = 4,
 }
 
 impl Display for BitObjType {
@@ -341,8 +313,6 @@ impl Display for BitObjType {
             BitObjType::Tree => "tree",
             BitObjType::Tag => "tag",
             BitObjType::Blob => "blob",
-            BitObjType::OfsDelta => "ofs-delta",
-            BitObjType::RefDelta => "ref-delta",
         };
         write!(f, "{}", s)
     }

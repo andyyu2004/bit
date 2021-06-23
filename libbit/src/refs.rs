@@ -151,8 +151,7 @@ impl BitRef {
             BitObjKind::Blob(..) => bail!("blob type is not treeish"),
             BitObjKind::Commit(commit) => repo.read_obj(commit.tree)?.into_tree(),
             BitObjKind::Tree(tree) => Ok(tree),
-            BitObjKind::Tag(_) => todo!(),
-            BitObjKind::OfsDelta(..) | BitObjKind::RefDelta(..) => bug!(),
+            BitObjKind::Tag(..) => todo!(),
         }
     }
 }

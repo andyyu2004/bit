@@ -29,8 +29,6 @@ impl<'r> BitRepo<'r> {
             BitObjType::Commit => todo!(),
             //BitObjKind::Commit(Commit::deserialize_to_end(reader)?),
             BitObjType::Blob => Box::new(MutableBlob::from_reader(reader)?),
-            BitObjType::OfsDelta => todo!(),
-            BitObjType::RefDelta => todo!(),
         };
 
         let obj: &dyn WritableObject = obj.as_ref();

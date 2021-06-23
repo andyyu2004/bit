@@ -176,7 +176,7 @@ impl Deserialize for BitIndexInner {
             .map(|ext| BitReuc::deserialize_unbuffered(&ext.data[..]))
             .transpose()?;
 
-        assert!(
+        debug_assert!(
             extensions.is_empty(),
             "unhandled index extension (its fine to ignore in practice as no extension is mandantory but its good to know)"
         );

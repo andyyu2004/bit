@@ -95,10 +95,7 @@ impl BitTreeCache {
                     cache_tree.entry_count += child.entry_count;
                     cache_tree.children.push(child);
                 }
-                BitObjKind::Commit(..)
-                | BitObjKind::Tag(..)
-                | BitObjKind::OfsDelta(..)
-                | BitObjKind::RefDelta(..) => unreachable!(),
+                BitObjKind::Commit(..) | BitObjKind::Tag(..) => unreachable!(),
             }
         }
 

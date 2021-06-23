@@ -22,15 +22,23 @@ const OFFSET_SIZE: u64 = 4;
 /// maximum 31 bit number (highest bit represents it uses a large offset in the EXT layer)
 const MAX_OFFSET: u32 = 0x7fffffff;
 
+impl BitPackObjRaw {
+    fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
+        trace!("BitObjRaw::expand_with_delta(..)");
+        //? is it guaranteed that the (expanded) base of a delta is of the same type?
+        let &Self { obj_type, ref bytes } = self;
+        Ok(Self { obj_type, bytes: delta.expand(bytes)? })
+    }
+}
+
 // all the bytes of the delta in `Self::Ofs` and `Self::Ref` should be zlib-inflated already
-#[derive(PartialEq)]
-pub enum BitObjRawKind {
-    Raw(BitObjRaw),
+pub enum BitPackObjRawKind {
+    Raw(BitPackObjRaw),
     Ofs(u64, Vec<u8>),
     Ref(Oid, Vec<u8>),
 }
 
-impl Debug for BitObjRawKind {
+impl Debug for BitPackObjRawKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Raw(raw) => write!(f, "BitObjRawKind::Raw({:?})", raw),
@@ -104,15 +112,15 @@ impl Pack {
 
     pub fn expand_raw_obj(
         &mut self,
-        raw_kind: BitObjRawKind,
+        raw_kind: BitPackObjRawKind,
         base_offset: u64,
-    ) -> BitResult<BitObjRaw> {
+    ) -> BitResult<BitPackObjRaw> {
         trace!("expand_raw_obj(raw_kind: {:?}, base_offset: {})", raw_kind, base_offset);
         let (base, delta_bytes) = match raw_kind {
-            BitObjRawKind::Raw(raw) => return Ok(raw),
-            BitObjRawKind::Ofs(offset, delta) =>
+            BitPackObjRawKind::Raw(raw) => return Ok(raw),
+            BitPackObjRawKind::Ofs(offset, delta) =>
                 (self.read_obj_raw_at(base_offset - offset)?, delta),
-            BitObjRawKind::Ref(base_oid, delta) => (self.read_obj_raw(base_oid)?, delta),
+            BitPackObjRawKind::Ref(base_oid, delta) => (self.read_obj_raw(base_oid)?, delta),
         };
 
         trace!("expand_raw_obj:base={:?}; delta_len={}", base, delta_bytes.len());
@@ -121,14 +129,14 @@ impl Pack {
     }
 
     /// returns fully expanded raw object at offset
-    pub fn read_obj_raw_at(&mut self, offset: u64) -> BitResult<BitObjRaw> {
+    pub fn read_obj_raw_at(&mut self, offset: u64) -> BitResult<BitPackObjRaw> {
         trace!("read_obj_raw_at(offset: {})", offset);
         let raw = self.pack_reader().read_obj_from_offset_raw(offset)?;
         self.expand_raw_obj(raw, offset)
     }
 
     /// returns fully expanded raw object with oid
-    pub fn read_obj_raw(&mut self, oid: Oid) -> BitResult<BitObjRaw> {
+    pub fn read_obj_raw(&mut self, oid: Oid) -> BitResult<BitPackObjRaw> {
         trace!("read_obj_raw(oid: {})", oid);
         let offset = self.obj_offset(oid)?;
         let raw = self.read_obj_raw_at(offset)?;
@@ -139,7 +147,6 @@ impl Pack {
         let (crc, offset) = self.obj_crc_offset(oid)?;
         trace!("read_obj_header(oid: {}); crc={}; offset={}", oid, crc, offset);
         let header = self.read_obj_header_at(offset)?;
-        assert!(!header.obj_type.is_delta());
         Ok(header)
     }
 
@@ -147,15 +154,17 @@ impl Pack {
         trace!("read_obj_header_at(offset: {})", offset);
         let reader = self.pack_reader();
         let header = reader.read_header_from_offset(offset)?;
-        // can assume base_header has same type
+        // can we assume base_header definitely has same type?
         let base_header = match header.obj_type {
-            BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
-                return Ok(header),
-            BitObjType::OfsDelta => {
+            BitPackObjType::Commit
+            | BitPackObjType::Tree
+            | BitPackObjType::Blob
+            | BitPackObjType::Tag => return Ok(header.into()),
+            BitPackObjType::OfsDelta => {
                 let ofs = reader.read_offset()?;
                 self.read_obj_header_at(offset - ofs)
             }
-            BitObjType::RefDelta => {
+            BitPackObjType::RefDelta => {
                 let oid = self.pack_reader().read_oid()?;
                 self.read_obj_header(oid)
             }
@@ -163,17 +172,19 @@ impl Pack {
         Ok(BitObjHeader { size: header.size, obj_type: base_header.obj_type })
     }
 
+    #[cfg(test)]
     pub fn read_obj(&mut self, oid: Oid) -> BitResult<BitObjKind> {
         trace!("read_obj(oid: {}) ", oid);
         let raw = self.read_obj_raw(oid)?;
-        let obj = BitObjKind::from_raw(oid, raw)?;
+        let obj = BitObjKind::from_raw_pack_obj(oid, raw)?;
         // obj.set_oid(oid);
         Ok(obj)
     }
 }
 
 impl BitObjKind {
-    pub fn from_raw(oid: Oid, raw: BitObjRaw) -> BitResult<Self> {
+    #[cfg(test)]
+    pub fn from_raw_pack_obj(oid: Oid, raw: BitPackObjRaw) -> BitResult<Self> {
         let cached = BitObjCached::new(oid, raw.obj_type, raw.bytes.len() as u64);
         Self::from_slice(cached, &raw.bytes)
     }
@@ -371,6 +382,50 @@ pub struct PackfileReader<R> {
     n: u32,
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
+enum BitPackObjType {
+    Commit   = 1,
+    Tree     = 2,
+    Blob     = 3,
+    Tag      = 4,
+    OfsDelta = 6,
+    RefDelta = 7,
+}
+
+impl From<BitPackObjType> for BitObjType {
+    fn from(obj_type: BitPackObjType) -> BitObjType {
+        match obj_type {
+            BitPackObjType::Commit => BitObjType::Commit,
+            BitPackObjType::Tree => BitObjType::Tree,
+            BitPackObjType::Blob => BitObjType::Blob,
+            BitPackObjType::Tag => BitObjType::Tag,
+            BitPackObjType::OfsDelta | BitPackObjType::RefDelta => bug!("found delta object type"),
+        }
+    }
+}
+
+impl BitPackObjType {
+    pub fn is_delta(self) -> bool {
+        match self {
+            Self::Commit | Self::Tree | Self::Blob | Self::Tag => false,
+            Self::OfsDelta | Self::RefDelta => true,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+struct BitPackObjHeader {
+    obj_type: BitPackObjType,
+    size: u64,
+}
+
+impl From<BitPackObjHeader> for BitObjHeader {
+    fn from(header: BitPackObjHeader) -> BitObjHeader {
+        let BitPackObjHeader { obj_type, size } = header;
+        Self { obj_type: obj_type.into(), size }
+    }
+}
+
 impl Packfile {
     fn parse_header(mut reader: impl BufRead) -> BitResult<u32> {
         let sig = reader.read_array::<u8, 4>()?;
@@ -392,35 +447,37 @@ impl<R: BufReadSeek> PackfileReader<R> {
     // the `size` here is the `size` shown in `git verify-pack` (not the `size-in-packfile`)
     // so the uncompressed size (i.e. we can call `take` on the zlib (decompressed) stream, rather than the compressed stream)
     // https://git-scm.com/docs/git-verify-pack
-    pub fn read_pack_obj_header(&mut self) -> BitResult<BitObjHeader> {
+    fn read_pack_obj_header(&mut self) -> BitResult<BitPackObjHeader> {
         let (ty, size) = self.read_le_varint_with_shift(3)?;
-        let obj_type = BitObjType::from_u8(ty).expect("invalid bit object type");
-        Ok(BitObjHeader { obj_type, size })
+        let obj_type = BitPackObjType::from_u8(ty).expect("invalid bit object type");
+        Ok(BitPackObjHeader { obj_type, size })
     }
 
     /// seek to `offset` and read pack object header
-    pub fn read_header_from_offset(&mut self, offset: u64) -> BitResult<BitObjHeader> {
+    fn read_header_from_offset(&mut self, offset: u64) -> BitResult<BitPackObjHeader> {
         self.seek(SeekFrom::Start(offset))?;
         self.read_pack_obj_header()
     }
 
-    pub fn read_obj_from_offset_raw(&mut self, offset: u64) -> BitResult<BitObjRawKind> {
+    pub fn read_obj_from_offset_raw(&mut self, offset: u64) -> BitResult<BitPackObjRawKind> {
         trace!("read_obj_from_offset_raw(offset: {})", offset);
-        let BitObjHeader { obj_type, size } = self.read_header_from_offset(offset)?;
+        let BitPackObjHeader { obj_type, size } = self.read_header_from_offset(offset)?;
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
         // we so we have to treat them a bit differently
         match obj_type {
-            BitObjType::Commit | BitObjType::Tree | BitObjType::Blob | BitObjType::Tag =>
-                Ok(BitObjRawKind::Raw(BitObjRaw {
-                    obj_type,
-                    bytes: self.as_zlib_decode_stream().take(size).read_to_vec()?,
-                })),
-            BitObjType::OfsDelta => Ok(BitObjRawKind::Ofs(
+            BitPackObjType::Commit
+            | BitPackObjType::Tree
+            | BitPackObjType::Blob
+            | BitPackObjType::Tag => Ok(BitPackObjRawKind::Raw(BitPackObjRaw {
+                obj_type: BitObjType::from(obj_type),
+                bytes: self.as_zlib_decode_stream().take(size).read_to_vec()?,
+            })),
+            BitPackObjType::OfsDelta => Ok(BitPackObjRawKind::Ofs(
                 self.read_offset()?,
                 self.as_zlib_decode_stream().take(size).read_to_vec()?,
             )),
-            BitObjType::RefDelta => Ok(BitObjRawKind::Ref(
+            BitPackObjType::RefDelta => Ok(BitPackObjRawKind::Ref(
                 self.read_oid()?,
                 self.as_zlib_decode_stream().take(size).read_to_vec()?,
             )),
