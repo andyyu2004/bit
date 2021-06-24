@@ -87,10 +87,8 @@ impl<'rcx> BitIndex<'rcx> {
         if self.has_conflicts() {
             bail!("cannot write-tree an an index that is not fully merged");
         }
-        // keeping old implementation as it's significantly faster
-        // consider it a specialized implementation
+
         self.tree_iter().build_tree(self.repo)
-        // TreeBuilder::new(self).build()
     }
 
     pub fn is_racy_entry(&self, worktree_entry: &BitIndexEntry) -> bool {
@@ -150,58 +148,6 @@ impl<'rcx> BitIndex<'rcx> {
 
 type IndexStdIterator = impl Iterator<Item = BitIndexEntry> + Clone + std::fmt::Debug;
 pub type IndexEntryIterator = impl BitEntryIterator;
-
-struct TreeBuilder<'a, 'rcx> {
-    index: &'a BitIndex<'rcx>,
-    repo: BitRepo<'rcx>,
-    index_entries: Peekable<IndexStdIterator>,
-    // count the number of blobs created (not subtrees)
-    // should match the number of index entries
-}
-
-impl<'a, 'rcx> TreeBuilder<'a, 'rcx> {
-    pub fn new(index: &'a BitIndex<'rcx>) -> Self {
-        Self { index, repo: index.repo, index_entries: index.std_iter().peekable() }
-    }
-
-    fn build_tree(&mut self, current_index_dir: impl AsRef<Path>, depth: usize) -> BitResult<Oid> {
-        let mut entries = BTreeSet::new();
-        let current_index_dir = current_index_dir.as_ref();
-        while let Some(next_entry) = self.index_entries.peek() {
-            let &BitIndexEntry { mode, path, oid, .. } = next_entry;
-            // if the depth is greater than the number of components in the filepath
-            // then we need to `break` and go out one level
-            let (curr_dir, segment) = match path.try_split_path_at(depth) {
-                Some(x) => x,
-                None => break,
-            };
-
-            if curr_dir.as_path() != current_index_dir {
-                break;
-            }
-
-            let nxt_path = curr_dir.as_path().join(segment);
-            if nxt_path == path.as_path() {
-                // only keep the final segment of the path inside the tree entry
-                assert!(entries.insert(TreeEntry { mode, path: segment, oid }));
-                self.index_entries.next();
-            } else {
-                let subtree = self.build_tree(&nxt_path, 1 + depth)?;
-                assert!(entries.insert(TreeEntry {
-                    path: segment,
-                    mode: FileMode::TREE,
-                    oid: subtree,
-                }));
-            }
-        }
-
-        self.repo.write_obj(&MutableTree::new(entries))
-    }
-
-    pub fn build(mut self) -> BitResult<Oid> {
-        self.build_tree(BitPath::EMPTY, 0)
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BitIndexHeader {
