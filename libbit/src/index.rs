@@ -3,7 +3,9 @@ mod index_inner;
 mod reuc;
 mod tree_cache;
 
-use self::index_inner::BitIndexInner;
+pub use index_entry::*;
+pub use index_inner::BitIndexInner;
+
 use self::reuc::BitReuc;
 use self::tree_cache::BitTreeCache;
 use crate::diff::*;
@@ -19,7 +21,6 @@ use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::time::Timespec;
 use bitflags::bitflags;
-pub use index_entry::*;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
@@ -43,14 +44,14 @@ bitflags! {
 }
 
 #[derive(Debug)]
-pub struct BitIndex<'r> {
-    pub repo: BitRepo<'r>,
+pub struct BitIndex<'rcx> {
+    pub repo: BitRepo<'rcx>,
     // index file may not yet exist
     mtime: Option<Timespec>,
     inner: Filelock<BitIndexInner>,
 }
 
-impl<'r> Deref for BitIndex<'r> {
+impl<'rcx> Deref for BitIndex<'rcx> {
     type Target = BitIndexInner;
 
     fn deref(&self) -> &Self::Target {
@@ -58,7 +59,7 @@ impl<'r> Deref for BitIndex<'r> {
     }
 }
 
-impl<'r> DerefMut for BitIndex<'r> {
+impl<'rcx> DerefMut for BitIndex<'rcx> {
     /// refer to note in [crate::lockfile::Filelock] `deref_mut`
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
@@ -69,20 +70,16 @@ trait BitIndexExt {
     fn signature(&self) -> [u8; 4];
 }
 
-impl<'r> BitIndex<'r> {
+impl<'rcx> BitIndex<'rcx> {
     pub fn rollback(&mut self) {
         self.inner.rollback()
     }
 
-    pub fn new(repo: BitRepo<'r>) -> BitResult<Self> {
+    pub fn new(repo: BitRepo<'rcx>) -> BitResult<Self> {
         let index_path = repo.index_path();
         let mtime = std::fs::metadata(index_path).as_ref().map(Timespec::mtime).ok();
         let inner = Filelock::lock(index_path)?;
         Ok(Self { repo, inner, mtime })
-    }
-
-    pub fn tree_iter(&self) -> IndexTreeIter<'_, 'r> {
-        IndexTreeIter::new(self)
     }
 
     /// builds a tree object from the current index entries and writes it and all subtrees to disk
@@ -90,7 +87,10 @@ impl<'r> BitIndex<'r> {
         if self.has_conflicts() {
             bail!("cannot write-tree an an index that is not fully merged");
         }
-        TreeBuilder::new(self).build()
+        // keeping old implementation as it's significantly faster
+        // consider it a specialized implementation
+        self.tree_iter().build_tree(self.repo)
+        // TreeBuilder::new(self).build()
     }
 
     pub fn is_racy_entry(&self, worktree_entry: &BitIndexEntry) -> bool {
@@ -110,11 +110,11 @@ impl<'r> BitIndex<'r> {
 
     /// makes the index exactly match the working tree (removes, updates, and adds)
     pub fn add_all(&mut self) -> BitResult<()> {
-        struct AddAll<'a, 'r> {
-            index: &'a mut BitIndex<'r>,
+        struct AddAll<'a, 'rcx> {
+            index: &'a mut BitIndex<'rcx>,
         }
 
-        impl<'a, 'r> Apply for AddAll<'a, 'r> {
+        impl<'a, 'rcx> Apply for AddAll<'a, 'rcx> {
             fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
                 self.index.add_entry(*new)
             }
@@ -151,16 +151,16 @@ impl<'r> BitIndex<'r> {
 type IndexStdIterator = impl Iterator<Item = BitIndexEntry> + Clone + std::fmt::Debug;
 pub type IndexEntryIterator = impl BitEntryIterator;
 
-struct TreeBuilder<'a, 'r> {
-    index: &'a BitIndex<'r>,
-    repo: BitRepo<'r>,
+struct TreeBuilder<'a, 'rcx> {
+    index: &'a BitIndex<'rcx>,
+    repo: BitRepo<'rcx>,
     index_entries: Peekable<IndexStdIterator>,
     // count the number of blobs created (not subtrees)
     // should match the number of index entries
 }
 
-impl<'a, 'r> TreeBuilder<'a, 'r> {
-    pub fn new(index: &'a BitIndex<'r>) -> Self {
+impl<'a, 'rcx> TreeBuilder<'a, 'rcx> {
+    pub fn new(index: &'a BitIndex<'rcx>) -> Self {
         Self { index, repo: index.repo, index_entries: index.std_iter().peekable() }
     }
 
@@ -312,3 +312,6 @@ mod tests;
 
 #[cfg(test)]
 mod tree_cache_tests;
+
+#[cfg(test)]
+mod bench;

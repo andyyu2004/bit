@@ -13,7 +13,7 @@ pub struct BitStatus {
     pub unstaged: WorkspaceDiff,
 }
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     pub fn status(self, pathspec: Pathspec) -> BitResult<BitStatus> {
         self.with_index_mut(|index| {
             let head = self.read_head()?;

@@ -11,6 +11,7 @@ use crate::util;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
+use std::iter::FromIterator;
 use std::ops::Deref;
 
 pub trait Treeish {
@@ -42,7 +43,7 @@ impl Display for TreeEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             write!(f, "{} {}\0{}", self.mode, self.path, unsafe {
-                // SAFETY we're just printing this out and not using it anywhere
+                // SAFETY we'rcxe just printing this out and not using it anywhere
                 std::str::from_utf8_unchecked(self.oid.as_ref())
             })
         } else {
@@ -90,6 +91,12 @@ impl Deref for Tree {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl FromIterator<TreeEntry> for MutableTree {
+    fn from_iter<T: IntoIterator<Item = TreeEntry>>(iter: T) -> Self {
+        Self::new(iter.into_iter().collect())
     }
 }
 

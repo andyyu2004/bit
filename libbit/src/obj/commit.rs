@@ -104,7 +104,7 @@ impl MutableCommit {
     }
 }
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     /// create and write commit to odb
     pub fn mk_commit(
         &self,

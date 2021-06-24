@@ -2,7 +2,7 @@ use super::*;
 use crate::cmd::BitHashObjectOpts;
 use crate::obj;
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     /// be careful when deleting `rm foo` as the symlink points at it
     /// WARNING: be very careful when changing this sample repo,
     /// it's probably better to create another repo based on this one
@@ -26,6 +26,7 @@ impl<'r> BitRepo<'r> {
         })
     }
 
+    // same repo as above but without the symlink issue
     pub fn with_sample_repo_no_sym<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {
             touch!(repo: "foo");

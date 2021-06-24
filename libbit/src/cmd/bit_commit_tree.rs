@@ -3,7 +3,7 @@ use crate::obj::{CommitMessage, Oid};
 use crate::repo::BitRepo;
 use std::str::FromStr;
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     pub fn bit_commit_tree(
         &self,
         parent: Option<Oid>,

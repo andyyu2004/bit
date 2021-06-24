@@ -41,6 +41,7 @@ tempfile = "3"
 owo-colors = "2.0.0"
 maplit = "1"
 rayon = "1.5"
+indexmap = "1.6.2"
 fallible-iterator = { git = "https://github.com/andyyu2004/rust-fallible-iterator" }
 diffy = { git = "https://github.com/andyyu2004/diffy" }
 
@@ -52,6 +53,11 @@ fs_extra = " 1.2.0"
 quickcheck_macros = "1"
 env_logger = "0.8.3"
 rand = "0.8.3"
+criterion = "0.3"
 
 [lib]
 doctest = false
+
+[[bench]]
+name = "benchmark"
+harness = false

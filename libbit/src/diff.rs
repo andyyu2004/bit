@@ -19,17 +19,17 @@ pub trait Apply {
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()>;
 }
 
-pub trait Differ<'r>: Apply {
-    fn index_mut(&mut self) -> &mut BitIndex<'r>;
+pub trait Differ<'rcx>: Apply {
+    fn index_mut(&mut self) -> &mut BitIndex<'rcx>;
 }
 
-pub trait DiffBuilder<'r>: Differ<'r> {
+pub trait DiffBuilder<'rcx>: Differ<'rcx> {
     /// the type of the resulting diff (returned by `Self::build_diff`)
     type Diff;
     fn build_diff(self) -> BitResult<Self::Diff>;
 }
 
-pub trait TreeDiffer<'r> {
+pub trait TreeDiffer<'rcx> {
     /// unmatched new entry
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()>;
     /// called when two entries are matched (could possibly be the same entry)
@@ -39,16 +39,16 @@ pub trait TreeDiffer<'r> {
 }
 
 // TODO this is actually now specific to worktree index diffs
-pub struct GenericDiffer<'d, 'r, D, I, J>
+pub struct GenericDiffer<'d, 'rcx, D, I, J>
 where
-    D: Differ<'r>,
+    D: Differ<'rcx>,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
     differ: &'d mut D,
     old_iter: Peekable<Fuse<I>>,
     new_iter: Peekable<Fuse<J>>,
-    pd: std::marker::PhantomData<&'r ()>,
+    pd: std::marker::PhantomData<&'rcx ()>,
 }
 
 #[derive(Debug)]
@@ -58,9 +58,9 @@ enum Changed {
     Maybe,
 }
 
-impl<'d, 'r, D, I, J> GenericDiffer<'d, 'r, D, I, J>
+impl<'d, 'rcx, D, I, J> GenericDiffer<'d, 'rcx, D, I, J>
 where
-    D: Differ<'r>,
+    D: Differ<'rcx>,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
@@ -122,15 +122,15 @@ where
     }
 }
 
-pub struct TreeDifferGeneric<'r, I, J> {
-    repo: BitRepo<'r>,
+pub struct TreeDifferGeneric<'rcx, I, J> {
+    repo: BitRepo<'rcx>,
     old_iter: I,
     new_iter: J,
     diff: WorkspaceDiff,
 }
 
-impl<'r, I, J> TreeDifferGeneric<'r, I, J> {
-    pub fn new(repo: BitRepo<'r>, old_iter: I, new_iter: J) -> Self {
+impl<'rcx, I, J> TreeDifferGeneric<'rcx, I, J> {
+    pub fn new(repo: BitRepo<'rcx>, old_iter: I, new_iter: J) -> Self {
         Self { repo, old_iter, new_iter, diff: Default::default() }
     }
 }
@@ -141,7 +141,7 @@ fn diff_cmp(a: &impl BitEntry, b: &impl BitEntry) -> std::cmp::Ordering {
     a.path().cmp(&b.path()).then_with(|| a.mode().cmp(&b.mode()))
 }
 
-impl<'r, I, J> TreeDifferGeneric<'r, I, J>
+impl<'rcx, I, J> TreeDifferGeneric<'rcx, I, J>
 where
     I: BitTreeIterator,
     J: BitTreeIterator,
@@ -166,7 +166,7 @@ where
     }
 }
 
-impl<'r, I, J> TreeDiffer<'r> for TreeDifferGeneric<'r, I, J>
+impl<'rcx, I, J> TreeDiffer<'rcx> for TreeDifferGeneric<'rcx, I, J>
 where
     I: BitTreeIterator,
     J: BitTreeIterator,
@@ -231,7 +231,7 @@ where
     }
 }
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     /// diff the tree belonging to the commit pointed to by `reference` with the index
     pub fn diff_ref_index(self, reference: BitRef, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         let commit_oid = self.try_fully_resolve_ref(reference)?;
@@ -259,7 +259,7 @@ impl<'r> BitRepo<'r> {
     }
 }
 
-impl<'r> BitIndex<'r> {
+impl<'rcx> BitIndex<'rcx> {
     pub fn diff_worktree(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
         IndexWorktreeDiffer::new(self, pathspec).build_diff()
     }
@@ -271,7 +271,7 @@ impl<'r> BitIndex<'r> {
     }
 
     pub fn diff_head(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceDiff> {
-        self.diff_tree(self.repo.head_tree_oid()?, pathspec)
+        self.diff_tree(self.repo.head_tree()?, pathspec)
     }
 }
 
@@ -311,17 +311,17 @@ impl Diff for WorkspaceDiff {
     }
 }
 
-pub(crate) struct IndexWorktreeDiffer<'a, 'r> {
-    repo: BitRepo<'r>,
-    index: &'a mut BitIndex<'r>,
+pub(crate) struct IndexWorktreeDiffer<'a, 'rcx> {
+    repo: BitRepo<'rcx>,
+    index: &'a mut BitIndex<'rcx>,
     pathspec: Pathspec,
     diff: WorkspaceDiff,
     // directories that only contain untracked files
     _untracked_dirs: HashSet<BitPath>,
 }
 
-impl<'a, 'r> IndexWorktreeDiffer<'a, 'r> {
-    pub fn new(index: &'a mut BitIndex<'r>, pathspec: Pathspec) -> Self {
+impl<'a, 'rcx> IndexWorktreeDiffer<'a, 'rcx> {
+    pub fn new(index: &'a mut BitIndex<'rcx>, pathspec: Pathspec) -> Self {
         let repo = index.repo;
         Self {
             index,
@@ -333,7 +333,7 @@ impl<'a, 'r> IndexWorktreeDiffer<'a, 'r> {
     }
 }
 
-impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
+impl<'a, 'rcx> DiffBuilder<'rcx> for IndexWorktreeDiffer<'a, 'rcx> {
     type Diff = WorkspaceDiff;
 
     fn build_diff(mut self) -> BitResult<WorkspaceDiff> {
@@ -344,7 +344,7 @@ impl<'a, 'r> DiffBuilder<'r> for IndexWorktreeDiffer<'a, 'r> {
     }
 }
 
-impl<'a, 'r> Apply for IndexWorktreeDiffer<'a, 'r> {
+impl<'a, 'rcx> Apply for IndexWorktreeDiffer<'a, 'rcx> {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
         self.diff.new.push(*new);
         Ok(())
@@ -360,13 +360,13 @@ impl<'a, 'r> Apply for IndexWorktreeDiffer<'a, 'r> {
     }
 }
 
-impl<'a, 'r> Differ<'r> for IndexWorktreeDiffer<'a, 'r> {
-    fn index_mut(&mut self) -> &mut BitIndex<'r> {
+impl<'a, 'rcx> Differ<'rcx> for IndexWorktreeDiffer<'a, 'rcx> {
+    fn index_mut(&mut self) -> &mut BitIndex<'rcx> {
         self.index
     }
 }
 
-impl<'r> BitIndex<'r> {
+impl<'rcx> BitIndex<'rcx> {
     //? maybe the parameters to this function need to be less general
     //? and rather than be `old` and `new` needs to be `index_entry` and `worktree_entry
     /// determine's whether `new` is *definitely* different from `old`

@@ -322,3 +322,13 @@ fn test_index_tree_iterator_filter() -> BitResult<()> {
         })
     })
 }
+
+#[test]
+fn test_build_tree_from_tree_iter() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let mut tree_iter = repo.head_tree_iter()?;
+        let tree = tree_iter.build_tree(repo)?;
+        assert_eq!(tree, repo.head_tree()?);
+        Ok(())
+    })
+}

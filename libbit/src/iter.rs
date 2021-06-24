@@ -35,17 +35,17 @@ pub trait BitEntry {
 
 /// wrapper around `TreeIter` that skips the tree entries
 #[derive(Debug)]
-pub struct TreeEntryIter<'r> {
-    tree_iter: TreeIter<'r>,
+pub struct TreeEntryIter<'rcx> {
+    tree_iter: TreeIter<'rcx>,
 }
 
-impl<'r> TreeEntryIter<'r> {
-    pub fn new(repo: BitRepo<'r>, oid: Oid) -> Self {
+impl<'rcx> TreeEntryIter<'rcx> {
+    pub fn new(repo: BitRepo<'rcx>, oid: Oid) -> Self {
         Self { tree_iter: TreeIter::new(repo, oid) }
     }
 }
 
-impl<'r> FallibleIterator for TreeEntryIter<'r> {
+impl<'rcx> FallibleIterator for TreeEntryIter<'rcx> {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
@@ -84,8 +84,8 @@ impl FallibleIterator for DirIter {
     }
 }
 
-struct WorktreeIter<'r> {
-    repo: BitRepo<'r>,
+struct WorktreeIter<'rcx> {
+    repo: BitRepo<'rcx>,
     tracked: FxHashSet<BitPath>,
     // TODO ignoring all nonroot ignores for now
     // not sure what the correct collection for this is? some kind of tree where gitignores know their "parent" gitignore?
@@ -93,8 +93,8 @@ struct WorktreeIter<'r> {
     walk: walkdir::IntoIter,
 }
 
-impl<'r> WorktreeIter<'r> {
-    pub fn new(index: &BitIndex<'r>) -> BitResult<Self> {
+impl<'rcx> WorktreeIter<'rcx> {
+    pub fn new(index: &BitIndex<'rcx>) -> BitResult<Self> {
         let repo = index.repo;
         // ignoring any gitignore errors for now
         let ignore = vec![Gitignore::new(repo.workdir.join(".gitignore").as_path()).0];
@@ -202,22 +202,22 @@ pub trait BitEntryIterator = BitIterator<BitIndexEntry>;
 
 pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 
-impl<'r> BitIndex<'r> {
-    pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + 'r> {
+impl<'rcx> BitIndex<'rcx> {
+    pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + 'rcx> {
         trace!("worktree_iter()");
         WorktreeIter::new(&self)
     }
 }
 
-impl<'r> BitRepo<'r> {
-    pub fn tree_entry_iter(self, oid: Oid) -> BitResult<impl BitEntryIterator + 'r> {
+impl<'rcx> BitRepo<'rcx> {
+    pub fn tree_entry_iter(self, oid: Oid) -> BitResult<impl BitEntryIterator + 'rcx> {
         trace!("tree_entry_iter(oid: {})", oid);
         Ok(TreeEntryIter::new(self, oid))
     }
 
-    pub fn head_iter(self) -> BitResult<impl BitEntryIterator + 'r> {
+    pub fn head_iter(self) -> BitResult<impl BitEntryIterator + 'rcx> {
         trace!("head_iter()");
-        let oid = self.head_tree_oid()?;
+        let oid = self.head_tree()?;
         self.tree_entry_iter(oid)
     }
 }

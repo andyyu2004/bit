@@ -28,6 +28,10 @@ impl BitIndexInner {
         Self { entries, tree_cache, reuc }
     }
 
+    pub fn tree_iter(&self) -> IndexTreeIter<'_> {
+        IndexTreeIter::new(self)
+    }
+
     pub fn tree_cache(&self) -> Option<&BitTreeCache> {
         self.tree_cache.as_ref()
     }

@@ -1,8 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndex;
-use crate::obj::{
-    BitId, BitObjHeader, BitObjKind, MutableBlob, Oid, PartialOid, Tree, Treeish, WritableObject
-};
+use crate::obj::*;
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
 use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, SymbolicRef};
@@ -23,11 +21,11 @@ pub const BIT_CONFIG_FILE_PATH: &str = "config";
 pub const BIT_OBJECTS_DIR_PATH: &str = "objects";
 
 #[derive(Copy, Clone)]
-pub struct BitRepo<'r> {
-    ctxt: &'r RepoCtxt<'r>,
+pub struct BitRepo<'rcx> {
+    ctxt: &'rcx RepoCtxt<'rcx>,
 }
 
-pub struct RepoCtxt<'r> {
+pub struct RepoCtxt<'rcx> {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
     pub workdir: BitPath,
@@ -35,11 +33,11 @@ pub struct RepoCtxt<'r> {
     config_filepath: BitPath,
     index_filepath: BitPath,
     odb_cell: OnceCell<BitObjDb>,
-    refdb_cell: OnceCell<BitRefDb<'r>>,
-    index_cell: OnceCell<RefCell<BitIndex<'r>>>,
+    refdb_cell: OnceCell<BitRefDb<'rcx>>,
+    index_cell: OnceCell<RefCell<BitIndex<'rcx>>>,
 }
 
-pub trait Repo<'r> {
+pub trait Repo<'rcx> {
     type Odb: BitObjDbBackend;
     type RefDb: BitRefDbBackend;
 
@@ -47,13 +45,10 @@ pub trait Repo<'r> {
     fn refdb(&self) -> BitResult<&Self::RefDb>;
 }
 
-impl<'r> Repo<'r> for BitRepo<'r> {
+impl<'rcx> Repo<'rcx> for BitRepo<'rcx> {
     type Odb = BitObjDb;
-    type RefDb = BitRefDb<'r>;
+    type RefDb = BitRefDb<'rcx>;
 
-    // could consider doing something similar with the index itself
-    // but this would be much less trivial change
-    // and it would probably need to sit behind a LockfileGuard
     fn odb(&self) -> BitResult<&Self::Odb> {
         self.odb_cell.get_or_try_init(|| BitObjDb::new(self.bitdir.join(BIT_OBJECTS_DIR_PATH)))
     }
@@ -63,7 +58,7 @@ impl<'r> Repo<'r> for BitRepo<'r> {
     }
 }
 
-impl<'r> RepoCtxt<'r> {
+impl<'rcx> RepoCtxt<'rcx> {
     fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> BitResult<Self> {
         let workdir = BitPath::intern(workdir);
         let bitdir = BitPath::intern(bitdir);
@@ -109,9 +104,9 @@ impl<'r> RepoCtxt<'r> {
         assert!(bitdir.exists());
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
 
-        let ctxt = RepoCtxt::new(worktree, bitdir, config_filepath)?;
+        let rcx = RepoCtxt::new(worktree, bitdir, config_filepath)?;
 
-        let version = ctxt
+        let version = rcx
             .config()
             .repositoryformatversion()?
             .expect("`repositoryformatversion` missing in configuration");
@@ -122,18 +117,18 @@ impl<'r> RepoCtxt<'r> {
             version
         );
 
-        Ok(ctxt)
+        Ok(rcx)
     }
 
     fn load(path: impl AsRef<Path>) -> BitResult<Self> {
         Self::load_with_bitdir(path, ".git")
     }
 
-    pub fn with_res<R>(&'r self, f: impl FnOnce(BitRepo<'r>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_res<R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> BitResult<R>) -> BitResult<R> {
         self.with(f)
     }
 
-    pub fn with<R>(&'r self, f: impl FnOnce(BitRepo<'r>) -> R) -> R {
+    pub fn with<R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> R) -> R {
         f(BitRepo { ctxt: self })
     }
 
@@ -148,7 +143,7 @@ impl<'r> RepoCtxt<'r> {
     }
 }
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     /// returns `None` if the reference does not yet exist
     // don't think this can be written in terms of `fully_resolve_ref` below
     // if we were to do something like `fully_resolve_ref().ok()`, then all errors will result in None
@@ -203,7 +198,7 @@ impl<'r> BitRepo<'r> {
         tls::enter_repo(&ctxt, f)
     }
 
-    fn index_ref(&self) -> BitResult<&RefCell<BitIndex<'r>>> {
+    fn index_ref(&self) -> BitResult<&RefCell<BitIndex<'rcx>>> {
         self.index_cell
             .get_or_try_init::<_, BitGenericError>(|| Ok(RefCell::new(BitIndex::new(*self)?)))
     }
@@ -294,20 +289,9 @@ impl<'r> BitRepo<'r> {
         }
     }
 
-    /// the tree belonging to the `HEAD` reference, or an empty tree if either
-    /// HEAD does not exist, or is not fully resolvable
-    pub fn head_tree(&self) -> BitResult<Tree> {
-        let oid = match self.resolve_head()? {
-            BitRef::Direct(oid) => oid,
-            _ => return Ok(Tree::default()),
-        };
-        let commit = self.read_obj(oid)?.into_commit();
-        self.read_obj(commit.tree())?.into_tree()
-    }
-
     /// gets the oid of the tree belonging to the HEAD commit
     /// returns Oid::Unknown if there is no HEAD commit
-    pub fn head_tree_oid(&self) -> BitResult<Oid> {
+    pub fn head_tree(&self) -> BitResult<Oid> {
         let oid = match self.resolve_head()? {
             BitRef::Direct(oid) => oid,
             _ => return Ok(Oid::UNKNOWN),
@@ -444,8 +428,8 @@ impl Debug for BitRepo<'_> {
     }
 }
 
-impl<'r> Deref for BitRepo<'r> {
-    type Target = RepoCtxt<'r>;
+impl<'rcx> Deref for BitRepo<'rcx> {
+    type Target = RepoCtxt<'rcx>;
 
     fn deref(&self) -> &Self::Target {
         &self.ctxt

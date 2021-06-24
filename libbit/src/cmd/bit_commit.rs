@@ -4,7 +4,7 @@ use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind};
 use crate::repo::BitRepo;
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     pub fn bit_commit(&self, message: Option<String>) -> BitResult<()> {
         let bitref = self.commit(message)?;
         println!("committed {}", bitref);
@@ -22,7 +22,7 @@ impl<'r> BitRepo<'r> {
         let parent = self.try_fully_resolve_ref(sym)?;
 
         let tree = self.write_tree()?;
-        let head_tree = self.head_tree_oid()?;
+        let head_tree = self.head_tree()?;
 
         // don't allow empty commits; also don't currently provide the option to do so as it's not that useful
         // the rhs of the disjunction checks for the case of an empty initial commit

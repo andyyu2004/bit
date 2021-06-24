@@ -59,6 +59,13 @@ impl BitPath {
         self.join("")
     }
 
+    /// return the filename of a path, empty path if no filename
+    pub fn file_name(self) -> Self {
+        Self::intern(
+            self.as_path().file_name().map(|filename| filename.to_str().unwrap()).unwrap_or(""),
+        )
+    }
+
     pub fn join(self, path: impl AsRef<Path>) -> Self {
         Self::intern(self.as_path().join(path))
     }

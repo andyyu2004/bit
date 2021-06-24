@@ -1,4 +1,6 @@
 use super::*;
+use crate::obj::MutableTree;
+use std::iter::FromIterator;
 
 /// tree iterators allow stepping over entire trees (skipping all entries recursively)
 pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
@@ -25,6 +27,19 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
         Ok(())
     }
 
+    /// creates a tree object from a tree_iterator
+    /// the tree_iterator must be "fresh" and completely unconsumed
+    fn build_tree(&mut self, repo: BitRepo<'_>) -> BitResult<Oid>
+    where
+        Self: Sized,
+    {
+        // skip root entry
+        let root = self.next()?.unwrap();
+        let oid = build_tree_internal(self, repo, BitPath::EMPTY)?;
+        debug_assert!(root.oid.is_unknown() || root.oid == oid);
+        Ok(oid)
+    }
+
     // seems difficult to provide a peek method just via an adaptor
     // unclear how to implement peek in terms of `over` and `next`
     // in particular for the case of `TreeIter`,
@@ -34,6 +49,46 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
     // probably better to just let the implementor deal with it
     // especially as the implementation is probably trivial
     fn peek(&mut self) -> BitResult<Option<Self::Item>>;
+}
+
+impl<'a, I: BitTreeIterator> BitTreeIterator for &'a mut I {
+    fn over(&mut self) -> BitResult<Option<Self::Item>> {
+        (**self).over()
+    }
+
+    fn peek(&mut self) -> BitResult<Option<Self::Item>> {
+        (**self).peek()
+    }
+}
+
+fn build_tree_internal(
+    iter: &mut impl BitTreeIterator,
+    repo: BitRepo<'_>,
+    base_path: BitPath,
+) -> BitResult<Oid> {
+    let mut entries = vec![];
+    loop {
+        let entry = match iter.peek()? {
+            Some(entry) if entry.path.starts_with(base_path) => {
+                iter.next()?;
+                match entry.mode {
+                    FileMode::REG | FileMode::EXEC | FileMode::LINK =>
+                        TreeEntry { oid: entry.oid, mode: entry.mode, path: entry.path.file_name() },
+                    FileMode::TREE => TreeEntry {
+                        oid: build_tree_internal(iter, repo, entry.path)?,
+                        mode: FileMode::TREE,
+                        path: entry.path.file_name(),
+                    },
+                    FileMode::GITLINK => todo!(),
+                }
+            }
+            _ => break,
+        };
+        entries.push(entry);
+    }
+    debug_assert!(entries.is_sorted());
+    let tree = MutableTree::from_iter(entries);
+    repo.write_obj(&tree)
 }
 
 impl<I, F> BitTreeIterator for fallible_iterator::Filter<I, F>
@@ -64,21 +119,21 @@ where
     }
 }
 
-impl<'r> BitRepo<'r> {
-    pub fn head_tree_iter(self) -> BitResult<TreeIter<'r>> {
-        let oid = self.head_tree_oid()?;
+impl<'rcx> BitRepo<'rcx> {
+    pub fn head_tree_iter(self) -> BitResult<TreeIter<'rcx>> {
+        let oid = self.head_tree()?;
         Ok(self.tree_iter(oid))
     }
 
     /// return's tree iterator for a tree with `oid`
-    pub fn tree_iter(self, oid: Oid) -> TreeIter<'r> {
+    pub fn tree_iter(self, oid: Oid) -> TreeIter<'rcx> {
         TreeIter::new(self, oid)
     }
 }
 
 #[derive(Debug)]
-pub struct TreeIter<'r> {
-    repo: BitRepo<'r>,
+pub struct TreeIter<'rcx> {
+    repo: BitRepo<'rcx>,
     // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself
     entry_stack: Vec<(BitPath, TreeEntry)>,
     /// the number of entries in the stack before the most recent directory was pushed
@@ -86,8 +141,8 @@ pub struct TreeIter<'r> {
     previous_len: usize,
 }
 
-impl<'r> TreeIter<'r> {
-    pub fn new(repo: BitRepo<'r>, oid: Oid) -> Self {
+impl<'rcx> TreeIter<'rcx> {
+    pub fn new(repo: BitRepo<'rcx>, oid: Oid) -> Self {
         debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_tree());
         // if the `oid` is unknown then we just want an empty iterator
         let entry_stack = if oid.is_known() {
@@ -99,7 +154,7 @@ impl<'r> TreeIter<'r> {
     }
 }
 
-impl<'r> FallibleIterator for TreeIter<'r> {
+impl<'rcx> FallibleIterator for TreeIter<'rcx> {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
@@ -138,7 +193,7 @@ impl<'r> FallibleIterator for TreeIter<'r> {
         }
     }
 }
-impl<'r> BitTreeIterator for TreeIter<'r> {
+impl<'rcx> BitTreeIterator for TreeIter<'rcx> {
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
         match self.next()? {
             Some(entry) => {

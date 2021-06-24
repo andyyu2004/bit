@@ -1,15 +1,16 @@
 use super::*;
+use crate::index::BitIndexInner;
 
-pub struct IndexTreeIter<'a, 'r> {
-    index: &'a BitIndex<'r>,
+pub struct IndexTreeIter<'a> {
+    index: &'a BitIndexInner,
     entry_iter: Peekable<IndexEntryIterator>,
     // pseudotrees that have been yielded
     pseudotrees: FxHashSet<BitPath>,
     peeked: Option<BitIndexEntry>,
 }
 
-impl<'a, 'r> IndexTreeIter<'a, 'r> {
-    pub fn new(index: &'a BitIndex<'r>) -> Self {
+impl<'a> IndexTreeIter<'a> {
+    pub fn new(index: &'a BitIndexInner) -> Self {
         Self {
             index,
             peeked: None,
@@ -45,7 +46,7 @@ impl<'a, 'r> IndexTreeIter<'a, 'r> {
     }
 }
 
-impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
+impl<'a> FallibleIterator for IndexTreeIter<'a> {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
@@ -76,7 +77,7 @@ impl<'a, 'r> FallibleIterator for IndexTreeIter<'a, 'r> {
     }
 }
 
-impl<'a, 'r> BitTreeIterator for IndexTreeIter<'a, 'r> {
+impl<'a> BitTreeIterator for IndexTreeIter<'a> {
     fn peek(&mut self) -> BitResult<Option<Self::Item>> {
         if let Some(peeked) = self.peeked {
             Ok(Some(peeked))

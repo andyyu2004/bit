@@ -51,13 +51,13 @@ impl Cmd for BitDiffCliOpts {
 // if this is the case, we could just have two cases
 // - if the hash is known, then we read it from the object store,
 // - otherwise, we read it from disk
-struct DiffFormatter<'r, W> {
-    repo: BitRepo<'r>,
+struct DiffFormatter<'rcx, W> {
+    repo: BitRepo<'rcx>,
     writer: W,
 }
 
-impl<'r, W: Write> DiffFormatter<'r, W> {
-    pub fn new(repo: BitRepo<'r>, writer: W) -> BitResult<Self> {
+impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
+    pub fn new(repo: BitRepo<'rcx>, writer: W) -> BitResult<Self> {
         Ok(Self { repo, writer })
     }
 
@@ -74,7 +74,7 @@ impl<'r, W: Write> DiffFormatter<'r, W> {
     }
 }
 
-impl<'r, W: Write> Apply for DiffFormatter<'r, W> {
+impl<'rcx, W: Write> Apply for DiffFormatter<'rcx, W> {
     fn on_created(&mut self, _new: &BitIndexEntry) -> BitResult<()> {
         todo!()
     }

@@ -7,7 +7,7 @@ use crate::repo::BitRepo;
 #[test]
 fn test_diff_two_same_trees() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        let oid = repo.head_tree_oid()?;
+        let oid = repo.head_tree()?;
         // TODO test performance and number of comparisons etc
         let diff = repo.diff_tree_to_tree(oid, oid)?;
         assert!(diff.is_empty());
@@ -21,7 +21,7 @@ fn test_diff_head_prime_to_head() -> BitResult<()> {
         let head_prime = repo.resolve_rev(&parse_rev!("HEAD^"))?;
         let oid = repo.read_obj(head_prime)?.into_commit().tree;
 
-        let diff = repo.diff_tree_to_tree(oid, repo.head_tree_oid()?)?;
+        let diff = repo.diff_tree_to_tree(oid, repo.head_tree()?)?;
         assert!(diff.modified.is_empty());
         assert!(diff.deleted.is_empty());
         assert_eq!(diff.new.len(), 4);

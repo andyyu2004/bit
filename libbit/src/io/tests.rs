@@ -5,7 +5,7 @@ use std::io::BufReader;
 // checks that hash reader incrementally hashes correctly without the buffer messing stuff up
 #[test]
 fn test_hash_reader_generates_correct_hash() -> BitResult<()> {
-    let original_bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
+    let original_bytes = include_bytes!("../../tests/files/mediumindex") as &[u8];
     let mut reader = BufReader::new(original_bytes);
     let mut hash_reader = HashReader::new_sha1(&mut reader);
     let bytes = hash_reader.read_to_vec()?;

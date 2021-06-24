@@ -3,6 +3,7 @@ use crate::error::BitGenericError;
 use crate::obj::Treeish;
 use crate::path::BitPath;
 use fallible_iterator::FallibleIterator;
+use indexmap::indexmap;
 use itertools::Itertools;
 use quickcheck::Arbitrary;
 use rand::Rng;
@@ -46,11 +47,12 @@ impl Arbitrary for BitIndexEntry {
 impl BitTreeCache {
     fn arbitrary_depth_limited(g: &mut quickcheck::Gen, size: u8) -> Self {
         let children = if size == 0 {
-            vec![]
+            indexmap! {}
         } else {
             (0..rand::thread_rng().gen_range(0..5))
                 .map(|_| Self::arbitrary_depth_limited(g, size / 2))
-                .collect_vec()
+                .map(|subtree| (subtree.path, subtree))
+                .collect()
         };
 
         Self {
@@ -64,7 +66,7 @@ impl BitTreeCache {
     }
 }
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     pub fn index_add(
         &self,
         pathspec: impl TryInto<Pathspec, Error = BitGenericError>,
@@ -79,7 +81,7 @@ impl<'r> BitRepo<'r> {
     }
 }
 
-impl<'r> BitIndex<'r> {
+impl<'rcx> BitIndex<'rcx> {
     #[cfg(test)]
     pub fn add_str(&mut self, s: &str) -> BitResult<()> {
         let pathspec = s.parse::<Pathspec>()?;
@@ -137,7 +139,7 @@ fn test_add_symlink() -> BitResult<()> {
 
 #[test]
 fn test_parse_large_index() -> BitResult<()> {
-    let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
+    let bytes = include_bytes!("../../tests/files/mediumindex") as &[u8];
     let index = BitIndexInner::deserialize_unbuffered(bytes)?;
     assert_eq!(index.len(), 31);
     Ok(())
@@ -285,7 +287,6 @@ fn test_status_staged_deleted_files() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         rm!(repo: "foo");
         bit_add_all!(repo);
-        dbg_entry_iter!(repo.tree_iter(repo.head_tree_oid()?));
         repo.with_index(|index| {
             dbg_entry_iter!(index.tree_iter());
             Ok(())
@@ -326,24 +327,29 @@ fn add_file_to_index() -> BitResult<()> {
     })
 }
 
+macro_rules! parse_and_serialize_index {
+    ($path:literal) => {{
+        let bytes = include_bytes!($path) as &[u8];
+        let index = BitIndexInner::deserialize_unbuffered(bytes)?;
+        let mut buf = vec![];
+        index.serialize(&mut buf)?;
+        assert_eq!(bytes, buf);
+        Ok(())
+    }};
+}
 #[test]
 fn parse_and_serialize_small_index() -> BitResult<()> {
-    let bytes = include_bytes!("../../tests/files/smallindex") as &[u8];
-    let index = BitIndexInner::deserialize_unbuffered(bytes)?;
-    let mut buf = vec![];
-    index.serialize(&mut buf)?;
-    assert_eq!(bytes, buf);
-    Ok(())
+    parse_and_serialize_index!("../../tests/files/smallindex")
 }
 
 #[test]
-fn parse_and_serialize_large_index() -> BitResult<()> {
-    let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
-    let index = BitIndexInner::deserialize_unbuffered(bytes)?;
-    let mut buf = vec![];
-    index.serialize(&mut buf)?;
-    assert_eq!(bytes, buf);
-    Ok(())
+fn parse_and_serialize_medium_index() -> BitResult<()> {
+    parse_and_serialize_index!("../../tests/files/mediumindex")
+}
+
+#[test]
+fn parse_and_serialize_lg2_index() -> BitResult<()> {
+    parse_and_serialize_index!("../../tests/files/lg2index")
 }
 
 #[test]
@@ -351,7 +357,7 @@ fn parse_small_index() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/smallindex") as &[u8];
     let index = BitIndexInner::deserialize_unbuffered(bytes)?;
     // data from `git ls-files --stage --debug`
-    // the flags show up as  `1` under git, not sure how they're parsed exactly
+    // the flags show up as  `1` under git, not sure how they'rcxe parsed exactly
     let entries = vec![
         BitIndexEntry {
             ctime: Timespec::new(1615087202, 541384113),
@@ -391,7 +397,7 @@ fn parse_small_index() -> BitResult<()> {
 
 #[test]
 fn parse_index_header() -> BitResult<()> {
-    let bytes = include_bytes!("../../tests/files/largeindex") as &[u8];
+    let bytes = include_bytes!("../../tests/files/mediumindex") as &[u8];
     let header = BitIndexInner::parse_header(BufReader::new(bytes))?;
     assert_eq!(
         header,

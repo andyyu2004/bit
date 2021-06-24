@@ -1,56 +1,79 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::obj::{BitObjKind, BitObject, Oid, Tree};
+use crate::obj::{BitObjKind, BitObject, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
+use indexmap::IndexMap;
 use std::io::{BufRead, Write};
-use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BitTreeCache {
+    /// relative path to parent
     pub path: BitPath,
     // -1 means invalid
     // the number of entries in the index that is covered by the tree this entry represents
     // (i.e. the number of "files" under this tree)
     pub entry_count: isize,
-    pub children: Vec<BitTreeCache>,
+    // this datastructure preserves insertion order *provided there are no removals*
+    // don't think that the order of this actually matters, but it is useful for testing that deserialize and serialization are inverses
+    pub children: IndexMap<BitPath, BitTreeCache>,
     pub oid: Oid,
 }
 
 impl Default for BitTreeCache {
     fn default() -> Self {
-        Self { path: BitPath::EMPTY, oid: Oid::UNKNOWN, entry_count: -1, children: vec![] }
+        Self {
+            path: BitPath::EMPTY,
+            oid: Oid::UNKNOWN,
+            entry_count: -1,
+            children: Default::default(),
+        }
     }
 }
 
-macro_rules! find_child_base_case {
-    ($self:expr, $path:ident) => {
-        let $path = $path.as_ref();
-        debug_assert!($path.is_relative());
-        if $self.path.as_path() == $path {
-            return Some($self);
-        }
-    };
-}
-
 impl BitTreeCache {
-    pub fn find_valid_child(&self, path: impl AsRef<Path>) -> Option<&BitTreeCache> {
+    pub fn find_valid_child(&self, path: BitPath) -> Option<&Self> {
         match self.find_child(path) {
             Some(child) if child.entry_count > 0 => Some(child),
             _ => None,
         }
     }
 
-    pub fn find_child(&self, path: impl AsRef<Path>) -> Option<&BitTreeCache> {
-        find_child_base_case!(self, path);
-        self.children.iter().find_map(|child| child.find_child(path))
+    pub fn find_child(&self, path: BitPath) -> Option<&Self> {
+        self.find_child_internal(path.components().iter().copied())
     }
 
-    pub fn find_child_mut(&mut self, path: impl AsRef<Path>) -> Option<&mut BitTreeCache> {
-        find_child_base_case!(self, path);
-        self.children.iter_mut().find_map(|child| child.find_child_mut(path))
+    fn find_child_internal(&self, mut components: impl Iterator<Item = BitPath>) -> Option<&Self> {
+        match components.next() {
+            Some(next) => self.children.get(&next)?.find_child_internal(components),
+            None => Some(self),
+        }
     }
+
+    pub fn find_child_mut(&mut self, path: BitPath) -> Option<&mut Self> {
+        self.find_child_mut_internal(path.components().iter().copied())
+    }
+
+    fn find_child_mut_internal(
+        &mut self,
+        mut components: impl Iterator<Item = BitPath>,
+    ) -> Option<&mut Self> {
+        match components.next() {
+            Some(next) => self.children.get_mut(&next)?.find_child_mut_internal(components),
+            None => Some(self),
+        }
+    }
+
+    // pub fn find_child(&self, path: impl AsRef<Path>) -> Option<&Self> {
+    //     find_child_base_case!(self, path);
+    //     self.children.iter().find_map(|child| child.find_child(path))
+    // }
+
+    // pub fn find_child_mut(&mut self, path: impl AsRef<Path>) -> Option<&mut Self> {
+    //     find_child_base_case!(self, path);
+    //     self.children.iter_mut().find_map(|child| child.find_child_mut(path))
+    // }
 
     pub fn invalidate_path(&mut self, path: BitPath) {
         self.entry_count = -1;
@@ -70,12 +93,13 @@ impl BitTreeCache {
         if self.is_valid() {
             false
         } else {
-            self.children.iter().all(|child| child.is_fully_valid())
+            self.children.values().all(|child| child.is_fully_valid())
         }
     }
 
-    pub fn read_tree_cache(repo: BitRepo<'_>, tree: &Tree) -> BitResult<Self> {
-        Self::read_tree_internal(repo, tree, BitPath::EMPTY)
+    pub fn read_tree_cache(repo: BitRepo<'_>, tree: Oid) -> BitResult<Self> {
+        let tree = repo.read_obj(tree)?.into_tree()?;
+        Self::read_tree_internal(repo, &tree, BitPath::EMPTY)
     }
 
     fn read_tree_internal(repo: BitRepo<'_>, tree: &Tree, path: BitPath) -> BitResult<Self> {
@@ -85,15 +109,15 @@ impl BitTreeCache {
         cache_tree.path = path;
 
         // alloacate a conservative amount of space assuming all entries are trees
-        cache_tree.children = Vec::with_capacity(tree.entries.len());
+        cache_tree.children = IndexMap::with_capacity(tree.entries.len());
 
         for entry in &tree.entries {
             match repo.read_obj(entry.oid)? {
                 BitObjKind::Blob(..) => cache_tree.entry_count += 1,
                 BitObjKind::Tree(subtree) => {
-                    let child = Self::read_tree_internal(repo, &subtree, path.join(entry.path))?;
+                    let child = Self::read_tree_internal(repo, &subtree, entry.path)?;
                     cache_tree.entry_count += child.entry_count;
-                    cache_tree.children.push(child);
+                    cache_tree.children.insert(entry.path, child);
                 }
                 BitObjKind::Commit(..) | BitObjKind::Tag(..) => unreachable!(),
             }
@@ -112,7 +136,7 @@ impl Serialize for BitTreeCache {
             writer.write_oid(self.oid)?;
         }
 
-        for child in &self.children {
+        for child in self.children.values() {
             child.serialize(writer)?;
         }
 
@@ -142,7 +166,10 @@ impl BitTreeCache {
 
         let children = (0..children_count)
             .map(|_| Self::deserialize_inner(reader))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|tree_cache| (tree_cache.path, tree_cache))
+            .collect();
         Ok(Self { path, entry_count, children, oid })
     }
 }

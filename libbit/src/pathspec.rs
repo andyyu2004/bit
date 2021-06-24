@@ -62,7 +62,10 @@ impl Pathspec {
         None
     }
 
-    pub fn match_worktree<'r>(self, index: &BitIndex<'r>) -> BitResult<impl BitEntryIterator + 'r> {
+    pub fn match_worktree<'rcx>(
+        self,
+        index: &BitIndex<'rcx>,
+    ) -> BitResult<impl BitEntryIterator + 'rcx> {
         self.match_entry_iterator(index.worktree_iter()?)
     }
 
@@ -70,15 +73,15 @@ impl Pathspec {
         self.match_entry_iterator(index.iter())
     }
 
-    pub fn match_tree<'r>(
+    pub fn match_tree<'rcx>(
         &self,
-        repo: BitRepo<'r>,
+        repo: BitRepo<'rcx>,
         oid: Oid,
-    ) -> BitResult<impl BitEntryIterator + 'r> {
+    ) -> BitResult<impl BitEntryIterator + 'rcx> {
         self.match_entry_iterator(repo.tree_entry_iter(oid)?)
     }
 
-    pub fn match_head<'r>(&self, repo: BitRepo<'r>) -> BitResult<impl BitEntryIterator + 'r> {
+    pub fn match_head<'rcx>(&self, repo: BitRepo<'rcx>) -> BitResult<impl BitEntryIterator + 'rcx> {
         self.match_entry_iterator(repo.head_iter()?)
     }
 

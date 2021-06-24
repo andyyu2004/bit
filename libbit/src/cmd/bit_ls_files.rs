@@ -6,7 +6,7 @@ pub struct BitLsFilesOpts {
     pub stage: bool,
 }
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     pub fn bit_ls_files(&self, opts: BitLsFilesOpts) -> BitResult<()> {
         self.with_index(|index| {
             index.iter().for_each(|entry| {

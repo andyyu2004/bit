@@ -17,7 +17,7 @@ pub enum Revspec {
     Ancestor(Box<Revspec>, u32),
 }
 
-impl<'r> BitRepo<'r> {
+impl<'rcx> BitRepo<'rcx> {
     pub fn resolve_rev(self, rev: &LazyRevspec) -> BitResult<Oid> {
         self.resolve_rev_inner(rev.eval(self)?)
     }
@@ -92,13 +92,13 @@ lazy_static! {
     };
 }
 
-struct RevspecParser<'a, 'r> {
-    repo: BitRepo<'r>,
+struct RevspecParser<'a, 'rcx> {
+    repo: BitRepo<'rcx>,
     src: &'a str,
 }
 
-impl<'a, 'r> RevspecParser<'a, 'r> {
-    pub fn new(repo: BitRepo<'r>, src: &'a str) -> Self {
+impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
+    pub fn new(repo: BitRepo<'rcx>, src: &'a str) -> Self {
         Self { repo, src }
     }
 
