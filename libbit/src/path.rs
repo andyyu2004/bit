@@ -47,9 +47,10 @@ impl BitPath {
     }
 
     /// adds trailing slash which is crucial for correct comparison ordering
+    // *IMPORTANT* do not intern the result of the trailing slash as it may get normalized away
     // TODO consider a more succinct name
-    pub fn join_trailing_slash(self) -> Self {
-        self.join("")
+    pub fn join_trailing_slash(self) -> PathBuf {
+        self.as_path().join("")
     }
 
     /// return the filename of a path, empty path if no filename
@@ -83,6 +84,10 @@ impl BitPath {
         // quite questionable turning paths into strings and then bytes
         // probably not very platform agnostic
         with_path_interner_mut(|interner| interner.intern_path(path))
+    }
+
+    pub fn as_str(self) -> &'static str {
+        self.as_path().to_str().unwrap()
     }
 
     pub fn as_path(self) -> &'static Path {

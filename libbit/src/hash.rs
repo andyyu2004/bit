@@ -122,7 +122,8 @@ impl Debug for SHA1Hash {
 
 impl Display for SHA1Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(self))
+        let hex = hex::encode(self);
+        if f.alternate() { write!(f, "{}", &hex[..7]) } else { write!(f, "{}", hex) }
     }
 }
 

@@ -127,6 +127,7 @@ thread_local! {
         EMPTY => "",
         HEAD => "HEAD",
         DOT_GIT => ".git",
+        REMOVED => "removed",
         A => "a",
         B => "b"
     }));

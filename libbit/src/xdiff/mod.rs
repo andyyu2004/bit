@@ -1,3 +1,7 @@
+mod format;
+
+pub use format::*;
+
 use diffy::PatchFormatter;
 use std::io::{self, Write};
 use std::ops::{Index, IndexMut};
@@ -98,3 +102,5 @@ impl<'a, 's> MyersDiff<'a, 's> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod xdiff_format_tests;

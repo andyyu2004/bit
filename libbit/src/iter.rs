@@ -15,6 +15,7 @@ use fallible_iterator::{FallibleIterator, Peekable};
 use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
 use rustc_hash::FxHashSet;
+use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -36,8 +37,12 @@ pub trait BitEntry {
     // i.e. index.rs < index/
     // however, the trailing slash is not actually stored in the tree entry path (TODO confirm against git)
     // we fix this by appending appending a slash
-    fn sort_path(&self) -> BitPath {
-        if self.mode() == FileMode::TREE { self.path().join_trailing_slash() } else { self.path() }
+    fn sort_path(&self) -> Cow<'static, Path> {
+        if self.mode() == FileMode::TREE {
+            Cow::Owned(self.path().join_trailing_slash())
+        } else {
+            Cow::Borrowed(self.path().as_path())
+        }
     }
 }
 

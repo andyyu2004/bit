@@ -198,7 +198,7 @@ impl PartialOrd for TreeEntry {
 
 impl Ord for TreeEntry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.sort_path().cmp(&other.sort_path())
+        BitPath::path_cmp(self.sort_path().as_ref(), other.sort_path().as_ref())
     }
 }
 
