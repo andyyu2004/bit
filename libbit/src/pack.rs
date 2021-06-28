@@ -20,7 +20,7 @@ const PACK_IDX_HEADER_SIZE: u64 = 8;
 const CRC_SIZE: u64 = 4;
 const OFFSET_SIZE: u64 = 4;
 /// maximum 31 bit number (highest bit represents it uses a large offset in the EXT layer)
-const MAX_OFFSET: u32 = 0x7fffffff;
+const MAX_OFFSET: u64 = 0x7fffffff;
 
 impl BitPackObjRaw {
     fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
@@ -231,17 +231,22 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         let index = self.find_oid_index(oid)?;
         debug_assert_eq!(oid, self.read_from(Layer::Oid, index)?);
         let crc = self.read_from::<u32>(Layer::Crc, index)?;
-        let offset = self.read_from::<u32>(Layer::Ofs, index)?;
-        assert!(offset < MAX_OFFSET, "todo ext");
+        let mut offset = self.read_from::<u32>(Layer::Ofs, index)? as u64;
         trace!("PackIndexReader::find_oid_crc_offset(..) -> ({}, {})", crc, offset);
-        Ok((crc, offset as u64))
+
+        if offset > MAX_OFFSET {
+            let ext_index = offset & MAX_OFFSET;
+            offset = self.read_from(Layer::Ext, ext_index as u64)?;
+        }
+
+        Ok((crc, offset))
     }
 
     /// returns the offset of the start of the layer relative to the start of
     /// the pack index in bytes
     pub fn offset_of(&mut self, layer: Layer, index: u64) -> u64 {
         debug_assert!(layer < Layer::Ext);
-        const SIZE: [u64; 3] = [20, 4, 4];
+        const SIZE: [u64; 4] = [20, 4, 4, 8];
         let layer = layer.to_usize().unwrap();
         let base = PACK_IDX_HEADER_SIZE
             + FANOUT_SIZE
