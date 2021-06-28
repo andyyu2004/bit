@@ -20,8 +20,8 @@ impl Timespec {
     }
 
     pub fn new_i64(sec: i64, nano: i64) -> Self {
-        assert!(sec < u32::MAX as i64);
-        assert!(nano < u32::MAX as i64);
+        debug_assert!(sec < u32::MAX as i64);
+        debug_assert!(nano < u32::MAX as i64);
         Self::new(sec as u32, nano as u32)
     }
 

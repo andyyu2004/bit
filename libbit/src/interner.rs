@@ -94,7 +94,7 @@ impl Interner {
         }
         let path = self.get_str(bitpath);
         let components = self.intern_components(path);
-        assert!(self.components.insert(bitpath, components).is_none());
+        debug_assert!(self.components.insert(bitpath, components).is_none());
         components
     }
 

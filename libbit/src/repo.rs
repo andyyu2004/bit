@@ -101,7 +101,7 @@ impl<'rcx> RepoCtxt<'rcx> {
             .canonicalize()
             .with_context(|| anyhow!("failed to load bit in non-existent directory"))?;
         let bitdir = worktree.join(bitdir);
-        assert!(bitdir.exists());
+        debug_assert!(bitdir.exists());
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
 
         let rcx = RepoCtxt::new(worktree, bitdir, config_filepath)?;

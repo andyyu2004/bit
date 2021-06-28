@@ -14,7 +14,7 @@ use crate::hash::BIT_HASH_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::{BitEntryIterator, BitTreeIterator, IndexTreeIter};
 use crate::lockfile::Filelock;
-use crate::obj::{BitObject, FileMode, MutableTree, Oid, TreeEntry};
+use crate::obj::{FileMode, Oid, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
@@ -24,13 +24,11 @@ use bitflags::bitflags;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::io::{prelude::*, BufReader};
-use std::iter::Peekable;
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
 
 const BIT_INDEX_HEADER_SIG: &[u8; 4] = b"DIRC";
 const BIT_INDEX_TREECACHE_SIG: &[u8; 4] = b"TREE";
@@ -206,31 +204,6 @@ impl MergeStage {
 impl Display for MergeStage {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", *self as u8)
-    }
-}
-
-impl BitIndexInner {
-    fn parse_header(mut r: impl BufRead) -> BitResult<BitIndexHeader> {
-        let mut signature = [0u8; 4];
-        r.read_exact(&mut signature)?;
-        assert_eq!(&signature, BIT_INDEX_HEADER_SIG);
-        let version = r.read_u32()?;
-        ensure!(version == 2, "Only index format v2 is supported");
-        let entryc = r.read_u32()?;
-
-        Ok(BitIndexHeader { signature, version, entryc })
-    }
-
-    fn parse_extensions(mut buf: &[u8]) -> BitResult<HashMap<[u8; 4], BitIndexExtension>> {
-        let mut extensions = HashMap::new();
-        while buf.len() > BIT_HASH_SIZE {
-            let signature: [u8; 4] = buf[0..4].try_into().unwrap();
-            let size = u32::from_be_bytes(buf[4..8].try_into().unwrap());
-            let data = buf[8..8 + size as usize].to_vec();
-            extensions.insert(signature, BitIndexExtension { signature, size, data });
-            buf = &buf[8 + size as usize..];
-        }
-        Ok(extensions)
     }
 }
 

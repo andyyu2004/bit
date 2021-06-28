@@ -116,6 +116,35 @@ impl BitIndexInner {
     }
 }
 
+impl BitIndexInner {
+    pub(super) fn parse_header(mut r: impl BufRead) -> BitResult<BitIndexHeader> {
+        let mut signature = [0u8; 4];
+        r.read_exact(&mut signature)?;
+        assert_eq!(&signature, BIT_INDEX_HEADER_SIG);
+        let version = r.read_u32()?;
+        ensure!(
+            version == 2 || version == 3,
+            "Only index formats v2 and v3 are supported (found version `{}`)",
+            version
+        );
+        let entryc = r.read_u32()?;
+
+        Ok(BitIndexHeader { signature, version, entryc })
+    }
+
+    fn parse_extensions(mut buf: &[u8]) -> BitResult<HashMap<[u8; 4], BitIndexExtension>> {
+        let mut extensions = HashMap::new();
+        while buf.len() > BIT_HASH_SIZE {
+            let signature: [u8; 4] = buf[0..4].try_into().unwrap();
+            let size = u32::from_be_bytes(buf[4..8].try_into().unwrap());
+            let data = buf[8..8 + size as usize].to_vec();
+            extensions.insert(signature, BitIndexExtension { signature, size, data });
+            buf = &buf[8 + size as usize..];
+        }
+        Ok(extensions)
+    }
+}
+
 impl Serialize for BitIndexInner {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         let mut hash_writer = HashWriter::new_sha1(writer);

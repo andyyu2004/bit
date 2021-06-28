@@ -18,6 +18,12 @@ impl Arbitrary for BitIndexEntries {
     }
 }
 
+impl Arbitrary for BitIndexEntryExtendedFlags {
+    fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
+        Self::default()
+    }
+}
+
 impl Arbitrary for BitTreeCache {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
         Self::arbitrary_depth_limited(g, rand::thread_rng().gen_range(0..30))
@@ -39,6 +45,7 @@ impl Arbitrary for BitIndexEntry {
             filesize: Arbitrary::arbitrary(g),
             oid: Arbitrary::arbitrary(g),
             flags,
+            extended_flags: Arbitrary::arbitrary(g),
             path,
         }
     }
@@ -368,6 +375,7 @@ fn parse_small_index() -> BitResult<()> {
             gid: 1000,
             filesize: 6,
             flags: BitIndexEntryFlags::new(12),
+            extended_flags: BitIndexEntryExtendedFlags::default(),
             path: BitPath::intern("dir/test.txt"),
             mode: FileMode::REG,
             oid: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
@@ -381,6 +389,7 @@ fn parse_small_index() -> BitResult<()> {
             gid: 1000,
             filesize: 6,
             flags: BitIndexEntryFlags::new(8),
+            extended_flags: BitIndexEntryExtendedFlags::default(),
             path: BitPath::intern("test.txt"),
             mode: FileMode::REG,
             oid: Oid::from_str("ce013625030ba8dba906f756967f9e9ca394464a").unwrap(),
@@ -482,15 +491,15 @@ fn index_flags_test() {
 
 #[test]
 fn index_entry_padding_test() {
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(8), 2);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(9), 1);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(10), 8);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(11), 7);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(12), 6);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(13), 5);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(14), 4);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(15), 3);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(16), 2);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(17), 1);
-    assert_eq!(BitIndexEntry::padding_len_for_filepath(18), 8);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(8, false), 2);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(9, false), 1);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(10, false), 8);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(11, false), 7);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(12, false), 6);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(13, false), 5);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(14, false), 4);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(15, false), 3);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(16, false), 2);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(17, false), 1);
+    assert_eq!(BitIndexEntry::padding_len_for_filepath(18, false), 8);
 }

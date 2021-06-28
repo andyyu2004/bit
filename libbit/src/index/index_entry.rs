@@ -47,6 +47,9 @@ impl Serialize for BitIndexEntry {
         writer.write_u32(self.filesize)?;
         writer.write_oid(self.oid)?;
         writer.write_u16(self.flags.0)?;
+        if self.flags.extended() {
+            writer.write_u16(self.extended_flags.0)?;
+        }
         writer.write_all(self.path.as_bytes())?;
         writer.write_all(&[0u8; 8][..self.padding_len()])?;
         Ok(())
@@ -65,11 +68,17 @@ impl Deserialize for BitIndexEntry {
         let filesize = r.read_u32()?;
         let oid = r.read_oid()?;
         let flags = BitIndexEntryFlags::new(r.read_u16()?);
+        let extended_flags = BitIndexEntryExtendedFlags::new(
+            flags.extended().then(|| r.read_u16()).transpose()?.unwrap_or_default(),
+        );
         // TODO optimization of skipping ahead flags.path_len() bytes instead of a linear scan to find the next null byte
         let path = r.read_null_terminated_path()?;
 
-        assert!(path.is_relative());
-        assert!(path.len() <= 0xfff && flags.path_len() as usize == path.len());
+        debug_assert!(path.is_relative());
+        debug_assert!(
+            flags.path_len() as usize == path.len()
+                || path.len() > 0xfff && flags.path_len() == 0xff
+        );
 
         let entry = BitIndexEntry {
             ctime,
@@ -82,6 +91,7 @@ impl Deserialize for BitIndexEntry {
             filesize,
             oid,
             flags,
+            extended_flags,
             path,
         };
 
@@ -116,6 +126,7 @@ pub struct BitIndexEntry {
     pub filesize: u32,
     pub oid: Oid,
     pub flags: BitIndexEntryFlags,
+    pub extended_flags: BitIndexEntryExtendedFlags,
     pub path: BitPath,
 }
 
@@ -134,6 +145,7 @@ impl From<TreeEntry> for BitIndexEntry {
             filesize: 0,
             oid: entry.oid,
             flags: BitIndexEntryFlags::new(0),
+            extended_flags: BitIndexEntryExtendedFlags::default(),
             path: entry.path,
         }
     }
@@ -145,6 +157,7 @@ impl BitIndexEntry {
     }
 }
 
+// also excludes extended flags
 const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + std::mem::size_of::<u64>() // mtime
             + std::mem::size_of::<u32>() // device
@@ -184,6 +197,7 @@ impl TryFrom<BitPath> for BitIndexEntry {
             filesize: metadata.st_size() as u32,
             oid: Oid::UNKNOWN,
             flags: BitIndexEntryFlags::with_path_len(relative.len()),
+            extended_flags: BitIndexEntryExtendedFlags::default(),
         })
     }
 }
@@ -194,16 +208,18 @@ impl BitIndexEntry {
     }
 
     pub(super) fn padding_len(&self) -> usize {
-        Self::padding_len_for_filepath(self.path.len())
+        Self::padding_len_for_filepath(self.path.len(), self.flags.extended())
     }
 
-    pub(super) fn padding_len_for_filepath(filepath_len: usize) -> usize {
-        let entry_size = ENTRY_SIZE_WITHOUT_FILEPATH + filepath_len;
+    pub(super) fn padding_len_for_filepath(filepath_len: usize, is_extended: bool) -> usize {
+        let entry_size = ENTRY_SIZE_WITHOUT_FILEPATH
+            + filepath_len
+            + is_extended.then_some(std::mem::size_of::<BitIndexEntryExtendedFlags>()).unwrap_or(0);
         // +8 instead of +7 as we should always have at least one byte
         // of padding as we consider the nullbyte of the filepath as padding
         let next_multiple_of_8 = ((entry_size + 8) / 8) * 8;
         let padding_size = next_multiple_of_8 - entry_size;
-        assert!(padding_size > 0 && padding_size <= 8);
+        debug_assert!(padding_size > 0 && padding_size <= 8);
         padding_size
     }
 }
@@ -244,6 +260,7 @@ impl Ord for BitIndexEntry {
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 // TODO revisit this if a less random arby impl is required
 #[cfg_attr(test, derive(BitArbitrary))]
+#[repr(transparent)]
 pub struct BitIndexEntryFlags(u16);
 
 impl Debug for BitIndexEntryFlags {
@@ -281,5 +298,17 @@ impl BitIndexEntryFlags {
 
     pub fn path_len(self) -> u16 {
         self.0 & 0x0FFF
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Default)]
+#[repr(transparent)]
+pub struct BitIndexEntryExtendedFlags(u16);
+
+impl BitIndexEntryExtendedFlags {
+    pub fn new(flags: u16) -> Self {
+        // bottom 13-bits unused, must be 0
+        debug_assert!(flags & 0x1000 == 0);
+        Self(flags)
     }
 }

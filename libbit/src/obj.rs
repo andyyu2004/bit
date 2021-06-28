@@ -131,7 +131,7 @@ impl FileMode {
     }
 
     pub fn new(u: u32) -> Self {
-        Self::try_from(u).unwrap_or_else(|_| panic!("invalid filemode `{}`", u))
+        Self::try_from(u).unwrap_or_else(|_| panic!("invalid filemode `{:06o}`", u))
     }
 
     pub fn from_metadata(metadata: &Metadata) -> Self {
@@ -150,7 +150,7 @@ impl FileMode {
         match self {
             Self::TREE => BitObjType::Tree,
             Self::EXEC | Self::REG | Self::LINK => BitObjType::Blob,
-            _ => unreachable!("invalid filemode for obj {}", self),
+            _ => unreachable!("invalid filemode for obj `{}`", self),
         }
     }
 }

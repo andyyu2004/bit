@@ -105,7 +105,7 @@ impl SymbolicRef {
     pub const HEAD: Self = Self { path: BitPath::HEAD };
 
     pub fn new(path: BitPath) -> Self {
-        assert!(path.is_relative());
+        debug_assert!(path.is_relative());
         Self { path }
     }
 
