@@ -1,10 +1,8 @@
 use super::*;
-use crate::error::BitGenericError;
 use crate::io::BufReadExt;
 use crate::iter::BitEntry;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
-use crate::tls;
 use std::fmt::{self, Debug, Formatter};
 use std::iter::FromIterator;
 use std::os::linux::fs::MetadataExt;
@@ -174,7 +172,7 @@ impl BitIndexEntry {
     pub fn from_path(repo: BitRepo<'_>, path: &Path) -> BitResult<Self> {
         {
             let normalized = repo.normalize(path)?;
-            let relative = repo.to_relative_path(normalized)?;
+            let relative = repo.to_relative_path(&normalized)?;
 
             debug_assert!(!normalized.is_dir(), "bit index entry should not be a directory");
             let metadata = normalized.symlink_metadata().unwrap();

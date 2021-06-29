@@ -1,5 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::index::BitIndex;
+use crate::io::ReadExt;
 use crate::obj::*;
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
@@ -7,6 +8,7 @@ use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, SymbolicRef
 use crate::signature::BitSignature;
 use crate::{hash, tls};
 use anyhow::Context;
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
@@ -353,8 +355,13 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn get_blob(&self, path: BitPath) -> BitResult<MutableBlob> {
-        let path = self.normalize(path)?;
-        let bytes = path.read_to_vec()?;
+        let path = self.normalize(path.as_ref())?;
+        let bytes = if path.symlink_metadata()?.file_type().is_symlink() {
+            // we literally hash the contents of the symlink without following
+            std::fs::read_link(path)?.to_str().unwrap().as_bytes().to_vec()
+        } else {
+            File::open(path)?.read_to_vec()?
+        };
         Ok(MutableBlob::new(bytes))
     }
 
@@ -369,19 +376,19 @@ impl<'rcx> BitRepo<'rcx> {
 
     /// converts relative_paths to absolute paths
     /// checks absolute paths exist and have a base relative to the bit directory
-    pub fn normalize(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
+    // can't figure out how to make this take an impl AsRef<Path> and make lifetimes work out
+    pub fn normalize<'p>(&self, path: &'p Path) -> BitResult<Cow<'p, Path>> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
-        let path = path.as_ref();
         if path.is_relative() {
             let normalized = path::normalize(&self.workdir.join(&path));
-            ensure!(
+            debug_assert!(
                 normalized.symlink_metadata().is_ok(),
                 "normalized path `{}` does not exist",
                 normalized.display()
             );
-            Ok(BitPath::intern(normalized))
+            Ok(Cow::Owned(normalized))
         } else {
             debug_assert!(
                 path.starts_with(&self.workdir),
@@ -389,7 +396,7 @@ impl<'rcx> BitRepo<'rcx> {
                 path.display(),
                 self.workdir
             );
-            Ok(BitPath::intern(path))
+            Ok(Cow::Borrowed(path))
         }
     }
 

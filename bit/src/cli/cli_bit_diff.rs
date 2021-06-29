@@ -68,7 +68,7 @@ impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
             // so if we textually diff it it won't show anything
             Ok(self.repo.read_obj(entry.oid)?.into_blob().to_string())
         } else {
-            let absolute_path = self.repo.normalize(entry.path)?;
+            let absolute_path = self.repo.normalize(entry.path.as_ref())?;
             Ok(std::fs::read_to_string(absolute_path)?)
         }
     }

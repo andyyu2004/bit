@@ -1,17 +1,17 @@
 use crate::path::BitPath;
 use bumpalo::Bump as Arena;
 use itertools::Itertools;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 #[derive(Default)]
 pub(crate) struct Interner {
     arena: Arena,
-    map: HashMap<&'static str, BitPath>,
-    set: HashSet<&'static str>,
+    map: FxHashMap<&'static str, BitPath>,
+    set: FxHashSet<&'static str>,
     paths: Vec<&'static str>,
-    components: HashMap<BitPath, &'static [BitPath]>,
+    components: FxHashMap<BitPath, &'static [BitPath]>,
 }
 
 pub trait Intern {
