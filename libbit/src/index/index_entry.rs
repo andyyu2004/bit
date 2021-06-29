@@ -73,7 +73,7 @@ impl Deserialize for BitIndexEntry {
             flags.extended().then(|| r.read_u16()).transpose()?.unwrap_or_default(),
         );
         // TODO optimization of skipping ahead flags.path_len() bytes instead of a linear scan to find the next null byte
-        let path = r.read_null_terminated_path()?;
+        let path = r.read_null_terminated_path_skip_n(flags.path_len() as usize)?;
 
         debug_assert!(path.is_relative());
         debug_assert!(

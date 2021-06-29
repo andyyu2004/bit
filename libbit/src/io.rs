@@ -9,6 +9,7 @@ use sha1::{digest::Output, Digest};
 use std::fmt::Display;
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 // all big-endian
@@ -216,7 +217,6 @@ impl<'a> Serialize for &'a [u8] {
 pub trait BufReadExtSized: BufRead + Sized {
     fn read_array<T: Deserialize, const N: usize>(&mut self) -> BitResult<[T; N]> {
         // SAFETY? not sure
-        // let mut xs: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
         let mut xs: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
         for i in 0..N {
             xs[i] = MaybeUninit::new(T::deserialize(&mut *self)?);
@@ -245,10 +245,6 @@ pub trait BufReadExt: BufRead {
         BufReader::new(flate2::bufread::ZlibDecoder::new(self))
     }
 
-    fn read_null_terminated_path(&mut self) -> BitResult<BitPath> {
-        self.read_null_terminated()
-    }
-
     /// read the bytes upto `sep` parsing as a base10 ascii numberj
     fn read_ascii_num(&mut self, sep: u8) -> BitResult<i64> {
         let mut buf = vec![];
@@ -261,6 +257,20 @@ pub trait BufReadExt: BufRead {
         let mut buf = vec![];
         let i = self.read_until(sep, &mut buf)?;
         std::str::from_utf8(&buf[..i - 1]).unwrap().parse()
+    }
+
+    fn read_null_terminated_path(&mut self) -> BitResult<BitPath> {
+        self.read_null_terminated()
+    }
+
+    // `n` should be at most the length of the path to read excluding the null byte
+    fn read_null_terminated_path_skip_n(&mut self, n: usize) -> BitResult<BitPath> {
+        let mut buf = vec![0; n];
+        // optimization when we know how many bytes we can read
+        self.read_exact(&mut buf)?;
+        self.read_until(0, &mut buf)?;
+        // ignore the null character
+        Ok(BitPath::intern(std::str::from_utf8(&buf[..buf.len() - 1]).unwrap()))
     }
 
     fn read_null_terminated<T: Deserialize>(&mut self) -> BitResult<T> {
