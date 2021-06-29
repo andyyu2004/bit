@@ -8,6 +8,7 @@ use crate::tls;
 use std::fmt::{self, Debug, Formatter};
 use std::iter::FromIterator;
 use std::os::linux::fs::MetadataExt;
+use std::path::Path;
 
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct BitIndexEntries(BitIndexEntriesMap);
@@ -169,10 +170,10 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + BIT_HASH_SIZE // hash
             + std::mem::size_of::<u16>(); // flags
 
-impl TryFrom<BitPath> for BitIndexEntry {
+impl<'a> TryFrom<&'a Path> for BitIndexEntry {
     type Error = BitGenericError;
 
-    fn try_from(path: BitPath) -> Result<Self, Self::Error> {
+    fn try_from(path: &'a Path) -> Result<Self, Self::Error> {
         let (normalized, relative) = tls::with_repo_res(|repo| {
             let normalized = repo.normalize(path)?;
             let relative = repo.to_relative_path(normalized)?;

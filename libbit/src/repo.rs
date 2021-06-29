@@ -383,7 +383,7 @@ impl<'rcx> BitRepo<'rcx> {
             );
             Ok(BitPath::intern(normalized))
         } else {
-            assert!(
+            debug_assert!(
                 path.starts_with(&self.workdir),
                 "absolute path `{}` is not under current bit directory `{}`",
                 path.display(),
