@@ -194,7 +194,7 @@ impl FallibleIterator for WorktreeIter<'_> {
             }
         };
 
-        BitIndexEntry::try_from(direntry.path()).map(Some)
+        BitIndexEntry::from_path(self.repo, direntry.path()).map(Some)
     }
 }
 

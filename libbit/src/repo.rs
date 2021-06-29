@@ -397,7 +397,7 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn to_relative_path(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
         // this seems to work just as well as the pathdiff crate
         let path = path.as_ref();
-        assert!(path.is_absolute());
+        debug_assert!(path.is_absolute());
         Ok(BitPath::intern(path.strip_prefix(&self.workdir)?))
     }
 

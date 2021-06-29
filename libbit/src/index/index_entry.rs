@@ -170,40 +170,35 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + BIT_HASH_SIZE // hash
             + std::mem::size_of::<u16>(); // flags
 
-impl<'a> TryFrom<&'a Path> for BitIndexEntry {
-    type Error = BitGenericError;
-
-    fn try_from(path: &'a Path) -> Result<Self, Self::Error> {
-        let (normalized, relative) = tls::with_repo_res(|repo| {
+impl BitIndexEntry {
+    pub fn from_path(repo: BitRepo<'_>, path: &Path) -> BitResult<Self> {
+        {
             let normalized = repo.normalize(path)?;
             let relative = repo.to_relative_path(normalized)?;
-            Ok((normalized, relative))
-        })?;
 
-        ensure!(!normalized.is_dir(), "bit index entry should not be a directory");
-        let metadata = normalized.symlink_metadata().unwrap();
+            debug_assert!(!normalized.is_dir(), "bit index entry should not be a directory");
+            let metadata = normalized.symlink_metadata().unwrap();
 
-        // the path must be relative to the repository root
-        // as this is the correct representation for the index entry
-        // and otherwise, the pathlen in the flags will be off
-        Ok(Self {
-            path: relative,
-            ctime: Timespec::ctime(&metadata),
-            mtime: Timespec::mtime(&metadata),
-            device: metadata.st_dev() as u32,
-            inode: metadata.st_ino() as u32,
-            mode: FileMode::from_metadata(&metadata),
-            uid: metadata.st_uid(),
-            gid: metadata.st_gid(),
-            filesize: metadata.st_size() as u32,
-            oid: Oid::UNKNOWN,
-            flags: BitIndexEntryFlags::with_path_len(relative.len()),
-            extended_flags: BitIndexEntryExtendedFlags::default(),
-        })
+            // the path must be relative to the repository root
+            // as this is the correct representation for the index entry
+            // and otherwise, the pathlen in the flags will be off
+            Ok(Self {
+                path: relative,
+                ctime: Timespec::ctime(&metadata),
+                mtime: Timespec::mtime(&metadata),
+                device: metadata.st_dev() as u32,
+                inode: metadata.st_ino() as u32,
+                mode: FileMode::from_metadata(&metadata),
+                uid: metadata.st_uid(),
+                gid: metadata.st_gid(),
+                filesize: metadata.st_size() as u32,
+                oid: Oid::UNKNOWN,
+                flags: BitIndexEntryFlags::with_path_len(relative.len()),
+                extended_flags: BitIndexEntryExtendedFlags::default(),
+            })
+        }
     }
-}
 
-impl BitIndexEntry {
     pub fn stage(&self) -> MergeStage {
         self.flags.stage()
     }
@@ -255,9 +250,7 @@ impl Ord for BitIndexEntry {
 /// 1  bit  assume-valid
 /// 1  bit  extended
 /// 2  bits stage
-/// 12 bits name length if length is less than 0xFFF; otherwise store 0xFFF
-// what is name really? probably path?
-// probably doesn't really matter and is fine to just default flags to 0
+/// 12 bits name length if length is less than 0xFFF; otherwise store 0xFFF (length excludes the null byte)
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 // TODO revisit this if a less random arby impl is required
 #[cfg_attr(test, derive(BitArbitrary))]
