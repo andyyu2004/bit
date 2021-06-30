@@ -11,4 +11,3 @@ Should probably remove the configuration structs inside libbit. Its more
 annoying than anything else and provides a uglier api than just having
 plain parameters. `bit` should figure out what to do with all the
 arguments not `libbit`.
-

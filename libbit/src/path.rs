@@ -1,42 +1,35 @@
 use crate::error::BitResult;
-use crate::interner::{with_path_interner, with_path_interner_mut};
+use crate::interner::with_path_interner_mut;
 use crate::io::ReadExt;
 use crate::serialize::{BufReadSeek, Deserialize};
 use anyhow::Context;
-use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
+use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader};
-use std::ops::{Deref, Index};
+use std::ops::Deref;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
-use std::slice::SliceIndex;
-use std::str::pattern::Pattern;
 
 /// interned path (where path is just a string)
 // interning paths is likely not worth it, but its nice to have it as a copy type
-// since its used so much, this will also lend itself to faster comparisons as
+// since its used so muchthis will also lend itself to faster comparisons as
 // its now just an integer compare
-#[derive(Eq, PartialEq, Clone, Copy, Hash)]
-pub struct BitPath(u32, #[cfg(debug_assertions)] &'static str);
+#[derive(Eq, PartialEq, Clone, Copy)]
+pub struct BitPath {
+    path: &'static OsStr,
+}
 
 pub type BitFileStream = impl BufReadSeek;
 
 impl BitPath {
-    pub(crate) const fn new(u: u32, #[cfg(debug_assertions)] s: &'static str) -> Self {
-        Self(
-            u,
-            #[cfg(debug_assertions)]
-            s,
-        )
+    pub(crate) const fn new(path: &'static OsStr) -> Self {
+        Self { path }
     }
 
     pub fn is_empty(self) -> bool {
         self == Self::EMPTY
-    }
-
-    pub fn index(self) -> u32 {
-        self.0
     }
 
     pub fn stream(self) -> BitResult<BitFileStream> {
@@ -61,9 +54,7 @@ impl BitPath {
 
     /// return the filename of a path, empty path if no filename
     pub fn file_name(self) -> Self {
-        Self::intern(
-            self.as_path().file_name().map(|filename| filename.to_str().unwrap()).unwrap_or(""),
-        )
+        Self::intern(self.as_path().file_name().unwrap_or_else(|| OsStr::new("")))
     }
 
     pub fn join(self, path: impl AsRef<Path>) -> Self {
@@ -86,17 +77,16 @@ impl BitPath {
         with_path_interner_mut(|interner| interner.intern_path(s))
     }
 
-    pub fn intern(path: impl AsRef<Path>) -> Self {
+    pub fn intern(path: impl AsRef<OsStr>) -> Self {
         // this must be outside the `interner` closure as the `as_ref` impl may use the interner
         // leading to refcell panics
-        let path = path.as_ref();
         // quite questionable turning paths into strings and then bytes
         // probably not very platform agnostic
-        with_path_interner_mut(|interner| interner.intern_path(path.to_str().unwrap()))
+        with_path_interner_mut(|interner| interner.intern_path(path))
     }
 
-    pub fn as_str(self) -> &'static str {
-        with_path_interner(|interner| interner.get_str(self))
+    pub fn as_path(self) -> &'static Path {
+        Path::new(self.path)
     }
 
     /// returns the components of a path
@@ -114,26 +104,16 @@ impl BitPath {
         })
     }
 
-    pub fn try_split_path_at(self, idx: usize) -> Option<(BitPath, BitPath)> {
-        let components = self.components();
-        if idx >= components.len() {
-            return None;
-        }
-        let (x, y) = (&components[..idx], &components[idx]);
-        let xs = x.join("/");
-        Some((BitPath::intern(xs), Self::intern(&y)))
+    pub fn len(self) -> usize {
+        self.as_os_str().len()
     }
 
-    pub fn len(self) -> usize {
-        self.as_str().len()
+    pub fn as_os_str(self) -> &'static OsStr {
+        self.as_path().as_os_str()
     }
 
     pub fn as_bytes(self) -> &'static [u8] {
-        self.as_str().as_bytes()
-    }
-
-    pub fn as_path(self) -> &'static Path {
-        self.as_str().as_ref()
+        self.as_path().as_os_str().as_bytes()
     }
 
     /// returns first component of the path
@@ -142,15 +122,39 @@ impl BitPath {
     }
 }
 
-impl AsRef<str> for BitPath {
-    fn as_ref(&self) -> &'static str {
-        self.as_str()
+impl Hash for BitPath {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self.path, state)
+    }
+}
+
+impl PartialEq<String> for BitPath {
+    fn eq(&self, other: &String) -> bool {
+        self == other.as_str()
+    }
+}
+
+impl<'a> PartialEq<&'a OsStr> for BitPath {
+    fn eq(&self, other: &&OsStr) -> bool {
+        self.as_os_str() == *other
+    }
+}
+
+impl PartialEq<str> for BitPath {
+    fn eq(&self, other: &str) -> bool {
+        self.as_os_str() == other
+    }
+}
+
+impl<'a> PartialEq<&'a str> for BitPath {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_os_str() == *other
     }
 }
 
 impl AsRef<OsStr> for BitPath {
     fn as_ref(&self) -> &OsStr {
-        OsStr::new(self.as_str())
+        self.as_path().as_os_str()
     }
 }
 
@@ -163,12 +167,6 @@ impl AsRef<Path> for BitPath {
 impl<'a> From<&'a Path> for BitPath {
     fn from(p: &'a Path) -> Self {
         Self::intern(p)
-    }
-}
-
-impl Borrow<str> for BitPath {
-    fn borrow(&self) -> &'static str {
-        self.as_str()
     }
 }
 
@@ -192,35 +190,17 @@ impl Debug for BitPath {
     }
 }
 
-impl PartialEq<String> for BitPath {
-    fn eq(&self, other: &String) -> bool {
-        self == other.as_str()
-    }
-}
+// impl<'a> Pattern<'a> for BitPath {
+//     type Searcher = <&'a str as Pattern<'a>>::Searcher;
 
-impl PartialEq<str> for BitPath {
-    fn eq(&self, other: &str) -> bool {
-        self.as_str() == other
-    }
-}
-
-impl PartialEq<&str> for BitPath {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_str() == *other
-    }
-}
-
-impl<'a> Pattern<'a> for BitPath {
-    type Searcher = <&'a str as Pattern<'a>>::Searcher;
-
-    fn into_searcher(self, haystack: &'a str) -> Self::Searcher {
-        self.as_str().into_searcher(haystack)
-    }
-}
+//     fn into_searcher(self, haystack: &'a str) -> Self::Searcher {
+//         self.as_os_str().into_searcher(haystack)
+//     }
+// }
 
 impl Display for BitPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
+        write!(f, "{}", self.as_path().display())
     }
 }
 
@@ -257,28 +237,19 @@ impl Ord for BitPath {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // doesn't make sense to compare relative with absolute and vice versa
         debug_assert_eq!(self.is_relative(), other.is_relative());
-        Self::path_cmp(self.as_str(), other.as_str())
+        Self::path_cmp(self, other)
     }
 }
 
 impl BitPath {
-    pub fn path_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    pub fn path_cmp(a: impl AsRef<OsStr>, b: impl AsRef<OsStr>) -> std::cmp::Ordering {
         // files with the same subpath should come before directories
+        let a = a.as_ref().as_bytes();
+        let b = b.as_ref().as_bytes();
         let m = a.len();
         let n = b.len();
         let minlen = std::cmp::min(m, n);
         a[..minlen].cmp(&b[..minlen]).then_with(|| m.cmp(&n))
-    }
-}
-
-impl<I> Index<I> for BitPath
-where
-    I: SliceIndex<str>,
-{
-    type Output = I::Output;
-
-    fn index(&self, index: I) -> &Self::Output {
-        &self.as_str()[index]
     }
 }
 

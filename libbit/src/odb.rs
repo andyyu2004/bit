@@ -14,6 +14,7 @@ use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
+use std::path::Path;
 use std::str::FromStr;
 
 //? questionable name, questionable macro is there a better way to express this pattern
@@ -211,12 +212,13 @@ impl BitObjDbBackend for BitLooseObjDb {
             // is that intentional behaviour?
             .filter(|entry| Ok(entry.path().is_file()))
             .filter_map(|entry| {
-                let filename = entry.file_name().to_str().unwrap();
-                if !filename.starts_with(file_prefix) {
+                let filename = entry.file_name();
+                let path = Path::new(filename);
+                if !path.starts_with(file_prefix) {
                     Ok(None)
                 } else {
                     assert_eq!(filename.len(), 38);
-                    let oid = format!("{}{}", dir, filename);
+                    let oid = format!("{}{}", dir, path.display());
                     assert_eq!(oid.len(), 40);
                     Oid::from_str(&oid).map(Some)
                 }

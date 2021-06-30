@@ -3,6 +3,7 @@ use crate::core::BitOrd;
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::io::BufReadExt;
+use crate::iter::BitEntry;
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::path::BitPath;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
@@ -201,20 +202,17 @@ impl Ord for TreeEntry {
     }
 }
 
-impl BitOrd for TreeEntry {
-    fn bit_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.sort_path().cmp(&other.sort_path())
+impl BitEntry for TreeEntry {
+    fn oid(&self) -> Oid {
+        self.oid
     }
-}
 
-impl TreeEntry {
-    // we must have files sorted before directories
-    // i.e. index.rs < index/
-    // however, the trailing slash is not actually stored in the tree entry path (TODO confirm against git)
-    // we fix this by appending appending a slash
+    fn path(&self) -> BitPath {
+        self.path
+    }
 
-    fn sort_path(&self) -> BitPath {
-        if self.mode == FileMode::TREE { self.path.join_trailing_slash() } else { self.path }
+    fn mode(&self) -> FileMode {
+        self.mode
     }
 }
 

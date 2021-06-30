@@ -43,6 +43,6 @@ fn test_path_ordering() {
 
 #[test]
 fn test_path_join_empty() {
-    assert_ne!(p!("foo").join(""), "foo");
-    assert_eq!(p!("foo").join(""), "foo/");
+    assert_ne!(p!("foo").join_trailing_slash(), "foo");
+    assert_eq!(p!("foo").join_trailing_slash(), "foo/");
 }

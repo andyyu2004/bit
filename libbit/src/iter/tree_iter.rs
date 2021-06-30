@@ -86,6 +86,7 @@ fn build_tree_internal(
         };
         entries.push(entry);
     }
+
     debug_assert!(entries.is_sorted());
     let tree = MutableTree::from_iter(entries);
     repo.write_obj(&tree)

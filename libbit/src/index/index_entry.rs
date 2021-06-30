@@ -180,8 +180,9 @@ impl BitIndexEntry {
             // the path must be relative to the repository root
             // as this is the correct representation for the index entry
             // and otherwise, the pathlen in the flags will be off
+            let path = BitPath::intern(relative);
             Ok(Self {
-                path: relative,
+                path,
                 ctime: Timespec::ctime(&metadata),
                 mtime: Timespec::mtime(&metadata),
                 device: metadata.st_dev() as u32,
@@ -191,7 +192,7 @@ impl BitIndexEntry {
                 gid: metadata.st_gid(),
                 filesize: metadata.st_size() as u32,
                 oid: Oid::UNKNOWN,
-                flags: BitIndexEntryFlags::with_path_len(relative.len()),
+                flags: BitIndexEntryFlags::with_path_len(path.len()),
                 extended_flags: BitIndexEntryExtendedFlags::default(),
             })
         }

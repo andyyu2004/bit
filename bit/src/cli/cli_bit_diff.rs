@@ -83,13 +83,13 @@ impl<'rcx, W: Write> Apply for DiffFormatter<'rcx, W> {
         let old_txt = self.read_blob(old)?;
         let new_txt = self.read_blob(new)?;
         let mut patch = xdiff::xdiff(&old_txt, &new_txt);
-        let a = BitPath::A.join(old.path).as_str();
-        let b = BitPath::B.join(new.path).as_str();
+        let a = BitPath::A.join(old.path);
+        let b = BitPath::B.join(new.path);
 
         let writer = &mut self.writer;
         writeln!(writer, "diff --bit {} {}", a, b)?;
-        patch.set_original(Cow::Borrowed(a));
-        patch.set_modified(Cow::Borrowed(b));
+        patch.set_original(Cow::Borrowed(a.to_str().unwrap()));
+        patch.set_modified(Cow::Borrowed(b.to_str().unwrap()));
         xdiff::format_patch_into(writer, &patch)?;
         Ok(())
     }

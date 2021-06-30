@@ -9,7 +9,6 @@ use sha1::{digest::Output, Digest};
 use std::fmt::Display;
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 // all big-endian

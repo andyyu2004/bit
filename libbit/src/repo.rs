@@ -15,6 +15,7 @@ use std::fs::{self, File};
 use std::io::{self, Write};
 use std::lazy::OnceCell;
 use std::ops::Deref;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
@@ -358,7 +359,7 @@ impl<'rcx> BitRepo<'rcx> {
         let path = self.normalize(path.as_ref())?;
         let bytes = if path.symlink_metadata()?.file_type().is_symlink() {
             // we literally hash the contents of the symlink without following
-            std::fs::read_link(path)?.to_str().unwrap().as_bytes().to_vec()
+            std::fs::read_link(path)?.as_os_str().as_bytes().to_vec()
         } else {
             File::open(path)?.read_to_vec()?
         };
@@ -401,11 +402,10 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// converts an absolute path into a path relative to the workdir of the repository
-    pub fn to_relative_path(&self, path: impl AsRef<Path>) -> BitResult<BitPath> {
+    pub fn to_relative_path<'p>(&self, path: &'p Path) -> BitResult<&'p Path> {
         // this seems to work just as well as the pathdiff crate
-        let path = path.as_ref();
         debug_assert!(path.is_absolute());
-        Ok(BitPath::intern(path.strip_prefix(&self.workdir)?))
+        Ok(path.strip_prefix(&self.workdir)?)
     }
 
     pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> BitPath {

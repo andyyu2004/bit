@@ -15,7 +15,7 @@ use fallible_iterator::{FallibleIterator, Peekable};
 use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
 use rustc_hash::FxHashSet;
-use std::convert::TryFrom;
+use std::ffi::OsStr;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -30,6 +30,14 @@ pub trait BitEntry {
 
     fn is_file(&self) -> bool {
         self.mode().is_file()
+    }
+
+    // we must have files sorted before directories
+    // i.e. index.rs < index/
+    // however, the trailing slash is not actually stored in the tree entry path (TODO confirm against git)
+    // we fix this by appending appending a slash
+    fn sort_path(&self) -> BitPath {
+        if self.mode() == FileMode::TREE { self.path().join_trailing_slash() } else { self.path() }
     }
 }
 
@@ -86,7 +94,7 @@ impl FallibleIterator for DirIter {
 
 struct WorktreeIter<'rcx> {
     repo: BitRepo<'rcx>,
-    tracked: FxHashSet<BitPath>,
+    tracked: FxHashSet<&'static OsStr>,
     // TODO ignoring all nonroot ignores for now
     // not sure what the correct collection for this is? some kind of tree where gitignores know their "parent" gitignore?
     ignore: Vec<Gitignore>,
@@ -100,7 +108,7 @@ impl<'rcx> WorktreeIter<'rcx> {
         let ignore = vec![Gitignore::new(repo.workdir.join(".gitignore").as_path()).0];
         //? we collect it into a hashmap for faster lookup?
         // not sure if this is actually better than just looking up in the index's entries
-        let tracked = index.entries().keys().map(|(path, _)| path).copied().collect();
+        let tracked = index.entries().keys().map(|(path, _)| path.as_os_str()).collect();
 
         Ok(Self {
             repo,
@@ -108,12 +116,13 @@ impl<'rcx> WorktreeIter<'rcx> {
             tracked,
             walk: WalkDir::new(repo.workdir)
                 .sort_by(|a, b| {
-                    let x = a.path().to_str().unwrap();
-                    let y = b.path().to_str().unwrap();
+                    let x = a.path();
+                    let y = b.path();
 
+                    // TODO should be able to rewrite this without the match now
                     //  for ordering and avoiding allocation where possible
-                    let t = a.file_type().is_dir().then(|| x.to_owned() + "/");
-                    let u = b.file_type().is_dir().then(|| y.to_owned() + "/");
+                    let t = a.file_type().is_dir().then(|| x.join(""));
+                    let u = b.file_type().is_dir().then(|| y.join(""));
 
                     match (&t, &u) {
                         (None, None) => BitPath::path_cmp(x, y),
@@ -134,13 +143,13 @@ impl<'rcx> WorktreeIter<'rcx> {
         debug_assert!(path.is_absolute());
         let relative = self.repo.to_relative_path(path)?;
 
-        if self.tracked.contains(&relative) {
+        if self.tracked.contains(&relative.as_os_str()) {
             return Ok(false);
         }
 
         // not ignoring .bit as git doesn't ignore .bit
         // perhaps we should just consider .bit as a debug directory only?
-        if relative.components().contains(&BitPath::DOT_GIT) {
+        if relative.iter().any(|component| component == BitPath::DOT_GIT.as_os_str()) {
             return Ok(true);
         }
 
