@@ -7,8 +7,10 @@ use indexmap::indexmap;
 use itertools::Itertools;
 use quickcheck::Arbitrary;
 use rand::Rng;
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::BufReader;
+use std::iter::FromIterator;
 use std::str::FromStr;
 
 impl Arbitrary for BitIndexEntries {
@@ -490,7 +492,20 @@ fn index_flags_test() {
 }
 
 #[test]
-fn index_entry_padding_test() {
+fn test_index_entry_ordering() {
+    let entries = BTreeSet::<BitIndexEntry>::from_iter(vec![
+        TreeEntry { mode: FileMode::TREE, oid: Oid::UNKNOWN, path: BitPath::intern("dir/foo") }
+            .into(),
+        TreeEntry { mode: FileMode::EXEC, oid: Oid::UNKNOWN, path: BitPath::intern("dir/foo.ext") }
+            .into(),
+    ]);
+    let mut iter = entries.into_iter();
+    assert_eq!(iter.next().unwrap().path, "dir/foo.ext");
+    assert_eq!(iter.next().unwrap().path, "dir/foo");
+}
+
+#[test]
+fn index_entry_padding_test_without_extended_flags() {
     assert_eq!(BitIndexEntry::padding_len_for_filepath(8, false), 2);
     assert_eq!(BitIndexEntry::padding_len_for_filepath(9, false), 1);
     assert_eq!(BitIndexEntry::padding_len_for_filepath(10, false), 8);

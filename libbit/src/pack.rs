@@ -409,15 +409,6 @@ impl From<BitPackObjType> for BitObjType {
     }
 }
 
-impl BitPackObjType {
-    pub fn is_delta(self) -> bool {
-        match self {
-            Self::Commit | Self::Tree | Self::Blob | Self::Tag => false,
-            Self::OfsDelta | Self::RefDelta => true,
-        }
-    }
-}
-
 #[derive(Copy, Clone, PartialEq, Eq)]
 struct BitPackObjHeader {
     obj_type: BitPackObjType,

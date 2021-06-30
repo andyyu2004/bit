@@ -1,6 +1,23 @@
 use crate::error::BitResult;
+use crate::index::BitIndexEntry;
+use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
+
+use super::BitEntry;
+
+impl PartialOrd for BitIndexEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BitIndexEntry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        BitPath::path_cmp(self.sort_path().as_ref(), other.sort_path().as_ref())
+            .then_with(|| self.stage().cmp(&other.stage()))
+    }
+}
 
 #[test]
 fn test_head_iterator() -> BitResult<()> {
