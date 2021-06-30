@@ -1,10 +1,9 @@
+use super::BitEntry;
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
-
-use super::BitEntry;
 
 impl PartialOrd for BitIndexEntry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {

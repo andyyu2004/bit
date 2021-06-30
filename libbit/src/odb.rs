@@ -212,14 +212,14 @@ impl BitObjDbBackend for BitLooseObjDb {
             // is that intentional behaviour?
             .filter(|entry| Ok(entry.path().is_file()))
             .filter_map(|entry| {
-                let filename = entry.file_name();
-                let path = Path::new(filename);
-                if !path.starts_with(file_prefix) {
+                let filename = entry.file_name().to_str().unwrap();
+                // we must use `str::start_with` not `path::starts_with` as the latter only considers it component wise
+                if !filename.starts_with(file_prefix.as_str()) {
                     Ok(None)
                 } else {
-                    assert_eq!(filename.len(), 38);
-                    let oid = format!("{}{}", dir, path.display());
-                    assert_eq!(oid.len(), 40);
+                    debug_assert_eq!(filename.len(), 38);
+                    let oid = format!("{}{}", dir, filename);
+                    debug_assert_eq!(oid.len(), 40);
                     Oid::from_str(&oid).map(Some)
                 }
             })

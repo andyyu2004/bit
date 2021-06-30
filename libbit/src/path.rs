@@ -195,14 +195,6 @@ impl Debug for BitPath {
     }
 }
 
-// impl<'a> Pattern<'a> for BitPath {
-//     type Searcher = <&'a str as Pattern<'a>>::Searcher;
-
-//     fn into_searcher(self, haystack: &'a str) -> Self::Searcher {
-//         self.as_os_str().into_searcher(haystack)
-//     }
-// }
-
 impl Display for BitPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_path().display())
