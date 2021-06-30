@@ -1,10 +1,8 @@
 mod index_tree_iter;
 mod tree_iter;
-mod worktree_tree_iter;
 
 pub use index_tree_iter::IndexTreeIter;
 pub use tree_iter::*;
-pub use worktree_tree_iter::WorktreeTreeIter;
 
 use crate::error::{BitGenericError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
@@ -115,26 +113,28 @@ impl<'rcx> WorktreeIter<'rcx> {
         // not sure if this is actually better than just looking up in the index's entries
         let tracked = index.entries().keys().map(|(path, _)| path.as_os_str()).collect();
 
-        let walk = WalkDir::new(repo.workdir)
-            .sort_by(|a, b| {
-                let x = a.path();
-                let y = b.path();
+        Ok(Self {
+            repo,
+            ignore,
+            tracked,
+            walk: WalkDir::new(repo.workdir)
+                .sort_by(|a, b| {
+                    let x = a.path();
+                    let y = b.path();
 
-                // TODO should be able to rewrite this without the match now
-                //  for ordering and avoiding allocation where possible
-                let t = a.file_type().is_dir().then(|| x.join(""));
-                let u = b.file_type().is_dir().then(|| y.join(""));
+                    // for correct ordering and avoiding allocation where possible
+                    let t = a.file_type().is_dir().then(|| x.join(""));
+                    let u = b.file_type().is_dir().then(|| y.join(""));
 
-                match (&t, &u) {
-                    (None, None) => BitPath::path_cmp(x, y),
-                    (None, Some(u)) => BitPath::path_cmp(x, u),
-                    (Some(t), None) => BitPath::path_cmp(t, y),
-                    (Some(t), Some(u)) => BitPath::path_cmp(t, u),
-                }
-            })
-            .into_iter();
-
-        Ok(Self { repo, ignore, tracked, walk })
+                    match (&t, &u) {
+                        (None, None) => BitPath::path_cmp(x, y),
+                        (None, Some(u)) => BitPath::path_cmp(x, u),
+                        (Some(t), None) => BitPath::path_cmp(t, y),
+                        (Some(t), Some(u)) => BitPath::path_cmp(t, u),
+                    }
+                })
+                .into_iter(),
+        })
     }
 
     // we need to explicitly ignore our root `.bit/.git` directories
@@ -147,6 +147,8 @@ impl<'rcx> WorktreeIter<'rcx> {
         let relative = self.repo.to_relative_path(path)?;
         debug_assert!(relative.iter().all(|component| BitPath::DOT_GIT != component));
 
+        // keeping a list of tracked files is sufficient (without considering tracked directories)
+        // as we just checked `path` only points to a file
         if self.tracked.contains(&relative.as_os_str()) {
             return Ok(false);
         }

@@ -206,7 +206,7 @@ impl<'rcx> BitRepo<'rcx> {
             .get_or_try_init::<_, BitGenericError>(|| Ok(RefCell::new(BitIndex::new(*self)?)))
     }
 
-    pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'_>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
         // don't have to error check here as the index only
         f(&*self.index_ref()?.borrow())
     }
