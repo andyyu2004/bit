@@ -143,7 +143,7 @@ impl<'rcx> WorktreeIter<'rcx> {
     // we need to explicitly ignore our root `.bit/.git` directories
     // TODO testing
     fn is_ignored(&self, path: &Path) -> BitResult<bool> {
-        // should only run this on files?
+        // should only run this on files
         debug_assert!(path.is_file());
         debug_assert!(path.is_absolute());
         let relative = self.repo.to_relative_path(path)?;
@@ -199,7 +199,8 @@ impl FallibleIterator for WorktreeIter<'_> {
             match self.walk.next().transpose()? {
                 Some(entry) => {
                     let path = entry.path();
-                    let is_dir = path.is_dir();
+                    let is_dir = entry.file_type().is_dir();
+                    // this iterator doesn't yield directory entries
                     if !is_dir && !self.is_ignored(path)? {
                         break entry;
                     }
