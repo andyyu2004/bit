@@ -275,7 +275,7 @@ impl<'rcx> BitIndex<'rcx> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 // tree entries here are not sufficient as we use this to manipulate the index which requires
 // some data in IndexEntries that are not present in TreeEntries (e.g. stage)
 // invariants:

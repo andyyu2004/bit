@@ -1,8 +1,16 @@
-use crate::error::{BitError, BitResult};
+use crate::error::BitResult;
 use crate::obj::Oid;
 use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind};
 use crate::repo::BitRepo;
+use enumflags2::bitflags;
+
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum BitStatusFlags {
+    Initial,
+}
 
 impl<'rcx> BitRepo<'rcx> {
     pub fn bit_commit(&self, message: Option<String>) -> BitResult<()> {
@@ -27,16 +35,8 @@ impl<'rcx> BitRepo<'rcx> {
         // don't allow empty commits; also don't currently provide the option to do so as it's not that useful
         // the rhs of the disjunction checks for the case of an empty initial commit
         if tree == head_tree || head_tree.is_unknown() && tree == Oid::EMPTY_TREE {
-            let status = self.status(Pathspec::MATCH_ALL)?;
-            println!("{}", status);
-            // some of this should go into status itself
-            if tree == Oid::EMPTY_TREE {
-                bail!(BitError::EMPTY_COMMIT_EMPTY_WORKTREE)
-            } else if status.unstaged.new.is_empty() {
-                bail!(BitError::EMPTY_COMMIT_CLEAN_WORKTREE)
-            } else {
-                bail!(BitError::EMPTY_COMMIT_UNTRACKED_FILES)
-            }
+            // rather oddly, we bail with the status report as the error message
+            bail!(self.status(Pathspec::MATCH_ALL)?)
         }
 
         let oid = self.commit_tree(parent, msg, tree)?;

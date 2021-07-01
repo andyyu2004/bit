@@ -1,5 +1,6 @@
 use crate::obj::{BitId, Oid, PartialOid};
 use crate::refs::SymbolicRef;
+use crate::status::BitStatus;
 use owo_colors::OwoColorize;
 use std::fmt::{self, Display, Formatter};
 
@@ -17,18 +18,11 @@ pub enum BitError {
     NonExistentSymRef(SymbolicRef),
 }
 
-impl BitError {
-    pub const EMPTY_COMMIT_CLEAN_WORKTREE: &'static str = "nothing to commit, working tree clean";
-    pub const EMPTY_COMMIT_EMPTY_WORKTREE: &'static str =
-        "nothing to commit (create/copy files and use `git add` to track";
-    pub const EMPTY_COMMIT_UNTRACKED_FILES: &'static str =
-        "nothing added to commit but untracked files present (use `bit add` to track)";
-}
-
 pub trait BitErrorExt {
     fn into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)>;
     fn into_nonexistent_symref_err(self) -> BitResult<SymbolicRef>;
     fn into_bit_error(self) -> BitResult<BitError>;
+    fn into_status_error(self) -> BitResult<BitStatus>;
 }
 
 impl BitErrorExt for BitGenericError {
@@ -54,6 +48,10 @@ impl BitErrorExt for BitGenericError {
             BitError::NonExistentSymRef(sym) => Ok(sym),
             err => Err(anyhow!(err)),
         }
+    }
+
+    fn into_status_error(self) -> BitResult<BitStatus> {
+        self.downcast()
     }
 }
 
