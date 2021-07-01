@@ -70,8 +70,8 @@ impl SHA1Hash {
 
     /// split hash into the first two hex digits (hence first byte)
     /// and the rest for use in finding <directory>/<file>
-    pub fn split(&self) -> (BitPath, BitPath) {
-        (BitPath::intern(hex::encode(&self[0..1])), BitPath::intern(hex::encode(&self[1..])))
+    pub fn split(&self) -> (String, String) {
+        (hex::encode(&self[0..1]), hex::encode(&self[1..]))
     }
 }
 
