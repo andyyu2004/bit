@@ -6,9 +6,11 @@ use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
 use sha1::{digest::Output, Digest};
+use std::ffi::OsStr;
 use std::fmt::Display;
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
+use std::os::unix::prelude::OsStrExt;
 use std::str::FromStr;
 
 // all big-endian
@@ -269,7 +271,7 @@ pub trait BufReadExt: BufRead {
         self.read_exact(&mut buf)?;
         self.read_until(0, &mut buf)?;
         // ignore the null character
-        Ok(BitPath::intern(std::str::from_utf8(&buf[..buf.len() - 1]).unwrap()))
+        Ok(BitPath::intern(OsStr::from_bytes(&buf[..buf.len() - 1])))
     }
 
     fn read_null_terminated<T: Deserialize>(&mut self) -> BitResult<T> {

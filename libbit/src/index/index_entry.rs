@@ -70,7 +70,8 @@ impl Deserialize for BitIndexEntry {
         let extended_flags = BitIndexEntryExtendedFlags::new(
             flags.extended().then(|| r.read_u16()).transpose()?.unwrap_or_default(),
         );
-        // TODO optimization of skipping ahead flags.path_len() bytes instead of a linear scan to find the next null byte
+
+        // optimization of skipping ahead flags.path_len() bytes instead of a linear scan to find the next null byte
         let path = r.read_null_terminated_path_skip_n(flags.path_len() as usize)?;
 
         debug_assert!(path.is_relative());
@@ -100,7 +101,7 @@ impl Deserialize for BitIndexEntry {
         // null byte belonging to the end of the filepath
         // this is safe as `0 < padding <= 8`
         r.read_exact(&mut padding[..entry.padding_len() - 1])?;
-        assert_eq!(u64::from_be_bytes(padding), 0);
+        debug_assert_eq!(u64::from_be_bytes(padding), 0);
 
         Ok(entry)
     }
