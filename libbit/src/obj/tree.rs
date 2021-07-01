@@ -1,5 +1,5 @@
 use super::{BitObjCached, FileMode, ImmutableBitObject, WritableObject};
-use crate::core::BitOrd;
+
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::io::BufReadExt;

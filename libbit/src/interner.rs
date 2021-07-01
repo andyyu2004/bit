@@ -24,7 +24,7 @@ pub trait Intern {
 
 impl Intern for str {
     fn intern(&self) -> &'static Self {
-        with_path_interner_mut(|interner| interner.intern_str(self))
+        with_path_interner(|interner| interner.intern_str(self))
     }
 }
 
@@ -133,10 +133,6 @@ thread_local! {
     }));
 }
 
-pub(crate) fn with_path_interner<R>(f: impl FnOnce(&Interner) -> R) -> R {
-    INTERNER.with(|interner| f(&*interner.borrow()))
-}
-
-pub(crate) fn with_path_interner_mut<R>(f: impl FnOnce(&mut Interner) -> R) -> R {
+pub(crate) fn with_path_interner<R>(f: impl FnOnce(&mut Interner) -> R) -> R {
     INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
 }

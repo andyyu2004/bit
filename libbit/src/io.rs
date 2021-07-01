@@ -5,7 +5,7 @@ use crate::path::BitPath;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
-use sha1::{digest::Output, Digest};
+use sha1::{Digest};
 use std::ffi::OsStr;
 use std::fmt::Display;
 use std::io::{self, prelude::*, BufReader};
@@ -364,10 +364,6 @@ impl<'a, D: Digest> Read for HashReader<'a, D> {
 }
 
 impl<'a, D: Digest> HashReader<'a, D> {
-    pub fn finalize_hash(&mut self) -> Output<D> {
-        self.hasher.finalize_reset()
-    }
-
     pub fn new(reader: &'a mut dyn BufRead) -> Self {
         Self { reader, hasher: D::new() }
     }
@@ -402,10 +398,6 @@ impl<'a, D: Digest> Write for HashWriter<'a, D> {
 }
 
 impl<'a, D: Digest> HashWriter<'a, D> {
-    pub fn finalize_hash(&mut self) -> Output<D> {
-        self.hasher.finalize_reset()
-    }
-
     pub fn new(writer: &'a mut dyn Write) -> Self {
         Self { writer, hasher: D::new() }
     }

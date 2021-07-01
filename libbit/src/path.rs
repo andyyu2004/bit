@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::interner::with_path_interner_mut;
+use crate::interner::with_path_interner;
 use crate::io::ReadExt;
 use crate::serialize::{BufReadSeek, Deserialize};
 use anyhow::Context;
@@ -75,7 +75,7 @@ impl BitPath {
 
     pub fn intern_str(s: impl AsRef<str>) -> Self {
         let s = s.as_ref();
-        with_path_interner_mut(|interner| interner.intern_path(s))
+        with_path_interner(|interner| interner.intern_path(s))
     }
 
     pub fn intern(path: impl AsRef<OsStr>) -> Self {
@@ -83,7 +83,7 @@ impl BitPath {
         // leading to refcell panics
         // quite questionable turning paths into strings and then bytes
         // probably not very platform agnostic
-        with_path_interner_mut(|interner| interner.intern_path(path))
+        with_path_interner(|interner| interner.intern_path(path))
     }
 
     pub fn as_str(self) -> &'static str {
@@ -97,7 +97,7 @@ impl BitPath {
     /// returns the components of a path
     /// foo/bar/baz -> [foo, bar, baz]
     pub fn components(self) -> &'static [BitPath] {
-        with_path_interner_mut(|interner| interner.get_components(self))
+        with_path_interner(|interner| interner.get_components(self))
     }
 
     /// similar to `[BitPath::components](crate::path::BitPath::components)`

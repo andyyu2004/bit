@@ -9,7 +9,7 @@ use std::ops::Index;
 use std::slice::SliceIndex;
 use std::str::FromStr;
 
-pub const BIT_HASH_SIZE: usize = std::mem::size_of::<Oid>();
+pub const OID_SIZE: usize = std::mem::size_of::<Oid>();
 
 #[derive(PartialEq, Eq, Hash, Clone, Ord, PartialOrd, Copy)]
 #[repr(transparent)]

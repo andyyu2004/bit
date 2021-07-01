@@ -1,10 +1,13 @@
+// allow for now as this unit is unused
+#![allow(dead_code)]
+
 use crate::error::BitResult;
 use crate::io::{BufReadExt, BufReadExtSized, ReadExt};
 use crate::serialize::{Deserialize, DeserializeSized};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Formatter};
-use std::io::{BufRead, Read};
+use std::io::BufRead;
 use std::ops::Deref;
 
 const CHUNK_SIZE: usize = 16;

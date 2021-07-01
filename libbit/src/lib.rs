@@ -33,9 +33,6 @@ extern crate maplit;
 extern crate num_derive;
 
 #[macro_use]
-extern crate scoped_tls;
-
-#[macro_use]
 extern crate bit_derive;
 
 #[macro_use]

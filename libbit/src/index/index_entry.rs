@@ -166,7 +166,7 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + std::mem::size_of::<u32>() // uid
             + std::mem::size_of::<u32>() // gid
             + std::mem::size_of::<u32>() // filesize
-            + BIT_HASH_SIZE // hash
+            + OID_SIZE // hash
             + std::mem::size_of::<u16>(); // flags
 
 impl BitIndexEntry {

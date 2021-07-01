@@ -134,7 +134,7 @@ impl BitIndexInner {
 
     fn parse_extensions(mut buf: &[u8]) -> BitResult<HashMap<[u8; 4], BitIndexExtension>> {
         let mut extensions = HashMap::new();
-        while buf.len() > BIT_HASH_SIZE {
+        while buf.len() > OID_SIZE {
             let signature: [u8; 4] = buf[0..4].try_into().unwrap();
             let size = u32::from_be_bytes(buf[4..8].try_into().unwrap());
             let data = buf[8..8 + size as usize].to_vec();
@@ -195,7 +195,7 @@ impl Deserialize for BitIndexInner {
             .collect::<Result<BitIndexEntries, _>>()?;
 
         let mut remainder = vec![];
-        assert!(r.read_to_end(&mut remainder)? >= BIT_HASH_SIZE);
+        assert!(r.read_to_end(&mut remainder)? >= OID_SIZE);
 
         let mut extensions = Self::parse_extensions(&remainder)?;
 
@@ -216,7 +216,7 @@ impl Deserialize for BitIndexInner {
 
         let bit_index = Self::new(entries, tree_cache, reuc);
 
-        let (bytes, hash) = buf.split_at(buf.len() - BIT_HASH_SIZE);
+        let (bytes, hash) = buf.split_at(buf.len() - OID_SIZE);
         let mut hasher = sha1::Sha1::new();
         hasher.update(bytes);
         let actual_hash = Oid::from(hasher.finalize());

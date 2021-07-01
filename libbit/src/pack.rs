@@ -1,6 +1,6 @@
 use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
-use crate::hash::{SHA1Hash, BIT_HASH_SIZE};
+use crate::hash::{SHA1Hash, OID_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::iter::{BitEntryIterator, BitIterator};
 use crate::obj::*;
@@ -19,6 +19,7 @@ const FANOUT_SIZE: u64 = FANOUT_ENTRYC as u64 * FANOUT_ENTRY_SIZE;
 const PACK_IDX_HEADER_SIZE: u64 = 8;
 const CRC_SIZE: u64 = 4;
 const OFFSET_SIZE: u64 = 4;
+const EXT_OFFSET_SIZE: u64 = 8;
 /// maximum 31 bit number (highest bit represents it uses a large offset in the EXT layer)
 const MAX_OFFSET: u64 = 0x7fffffff;
 
@@ -246,7 +247,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
     /// the pack index in bytes
     pub fn offset_of(&mut self, layer: Layer, index: u64) -> u64 {
         debug_assert!(layer < Layer::Ext);
-        const SIZE: [u64; 4] = [20, 4, 4, 8];
+        const SIZE: [u64; 4] = [OID_SIZE as u64, CRC_SIZE, OFFSET_SIZE, EXT_OFFSET_SIZE];
         let layer = layer.to_usize().unwrap();
         let base = PACK_IDX_HEADER_SIZE
             + FANOUT_SIZE
@@ -316,9 +317,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         let low = if prefix == 0 { 0 } else { self.fanout[prefix - 1] } as u64;
         let high = self.fanout[prefix] as u64;
 
-        self.seek(SeekFrom::Start(
-            PACK_IDX_HEADER_SIZE + FANOUT_SIZE + low * BIT_HASH_SIZE as u64,
-        ))?;
+        self.seek(SeekFrom::Start(PACK_IDX_HEADER_SIZE + FANOUT_SIZE + low * OID_SIZE as u64))?;
         let oids = self.reader.read_vec((high - low) as usize)?;
         match oids.binary_search(&oid) {
             Ok(idx) => Ok(low + idx as u64),
