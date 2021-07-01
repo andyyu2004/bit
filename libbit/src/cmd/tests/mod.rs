@@ -17,7 +17,7 @@ fn test_non_initial_empty_commit() -> BitResult<()> {
 
 #[test]
 fn test_initial_empty_commit() -> BitResult<()> {
-    let status = BitRepo::with_sample_repo(|repo| {
+    let status = BitRepo::with_empty_repo(|repo| {
         bit_commit_all!(repo);
         Ok(())
     })
