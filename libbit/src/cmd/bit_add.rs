@@ -22,7 +22,7 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn bit_add(&self, pathspecs: &[Pathspec]) -> BitResult<()> {
         self.with_index_mut(|index| {
             for pathspec in pathspecs {
-                index.add(&pathspec)?;
+                index.add(pathspec)?;
             }
             Ok(())
         })

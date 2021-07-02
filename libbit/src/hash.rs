@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{Oid, WritableObject};
-use crate::path::BitPath;
+
 use sha1::digest::Output;
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;

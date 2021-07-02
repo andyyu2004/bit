@@ -352,11 +352,13 @@ impl<'a, 'rcx> Apply for IndexWorktreeDiffer<'a, 'rcx> {
 
     fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
         debug_assert_eq!(old.path, new.path);
-        Ok(self.diff.modified.push((*old, *new)))
+        self.diff.modified.push((*old, *new));
+        Ok(())
     }
 
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
-        Ok(self.diff.deleted.push(*old))
+        self.diff.deleted.push(*old);
+        Ok(())
     }
 }
 

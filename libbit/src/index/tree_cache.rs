@@ -65,16 +65,6 @@ impl BitTreeCache {
         }
     }
 
-    // pub fn find_child(&self, path: impl AsRef<Path>) -> Option<&Self> {
-    //     find_child_base_case!(self, path);
-    //     self.children.iter().find_map(|child| child.find_child(path))
-    // }
-
-    // pub fn find_child_mut(&mut self, path: impl AsRef<Path>) -> Option<&mut Self> {
-    //     find_child_base_case!(self, path);
-    //     self.children.iter_mut().find_map(|child| child.find_child_mut(path))
-    // }
-
     pub fn invalidate_path(&mut self, path: BitPath) {
         self.entry_count = -1;
         // don't do this recursively as each path contains the full path, not just a component
@@ -103,13 +93,13 @@ impl BitTreeCache {
     }
 
     fn read_tree_internal(repo: BitRepo<'_>, tree: &Tree, path: BitPath) -> BitResult<Self> {
-        let mut cache_tree = Self::default();
-        cache_tree.oid = tree.oid();
-        cache_tree.entry_count = 0;
-        cache_tree.path = path;
-
-        // alloacate a conservative amount of space assuming all entries are trees
-        cache_tree.children = IndexMap::with_capacity(tree.entries.len());
+        let mut cache_tree = Self {
+            oid: tree.oid(),
+            entry_count: 0,
+            path,
+            // allocate a conservative amount of space assuming all entries are trees
+            children: IndexMap::with_capacity(tree.entries.len()),
+        };
 
         for entry in &tree.entries {
             match repo.read_obj(entry.oid)? {

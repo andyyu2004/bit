@@ -120,7 +120,8 @@ impl<'rcx> BitIndex<'rcx> {
             }
 
             fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
-                Ok(self.index.remove_entry(old.key()))
+                self.index.remove_entry(old.key());
+                Ok(())
             }
         }
         let diff = self.diff_worktree(Pathspec::MATCH_ALL)?;

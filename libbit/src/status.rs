@@ -20,7 +20,7 @@ bitflags! {
     #[derive(Default)]
     pub struct BitStatusFlags: u8 {
         // whether we have no prior commits
-        const INITIAL = 2 << 0;
+        const INITIAL = 1;
     }
 }
 

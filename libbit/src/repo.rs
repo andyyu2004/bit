@@ -439,7 +439,7 @@ impl<'rcx> Deref for BitRepo<'rcx> {
     type Target = RepoCtxt<'rcx>;
 
     fn deref(&self) -> &Self::Target {
-        &self.ctxt
+        self.ctxt
     }
 }
 

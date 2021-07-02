@@ -171,16 +171,16 @@ pub struct BitObjHeader {
 
 #[derive(PartialEq, Debug, BitObject)]
 pub enum BitObjKind {
-    Blob(Blob),
-    Commit(Commit),
-    Tree(Tree),
-    Tag(Tag),
+    Blob(Box<Blob>),
+    Commit(Box<Commit>),
+    Tree(Box<Tree>),
+    Tag(Box<Tag>),
 }
 
 impl Treeish for BitObjKind {
     fn into_tree(self) -> BitResult<Tree> {
         match self {
-            Self::Tree(tree) => Ok(tree),
+            Self::Tree(tree) => Ok(*tree),
             // panicking instead of erroring as this should be called only with certainty
             _ => panic!("expected tree, found `{}`", self.obj_ty()),
         }
@@ -207,14 +207,14 @@ impl BitObjKind {
 
     pub fn into_commit(self) -> Commit {
         match self {
-            Self::Commit(commit) => commit,
+            Self::Commit(commit) => *commit,
             _ => panic!("expected commit"),
         }
     }
 
     pub fn into_blob(self) -> Blob {
         match self {
-            BitObjKind::Blob(blob) => blob,
+            BitObjKind::Blob(blob) => *blob,
             _ => panic!("expected blob"),
         }
     }
@@ -225,10 +225,10 @@ impl BitObjKind {
 
     pub fn new(cached: BitObjCached, reader: impl BufRead) -> BitResult<Self> {
         match cached.obj_type {
-            BitObjType::Commit => Commit::new(cached, reader).map(Self::Commit),
-            BitObjType::Tree => Tree::new(cached, reader).map(Self::Tree),
-            BitObjType::Blob => Blob::new(cached, reader).map(Self::Blob),
-            BitObjType::Tag => Tag::new(cached, reader).map(Self::Tag),
+            BitObjType::Commit => Commit::new(cached, reader).map(Box::new).map(Self::Commit),
+            BitObjType::Tree => Tree::new(cached, reader).map(Box::new).map(Self::Tree),
+            BitObjType::Blob => Blob::new(cached, reader).map(Box::new).map(Self::Blob),
+            BitObjType::Tag => Tag::new(cached, reader).map(Box::new).map(Self::Tag),
         }
     }
 

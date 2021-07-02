@@ -3,9 +3,10 @@ use crate::error::BitResult;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use indexmap::indexmap;
-use std::lazy::Lazy;
+use std::lazy::SyncLazy;
 
-const CACHE_TREE: Lazy<BitTreeCache> = Lazy::new(|| BitTreeCache {
+// this breaks if we chanhge const to static
+const CACHE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
     path: BitPath::EMPTY,
     entry_count: 5,
     children: indexmap! {
@@ -21,7 +22,7 @@ const CACHE_TREE: Lazy<BitTreeCache> = Lazy::new(|| BitTreeCache {
     oid: "f3560f770ad0986e851d302b1d400588d5792f67".into(),
 });
 
-const CACHE_TREE_DIR_BAR: Lazy<BitTreeCache> = Lazy::new(|| BitTreeCache {
+const CACHE_TREE_DIR_BAR: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
     path: "bar".into(),
     entry_count: 1,
     children: indexmap! {},

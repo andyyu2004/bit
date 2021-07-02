@@ -150,7 +150,7 @@ impl BitRef {
         match repo.read_obj(oid)? {
             BitObjKind::Blob(..) => bail!("blob type is not treeish"),
             BitObjKind::Commit(commit) => repo.read_obj(commit.tree)?.into_tree(),
-            BitObjKind::Tree(tree) => Ok(tree),
+            BitObjKind::Tree(tree) => Ok(*tree),
             BitObjKind::Tag(..) => todo!(),
         }
     }

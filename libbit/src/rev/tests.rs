@@ -93,7 +93,7 @@ fn test_resolve_parent_of_non_commit_revspec() -> BitResult<()> {
         let err = repo.resolve_rev(&rev).unwrap_err();
         assert_eq!(
             err.to_string(),
-            format!("object `ebc3780a093cbda629d531c1c0d530a82063ee6f` is a tree, not a commit")
+            "object `ebc3780a093cbda629d531c1c0d530a82063ee6f` is a tree, not a commit".to_string()
         );
         Ok(())
     })

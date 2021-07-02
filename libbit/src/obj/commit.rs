@@ -191,14 +191,14 @@ impl DeserializeSized for MutableCommit {
         let mut key: Option<String> = None;
         let mut value: Option<String> = None;
 
-        while let Some(line) = lines.next() {
+        for line in &mut lines {
             let line = line?;
 
             // line is a continuation of the previous line
             if let Some(v) = &mut value {
-                if line.starts_with(' ') {
+                if let Some(stripped) = line.strip_prefix(' ') {
                     v.push('\n');
-                    v.push_str(&line[1..]);
+                    v.push_str(stripped);
                     continue;
                 } else {
                     attrs.insert(key.take().unwrap(), value.take().unwrap());

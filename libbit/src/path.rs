@@ -16,7 +16,7 @@ use std::path::{Component, Path, PathBuf};
 // interning paths is likely not worth it, but its nice to have it as a copy type
 // since its used so muchthis will also lend itself to faster comparisons as
 // its now just an integer compare
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, Clone, Copy)]
 pub struct BitPath {
     path: &'static OsStr,
 }
@@ -124,6 +124,14 @@ impl BitPath {
     /// returns first component of the path
     pub fn root_component(self) -> &'static Path {
         self.as_path().iter().next().unwrap().as_ref()
+    }
+}
+
+impl PartialEq for BitPath {
+    fn eq(&self, other: &Self) -> bool {
+        // TODO look into why this fails
+        // std::ptr::eq(self.path, other.path)
+        self.path == other.path
     }
 }
 

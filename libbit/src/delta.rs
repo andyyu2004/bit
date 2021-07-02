@@ -228,7 +228,7 @@ impl<'s> Deref for DeltaIndexCompressor<'_, 's> {
     type Target = DeltaIndex<'s>;
 
     fn deref(&self) -> &Self::Target {
-        &self.delta_index
+        self.delta_index
     }
 }
 

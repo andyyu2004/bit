@@ -118,7 +118,7 @@ impl FromStr for Pathspec {
         if s == "." {
             return Ok(Self::MATCH_ALL);
         }
-        let prefix_end = Self::find_prefix_end(&s);
+        let prefix_end = Self::find_prefix_end(s);
         let prefix = match prefix_end {
             Some(i) => &s[..i],
             None => s,

@@ -66,7 +66,7 @@ impl<'rcx> FallibleIterator for TreeEntryIter<'rcx> {
         // entry iterators only yield non-tree entries
         loop {
             match self.tree_iter.next()? {
-                Some(entry) if entry.is_file() => return Ok(Some(BitIndexEntry::from(entry))),
+                Some(entry) if entry.is_file() => return Ok(Some(entry)),
                 None => return Ok(None),
                 _ => continue,
             }
@@ -220,7 +220,7 @@ pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 impl<'rcx> BitIndex<'rcx> {
     pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + 'rcx> {
         trace!("worktree_iter()");
-        WorktreeIter::new(&self)
+        WorktreeIter::new(self)
     }
 }
 
