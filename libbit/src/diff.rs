@@ -3,27 +3,27 @@
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
-use crate::obj::{FileMode, Oid};
+use crate::obj::{FileMode, Oid, TreeEntry};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
+use crate::time::Timespec;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-// TODO bad name
-pub trait Apply {
+pub trait Differ {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()>;
     fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()>;
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()>;
 }
 
-pub trait Differ<'rcx>: Apply {
+pub trait IndexDiffer<'rcx>: Differ {
     fn index_mut(&mut self) -> &mut BitIndex<'rcx>;
 }
 
-pub trait DiffBuilder<'rcx>: Differ<'rcx> {
+pub trait DiffBuilder<'rcx>: IndexDiffer<'rcx> {
     /// the type of the resulting diff (returned by `Self::build_diff`)
     type Diff;
     fn build_diff(self) -> BitResult<Self::Diff>;
@@ -33,7 +33,7 @@ pub trait TreeDiffer<'rcx> {
     /// unmatched new entry
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()>;
     /// called when two entries are matched (could possibly be the same entry)
-    fn on_match(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
+    fn on_matched(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
     /// unmatched old entry
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()>;
 }
@@ -41,7 +41,7 @@ pub trait TreeDiffer<'rcx> {
 // TODO this is actually now specific to worktree index diffs
 pub struct GenericDiffer<'d, 'rcx, D, I, J>
 where
-    D: Differ<'rcx>,
+    D: IndexDiffer<'rcx>,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
@@ -60,7 +60,7 @@ enum Changed {
 
 impl<'d, 'rcx, D, I, J> GenericDiffer<'d, 'rcx, D, I, J>
 where
-    D: Differ<'rcx>,
+    D: IndexDiffer<'rcx>,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
@@ -114,6 +114,7 @@ where
                 }
             };
         }
+
         Ok(())
     }
 
@@ -138,7 +139,7 @@ impl<'rcx, I, J> TreeDifferGeneric<'rcx, I, J> {
 // comparison function for differs
 // cares about paths first, then modes second
 fn diff_cmp(a: &impl BitEntry, b: &impl BitEntry) -> std::cmp::Ordering {
-    a.path().cmp(&b.path()).then_with(|| a.mode().cmp(&b.mode()))
+    a.sort_path().cmp(&b.sort_path()).then_with(|| a.mode().cmp(&b.mode()))
 }
 
 impl<'rcx, I, J> TreeDifferGeneric<'rcx, I, J>
@@ -149,15 +150,13 @@ where
     fn build_diff(mut self) -> BitResult<WorkspaceDiff> {
         trace!("TreeDifferGeneric::build_diff");
         loop {
-            let a = self.old_iter.peek()?;
-            let b = self.new_iter.peek()?;
-            match (a, b) {
+            match (self.old_iter.peek()?, self.new_iter.peek()?) {
                 (None, None) => break,
                 (None, Some(new)) => self.on_created(new)?,
                 (Some(old), None) => self.on_deleted(old)?,
                 (Some(old), Some(new)) => match diff_cmp(&old, &new) {
                     Ordering::Less => self.on_deleted(old)?,
-                    Ordering::Equal => self.on_match(old, new)?,
+                    Ordering::Equal => self.on_matched(old, new)?,
                     Ordering::Greater => self.on_created(new)?,
                 },
             };
@@ -182,7 +181,7 @@ where
         }
     }
 
-    fn on_match(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+    fn on_matched(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_match(path: {})", new.path());
         // one of the oid's may be unknown due to being a pseudotree
         debug_assert!(old.oid().is_known() || new.oid().is_known());
@@ -206,8 +205,9 @@ where
             _ => {
                 debug_assert!(
                     old.is_file() && new.is_file(),
-                    "tree vs nontree should not call `on_match`, check the ordering function.
-                    if two entries have the same path then files should come before directories (as per `diff_cmp`)"
+                    "A tree vs nontree should not call `on_match`, check the ordering function.
+                    If two entries have the same path then files should come before directories (as per `diff_cmp`).
+                    We do not currently detect type changes, and instead treat this as an add/remove pair"
                 );
                 // non matching files
                 self.diff.modified.push((old, new));
@@ -293,26 +293,25 @@ impl WorkspaceDiff {
 }
 
 pub trait Diff {
-    fn apply<A: Apply>(&self, applier: &mut A) -> BitResult<()>;
+    fn apply_with<D: Differ>(&self, differ: &mut D) -> BitResult<()>;
 }
 
 impl Diff for WorkspaceDiff {
-    fn apply<A: Apply>(&self, applier: &mut A) -> BitResult<()> {
+    fn apply_with<D: Differ>(&self, differ: &mut D) -> BitResult<()> {
         for deleted in self.deleted.iter() {
-            applier.on_deleted(deleted)?;
+            differ.on_deleted(deleted)?;
         }
         for (old, new) in self.modified.iter() {
-            applier.on_modified(old, new)?;
+            differ.on_modified(old, new)?;
         }
         for new in self.new.iter() {
-            applier.on_created(new)?;
+            differ.on_created(new)?;
         }
         Ok(())
     }
 }
 
 pub(crate) struct IndexWorktreeDiffer<'a, 'rcx> {
-    repo: BitRepo<'rcx>,
     index: &'a mut BitIndex<'rcx>,
     pathspec: Pathspec,
     diff: WorkspaceDiff,
@@ -322,14 +321,7 @@ pub(crate) struct IndexWorktreeDiffer<'a, 'rcx> {
 
 impl<'a, 'rcx> IndexWorktreeDiffer<'a, 'rcx> {
     pub fn new(index: &'a mut BitIndex<'rcx>, pathspec: Pathspec) -> Self {
-        let repo = index.repo;
-        Self {
-            index,
-            repo,
-            pathspec,
-            diff: Default::default(),
-            _untracked_dirs: Default::default(),
-        }
+        Self { index, pathspec, diff: Default::default(), _untracked_dirs: Default::default() }
     }
 }
 
@@ -344,7 +336,7 @@ impl<'a, 'rcx> DiffBuilder<'rcx> for IndexWorktreeDiffer<'a, 'rcx> {
     }
 }
 
-impl<'a, 'rcx> Apply for IndexWorktreeDiffer<'a, 'rcx> {
+impl<'a, 'rcx> Differ for IndexWorktreeDiffer<'a, 'rcx> {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
         self.diff.new.push(*new);
         Ok(())
@@ -362,7 +354,7 @@ impl<'a, 'rcx> Apply for IndexWorktreeDiffer<'a, 'rcx> {
     }
 }
 
-impl<'a, 'rcx> Differ<'rcx> for IndexWorktreeDiffer<'a, 'rcx> {
+impl<'a, 'rcx> IndexDiffer<'rcx> for IndexWorktreeDiffer<'a, 'rcx> {
     fn index_mut(&mut self) -> &mut BitIndex<'rcx> {
         self.index
     }
@@ -389,10 +381,10 @@ impl<'rcx> BitIndex<'rcx> {
                 // there are currently only two types of diffs, index-worktree and head-index,
                 // where the left side is `old` and the right is `new`
                 // so the `old` parameter is either a head entry or an index entry
-                // a head_entry should never reach this section as it should always have a known hash
-                // (from the TreeEntry). To assert this we just check the filepath to be empty
-                // (as this is the default value given when a tree entry is converted to an index entry)
-                debug_assert!(!old.path.is_empty());
+                // A tree_entry should never reach this section as it should always have a known hash
+                // (from the TreeEntry). To assert this we just check the ctime to be zero
+                // (as this is the default value given when a tree entry is converted to an index entry and would not be possible otherwise)
+                debug_assert!(old.ctime != Timespec::ZERO);
 
                 // file may have changed, but we are not certain, so check the hash
                 let mut new_hash = new.oid;

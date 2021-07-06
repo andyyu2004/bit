@@ -1,5 +1,5 @@
 use super::*;
-use crate::diff::{Apply, Diff, WorkspaceDiff};
+use crate::diff::{Diff, Differ, WorkspaceDiff};
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::obj::Oid;
@@ -36,7 +36,7 @@ impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
     }
 
     pub fn format_diff_into(repo: BitRepo<'rcx>, writer: W, diff: &WorkspaceDiff) -> BitResult<()> {
-        diff.apply(&mut Self::new(repo, writer))
+        diff.apply_with(&mut Self::new(repo, writer))
     }
 
     fn read_blob(&self, entry: &BitIndexEntry) -> BitResult<String> {
@@ -52,7 +52,7 @@ impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
     }
 }
 
-impl<'rcx, W: Write> Apply for DiffFormatter<'rcx, W> {
+impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
         let new_txt = self.read_blob(new)?;
         let mut patch = xdiff::xdiff("", &new_txt);

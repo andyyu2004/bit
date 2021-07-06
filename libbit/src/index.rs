@@ -110,7 +110,7 @@ impl<'rcx> BitIndex<'rcx> {
             index: &'a mut BitIndex<'rcx>,
         }
 
-        impl<'a, 'rcx> Apply for AddAll<'a, 'rcx> {
+        impl<'a, 'rcx> Differ for AddAll<'a, 'rcx> {
             fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
                 self.index.add_entry(*new)
             }
@@ -125,7 +125,7 @@ impl<'rcx> BitIndex<'rcx> {
             }
         }
         let diff = self.diff_worktree(Pathspec::MATCH_ALL)?;
-        diff.apply(&mut AddAll { index: self })?;
+        diff.apply_with(&mut AddAll { index: self })?;
 
         // worktree should exactly match the index after `add_all`
         debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());

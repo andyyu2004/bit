@@ -135,8 +135,8 @@ impl From<TreeEntry> for BitIndexEntry {
         // its fine to zero most of these fields as we know the hash, and that is the only thing we
         // need to use to determine whether anything has changed
         Self {
-            ctime: Timespec::zero(),
-            mtime: Timespec::zero(),
+            ctime: Timespec::ZERO,
+            mtime: Timespec::ZERO,
             device: 0,
             inode: 0,
             mode: entry.mode,
