@@ -1,4 +1,4 @@
-use crate::diff::WorkspaceDiff;
+use crate::diff::WorkspaceStatus;
 use crate::error::BitResult;
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
@@ -12,8 +12,8 @@ pub struct BitStatus {
     head: BitRef,
     flags: BitStatusFlags,
     // TODO can use bitflags if more bools pop up here
-    pub staged: WorkspaceDiff,
-    pub unstaged: WorkspaceDiff,
+    pub staged: WorkspaceStatus,
+    pub unstaged: WorkspaceStatus,
 }
 
 bitflags! {
