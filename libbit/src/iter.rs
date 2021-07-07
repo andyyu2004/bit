@@ -115,29 +115,26 @@ impl<'rcx> WorktreeIter<'rcx> {
         // not sure if this is actually better than just looking up in the index's entries
         let tracked = index.entries().keys().map(|(path, _)| path.as_os_str()).collect();
 
-        Ok(Self {
-            repo,
-            ignore,
-            tracked,
-            walk: WalkDir::new(repo.workdir)
-                .sort_by(|a, b| {
-                    let x = a.path();
-                    let y = b.path();
+        let walk = WalkDir::new(repo.workdir)
+            .sort_by(|a, b| {
+                let x = a.path();
+                let y = b.path();
 
-                    // TODO should be able to rewrite this without the match now
-                    //  for ordering and avoiding allocation where possible
-                    let t = a.file_type().is_dir().then(|| x.join(""));
-                    let u = b.file_type().is_dir().then(|| y.join(""));
+                // TODO should be able to rewrite this without the match now
+                //  for ordering and avoiding allocation where possible
+                let t = a.file_type().is_dir().then(|| x.join(""));
+                let u = b.file_type().is_dir().then(|| y.join(""));
 
-                    match (&t, &u) {
-                        (None, None) => BitPath::path_cmp(x, y),
-                        (None, Some(u)) => BitPath::path_cmp(x, u),
-                        (Some(t), None) => BitPath::path_cmp(t, y),
-                        (Some(t), Some(u)) => BitPath::path_cmp(t, u),
-                    }
-                })
-                .into_iter(),
-        })
+                match (&t, &u) {
+                    (None, None) => BitPath::path_cmp(x, y),
+                    (None, Some(u)) => BitPath::path_cmp(x, u),
+                    (Some(t), None) => BitPath::path_cmp(t, y),
+                    (Some(t), Some(u)) => BitPath::path_cmp(t, u),
+                }
+            })
+            .into_iter();
+
+        Ok(Self { repo, ignore, tracked, walk })
     }
 
     // we need to explicitly ignore our root `.bit/.git` directories
@@ -146,16 +143,12 @@ impl<'rcx> WorktreeIter<'rcx> {
         // should only run this on files
         debug_assert!(path.is_file());
         debug_assert!(path.is_absolute());
+
         let relative = self.repo.to_relative_path(path)?;
+        debug_assert!(relative.iter().all(|component| BitPath::DOT_GIT != component));
 
         if self.tracked.contains(&relative.as_os_str()) {
             return Ok(false);
-        }
-
-        // not ignoring .bit as git doesn't ignore .bit
-        // perhaps we should just consider .bit as a debug directory only?
-        if relative.iter().any(|component| component == BitPath::DOT_GIT.as_os_str()) {
-            return Ok(true);
         }
 
         for ignore in &self.ignore {
@@ -195,13 +188,15 @@ impl FallibleIterator for WorktreeIter<'_> {
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
         // ignore directories
         let direntry = loop {
-            // TODO can we ignore .git, its a waste of time travering that directory just to be ignored
             match self.walk.next().transpose()? {
                 Some(entry) => {
                     let path = entry.path();
                     let is_dir = entry.file_type().is_dir();
-                    // this iterator doesn't yield directory entries
-                    if !is_dir && !self.is_ignored(path)? {
+                    // explicitly stepover .git directory
+                    if is_dir && BitPath::DOT_GIT == entry.file_name() {
+                        self.walk.skip_current_dir();
+                    } else if !is_dir && !self.is_ignored(path)? {
+                        // this iterator doesn't yield directory entries
                         break entry;
                     }
                 }

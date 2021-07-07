@@ -86,8 +86,8 @@ impl<'rcx> RepoCtxt<'rcx> {
             return Self::load(path);
         }
 
-        // also recognize `.bit` folder as its convenient for having
-        // bit repos under tests/repos
+        // also recognize `.bit` folder as its convenient for having bit repos under tests/repos
+        // it is for testing and debugging purposes only
         if path.join(".bit").exists() {
             return Self::load_with_bitdir(path, ".bit");
         }

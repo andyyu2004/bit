@@ -171,32 +171,30 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
 
 impl BitIndexEntry {
     pub fn from_path(repo: BitRepo<'_>, path: &Path) -> BitResult<Self> {
-        {
-            let normalized = repo.normalize(path)?;
-            let relative = repo.to_relative_path(&normalized)?;
+        let normalized = repo.normalize(path)?;
+        let relative = repo.to_relative_path(&normalized)?;
 
-            debug_assert!(!normalized.is_dir(), "bit index entry should not be a directory");
-            let metadata = normalized.symlink_metadata().unwrap();
+        debug_assert!(!normalized.is_dir(), "bit index entry should not be a directory");
+        let metadata = normalized.symlink_metadata()?;
 
-            // the path must be relative to the repository root
-            // as this is the correct representation for the index entry
-            // and otherwise, the pathlen in the flags will be off
-            let path = BitPath::intern(relative);
-            Ok(Self {
-                path,
-                ctime: Timespec::ctime(&metadata),
-                mtime: Timespec::mtime(&metadata),
-                device: metadata.st_dev() as u32,
-                inode: metadata.st_ino() as u32,
-                mode: FileMode::from_metadata(&metadata),
-                uid: metadata.st_uid(),
-                gid: metadata.st_gid(),
-                filesize: metadata.st_size() as u32,
-                oid: Oid::UNKNOWN,
-                flags: BitIndexEntryFlags::with_path_len(path.len()),
-                extended_flags: BitIndexEntryExtendedFlags::default(),
-            })
-        }
+        // the path must be relative to the repository root
+        // as this is the correct representation for the index entry
+        // and otherwise, the pathlen in the flags will be off
+        let path = BitPath::intern(relative);
+        Ok(Self {
+            path,
+            ctime: Timespec::ctime(&metadata),
+            mtime: Timespec::mtime(&metadata),
+            device: metadata.st_dev() as u32,
+            inode: metadata.st_ino() as u32,
+            mode: FileMode::from_metadata(&metadata),
+            uid: metadata.st_uid(),
+            gid: metadata.st_gid(),
+            filesize: metadata.st_size() as u32,
+            oid: Oid::UNKNOWN,
+            flags: BitIndexEntryFlags::with_path_len(path.len()),
+            extended_flags: BitIndexEntryExtendedFlags::default(),
+        })
     }
 
     pub fn stage(&self) -> MergeStage {
