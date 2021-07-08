@@ -1,18 +1,41 @@
 use crate::diff::{TreeDiffBuilder, TreeDiffer, TreeEntriesConsumer};
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
+use crate::iter::BitEntry;
 use crate::obj::{FileMode, Oid, TreeEntry};
 use crate::repo::BitRepo;
+use std::io::Write;
 
 impl<'rcx> BitRepo<'rcx> {
     /// update the worktree to match the tree represented by `target`
-    pub fn checkout_tree(&self, target_tree: Oid) -> BitResult<()> {
+    pub fn checkout_tree(self, target_tree: Oid) -> BitResult<()> {
         let baseline = self.head_tree_iter()?;
         let target = self.tree_iter(target_tree);
         // let workdir = self.with_index(|index| index.worktree_iter())?;
 
         let migration = MigrationDiffer::default().build_diff(baseline, target);
 
+        Ok(())
+    }
+
+    fn apply_migration(self, migration: &Migration) -> BitResult<()> {
+        for rmrf in &migration.rmrfs {
+            std::fs::remove_dir_all(rmrf.path)?;
+        }
+
+        for rm in &migration.rms {
+            std::fs::remove_file(rm.path)?;
+        }
+
+        for mkdir in &migration.mkdirs {
+            std::fs::create_dir(mkdir.path)?;
+        }
+
+        for create in &migration.creates {
+            let bytes = create.read_to_bytes(self)?;
+            let mut file = std::fs::File::create(create.path)?;
+            file.write_all(&bytes)?;
+        }
         Ok(())
     }
 }

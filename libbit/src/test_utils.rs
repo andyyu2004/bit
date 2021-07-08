@@ -420,6 +420,12 @@ macro_rules! tree_obj {
     };
 }
 
+macro_rules! p {
+    ($path:expr) => {
+        BitPath::intern($path)
+    };
+}
+
 /// same as `tree_obj!` but writes it to the repo and returns the oid
 macro_rules! tree {
     ( $($entries:tt)* ) => {{
