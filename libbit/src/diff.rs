@@ -149,9 +149,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn diff_tree_to_tree(self, a: Oid, b: Oid) -> BitResult<WorkspaceStatus> {
-        // TODO reconsider the api of actually retriving the diff
-        // could consider something like TreeDiffBuilder trait analogous to DiffBuilder
-        Ok(TreeStatusDiffer::default().run_diff(self.tree_iter(a), self.tree_iter(b))?.status)
+        TreeStatusDiffer::default().build_diff(self.tree_iter(a), self.tree_iter(b))
     }
 }
 
@@ -163,7 +161,7 @@ impl<'rcx> BitIndex<'rcx> {
     pub fn diff_tree(&mut self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         let tree_iter = pathspec.match_tree_iter(self.repo.tree_iter(tree));
         let index_iter = pathspec.match_tree_iter(self.tree_iter());
-        Ok(TreeStatusDiffer::default().run_diff(tree_iter, index_iter)?.status)
+        TreeStatusDiffer::default().build_diff(tree_iter, index_iter)
     }
 
     pub fn diff_head(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {

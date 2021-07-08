@@ -8,30 +8,21 @@ pub struct TreeDiffDriver<D, I, J> {
     new_iter: J,
 }
 
-impl<D, I, J> TreeDiffDriver<D, I, J> {
-    pub fn new(differ: D, old_iter: I, new_iter: J) -> Self {
-        Self { differ, old_iter, new_iter }
-    }
-}
-
-pub trait TreeDiffer: Sized {
-    fn run_diff(
+pub trait TreeDiffBuilder: TreeDiffer + Sized {
+    type Output;
+    fn build_diff(
         mut self,
         old_iter: impl BitTreeIterator,
         new_iter: impl BitTreeIterator,
-    ) -> BitResult<Self> {
-        TreeDiffDriver::new(&mut self, old_iter, new_iter).build_diff()?;
-        Ok(self)
+    ) -> BitResult<Self::Output> {
+        self.run_diff(old_iter, new_iter)?;
+        Ok(self.get_output())
     }
 
-    fn created_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()>;
-    fn created_blob(&mut self, new: BitIndexEntry) -> BitResult<()>;
-    fn deleted_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()>;
-    fn deleted_blob(&mut self, old: BitIndexEntry) -> BitResult<()>;
-    fn modified_blob(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
+    fn get_output(self) -> Self::Output;
 }
 
-impl<'a, D: TreeDiffer> TreeDiffer for &'a mut D {
+impl<'a, D: TreeDiffer + ?Sized> TreeDiffer for &'a mut D {
     fn created_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()> {
         (**self).created_tree(entries)
     }
@@ -53,13 +44,35 @@ impl<'a, D: TreeDiffer> TreeDiffer for &'a mut D {
     }
 }
 
+pub trait TreeDiffer {
+    fn run_diff(
+        &mut self,
+        old_iter: impl BitTreeIterator,
+        new_iter: impl BitTreeIterator,
+    ) -> BitResult<()> {
+        TreeDiffDriver::new(self, old_iter, new_iter).run_diff()
+    }
+
+    fn created_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()>;
+    fn created_blob(&mut self, new: BitIndexEntry) -> BitResult<()>;
+    fn deleted_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()>;
+    fn deleted_blob(&mut self, old: BitIndexEntry) -> BitResult<()>;
+    fn modified_blob(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
+}
+
+impl<D, I, J> TreeDiffDriver<D, I, J> {
+    pub fn new(differ: D, old_iter: I, new_iter: J) -> Self {
+        Self { differ, old_iter, new_iter }
+    }
+}
+
 impl<D, I, J> TreeDiffDriver<D, I, J>
 where
     D: TreeDiffer,
     I: BitTreeIterator,
     J: BitTreeIterator,
 {
-    fn build_diff(mut self) -> BitResult<()> {
+    fn run_diff(mut self) -> BitResult<()> {
         trace!("TreeDifferGeneric::build_diff");
         loop {
             match (self.old_iter.peek()?, self.new_iter.peek()?) {
@@ -146,10 +159,12 @@ impl<'a> TreeEntriesConsumer<'a> {
         Self { iter }
     }
 
-    pub fn step_over(self) -> BitResult<Option<BitIndexEntry>> {
-        self.iter.over()
+    /// step over the tree and return the entry of the tree itself
+    pub fn step_over(self) -> BitResult<BitIndexEntry> {
+        Ok(self.iter.over()?.expect("there is definitely something as we peeked this entry"))
     }
 
+    /// appends all the non-tree subentries of the tree to `container`
     pub fn collect_over(self, container: &mut Vec<BitIndexEntry>) -> BitResult<()> {
         self.iter.collect_over_tree(container)
     }
@@ -158,6 +173,14 @@ impl<'a> TreeEntriesConsumer<'a> {
 #[derive(Default)]
 pub struct TreeStatusDiffer {
     pub status: WorkspaceStatus,
+}
+
+impl TreeDiffBuilder for TreeStatusDiffer {
+    type Output = WorkspaceStatus;
+
+    fn get_output(self) -> Self::Output {
+        self.status
+    }
 }
 
 impl TreeDiffer for TreeStatusDiffer {
