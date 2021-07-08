@@ -224,16 +224,6 @@ impl<'rcx> BitRepo<'rcx> {
                 Err(err)
             }
         }
-        // Lockfile::with_mut(self.index_path(), LockfileFlags::SET_READONLY, |lockfile| {
-        //     let index = &mut BitIndex::from_lockfile(self, &lockfile)?;
-        //     let r = f(index)?;
-        //     if index.flags.contains(BitIndexFlags::DIRTY) {
-        //         index.serialize(lockfile)?;
-        //     } else {
-        //         lockfile.rollback();
-        //     }
-        //     Ok(r)
-        // })
     }
 
     // returns unit as we don't want anyone accessing the repo directly like this
@@ -383,7 +373,7 @@ impl<'rcx> BitRepo<'rcx> {
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
         if path.is_relative() {
-            let normalized = path::normalize(&self.workdir.join(&path));
+            let normalized = path::normalize(&self.to_absolute_path(&path));
             debug_assert!(
                 normalized.symlink_metadata().is_ok(),
                 "normalized path `{}` does not exist",
@@ -408,8 +398,9 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(path.strip_prefix(&self.workdir)?)
     }
 
-    pub(crate) fn relative_path(&self, path: impl AsRef<Path>) -> BitPath {
-        self.bitdir.join(path)
+    /// convert a relative path to be absolute based off the repository root
+    pub fn to_absolute_path(&self, path: impl AsRef<Path>) -> BitPath {
+        self.workdir.join(path)
     }
 
     #[cfg(test)]
@@ -418,11 +409,11 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub(crate) fn mk_bitdir(&self, path: impl AsRef<Path>) -> io::Result<()> {
-        fs::create_dir_all(self.relative_path(path))
+        fs::create_dir_all(self.bitdir.join(path))
     }
 
     pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
-        File::create(self.relative_path(path))
+        File::create(self.bitdir.join(path))
     }
 }
 

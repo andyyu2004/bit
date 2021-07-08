@@ -189,7 +189,7 @@ impl<'rcx> FallibleIterator for TreeIter<'rcx> {
             match self.entry_stack.pop() {
                 Some((base, mut entry)) => match entry.mode {
                     FileMode::TREE => {
-                        let tree = self.repo.read_obj(entry.oid)?.into_tree()?;
+                        let tree = entry.oid.into_tree(self.repo)?;
                         let path = base.join(entry.path);
                         debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
 

@@ -26,6 +26,22 @@ impl<'rcx> BitRefDb<'rcx> {
     pub fn join_log(&self, path: BitPath) -> BitPath {
         self.bitdir.join("logs").join(path)
     }
+
+    // tries to expand the symbolic reference
+    // i.e. master -> refs/heads/master
+    fn try_expand_symref(&self, sym: SymbolicRef) -> Option<SymbolicRef> {
+        const PREFIXES: &[BitPath] = &[BitPath::EMPTY, BitPath::REFSHEADS, BitPath::REFSTAGS];
+        // we only try to do expansion on single component paths (which all valid branches should be)
+        let prefixes =
+            if sym.path.as_path().components().count() == 1 { PREFIXES } else { &[BitPath::EMPTY] };
+        for prefix in prefixes {
+            let path = prefix.join(sym.path);
+            if self.join_ref(path).exists() {
+                return Some(SymbolicRef::new(path));
+            }
+        }
+        None
+    }
 }
 
 // unfortunately, doesn't seem like its easy to support a resolve operation on refdb as it will require reading
@@ -134,15 +150,15 @@ impl<'rcx> BitRefDbBackend for BitRefDb<'rcx> {
 
     fn partially_resolve(&self, reference: BitRef) -> BitResult<BitRef> {
         match reference {
-            BitRef::Direct(_) => Ok(reference),
+            BitRef::Direct(..) => Ok(reference),
             BitRef::Symbolic(sym) => {
                 let repo = self.repo;
-                let ref_path = repo.relative_path(sym.path);
-                if !ref_path.exists() {
-                    return Ok(reference);
-                }
+                let expanded_sym = match self.try_expand_symref(sym) {
+                    Some(expanded) => expanded,
+                    None => return Ok(reference),
+                };
+                let ref_path = self.join_ref(expanded_sym.path);
 
-                // TODO check second parameter
                 let r = Lockfile::with_readonly(ref_path, LockfileFlags::SET_READONLY, |_| {
                     let contents = std::fs::read_to_string(ref_path)?;
                     // symbolic references can be recursive

@@ -177,8 +177,10 @@ pub enum BitObjKind {
     Tag(Box<Tag>),
 }
 
-impl Treeish for BitObjKind {
-    fn into_tree(self) -> BitResult<Tree> {
+impl BitObjKind {
+    // TODO bitobjkind doesn't impl `Treeish` as the signature isn't ideal as we don't actually need the repo here
+    // to consider later
+    pub fn into_tree(self) -> BitResult<Tree> {
         match self {
             Self::Tree(tree) => Ok(*tree),
             // panicking instead of erroring as this should be called only with certainty

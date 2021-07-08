@@ -125,7 +125,8 @@ impl FromStr for PartialOid {
         ensure!(s.len() >= 4, "bit hash prefix must be at least 4 hex characters");
         ensure!(
             s.chars().all(|c| c.is_ascii_hexdigit()),
-            "partial hashes should only contain ascii hex digits"
+            "invalid partial hash `{}`. partial hashes should only contain ascii hex digits",
+            s
         );
         // initializing every byte to "0" so we can easily convert this string format into a binary `Oid`
         let mut bytes = [b"0"[0]; 40];

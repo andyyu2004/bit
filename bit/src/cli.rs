@@ -1,6 +1,7 @@
 mod cli_add;
 mod cli_bit_diff;
 mod cli_branch;
+mod cli_checkout;
 mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
@@ -34,6 +35,7 @@ use libbit::repo::BitRepo;
 use libbit::rev::LazyRevspec;
 use std::path::PathBuf;
 
+use self::cli_checkout::BitCheckoutCliOpts;
 use self::cli_reflog::BitReflogCliOpts;
 
 // experiment with changing structure of everything
@@ -73,12 +75,13 @@ pub fn run() -> BitResult<()> {
             dbg!(opts);
             todo!()
         }
-        BitSubCmd::Status(opts) => opts.exec(repo),
+        BitSubCmd::Branch(opts) => opts.exec(repo),
         BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
         BitSubCmd::Commit(opts) => repo.bit_commit(opts.message),
-        BitSubCmd::Branch(opts) => opts.exec(repo),
+        BitSubCmd::Checkout(opts) => opts.exec(repo),
         BitSubCmd::Diff(opts) => opts.exec(repo),
         BitSubCmd::Reflog(opts) => opts.exec(repo),
+        BitSubCmd::Status(opts) => opts.exec(repo),
     })
 }
 
@@ -96,6 +99,7 @@ pub enum BitSubCmd {
     Add(BitAddCliOpts),
     Branch(BitBranchCliOpts),
     CatFile(BitCatFileCliOpts),
+    Checkout(BitCheckoutCliOpts),
     CommitTree(BitCommitTreeCliOpts),
     Config(BitConfigCliOpts),
     Commit(BitCommitCliOpts),
@@ -166,12 +170,12 @@ pub struct BitCatFileCliOpts {
     #[clap(required_unless_present_any(&["pp", "ty", "size", "exit"]))]
     pub objtype: Option<BitObjType>,
     #[clap(required = true)]
-    pub rev: LazyRevspec,
+    pub revision: LazyRevspec,
 }
 
 impl Into<BitCatFileOpts> for BitCatFileCliOpts {
     fn into(self) -> BitCatFileOpts {
-        let Self { pp, exit, ty, size, objtype, rev } = self;
+        let Self { pp, exit, ty, size, objtype, revision: rev } = self;
         let op = if pp {
             BitCatFileOperation::PrettyPrint
         } else if size {

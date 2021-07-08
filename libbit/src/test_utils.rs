@@ -337,9 +337,8 @@ macro_rules! symbolic_ref {
     }};
 }
 
-macro_rules! parse_rev {
+macro_rules! rev {
     ($rev:expr) => {{
-        // NOTE: `eval` must be called with a repository in scope (tls)
         #[allow(unused_imports)]
         use std::str::FromStr;
         crate::rev::LazyRevspec::from_str($rev)?

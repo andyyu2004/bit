@@ -6,6 +6,7 @@ use crate::io::BufReadExt;
 use crate::iter::BitEntry;
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::path::BitPath;
+use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::tls;
 use crate::util;
@@ -16,12 +17,18 @@ use std::iter::FromIterator;
 use std::ops::Deref;
 
 pub trait Treeish {
-    fn into_tree(self) -> BitResult<Tree>;
+    fn into_tree(self, repo: BitRepo<'_>) -> BitResult<Tree>;
 }
 
 impl Treeish for Tree {
-    fn into_tree(self) -> BitResult<Self> {
+    fn into_tree(self, _repo: BitRepo<'_>) -> BitResult<Self> {
         Ok(self)
+    }
+}
+
+impl Treeish for Oid {
+    fn into_tree(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+        repo.read_obj(self)?.into_tree()
     }
 }
 

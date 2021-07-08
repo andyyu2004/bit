@@ -19,7 +19,7 @@ pub enum Revspec {
 
 impl<'rcx> BitRepo<'rcx> {
     pub fn resolve_rev(self, rev: &LazyRevspec) -> BitResult<Oid> {
-        self.resolve_rev_inner(rev.eval(self)?)
+        self.resolve_rev_inner(rev.parse(self)?)
     }
 
     /// resolves revision specification to the commit oid
@@ -64,8 +64,7 @@ impl Display for Revspec {
 // pretty weird wrapper around revspec
 // problem is revspec requires repo to be properly evaluated (as it requires some context to be parsed properly)
 // but we want FromStr to be implemented so clap can use it
-// this wrapper can lazily evaluated to get a parsed revspec (via `eval`)
-// obviously, this must only be done after `tls::REPO` is set
+// this wrapper can lazily evaluated to get a parsed revspec (via `parse`)
 #[derive(Debug)]
 pub struct LazyRevspec {
     src: String,
@@ -73,7 +72,7 @@ pub struct LazyRevspec {
 }
 
 impl LazyRevspec {
-    pub fn eval(&self, repo: BitRepo<'_>) -> BitResult<&Revspec> {
+    pub fn parse(&self, repo: BitRepo<'_>) -> BitResult<&Revspec> {
         self.parsed.get_or_try_init(|| RevspecParser::new(repo, &self.src).parse())
     }
 }

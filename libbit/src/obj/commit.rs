@@ -76,8 +76,8 @@ impl Display for CommitMessage {
 }
 
 impl Treeish for Commit {
-    fn into_tree(self) -> BitResult<Tree> {
-        tls::with_repo(|repo| repo.read_obj(self.tree)?.into_tree())
+    fn into_tree(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+        self.tree.into_tree(repo)
     }
 }
 

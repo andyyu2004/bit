@@ -1,42 +1,70 @@
 use crate::diff::{TreeDiffBuilder, TreeDiffer, TreeEntriesConsumer};
 use crate::error::BitResult;
-use crate::index::BitIndexEntry;
-use crate::iter::BitEntry;
+use crate::index::{BitIndexEntry, MergeStage};
+use crate::iter::{BitEntry, BitTreeIterator};
 use crate::obj::{FileMode, Oid, TreeEntry};
+use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
+use crate::rev::LazyRevspec;
+use std::fs::Permissions;
 use std::io::Write;
+use std::os::unix::prelude::PermissionsExt;
 
 impl<'rcx> BitRepo<'rcx> {
+    pub fn checkout_rev(self, rev: &LazyRevspec) -> BitResult<()> {
+        let commit_oid = self.resolve_rev(rev)?;
+        let tree_oid = self.read_obj(commit_oid)?.into_commit().tree;
+        self.checkout_tree(tree_oid)
+    }
+
     /// update the worktree to match the tree represented by `target`
     pub fn checkout_tree(self, target_tree: Oid) -> BitResult<()> {
+        let status = self.status(Pathspec::MATCH_ALL)?;
+        // only allow checkout on fully clean states for now
+        if !status.is_empty() {
+            bail!("cannot checkout: unclean state")
+        }
+
         let baseline = self.head_tree_iter()?;
         let target = self.tree_iter(target_tree);
+
         // let workdir = self.with_index(|index| index.worktree_iter())?;
 
-        let migration = MigrationDiffer::default().build_diff(baseline, target);
-
+        let migration = Migration::generate(baseline, target)?;
+        self.apply_migration(&migration)?;
         Ok(())
     }
 
     fn apply_migration(self, migration: &Migration) -> BitResult<()> {
-        for rmrf in &migration.rmrfs {
-            std::fs::remove_dir_all(rmrf.path)?;
-        }
+        self.with_index_mut(|index| {
+            for rmrf in &migration.rmrfs {
+                // TODO what to do with index?
+                std::fs::remove_dir_all(self.to_absolute_path(&rmrf.path))?;
+            }
 
-        for rm in &migration.rms {
-            std::fs::remove_file(rm.path)?;
-        }
+            for rm in &migration.rms {
+                std::fs::remove_file(self.to_absolute_path(&rm.path))?;
+                index.remove_entry((rm.path, MergeStage::None));
+            }
 
-        for mkdir in &migration.mkdirs {
-            std::fs::create_dir(mkdir.path)?;
-        }
+            for mkdir in &migration.mkdirs {
+                std::fs::create_dir(self.to_absolute_path(&mkdir.path))?;
+            }
 
-        for create in &migration.creates {
-            let bytes = create.read_to_bytes(self)?;
-            let mut file = std::fs::File::create(create.path)?;
-            file.write_all(&bytes)?;
-        }
-        Ok(())
+            for create in &migration.creates {
+                let path = self.to_absolute_path(&create.path);
+                let bytes = create.read_to_bytes(self)?;
+                let mut file = std::fs::File::with_options()
+                    .create_new(true)
+                    .read(false)
+                    .write(true)
+                    .open(&path)?;
+                std::fs::set_permissions(&path, Permissions::from_mode(create.mode.as_u32()))?;
+                file.write_all(&bytes)?;
+                index.add_entry(BitIndexEntry::from_path(self, &path)?)?;
+            }
+            Ok(())
+        })
     }
 }
 
@@ -52,6 +80,15 @@ pub struct Migration {
     mkdirs: Vec<TreeEntry>,
     // creation of new file
     creates: Vec<TreeEntry>,
+}
+
+impl Migration {
+    pub fn generate(
+        baseline: impl BitTreeIterator,
+        target: impl BitTreeIterator,
+    ) -> BitResult<Self> {
+        MigrationDiffer::default().build_diff(baseline, target)
+    }
 }
 
 #[derive(Default, Debug)]
@@ -104,5 +141,7 @@ impl TreeDiffer for MigrationDiffer {
     }
 }
 
+#[cfg(test)]
+mod migration_gen_tests;
 #[cfg(test)]
 mod tests;
