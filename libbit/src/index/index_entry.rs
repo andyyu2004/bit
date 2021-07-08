@@ -216,6 +216,11 @@ impl BitIndexEntry {
         debug_assert!(padding_size > 0 && padding_size <= 8);
         padding_size
     }
+
+    pub fn read_to_string(&self, repo: BitRepo<'_>) -> BitResult<String> {
+        let bytes = self.read_to_bytes(repo)?;
+        Ok(String::from_utf8(bytes)?)
+    }
 }
 
 impl BitEntry for BitIndexEntry {

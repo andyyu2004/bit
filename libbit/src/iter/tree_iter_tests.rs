@@ -109,7 +109,7 @@ fn test_tree_iterator_collect_over_non_root() -> BitResult<()> {
             // step over root, "dir", and "dir/test.txt"
             iter.nth(2)?;
             let mut vec = vec![];
-            iter.collect_over_tree(&mut vec)?;
+            iter.collect_over_tree_files(&mut vec)?;
             let paths = vec.iter().map(BitEntry::path).collect::<Vec<_>>();
             assert_eq!(paths, vec!["dir2/dir2.txt", "dir2/nested/coolfile.txt",]);
             Ok(())
@@ -192,7 +192,7 @@ fn test_tree_iterator_collect_over_root() -> BitResult<()> {
         repo.with_index(|index| {
             let mut iter = index.tree_iter();
             let mut vec = vec![];
-            iter.collect_over_tree(&mut vec)?;
+            iter.collect_over_tree_files(&mut vec)?;
             let paths = vec.iter().map(BitEntry::path).collect::<Vec<_>>();
             assert_eq!(
                 paths,

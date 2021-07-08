@@ -28,7 +28,29 @@ pub trait BitEntry {
     }
 
     fn is_file(&self) -> bool {
-        self.mode().is_file()
+        self.mode().is_blob()
+    }
+
+    // NOTES:
+    // Don't know how correct the following reasoning is.
+    // Where to read the blob from given an entry`?
+    // If `entry.hash.is_unknown()` then it must be a worktree entry as otherwise the hash
+    // would be definitely known as tree_entries and index_entries store the hash.
+    //
+    // However, does the converse hold? I think it currently does. Even though hashes for worktree entries
+    // maybe sometimes be calculated due to racy git, I don't think the change is recorded in the entry we access
+    // in the Differ trait.
+    // if this is the case, we could just have two cases
+    // - if the hash is known, then we read it from the object store
+    // - otherwise, we read it from disk
+    fn read_to_bytes(&self, repo: BitRepo<'_>) -> BitResult<Vec<u8>> {
+        let oid = self.oid();
+        if oid.is_known() {
+            Ok(repo.read_obj(oid)?.into_blob().into_bytes())
+        } else {
+            let absolute_path = repo.normalize(self.path().as_path())?;
+            Ok(std::fs::read(absolute_path)?)
+        }
     }
 
     // we must have files sorted before directories

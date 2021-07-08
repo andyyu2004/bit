@@ -122,7 +122,7 @@ impl FileMode {
         self as u32
     }
 
-    pub fn is_file(self) -> bool {
+    pub fn is_blob(self) -> bool {
         matches!(self, FileMode::EXEC | FileMode::REG | FileMode::LINK)
     }
 

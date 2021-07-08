@@ -2,23 +2,13 @@ use super::*;
 use crate::diff::{Diff, Differ, WorkspaceStatus};
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
+use crate::iter::BitEntry;
 use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::xdiff;
 use std::borrow::Cow;
 
-// NOTES:
-// don't know how correct this reasoning is
-// where to read the blob from given a `BitIndexEntry` `entry`?
-// if `entry.hash.is_unknown()` then it must be a worktree entry as otherwise the hash
-// would be definitely known.
-// however, does the converse hold? I think it currently does. Even though hashes for worktree entries
-// maybe sometimes be calculated due to racy git, I don't think the change is recorded in the entry we access
-// in the Apply trait.
-// if this is the case, we could just have two cases
-// - if the hash is known, then we read it from the object store,
-// - otherwise, we read it from disk
 pub struct DiffFormatter<'rcx, W> {
     repo: BitRepo<'rcx>,
     writer: W,
@@ -44,15 +34,10 @@ impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
     }
 
     fn read_blob(&self, entry: &BitIndexEntry) -> BitResult<String> {
-        if entry.oid.is_known() {
-            // TODO diffing binary files?
-            // currently the tostring impl will return the same thing
-            // so if we textually diff it it won't show anything
-            Ok(self.repo.read_obj(entry.oid)?.into_blob().to_string())
-        } else {
-            let absolute_path = self.repo.normalize(entry.path.as_path())?;
-            Ok(std::fs::read_to_string(absolute_path)?)
-        }
+        let bytes = entry.read_to_bytes(self.repo)?;
+        // TODO diffing binary files?
+        // currently will just not do anything as they all have the same string representation
+        Ok(String::from_utf8(bytes).unwrap_or_else(|_| "<binary>".to_string()))
     }
 }
 

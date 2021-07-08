@@ -165,8 +165,15 @@ impl<'a> TreeEntriesConsumer<'a> {
     }
 
     /// appends all the non-tree subentries of the tree to `container`
-    pub fn collect_over(self, container: &mut Vec<BitIndexEntry>) -> BitResult<()> {
-        self.iter.collect_over_tree(container)
+    pub fn collect_over_all(self, container: &mut Vec<BitIndexEntry>) -> BitResult<BitIndexEntry> {
+        self.iter.collect_over_tree_all(container)
+    }
+
+    pub fn collect_over_files(
+        self,
+        container: &mut Vec<BitIndexEntry>,
+    ) -> BitResult<BitIndexEntry> {
+        self.iter.collect_over_tree_files(container)
     }
 }
 
@@ -185,7 +192,8 @@ impl TreeDiffBuilder for TreeStatusDiffer {
 
 impl TreeDiffer for TreeStatusDiffer {
     fn created_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()> {
-        entries.collect_over(&mut self.status.new)
+        entries.collect_over_files(&mut self.status.new)?;
+        Ok(())
     }
 
     fn created_blob(&mut self, new: BitIndexEntry) -> BitResult<()> {
@@ -193,7 +201,8 @@ impl TreeDiffer for TreeStatusDiffer {
     }
 
     fn deleted_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()> {
-        entries.collect_over(&mut self.status.deleted)
+        entries.collect_over_files(&mut self.status.deleted)?;
+        Ok(())
     }
 
     fn deleted_blob(&mut self, old: BitIndexEntry) -> BitResult<()> {

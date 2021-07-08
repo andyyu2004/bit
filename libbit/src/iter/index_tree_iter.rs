@@ -91,7 +91,7 @@ impl<'a> BitTreeIterator for IndexTreeIter<'a> {
         match self.next()? {
             Some(entry) => match entry.mode() {
                 FileMode::TREE => self.step_over_tree(entry),
-                mode if mode.is_file() => Ok(Some(entry)),
+                mode if mode.is_blob() => Ok(Some(entry)),
                 _ => unreachable!(),
             },
             None => Ok(None),

@@ -31,6 +31,12 @@ impl WritableObject for MutableBlob {
     }
 }
 
+impl Blob {
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.inner.bytes
+    }
+}
+
 impl Display for Blob {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match std::str::from_utf8(&self.bytes) {

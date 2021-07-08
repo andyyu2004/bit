@@ -2,7 +2,11 @@ use super::*;
 use crate::obj::MutableTree;
 use std::iter::FromIterator;
 
-/// tree iterators allow stepping over entire trees (skipping all entries recursively)
+/// Tree iterators allow stepping over entire trees (skipping all entries recursively)
+// The methods on this trait yield index_entries rather than tree_entries as index_entries are strictly more general
+// In particular, the index tree iterator implements this trait and we don't want to lose the information in the index entry.
+// On the otherhand, its ok to just fill the extra fields with sentinels.
+// Considered using an enum holding either a tree entry or an index entry but it didn't seem worth it
 pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
     /// unstable semantics
     /// if the next entry is a tree then yield the tree entry but skip over its contents
@@ -13,18 +17,39 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
     /// full paths should be returned (relative to repo root), not just relative to the parent
     fn over(&mut self) -> BitResult<Option<Self::Item>>;
 
-    /// same as `self.over` but instead appends all the non-tree entries into a container
-    // this takes a container to append to instead of returning a vec to avoid a separate allocation
-    fn collect_over_tree(&mut self, container: &mut Vec<BitIndexEntry>) -> BitResult<()> {
-        let tree_entry = self.peek()?.expect("currently expected to not be called when at end");
-        // debug_assert_eq!(tree_entry.mode(), FileMode::TREE);
-        while self.peek()?.map(|next| next.path().starts_with(tree_entry.path())).unwrap_or(false) {
+    // TODO these names all suck
+    fn collect_over_tree_files(
+        &mut self,
+        container: &mut Vec<BitIndexEntry>,
+    ) -> BitResult<Self::Item> {
+        self.collect_over_tree_filtered(|entry| entry.is_file(), container)
+    }
+
+    fn collect_over_tree_all(
+        &mut self,
+        container: &mut Vec<BitIndexEntry>,
+    ) -> BitResult<Self::Item> {
+        self.collect_over_tree_filtered(|_| true, container)
+    }
+
+    /// Same as `self.over` but instead appends all the entries that satisfy the predicate into a container.
+    /// This takes a container to append to instead of returning a vec to avoid a separate allocation.
+    /// Returns the tree_entry.
+    fn collect_over_tree_filtered(
+        &mut self,
+        predicate: fn(&BitIndexEntry) -> bool,
+        container: &mut Vec<BitIndexEntry>,
+    ) -> BitResult<Self::Item> {
+        let tree_entry = self.next()?.expect("currently expected to not be called when at end");
+        let tree_entry_path = tree_entry.path();
+        debug_assert_eq!(tree_entry.mode(), FileMode::TREE);
+        while self.peek()?.map(|next| next.path().starts_with(tree_entry_path)).unwrap_or(false) {
             let entry = self.next()?.unwrap();
-            if entry.is_file() {
+            if predicate(&entry) {
                 container.push(entry);
             }
         }
-        Ok(())
+        Ok(tree_entry)
     }
 
     /// creates a tree object from a tree_iterator
