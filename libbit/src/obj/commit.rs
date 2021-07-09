@@ -112,7 +112,11 @@ impl<'rcx> BitRepo<'rcx> {
         message: CommitMessage,
         parent: Option<Oid>,
     ) -> BitResult<Oid> {
-        // TODO validate hashes of parent and tree
+        ensure!(self.read_obj_header(tree)?.obj_type == BitObjType::Tree);
+        if let Some(par) = parent {
+            ensure!(self.read_obj_header(par)?.obj_type == BitObjType::Commit);
+        }
+
         let author = self.user_signature()?;
         let committer = author.clone();
         let commit = MutableCommit::new(tree, parent, message, author, committer);
