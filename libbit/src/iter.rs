@@ -145,8 +145,8 @@ impl<'rcx> WorktreeIter<'rcx> {
                     let y = b.path();
 
                     // for correct ordering and avoiding allocation where possible
-                    let t = a.file_type().is_dir().then(|| x.join(""));
-                    let u = b.file_type().is_dir().then(|| y.join(""));
+                    let t = a.file_type().is_dir().then(|| x.join(BitPath::EMPTY));
+                    let u = b.file_type().is_dir().then(|| y.join(BitPath::EMPTY));
 
                     match (&t, &u) {
                         (None, None) => BitPath::path_cmp(x, y),

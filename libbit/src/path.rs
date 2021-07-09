@@ -129,15 +129,31 @@ impl BitPath {
 
 impl PartialEq for BitPath {
     fn eq(&self, other: &Self) -> bool {
-        // TODO look into why this fails
+        // there are definitely some issues with how the path constants are being done
+        // probably to do with dealing with pointer addresses in const_eval
+        // it's not too urgent as the performance with full path comparisons is fine
+        // #[cfg(debug_assertions)]
+        // if self.path == other.path {
+        //     assert!(
+        //         std::ptr::eq(self.path, other.path),
+        //         "path `{}` matched but had different addresses: {:?} <> {:?}",
+        //         self,
+        //         self.path as *const _,
+        //         other.path as *const _,
+        //     );
+        // }
         // std::ptr::eq(self.path, other.path)
+
+        // keep consistent with below
         self.path == other.path
     }
 }
 
 impl Hash for BitPath {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        std::ptr::hash(self.path, state)
+        // keep consistent with above
+        self.path.hash(state)
+        // std::ptr::hash(self.path, state)
     }
 }
 
