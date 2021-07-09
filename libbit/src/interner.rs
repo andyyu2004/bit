@@ -129,6 +129,7 @@ thread_local! {
         DOT_GIT => ".git",
         REMOVED => "removed",
         REFSHEADS => "refs/heads",
+        ATSYM => "@",
         REFSTAGS => "refs/tags",
         A => "a",
         B => "b"

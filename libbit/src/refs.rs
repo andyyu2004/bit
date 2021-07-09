@@ -136,9 +136,17 @@ impl FromStr for SymbolicRef {
             // support parsing symbolic_ref without the prefix for use in revs
             // maybe a better way
             s
-        };
+        }
+        .trim_end();
+
+        let mut path = BitPath::intern(r);
+        // rewrite @ to be an alias for HEAD
+        if path == BitPath::ATSYM {
+            path = BitPath::HEAD;
+        }
+
         // TODO validation on r
-        Ok(Self { path: BitPath::intern(r.trim_end()) })
+        Ok(Self { path })
     }
 }
 

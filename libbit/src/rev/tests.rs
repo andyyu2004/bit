@@ -13,6 +13,15 @@ fn test_parse_revspec_parent() -> BitResult<()> {
 }
 
 #[test]
+fn test_parse_at_symbol_as_alias_to_head() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        assert_eq!(rev!("@").parse(repo)?, rev!("HEAD").parse(repo)?);
+        assert_eq!(rev!("@^").parse(repo)?, rev!("HEAD^").parse(repo)?);
+        Ok(())
+    })
+}
+
+#[test]
 fn test_parse_revspec_with_symref_ancestor() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let rev = rev!("HEAD~5");

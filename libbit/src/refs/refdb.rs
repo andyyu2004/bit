@@ -195,6 +195,7 @@ pub enum RefUpdateCommitKind {
 pub enum RefUpdateCause {
     NewBranch { from: BitRef },
     Commit { subject: String, kind: RefUpdateCommitKind },
+    Checkout { from: BitRef, to: BitRef },
 }
 
 impl Display for RefUpdateCause {
@@ -206,6 +207,8 @@ impl Display for RefUpdateCause {
                 RefUpdateCommitKind::Amend => write!(f, "commit (amend): {}", subject),
                 RefUpdateCommitKind::Initial => write!(f, "commit (initial): {}", subject),
             },
+            RefUpdateCause::Checkout { from, to } =>
+                write!(f, "checkout: moving from `{}` to `{}`", from, to),
         }
     }
 }

@@ -2,8 +2,9 @@ use crate::diff::{TreeDiffBuilder, TreeDiffer, TreeEntriesConsumer};
 use crate::error::BitResult;
 use crate::index::{BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitTreeIterator};
-use crate::obj::{FileMode, Oid, TreeEntry};
+use crate::obj::{BitObject, Commit, FileMode, TreeEntry};
 use crate::pathspec::Pathspec;
+use crate::refs::{BitRef, RefUpdateCause};
 use crate::repo::BitRepo;
 use crate::rev::LazyRevspec;
 use std::fs::Permissions;
@@ -13,12 +14,15 @@ use std::os::unix::prelude::PermissionsExt;
 impl<'rcx> BitRepo<'rcx> {
     pub fn checkout_rev(self, rev: &LazyRevspec) -> BitResult<()> {
         let commit_oid = self.resolve_rev(rev)?;
-        let tree_oid = self.read_obj(commit_oid)?.into_commit().tree;
-        self.checkout_tree(tree_oid)
+        let commit = self.read_obj(commit_oid)?.into_commit();
+        self.checkout_commit(&commit)
     }
 
-    /// update the worktree to match the tree represented by `target`
-    pub fn checkout_tree(self, target_tree: Oid) -> BitResult<()> {
+    /// checkout the commit
+    /// - updates the worktree to match the tree represented by the tree of the commit
+    /// - updates HEAD
+    pub fn checkout_commit(self, commit: &Commit) -> BitResult<()> {
+        let target_tree = commit.tree;
         let status = self.status(Pathspec::MATCH_ALL)?;
         // only allow checkout on fully clean states for now
         if !status.is_empty() {
@@ -32,14 +36,22 @@ impl<'rcx> BitRepo<'rcx> {
 
         let migration = Migration::generate(baseline, target)?;
         self.apply_migration(&migration)?;
+
+        let new_ref = BitRef::Direct(commit.oid());
+        self.update_head(
+            new_ref,
+            RefUpdateCause::Checkout { from: self.read_head()?, to: new_ref },
+        )?;
+
+        debug_assert!(self.status(Pathspec::MATCH_ALL)?.is_empty());
         Ok(())
     }
 
     fn apply_migration(self, migration: &Migration) -> BitResult<()> {
         self.with_index_mut(|index| {
             for rmrf in &migration.rmrfs {
-                // TODO what to do with index?
                 std::fs::remove_dir_all(self.to_absolute_path(&rmrf.path))?;
+                index.remove_directory(rmrf.path)?;
             }
 
             for rm in &migration.rms {

@@ -112,7 +112,15 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
     /// either a partialoid or a ref
     fn parse_base(&mut self) -> BitResult<Revspec> {
         let repo = self.repo;
-        let s = self.next()?;
+        // some hacky special case for parsing the alias @ for HEAD
+        // it's a bit annoying as @ is both a separator and a valid base
+        let s = if &self.src[0..1] == "@" {
+            self.src = &self.src[1..];
+            "@"
+        } else {
+            self.next()?
+        };
+
         // try to interpret as a ref first and if it parses, then expand it to see if it resolves to something valid
         // this is better than doing it as a partialoid first as partialoid might fail either due to being ambiguous or due to not existing
         // but refs will only fail for not existing
