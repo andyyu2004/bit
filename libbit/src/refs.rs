@@ -65,7 +65,11 @@ impl Display for BitRef {
 
 impl Serialize for BitRef {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
-        Ok(writer.write_all(self.to_string().as_bytes())?)
+        match self {
+            BitRef::Direct(hash) => write!(writer, "{}", hash)?,
+            BitRef::Symbolic(path) => write!(writer, "ref: {}", path)?,
+        };
+        Ok(())
     }
 }
 

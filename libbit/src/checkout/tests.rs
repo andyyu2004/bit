@@ -30,7 +30,8 @@ fn test_checkout_moves_head_to_branch_not_commit() -> BitResult<()> {
         repo.checkout(&rev!("master"))?;
         let head = repo.read_head()?;
         assert!(head.is_symbolic());
-        assert_eq!(head, symbolic_ref!("master"));
+        // the symbolic reference should be expanded
+        assert_eq!(head, symbolic_ref!("refs/heads/master"));
 
         Ok(())
     })

@@ -72,6 +72,7 @@ impl<'rcx> BitRepo<'rcx> {
             for create in &migration.creates {
                 let path = self.to_absolute_path(&create.path);
                 let bytes = create.read_to_bytes(self)?;
+
                 if create.mode.is_link() {
                     //? is it guaranteed that a symlink contains the path of the target, or is it fs impl dependent?
                     let symlink_target = OsStr::from_bytes(&bytes);
@@ -86,6 +87,7 @@ impl<'rcx> BitRepo<'rcx> {
                     file.write_all(&bytes)?;
                     file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
                 }
+
                 index.add_entry(BitIndexEntry::from_path(self, &path)?)?;
             }
             Ok(())

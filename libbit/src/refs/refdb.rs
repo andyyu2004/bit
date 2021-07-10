@@ -27,9 +27,16 @@ impl<'rcx> BitRefDb<'rcx> {
         self.bitdir.join("logs").join(path)
     }
 
+    fn expand_ref(&self, reference: BitRef) -> BitResult<BitRef> {
+        match reference {
+            BitRef::Direct(..) => Ok(reference),
+            BitRef::Symbolic(sym) => self.expand_symref(sym).map(BitRef::Symbolic),
+        }
+    }
+
     // tries to expand the symbolic reference
     // i.e. master -> refs/heads/master
-    fn try_expand_symref(&self, sym: SymbolicRef) -> Option<SymbolicRef> {
+    fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef> {
         const PREFIXES: &[BitPath] = &[BitPath::EMPTY, BitPath::REFSHEADS, BitPath::REFSTAGS];
         // we only try to do expansion on single component paths (which all valid branches should be)
         let prefixes =
@@ -37,10 +44,11 @@ impl<'rcx> BitRefDb<'rcx> {
         for prefix in prefixes {
             let path = prefix.join(sym.path);
             if self.join_ref(path).exists() {
-                return Some(SymbolicRef::new(path));
+                return Ok(SymbolicRef::new(path));
             }
         }
-        None
+
+        bail!("failed to expand reference. no valid branch or tag found with name `{}`", sym)
     }
 }
 
@@ -114,7 +122,9 @@ impl<'rcx> BitRefDbBackend for BitRefDb<'rcx> {
 
     fn update(&self, sym: SymbolicRef, to: BitRef, cause: RefUpdateCause) -> BitResult<()> {
         Lockfile::with_mut(self.join_ref(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
-            to.serialize(lockfile)
+            // we must write the full path of the reference
+            // i.e. `refs/heads/master` not just `master`
+            self.expand_ref(to)?.serialize(lockfile)
         })?;
 
         let new_oid = self.repo.fully_resolve_ref(to)?;
@@ -153,9 +163,9 @@ impl<'rcx> BitRefDbBackend for BitRefDb<'rcx> {
             BitRef::Direct(..) => Ok(reference),
             BitRef::Symbolic(sym) => {
                 let repo = self.repo;
-                let expanded_sym = match self.try_expand_symref(sym) {
-                    Some(expanded) => expanded,
-                    None => return Ok(reference),
+                let expanded_sym = match self.expand_symref(sym) {
+                    Ok(expanded) => expanded,
+                    Err(..) => return Ok(reference),
                 };
                 let ref_path = self.join_ref(expanded_sym.path);
 
