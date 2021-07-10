@@ -305,6 +305,10 @@ impl<'rcx> BitRepo<'rcx> {
         self.refdb()?.read(SymbolicRef::HEAD)
     }
 
+    pub fn is_head_detached(&self) -> BitResult<bool> {
+        Ok(self.read_head()?.is_direct())
+    }
+
     pub fn update_head(&self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
         self.update_ref(SymbolicRef::HEAD, bitref.into(), cause)
     }

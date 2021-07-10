@@ -18,13 +18,20 @@ pub enum Revspec {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn resolve_rev(self, rev: &LazyRevspec) -> BitResult<Oid> {
-        self.resolve_rev_inner(rev.parse(self)?)
+    /// resolve a revision to an oid
+    pub fn fully_resolve_rev(self, rev: &LazyRevspec) -> BitResult<Oid> {
+        let reference = self.resolve_rev(rev)?;
+        self.fully_resolve_ref(reference)
     }
 
-    /// resolves revision specification to the commit oid
-    fn resolve_rev_inner(&self, rev: &Revspec) -> BitResult<Oid> {
-        let get_parent = |oid: Oid| -> BitResult<Oid> {
+    /// resolve a revision to a reference (either a branch or a commit, never HEAD itself)
+    pub fn resolve_rev(self, rev: &LazyRevspec) -> BitResult<BitRef> {
+        self.fully_resolve_rev_to_ref(rev.parse(self)?)
+    }
+
+    fn fully_resolve_rev_to_ref(&self, rev: &Revspec) -> BitResult<BitRef> {
+        let get_parent = |reference: BitRef| -> BitResult<BitRef> {
+            let oid = self.fully_resolve_ref(reference)?;
             let obj_type = self.read_obj_header(oid)?.obj_type;
             ensure_eq!(
                 obj_type,
@@ -35,17 +42,19 @@ impl<'rcx> BitRepo<'rcx> {
             );
             let commit = self.read_obj(oid)?.into_commit();
             match commit.parent {
-                Some(parent) => Ok(parent),
+                Some(parent) => Ok(BitRef::Direct(parent)),
                 None => bail!("revision `{}` refers to the parent of an initial commit", rev),
             }
         };
 
-        match rev {
-            Revspec::Ref(r) => self.fully_resolve_ref(*r),
-            Revspec::Partial(prefix) => self.expand_prefix(*prefix),
-            Revspec::Parent(inner) => self.resolve_rev_inner(inner).and_then(get_parent),
-            Revspec::Ancestor(rev, n) =>
-                (0..*n).try_fold(self.resolve_rev_inner(rev)?, |oid, _| get_parent(oid)),
+        match *rev {
+            // we want to resolve HEAD once
+            Revspec::Ref(r) if r == BitRef::HEAD => self.read_head(),
+            Revspec::Ref(r) => Ok(r),
+            Revspec::Partial(prefix) => self.expand_prefix(prefix).map(BitRef::Direct),
+            Revspec::Parent(ref inner) => self.fully_resolve_rev_to_ref(inner).and_then(get_parent),
+            Revspec::Ancestor(ref rev, n) =>
+                (0..n).try_fold(self.fully_resolve_rev_to_ref(&rev)?, |oid, _| get_parent(oid)),
         }
     }
 }

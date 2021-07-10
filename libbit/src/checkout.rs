@@ -2,28 +2,34 @@ use crate::diff::{TreeDiffBuilder, TreeDiffer, TreeEntriesConsumer};
 use crate::error::BitResult;
 use crate::index::{BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitTreeIterator};
-use crate::obj::{BitObject, Commit, FileMode, TreeEntry};
+use crate::obj::{FileMode, TreeEntry};
 use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause};
 use crate::repo::BitRepo;
 use crate::rev::LazyRevspec;
+use std::ffi::OsStr;
 use std::fs::Permissions;
 use std::io::Write;
-use std::os::unix::prelude::PermissionsExt;
+use std::os::unix::prelude::{OsStrExt, PermissionsExt};
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn checkout_rev(self, rev: &LazyRevspec) -> BitResult<()> {
-        let commit_oid = self.resolve_rev(rev)?;
-        let commit = self.read_obj(commit_oid)?.into_commit();
-        self.checkout_commit(&commit)
+    /// checkout the branch/commit specified by the revision
+    /// - updates the worktree to match the tree represented by the tree of the commit
+    /// - moves HEAD to point at the branch/commit
+    pub fn checkout(self, rev: &LazyRevspec) -> BitResult<()> {
+        let reference = self.resolve_rev(rev)?;
+        self.checkout_reference(reference)
     }
 
-    /// checkout the commit
-    /// - updates the worktree to match the tree represented by the tree of the commit
-    /// - updates HEAD
-    pub fn checkout_commit(self, commit: &Commit) -> BitResult<()> {
+    pub fn checkout_reference(self, reference: impl Into<BitRef>) -> BitResult<()> {
+        let reference = reference.into();
+        // doesn't make sense to move HEAD -> HEAD
+        assert_ne!(reference, BitRef::HEAD);
+        let commit_oid = self.fully_resolve_ref(reference)?;
+        let commit = self.read_obj(commit_oid)?.into_commit();
         let target_tree = commit.tree;
         let status = self.status(Pathspec::MATCH_ALL)?;
+
         // only allow checkout on fully clean states for now
         if !status.is_empty() {
             bail!("cannot checkout: unclean state")
@@ -37,13 +43,13 @@ impl<'rcx> BitRepo<'rcx> {
         let migration = Migration::generate(baseline, target)?;
         self.apply_migration(&migration)?;
 
-        let new_ref = BitRef::Direct(commit.oid());
         self.update_head(
-            new_ref,
-            RefUpdateCause::Checkout { from: self.read_head()?, to: new_ref },
+            reference,
+            RefUpdateCause::Checkout { from: self.read_head()?, to: reference },
         )?;
 
-        debug_assert!(self.status(Pathspec::MATCH_ALL)?.is_empty());
+        // TODO make this a debug_assertion as it's quite expensive when checkout is more tested
+        assert!(self.status(Pathspec::MATCH_ALL)?.is_empty());
         Ok(())
     }
 
@@ -66,13 +72,20 @@ impl<'rcx> BitRepo<'rcx> {
             for create in &migration.creates {
                 let path = self.to_absolute_path(&create.path);
                 let bytes = create.read_to_bytes(self)?;
-                let mut file = std::fs::File::with_options()
-                    .create_new(true)
-                    .read(false)
-                    .write(true)
-                    .open(&path)?;
-                std::fs::set_permissions(&path, Permissions::from_mode(create.mode.as_u32()))?;
-                file.write_all(&bytes)?;
+                if create.mode.is_link() {
+                    //? is it guaranteed that a symlink contains the path of the target, or is it fs impl dependent?
+                    let symlink_target = OsStr::from_bytes(&bytes);
+                    std::os::unix::fs::symlink(symlink_target, path)?;
+                } else {
+                    debug_assert!(create.mode.is_file());
+                    let mut file = std::fs::File::with_options()
+                        .create_new(true)
+                        .read(false)
+                        .write(true)
+                        .open(&path)?;
+                    file.write_all(&bytes)?;
+                    file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
+                }
                 index.add_entry(BitIndexEntry::from_path(self, &path)?)?;
             }
             Ok(())

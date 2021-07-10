@@ -18,7 +18,7 @@ fn test_diff_two_same_trees() -> BitResult<()> {
 #[test]
 fn test_diff_head_prime_to_head() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        let head_prime = repo.resolve_rev(&rev!("HEAD^"))?;
+        let head_prime = repo.fully_resolve_rev(&rev!("HEAD^"))?;
         let oid = repo.read_obj(head_prime)?.into_commit().tree;
 
         let diff = repo.diff_tree_to_tree(oid, repo.head_tree()?)?;

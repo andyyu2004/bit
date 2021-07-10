@@ -21,7 +21,7 @@ pub enum BitCatFileOperation {
 impl<'rcx> BitRepo<'rcx> {
     pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<()> {
         trace!("bit_cat_file {:?}", opts);
-        let id = self.resolve_rev(&opts.rev)?;
+        let id = self.fully_resolve_rev(&opts.rev)?;
         match opts.op {
             // TODO not really a correct implementation currently
             // just prints it in an alternate format

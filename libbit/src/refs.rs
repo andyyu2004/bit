@@ -162,6 +162,16 @@ impl BitRef {
             BitObjKind::Tag(..) => todo!(),
         }
     }
+
+    /// Returns `true` if the bit_ref is [`Direct`].
+    pub fn is_direct(&self) -> bool {
+        matches!(self, Self::Direct(..))
+    }
+
+    /// Returns `true` if the bit_ref is [`Symbolic`].
+    pub fn is_symbolic(&self) -> bool {
+        matches!(self, Self::Symbolic(..))
+    }
 }
 
 #[cfg(test)]
