@@ -1,7 +1,7 @@
 use crate::error::BitResult;
 use crate::obj::Oid;
 use crate::pathspec::Pathspec;
-use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind};
+use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind, SymbolicRef};
 use crate::repo::BitRepo;
 use enumflags2::bitflags;
 
@@ -23,8 +23,7 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn commit(&self, msg: Option<String>) -> BitResult<Oid> {
         let head = self.read_head()?;
         let sym = match head {
-            BitRef::Direct(_oid) =>
-                todo!("todo head is pointing to a commit not a branch (detached head state)"),
+            BitRef::Direct(..) => SymbolicRef::HEAD,
             BitRef::Symbolic(sym) => sym,
         };
         let parent = self.try_fully_resolve_ref(sym)?;

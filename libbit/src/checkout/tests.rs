@@ -1,5 +1,6 @@
 use crate::error::BitResult;
 use crate::obj::FileMode;
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
 
 #[test]
@@ -18,7 +19,7 @@ fn test_simple_checkout_rm_rf() -> BitResult<()> {
 
 #[test]
 fn test_checkout_moves_head_to_branch_not_commit() -> BitResult<()> {
-    BitRepo::with_sample_repo(|repo| {
+    BitRepo::with_sample_repo_no_sym(|repo| {
         // HEAD should resolve to a branch
         repo.checkout(&rev!("HEAD"))?;
         assert!(repo.read_head()?.is_symbolic());
@@ -26,6 +27,10 @@ fn test_checkout_moves_head_to_branch_not_commit() -> BitResult<()> {
         // however, HEAD^ resolves to a commit and so should move head to be direct (detached head)
         repo.checkout(&rev!("HEAD^"))?;
         assert!(repo.is_head_detached()?);
+        assert_eq!(
+            repo.read_head()?,
+            BitRef::Direct("6b5041d58b7ac78bad7be3b727ba605a82a94b25".into())
+        );
 
         repo.checkout(&rev!("master"))?;
         let head = repo.read_head()?;

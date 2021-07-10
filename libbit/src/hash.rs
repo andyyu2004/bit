@@ -86,6 +86,7 @@ impl FromStr for SHA1Hash {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim_end();
         ensure!(s.len() == 40, "creating SHA1 with invalid hex string (incorrect length)");
         ensure!(
             s.chars().all(|c| c.is_ascii_hexdigit()),
