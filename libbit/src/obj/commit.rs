@@ -75,8 +75,8 @@ impl Display for CommitMessage {
 }
 
 impl Treeish for Commit {
-    fn into_tree(self, repo: BitRepo<'_>) -> BitResult<Tree> {
-        self.tree.into_tree(repo)
+    fn treeish(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+        self.tree.treeish(repo)
     }
 }
 

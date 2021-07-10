@@ -152,6 +152,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// return's tree iterator for a tree with `oid`
+    /// it is valid to pass a commit oid which will resolve to the commits tree
     pub fn tree_iter(self, oid: Oid) -> TreeIter<'rcx> {
         TreeIter::new(self, oid)
     }
@@ -169,7 +170,7 @@ pub struct TreeIter<'rcx> {
 
 impl<'rcx> TreeIter<'rcx> {
     pub fn new(repo: BitRepo<'rcx>, oid: Oid) -> Self {
-        debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_tree());
+        debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_treeish());
         // if the `oid` is unknown then we just want an empty iterator
         let entry_stack = if oid.is_known() {
             vec![(BitPath::EMPTY, TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE })]
@@ -189,7 +190,7 @@ impl<'rcx> FallibleIterator for TreeIter<'rcx> {
             match self.entry_stack.pop() {
                 Some((base, mut entry)) => match entry.mode {
                     FileMode::TREE => {
-                        let tree = entry.oid.into_tree(self.repo)?;
+                        let tree = entry.oid.treeish(self.repo)?;
                         let path = base.join(entry.path);
                         debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
 

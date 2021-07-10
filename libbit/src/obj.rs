@@ -233,6 +233,10 @@ impl BitObjKind {
         matches!(self, Self::Tree(..))
     }
 
+    pub fn is_treeish(&self) -> bool {
+        matches!(self, Self::Tree(..) | Self::Commit(..))
+    }
+
     pub fn new(cached: BitObjCached, reader: impl BufRead) -> BitResult<Self> {
         match cached.obj_type {
             BitObjType::Commit => Commit::new(cached, reader).map(Box::new).map(Self::Commit),

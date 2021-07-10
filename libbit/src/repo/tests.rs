@@ -55,7 +55,7 @@ impl<'rcx> BitRepo<'rcx> {
             touch!(repo: "foo");
             for s in &strs {
                 modify!(repo: "foo" << s);
-                commit_oids.push(bit_commit_all!(repo));
+                commit_oids.push(bit_commit_all!(repo).commit_oid);
             }
 
             f(repo, commit_oids)

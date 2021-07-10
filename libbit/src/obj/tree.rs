@@ -1,4 +1,4 @@
-use super::{BitObjCached, FileMode, ImmutableBitObject, WritableObject};
+use super::{BitObjCached, BitObjKind, FileMode, ImmutableBitObject, WritableObject};
 
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
@@ -6,6 +6,7 @@ use crate::io::BufReadExt;
 use crate::iter::BitEntry;
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::path::BitPath;
+use crate::peel::Peel;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::tls;
@@ -17,18 +18,29 @@ use std::iter::FromIterator;
 use std::ops::Deref;
 
 pub trait Treeish {
-    fn into_tree(self, repo: BitRepo<'_>) -> BitResult<Tree>;
+    fn treeish(self, repo: BitRepo<'_>) -> BitResult<Tree>;
 }
 
 impl Treeish for Tree {
-    fn into_tree(self, _repo: BitRepo<'_>) -> BitResult<Self> {
+    fn treeish(self, _repo: BitRepo<'_>) -> BitResult<Self> {
         Ok(self)
     }
 }
 
 impl Treeish for Oid {
-    fn into_tree(self, repo: BitRepo<'_>) -> BitResult<Tree> {
-        repo.read_obj(self)?.into_tree()
+    fn treeish(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+        repo.read_obj(self)?.treeish(repo)
+    }
+}
+
+impl Treeish for BitObjKind {
+    fn treeish(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+        match self {
+            BitObjKind::Commit(commit) => commit.peel(repo),
+            BitObjKind::Tree(tree) => Ok(*tree),
+            BitObjKind::Tag(_) => todo!(),
+            BitObjKind::Blob(..) => bug!("blob is not treeish"),
+        }
     }
 }
 

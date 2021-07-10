@@ -21,6 +21,7 @@ impl<'rcx> BitRepo<'rcx> {
         message: Option<String>,
         tree: Oid,
     ) -> BitResult<Oid> {
+        // arguably the act of calling into the editor should move out of lib into bin
         let message = match &message {
             Some(msg) => CommitMessage::from_str(msg),
             None => self.read_commit_msg(),

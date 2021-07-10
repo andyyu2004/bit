@@ -78,7 +78,7 @@ pub fn run() -> BitResult<()> {
         }
         BitSubCmd::Branch(opts) => opts.exec(repo),
         BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
-        BitSubCmd::Commit(opts) => repo.bit_commit(opts.message),
+        BitSubCmd::Commit(opts) => opts.exec(repo),
         BitSubCmd::Checkout(opts) => opts.exec(repo),
         BitSubCmd::Diff(opts) => opts.exec(repo),
         BitSubCmd::Reflog(opts) => opts.exec(repo),

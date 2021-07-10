@@ -181,6 +181,10 @@ pub struct WorkspaceStatus {
 }
 
 impl WorkspaceStatus {
+    pub fn len(&self) -> usize {
+        self.new.len() + self.modified.len() + self.deleted.len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.new.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
     }

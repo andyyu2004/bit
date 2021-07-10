@@ -1,9 +1,12 @@
+use crate::diff::WorkspaceStatus;
 use crate::error::BitResult;
 use crate::obj::Oid;
 use crate::pathspec::Pathspec;
+use crate::peel::Peel;
 use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind, SymbolicRef};
 use crate::repo::BitRepo;
 use enumflags2::bitflags;
+use std::fmt::{self, Display, Formatter};
 
 #[bitflags]
 #[repr(u8)]
@@ -13,14 +16,8 @@ enum BitStatusFlags {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn bit_commit(&self, message: Option<String>) -> BitResult<()> {
-        let bitref = self.commit(message)?;
-        println!("committed {}", bitref);
-        Ok(())
-    }
-
     // TODO return a BitCommitReport which includes the oid, and kind (CommitKind) etc
-    pub fn commit(&self, msg: Option<String>) -> BitResult<Oid> {
+    pub fn commit(self, msg: Option<String>) -> BitResult<CommitSummary> {
         let head = self.read_head()?;
         let sym = match head {
             BitRef::Direct(..) => SymbolicRef::HEAD,
@@ -38,8 +35,8 @@ impl<'rcx> BitRepo<'rcx> {
             bail!(self.status(Pathspec::MATCH_ALL)?)
         }
 
-        let oid = self.commit_tree(parent, msg, tree)?;
-        let commit = self.read_obj(oid)?.into_commit();
+        let commit_oid = self.commit_tree(parent, msg, tree)?;
+        let commit = commit_oid.peel(self)?;
 
         // TODO print status of commit
         // include initial commit if it is one
@@ -53,7 +50,45 @@ impl<'rcx> BitRepo<'rcx> {
             },
         };
 
-        self.update_ref(sym, oid, cause)?;
-        Ok(oid)
+        self.update_ref(sym, commit_oid, cause)?;
+
+        Ok(CommitSummary {
+            sym,
+            commit_oid,
+            status: self.diff_tree_to_tree(parent.unwrap_or(Oid::UNKNOWN), commit.tree)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct CommitSummary {
+    /// the symbolic reference that was moved by this commit
+    pub sym: SymbolicRef,
+    /// the oid of the newly created commit
+    pub commit_oid: Oid,
+    /// the difference between HEAD^ and HEAD
+    pub status: WorkspaceStatus,
+}
+
+impl Display for CommitSummary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.sym == SymbolicRef::HEAD {
+            writeln!(f, "[detached HEAD {}]", self.commit_oid)?;
+        } else {
+            writeln!(f, "[{} {}]", self.sym, self.commit_oid)?;
+        }
+
+        let files_changed = self.status.len();
+        writeln!(f, "{} file{} changed", files_changed, pluralize!(files_changed))?;
+
+        for created in &self.status.new {
+            writeln!(f, "create mode {} {}", created.mode, created.path)?;
+        }
+
+        for deleted in &self.status.deleted {
+            writeln!(f, "delete mode {} {}", deleted.mode, deleted.path)?;
+        }
+
+        Ok(())
     }
 }

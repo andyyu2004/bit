@@ -13,3 +13,9 @@ macro_rules! bug {
         panic!($($arg)*)
     }};
 }
+
+macro_rules! pluralize {
+    ($count:expr) => {
+        if $count == 1 { "" } else { "s" }
+    };
+}
