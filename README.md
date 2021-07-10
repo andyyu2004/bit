@@ -5,23 +5,25 @@ commands.
 
 Wouldn't recommend using this to manipulate your valued repositories yet!
 
-Currently implements the following commands with a subset of the
-same options as git.
+Currently implements the following commands with a subset of the same options as git.
 
--   bit init
--   bit add
--   bit branch
--   bit commit
--   bit hash-object
--   bit cat-file
--   bit log
--   bit ls-files
--   bit commit-tree
--   bit config
--   bit write-tree
+- bit init
+- bit add
+- bit branch
+- bit cat-file
+- bit checkout
+- bit commit-tree
+- bit commit
+- bit config
+- bit diff
+- bit hash-object
+- bit log
+- bit ls-files
+- bit status
+- bit switch
+- bit write-tree
 
-Run commands and subcommands with the `--help` flag to see all available
-options.
+Run commands and subcommands with the `--help` flag to see all available options.
 
 ## Installation
 
@@ -38,4 +40,4 @@ Alternatively, you can install `bit` locally as a binary using `cargo install --
 
 # Warning
 
-This has been tested on arch and ubuntu only. I suspect this won't work on windows mostly due to my handling of paths.
+This does not currently support windows as it uses some unix specific path apis.
