@@ -92,3 +92,6 @@ impl Display for CommitSummary {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -41,7 +41,6 @@ extern crate anyhow;
 #[cfg(test)]
 #[macro_use]
 mod test_utils;
-mod peel;
 
 #[macro_use]
 extern crate log;
@@ -69,6 +68,7 @@ pub mod serialize;
 pub mod status;
 pub mod xdiff;
 
+mod commit;
 mod core;
 mod delta;
 mod interner;
@@ -77,6 +77,7 @@ mod iter;
 mod lockfile;
 mod odb;
 mod pack;
+mod peel;
 mod signature;
 mod time;
 mod tls;
