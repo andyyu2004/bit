@@ -1,18 +1,18 @@
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
-use libbit::refs::SymbolicRef;
 use libbit::repo::BitRepo;
+use libbit::rev::LazyRevspec;
 
 #[derive(Clap, Debug)]
 pub struct BitSwitchCliOpts {
-    branch: SymbolicRef,
+    revision: LazyRevspec,
 }
 
 impl Cmd for BitSwitchCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
-        dbg!(repo.partially_resolve_ref(self.branch)?);
-        dbg!(&self);
-        todo!()
+        // switch is currently a limited form of checkout where only branches are allowed (can't checkout commits)
+        let branch = repo.resolve_rev_to_branch(&self.revision)?;
+        repo.checkout_reference(branch)
     }
 }

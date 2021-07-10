@@ -48,7 +48,7 @@ impl<'rcx> BitRepo<'rcx> {
             RefUpdateCause::Checkout { from: self.read_head()?, to: reference },
         )?;
 
-        // TODO make this a debug_assertion as it's quite expensive when checkout is more tested
+        // TODO make this a debug_assertion (as it's quite expensive) when checkout is more tested
         assert!(self.status(Pathspec::MATCH_ALL)?.is_empty());
         Ok(())
     }

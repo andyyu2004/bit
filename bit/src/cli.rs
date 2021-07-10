@@ -37,6 +37,7 @@ use std::path::PathBuf;
 
 use self::cli_checkout::BitCheckoutCliOpts;
 use self::cli_reflog::BitReflogCliOpts;
+use self::cli_switch::BitSwitchCliOpts;
 
 // experiment with changing structure of everything
 // more code should be in the binary
@@ -82,6 +83,7 @@ pub fn run() -> BitResult<()> {
         BitSubCmd::Diff(opts) => opts.exec(repo),
         BitSubCmd::Reflog(opts) => opts.exec(repo),
         BitSubCmd::Status(opts) => opts.exec(repo),
+        BitSubCmd::Switch(opts) => opts.exec(repo),
     })
 }
 
@@ -110,6 +112,7 @@ pub enum BitSubCmd {
     LsFiles(BitLsFilesCliOpts),
     Reflog(BitReflogCliOpts),
     Status(BitStatusCliOpts),
+    Switch(BitSwitchCliOpts),
     UpdateIndex(BitUpdateIndexCliOpts),
     WriteTree,
 }

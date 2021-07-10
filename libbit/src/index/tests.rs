@@ -1,6 +1,5 @@
 use super::*;
 use crate::error::BitGenericError;
-use crate::obj::Treeish;
 use crate::path::BitPath;
 use fallible_iterator::FallibleIterator;
 use indexmap::indexmap;

@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, Oid, PartialOid};
-use crate::refs::BitRef;
+use crate::refs::{BitRef, SymbolicRef};
 use crate::repo::BitRepo;
 use lazy_static::lazy_static;
 use std::collections::HashSet;
@@ -27,6 +27,13 @@ impl<'rcx> BitRepo<'rcx> {
     /// resolve a revision to a reference (either a branch or a commit, never HEAD itself)
     pub fn resolve_rev(self, rev: &LazyRevspec) -> BitResult<BitRef> {
         self.fully_resolve_rev_to_ref(rev.parse(self)?)
+    }
+
+    pub fn resolve_rev_to_branch(self, rev: &LazyRevspec) -> BitResult<SymbolicRef> {
+        match self.resolve_rev(rev)? {
+            BitRef::Direct(..) => bail!("expected branch, found commit `{}`", rev),
+            BitRef::Symbolic(sym) => Ok(sym),
+        }
     }
 
     fn fully_resolve_rev_to_ref(&self, rev: &Revspec) -> BitResult<BitRef> {
@@ -78,6 +85,12 @@ impl Display for Revspec {
 pub struct LazyRevspec {
     src: String,
     parsed: OnceCell<Revspec>,
+}
+
+impl Display for LazyRevspec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.src)
+    }
 }
 
 impl LazyRevspec {

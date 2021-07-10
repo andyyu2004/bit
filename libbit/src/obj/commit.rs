@@ -5,7 +5,6 @@ use crate::odb::BitObjDbBackend;
 use crate::repo::{BitRepo, Repo};
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
-use crate::tls;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
