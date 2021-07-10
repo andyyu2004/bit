@@ -132,7 +132,7 @@ macro_rules! test_serde {
 }
 macro_rules! bit_commit {
     ($repo:expr) => {
-        $repo.commit(Some(String::from("arbitrary message")))?;
+        $repo.commit(Some(String::from("arbitrary message")))?
     };
 }
 
@@ -228,6 +228,7 @@ macro_rules! modify {
         #[allow(unused_imports)]
         use std::io::prelude::*;
         let mut file = std::fs::File::with_options()
+            .create(false)
             .read(false)
             .append(false)
             .write(true)

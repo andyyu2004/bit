@@ -1,6 +1,6 @@
 use crate::diff::WorkspaceStatus;
 use crate::error::BitResult;
-use crate::obj::Oid;
+use crate::obj::{BitObject, Commit, Oid};
 use crate::pathspec::Pathspec;
 use crate::peel::Peel;
 use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind, SymbolicRef};
@@ -53,9 +53,9 @@ impl<'rcx> BitRepo<'rcx> {
         self.update_ref(sym, commit_oid, cause)?;
 
         Ok(CommitSummary {
-            sym,
-            commit_oid,
             status: self.diff_tree_to_tree(parent.unwrap_or(Oid::UNKNOWN), commit.tree)?,
+            sym,
+            commit,
         })
     }
 }
@@ -64,8 +64,8 @@ impl<'rcx> BitRepo<'rcx> {
 pub struct CommitSummary {
     /// the symbolic reference that was moved by this commit
     pub sym: SymbolicRef,
-    /// the oid of the newly created commit
-    pub commit_oid: Oid,
+    /// the newly created commit object
+    pub commit: Commit,
     /// the difference between HEAD^ and HEAD
     pub status: WorkspaceStatus,
 }
@@ -73,9 +73,9 @@ pub struct CommitSummary {
 impl Display for CommitSummary {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.sym == SymbolicRef::HEAD {
-            writeln!(f, "[detached HEAD {}]", self.commit_oid)?;
+            writeln!(f, "[detached HEAD {}]", self.commit.oid())?;
         } else {
-            writeln!(f, "[{} {}]", self.sym, self.commit_oid)?;
+            writeln!(f, "[{} {}]", self.sym, self.commit.oid())?;
         }
 
         let files_changed = self.status.len();

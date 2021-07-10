@@ -176,6 +176,10 @@ impl BitRef {
     pub fn is_symbolic(&self) -> bool {
         matches!(self, Self::Symbolic(..))
     }
+
+    pub fn into_direct(self) -> Oid {
+        if let Self::Direct(oid) = self { oid } else { panic!() }
+    }
 }
 
 #[cfg(test)]
