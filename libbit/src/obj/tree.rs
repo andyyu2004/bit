@@ -1,5 +1,4 @@
 use super::{BitObjCached, BitObjKind, FileMode, ImmutableBitObject, WritableObject};
-
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::io::BufReadExt;
@@ -17,24 +16,24 @@ use std::io::prelude::*;
 use std::iter::FromIterator;
 use std::ops::Deref;
 
-pub trait Treeish {
-    fn treeish(self, repo: BitRepo<'_>) -> BitResult<Tree>;
+pub trait Treeish<'rcx> {
+    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>>;
 }
 
-impl Treeish for Tree {
-    fn treeish(self, _repo: BitRepo<'_>) -> BitResult<Self> {
+impl<'rcx> Treeish<'rcx> for Tree<'rcx> {
+    fn treeish(self, _repo: BitRepo<'rcx>) -> BitResult<Self> {
         Ok(self)
     }
 }
 
-impl Treeish for Oid {
-    fn treeish(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+impl<'rcx> Treeish<'rcx> for Oid {
+    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
         repo.read_obj(self)?.treeish(repo)
     }
 }
 
-impl Treeish for BitObjKind {
-    fn treeish(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+impl<'rcx> Treeish<'rcx> for BitObjKind<'rcx> {
+    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
         match self {
             BitObjKind::Commit(commit) => commit.peel(repo),
             BitObjKind::Tree(tree) => Ok(*tree),
@@ -44,7 +43,7 @@ impl Treeish for BitObjKind {
     }
 }
 
-impl Display for Tree {
+impl Display for Tree<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             for entry in &self.entries {
@@ -78,12 +77,13 @@ impl Display for TreeEntry {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Tree {
+pub struct Tree<'rcx> {
+    owner: BitRepo<'rcx>,
     cached: BitObjCached,
     inner: MutableTree,
 }
 
-impl Tree {
+impl Tree<'_> {
     pub const EMPTY_SIZE: u64 = 0;
 
     #[cfg(test)]
@@ -92,21 +92,12 @@ impl Tree {
     }
 }
 
-impl Default for Tree {
-    fn default() -> Self {
-        Self {
-            cached: BitObjCached::new(Oid::EMPTY_TREE, BitObjType::Tree, Self::EMPTY_SIZE),
-            inner: MutableTree::default(),
-        }
-    }
-}
-
 #[derive(PartialEq, Debug, Clone)]
 pub struct MutableTree {
     pub entries: BTreeSet<TreeEntry>,
 }
 
-impl Deref for Tree {
+impl Deref for Tree<'_> {
     type Target = MutableTree;
 
     fn deref(&self) -> &Self::Target {
@@ -174,17 +165,17 @@ impl WritableObject for MutableTree {
     }
 }
 
-impl BitObject for Tree {
+impl BitObject for Tree<'_> {
     fn obj_cached(&self) -> &BitObjCached {
         &self.cached
     }
 }
 
-impl ImmutableBitObject for Tree {
+impl<'rcx> ImmutableBitObject<'rcx> for Tree<'rcx> {
     type Mutable = MutableTree;
 
-    fn from_mutable(cached: BitObjCached, inner: Self::Mutable) -> Self {
-        Self { cached, inner }
+    fn from_mutable(owner: BitRepo<'rcx>, cached: BitObjCached, inner: Self::Mutable) -> Self {
+        Self { owner, cached, inner }
     }
 }
 

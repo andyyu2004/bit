@@ -157,7 +157,7 @@ impl FromStr for SymbolicRef {
 impl BitRef {
     pub const HEAD: Self = Self::Symbolic(SymbolicRef::HEAD);
 
-    pub fn resolve_to_tree(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+    pub fn resolve_to_tree<'rcx>(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
         let oid = repo.fully_resolve_ref(self)?;
         match repo.read_obj(oid)? {
             BitObjKind::Blob(..) => bail!("blob type is not treeish"),

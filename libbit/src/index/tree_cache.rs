@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::obj::{BitObjKind, BitObject, Oid, Tree, Treeish};
+use crate::obj::{BitObjKind, BitObject, Oid, Tree};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -92,7 +92,7 @@ impl BitTreeCache {
         Self::read_tree_internal(repo, &tree, BitPath::EMPTY)
     }
 
-    fn read_tree_internal(repo: BitRepo<'_>, tree: &Tree, path: BitPath) -> BitResult<Self> {
+    fn read_tree_internal(repo: BitRepo<'_>, tree: &Tree<'_>, path: BitPath) -> BitResult<Self> {
         let mut cache_tree = Self {
             oid: tree.oid(),
             entry_count: 0,

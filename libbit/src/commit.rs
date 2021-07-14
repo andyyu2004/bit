@@ -17,7 +17,7 @@ enum BitStatusFlags {
 
 impl<'rcx> BitRepo<'rcx> {
     // TODO return a BitCommitReport which includes the oid, and kind (CommitKind) etc
-    pub fn commit(self, msg: Option<String>) -> BitResult<CommitSummary> {
+    pub fn commit(self, msg: Option<String>) -> BitResult<CommitSummary<'rcx>> {
         let head = self.read_head()?;
         let sym = match head {
             BitRef::Direct(..) => SymbolicRef::HEAD,
@@ -61,16 +61,16 @@ impl<'rcx> BitRepo<'rcx> {
 }
 
 #[derive(Debug)]
-pub struct CommitSummary {
+pub struct CommitSummary<'rcx> {
     /// the symbolic reference that was moved by this commit
     pub sym: SymbolicRef,
     /// the newly created commit object
-    pub commit: Commit,
+    pub commit: Commit<'rcx>,
     /// the difference between HEAD^ and HEAD
     pub status: WorkspaceStatus,
 }
 
-impl Display for CommitSummary {
+impl Display for CommitSummary<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.sym == SymbolicRef::HEAD {
             writeln!(f, "[detached HEAD {}]", self.commit.oid())?;

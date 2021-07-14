@@ -28,6 +28,12 @@ pub struct BitRepo<'rcx> {
     ctxt: &'rcx RepoCtxt<'rcx>,
 }
 
+impl PartialEq for BitRepo<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.ctxt, other.ctxt)
+    }
+}
+
 pub struct RepoCtxt<'rcx> {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
@@ -333,8 +339,9 @@ impl<'rcx> BitRepo<'rcx> {
         self.odb()?.write(obj)
     }
 
-    pub fn read_obj(&self, id: impl Into<BitId>) -> BitResult<BitObjKind> {
-        self.odb()?.read(id.into())
+    pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
+        let raw = self.odb()?.read_raw(id.into())?;
+        BitObjKind::from_raw(self, raw)
     }
 
     pub fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {

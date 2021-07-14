@@ -172,23 +172,6 @@ impl Pack {
         }?;
         Ok(BitObjHeader { size: header.size, obj_type: base_header.obj_type })
     }
-
-    #[cfg(test)]
-    pub fn read_obj(&mut self, oid: Oid) -> BitResult<BitObjKind> {
-        trace!("read_obj(oid: {}) ", oid);
-        let raw = self.read_obj_raw(oid)?;
-        let obj = BitObjKind::from_raw_pack_obj(oid, raw)?;
-        // obj.set_oid(oid);
-        Ok(obj)
-    }
-}
-
-impl BitObjKind {
-    #[cfg(test)]
-    pub fn from_raw_pack_obj(oid: Oid, raw: BitPackObjRaw) -> BitResult<Self> {
-        let cached = BitObjCached::new(oid, raw.obj_type, raw.bytes.len() as u64);
-        Self::from_slice(cached, &raw.bytes)
-    }
 }
 
 #[derive(Debug)]

@@ -14,19 +14,20 @@ use std::process::Command;
 use std::str::FromStr;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct Commit {
+pub struct Commit<'rcx> {
+    owner: BitRepo<'rcx>,
     cached: BitObjCached,
     inner: MutableCommit,
 }
 
-impl Commit {
+impl Commit<'_> {
     /// Get a reference to the commit's tree.
     pub fn tree(&self) -> Oid {
         self.tree
     }
 }
 
-impl Deref for Commit {
+impl Deref for Commit<'_> {
     type Target = MutableCommit;
 
     fn deref(&self) -> &Self::Target {
@@ -74,8 +75,8 @@ impl Display for CommitMessage {
     }
 }
 
-impl Treeish for Commit {
-    fn treeish(self, repo: BitRepo<'_>) -> BitResult<Tree> {
+impl<'rcx> Treeish<'rcx> for Commit<'rcx> {
+    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
         self.tree.treeish(repo)
     }
 }
@@ -104,6 +105,10 @@ impl MutableCommit {
 }
 
 impl<'rcx> BitRepo<'rcx> {
+    pub fn merge_base(&self, a: &Commit<'rcx>, b: &Commit<'rcx>) -> &Commit<'rcx> {
+        todo!()
+    }
+
     /// create and write commit to odb
     pub fn mk_commit(
         &self,
@@ -147,7 +152,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
-impl Display for Commit {
+impl Display for Commit<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut buf = vec![];
         self.serialize(&mut buf).unwrap();
@@ -232,16 +237,16 @@ impl DeserializeSized for MutableCommit {
     }
 }
 
-impl BitObject for Commit {
+impl BitObject for Commit<'_> {
     fn obj_cached(&self) -> &BitObjCached {
         &self.cached
     }
 }
 
-impl ImmutableBitObject for Commit {
+impl<'rcx> ImmutableBitObject<'rcx> for Commit<'rcx> {
     type Mutable = MutableCommit;
 
-    fn from_mutable(cached: BitObjCached, inner: Self::Mutable) -> Self {
-        Self { cached, inner }
+    fn from_mutable(owner: BitRepo<'rcx>, cached: BitObjCached, inner: Self::Mutable) -> Self {
+        Self { owner, cached, inner }
     }
 }

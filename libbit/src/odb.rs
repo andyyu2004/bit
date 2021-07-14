@@ -95,11 +95,6 @@ impl BitObjDbBackend for BitObjDb {
 }
 
 pub trait BitObjDbBackend {
-    fn read(&self, id: BitId) -> BitResult<BitObjKind> {
-        trace!("BitLooseObjDb::read(id: {})", id);
-        self.read_raw(id).and_then(BitObjKind::from_raw)
-    }
-
     fn read_raw(&self, id: BitId) -> BitResult<BitRawObj>;
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader>;
     fn write(&self, obj: &dyn WritableObject) -> BitResult<Oid>;
