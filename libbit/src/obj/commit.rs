@@ -105,13 +105,13 @@ impl MutableCommit {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn merge_base(&self, a: &Commit<'rcx>, b: &Commit<'rcx>) -> &Commit<'rcx> {
+    pub fn merge_base(self, a: &Commit<'rcx>, b: &Commit<'rcx>) -> Commit<'rcx> {
         todo!()
     }
 
     /// create and write commit to odb
     pub fn mk_commit(
-        &self,
+        self,
         tree: Oid,
         message: CommitMessage,
         parent: Option<Oid>,
@@ -127,7 +127,7 @@ impl<'rcx> BitRepo<'rcx> {
         self.odb()?.write(&commit)
     }
 
-    pub fn read_commit_msg(&self) -> BitResult<CommitMessage> {
+    pub fn read_commit_msg(self) -> BitResult<CommitMessage> {
         let editor = std::env::var("EDITOR").expect("$EDITOR variable is not set");
         let template = r#"
 # Please; enter the commit message for your changes. Lines starting

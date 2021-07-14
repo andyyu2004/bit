@@ -25,12 +25,12 @@ pub const BIT_OBJECTS_DIR_PATH: &str = "objects";
 
 #[derive(Copy, Clone)]
 pub struct BitRepo<'rcx> {
-    ctxt: &'rcx RepoCtxt<'rcx>,
+    rcx: &'rcx RepoCtxt<'rcx>,
 }
 
 impl PartialEq for BitRepo<'_> {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.ctxt, other.ctxt)
+        std::ptr::eq(self.rcx, other.rcx)
     }
 }
 
@@ -138,7 +138,7 @@ impl<'rcx> RepoCtxt<'rcx> {
     }
 
     pub fn with<R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> R) -> R {
-        f(BitRepo { ctxt: self })
+        f(BitRepo { rcx: self })
     }
 
     #[inline]
@@ -164,19 +164,19 @@ impl<'rcx> BitRepo<'rcx> {
         }
     }
 
-    pub fn partially_resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+    pub fn partially_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
         self.refdb()?.partially_resolve(reference.into())
     }
 
-    pub fn resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+    pub fn resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
         self.refdb()?.resolve(reference.into())
     }
 
-    pub fn fully_resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<Oid> {
+    pub fn fully_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<Oid> {
         self.refdb()?.fully_resolve(reference.into())
     }
 
-    pub fn default_signature(&self) -> BitResult<BitSignature> {
+    pub fn default_signature(self) -> BitResult<BitSignature> {
         todo!()
         // BitSignature { name: self.config, email: , time: () }
     }
@@ -281,7 +281,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// todo only works with full hash
-    pub fn get_full_object_hash(&self, id: BitId) -> BitResult<Oid> {
+    pub fn get_full_object_hash(self, id: BitId) -> BitResult<Oid> {
         match id {
             BitId::Full(hash) => Ok(hash),
             BitId::Partial(_partial) => todo!(),
@@ -290,7 +290,7 @@ impl<'rcx> BitRepo<'rcx> {
 
     /// gets the oid of the tree belonging to the HEAD commit
     /// returns Oid::Unknown if there is no HEAD commit
-    pub fn head_tree(&self) -> BitResult<Oid> {
+    pub fn head_tree(self) -> BitResult<Oid> {
         let oid = match self.resolve_head()? {
             BitRef::Direct(oid) => oid,
             _ => return Ok(Oid::UNKNOWN),
@@ -299,7 +299,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// returns the resolved hash of the HEAD symref
-    pub fn resolve_head(&self) -> BitResult<BitRef> {
+    pub fn resolve_head(self) -> BitResult<BitRef> {
         let head = self.read_head()?;
         self.resolve_ref(head)
     }
@@ -307,15 +307,15 @@ impl<'rcx> BitRepo<'rcx> {
     /// reads the contents of `HEAD`
     /// e.g. if `HEAD` -> `ref: refs/heads/master`
     /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
-    pub fn read_head(&self) -> BitResult<BitRef> {
+    pub fn read_head(self) -> BitResult<BitRef> {
         self.refdb()?.read(SymbolicRef::HEAD)
     }
 
-    pub fn is_head_detached(&self) -> BitResult<bool> {
+    pub fn is_head_detached(self) -> BitResult<bool> {
         Ok(self.read_head()?.is_direct())
     }
 
-    pub fn update_head(&self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
+    pub fn update_head(self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
         self.update_ref(SymbolicRef::HEAD, bitref.into(), cause)
     }
 
@@ -335,7 +335,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// writes `obj` into the object store returning its full hash
-    pub fn write_obj(&self, obj: &dyn WritableObject) -> BitResult<Oid> {
+    pub fn write_obj(self, obj: &dyn WritableObject) -> BitResult<Oid> {
         self.odb()?.write(obj)
     }
 
@@ -344,19 +344,19 @@ impl<'rcx> BitRepo<'rcx> {
         BitObjKind::from_raw(self, raw)
     }
 
-    pub fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
+    pub fn expand_prefix(self, prefix: PartialOid) -> BitResult<Oid> {
         self.odb()?.expand_prefix(prefix)
     }
 
-    pub fn obj_exists(&self, id: impl Into<BitId>) -> BitResult<bool> {
+    pub fn obj_exists(self, id: impl Into<BitId>) -> BitResult<bool> {
         self.odb()?.exists(id.into())
     }
 
-    pub fn read_obj_header(&self, id: impl Into<BitId>) -> BitResult<BitObjHeader> {
+    pub fn read_obj_header(self, id: impl Into<BitId>) -> BitResult<BitObjHeader> {
         self.odb()?.read_header(id.into())
     }
 
-    pub fn get_blob(&self, path: BitPath) -> BitResult<MutableBlob> {
+    pub fn get_blob(self, path: BitPath) -> BitResult<MutableBlob> {
         let path = self.normalize(path.as_ref())?;
         let bytes = if path.symlink_metadata()?.file_type().is_symlink() {
             // we literally hash the contents of the symlink without following
@@ -367,19 +367,19 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(MutableBlob::new(bytes))
     }
 
-    pub fn write_blob(&self, path: BitPath) -> BitResult<Oid> {
+    pub fn write_blob(self, path: BitPath) -> BitResult<Oid> {
         let blob = self.get_blob(path)?;
         self.write_obj(&blob)
     }
 
-    pub fn hash_blob(&self, path: BitPath) -> BitResult<Oid> {
+    pub fn hash_blob(self, path: BitPath) -> BitResult<Oid> {
         self.get_blob(path).and_then(|blob| hash::hash_obj(&blob))
     }
 
     /// converts relative_paths to absolute paths
     /// checks absolute paths exist and have a base relative to the bit directory
     // can't figure out how to make this take an impl AsRef<Path> and make lifetimes work out
-    pub fn normalize<'p>(&self, path: &'p Path) -> BitResult<Cow<'p, Path>> {
+    pub fn normalize<'p>(self, path: &'p Path) -> BitResult<Cow<'p, Path>> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
@@ -403,27 +403,27 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// converts an absolute path into a path relative to the workdir of the repository
-    pub fn to_relative_path<'p>(&self, path: &'p Path) -> BitResult<&'p Path> {
+    pub fn to_relative_path<'p>(self, path: &'p Path) -> BitResult<&'p Path> {
         // this seems to work just as well as the pathdiff crate
         debug_assert!(path.is_absolute());
         Ok(path.strip_prefix(&self.workdir)?)
     }
 
     /// convert a relative path to be absolute based off the repository root
-    pub fn to_absolute_path(&self, path: impl AsRef<Path>) -> BitPath {
+    pub fn to_absolute_path(self, path: impl AsRef<Path>) -> BitPath {
         self.workdir.join(path)
     }
 
     #[cfg(test)]
-    pub(crate) fn relative_paths(&self, paths: &[impl AsRef<Path>]) -> BitPath {
+    pub(crate) fn relative_paths(self, paths: &[impl AsRef<Path>]) -> BitPath {
         paths.iter().fold(self.bitdir, |base, path| base.join(path))
     }
 
-    pub(crate) fn mk_bitdir(&self, path: impl AsRef<Path>) -> io::Result<()> {
+    pub(crate) fn mk_bitdir(self, path: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(self.bitdir.join(path))
     }
 
-    pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
+    pub(crate) fn mk_bitfile(self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.bitdir.join(path))
     }
 }
@@ -441,7 +441,7 @@ impl<'rcx> Deref for BitRepo<'rcx> {
     type Target = RepoCtxt<'rcx>;
 
     fn deref(&self) -> &Self::Target {
-        self.ctxt
+        self.rcx
     }
 }
 

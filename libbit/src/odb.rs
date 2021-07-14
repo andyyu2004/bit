@@ -14,7 +14,6 @@ use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
-
 use std::str::FromStr;
 
 //? questionable name, questionable macro is there a better way to express this pattern
