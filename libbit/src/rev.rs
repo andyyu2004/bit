@@ -195,4 +195,6 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
 }
 
 #[cfg(test)]
+mod revwalk_tests;
+#[cfg(test)]
 mod tests;

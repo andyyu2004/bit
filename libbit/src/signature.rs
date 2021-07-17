@@ -49,7 +49,7 @@ impl BitTimeZoneOffset {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, PartialOrd, Eq, Ord, Hash)]
+#[derive(PartialEq, Copy, Clone, Debug, PartialOrd, Eq, Ord, Hash)]
 pub struct BitTime {
     pub(crate) time: BitEpochTime,
     pub(crate) offset: BitTimeZoneOffset,
