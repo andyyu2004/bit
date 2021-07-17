@@ -1,0 +1,13 @@
+0000000000000000000000000000000000000000 c1bc532c9e6d1b74888bd893a316dfcbda218beb Andy Yu <andyyu2004@gmail.com> 1626506114 +1200	commit (initial): init
+c1bc532c9e6d1b74888bd893a316dfcbda218beb f8103f9989467247cd1097e0aaa538b545a99996 Andy Yu <andyyu2004@gmail.com> 1626506128 +1200	commit: A
+f8103f9989467247cd1097e0aaa538b545a99996 988788c14ac1f5324cdd60335e7e01cfa628be1d Andy Yu <andyyu2004@gmail.com> 1626506133 +1200	commit: B
+988788c14ac1f5324cdd60335e7e01cfa628be1d f439ec863a80027439ecdbe78c1a517cb5b3caca Andy Yu <andyyu2004@gmail.com> 1626506137 +1200	commit: C
+f439ec863a80027439ecdbe78c1a517cb5b3caca 8a148895abe4507c87c4e2756b9c7743dbc3deb7 Andy Yu <andyyu2004@gmail.com> 1626506141 +1200	commit: D
+8a148895abe4507c87c4e2756b9c7743dbc3deb7 7b158cc2692f71b0d39f5abcb3ede6197aa55708 Andy Yu <andyyu2004@gmail.com> 1626506142 +1200	commit: E
+7b158cc2692f71b0d39f5abcb3ede6197aa55708 f78dd0ade418038677cda9ada00989a21af1e242 Andy Yu <andyyu2004@gmail.com> 1626506162 +1200	commit: three of these
+f78dd0ade418038677cda9ada00989a21af1e242 46bcfda1e8b47e02e3168605c170aaf338472326 Andy Yu <andyyu2004@gmail.com> 1626506162 +1200	commit: three of these
+46bcfda1e8b47e02e3168605c170aaf338472326 dfaea58c308d8ede90abbd439c6f84ea3b95402c Andy Yu <andyyu2004@gmail.com> 1626506162 +1200	commit: three of these
+dfaea58c308d8ede90abbd439c6f84ea3b95402c 4e0b8a8ea5deecc64e35aa5176294cbc6d147310 Andy Yu <andyyu2004@gmail.com> 1626506162 +1200	commit: three of these
+4e0b8a8ea5deecc64e35aa5176294cbc6d147310 dfaea58c308d8ede90abbd439c6f84ea3b95402c Andy Yu <andyyu2004@gmail.com> 1626506185 +1200	reset: moving to @^
+dfaea58c308d8ede90abbd439c6f84ea3b95402c 2c5a4ac9722e245f12b83642fe24848252b9b1ce Andy Yu <andyyu2004@gmail.com> 1626506389 +1200	commit: H back on master
+2c5a4ac9722e245f12b83642fe24848252b9b1ce 9aed6cad276983296289c808f85cdcecdcbc6aff Andy Yu <andyyu2004@gmail.com> 1626506552 +1200	commit: update readme

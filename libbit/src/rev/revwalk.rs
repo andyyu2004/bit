@@ -19,7 +19,8 @@ pub struct RevWalk<'rcx> {
 
 bitflags! {
     struct CommitNodeFlags: u8 {
-        const SEEN = 1;
+        const SEEN = 1 << 1;
+        const ENQUEUED = 1 << 2;
     }
 }
 
@@ -59,7 +60,7 @@ impl<'rcx> RevWalk<'rcx> {
     }
 
     pub fn enqueue_commit(&mut self, commit: Commit<'rcx>) {
-        if self.flags[&commit.oid()].contains(CommitNodeFlags::SEEN) {
+        if self.flags[&commit.oid()].contains(CommitNodeFlags::ENQUEUED) {
             return;
         }
         self.queue.push(commit)
