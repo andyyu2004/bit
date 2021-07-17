@@ -1,8 +1,11 @@
+use fallible_iterator::FallibleIterator;
+
 use super::{BitObjCached, ImmutableBitObject, Tree, Treeish, WritableObject};
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::odb::BitObjDbBackend;
 use crate::repo::{BitRepo, Repo};
+use crate::rev::RevWalk;
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
 use std::collections::HashMap;
@@ -20,10 +23,29 @@ pub struct Commit<'rcx> {
     inner: MutableCommit,
 }
 
-impl Commit<'_> {
+impl<'rcx> Commit<'rcx> {
     /// Get a reference to the commit's tree.
     pub fn tree(&self) -> Oid {
         self.tree
+    }
+
+    pub fn revwalk(self) -> BitResult<RevWalk<'rcx>> {
+        RevWalk::walk_commit(self)
+    }
+
+    // just the first common ancestor found
+    pub fn find_merge_base(self, other: Commit<'rcx>) -> BitResult<Commit<'rcx>> {
+        debug_assert_eq!(self.owner, other.owner);
+
+        let mut xs = self.revwalk()?;
+        let mut ys = other.revwalk()?;
+        loop {
+            match (xs.next()?, ys.next()?) {
+                (Some(x), Some(y)) if x.oid() == y.oid() => return Ok(x),
+                (Some(_), Some(_)) => continue,
+                _ => bail!("todo no merge base found"),
+            }
+        }
     }
 }
 
@@ -105,10 +127,6 @@ impl MutableCommit {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn merge_base(self, a: &Commit<'rcx>, b: &Commit<'rcx>) -> Commit<'rcx> {
-        todo!()
-    }
-
     /// create and write commit to odb
     pub fn mk_commit(
         self,
@@ -117,12 +135,20 @@ impl<'rcx> BitRepo<'rcx> {
         parent: Option<Oid>,
     ) -> BitResult<Oid> {
         ensure!(self.read_obj_header(tree)?.obj_type == BitObjType::Tree);
-        if let Some(par) = parent {
-            ensure!(self.read_obj_header(par)?.obj_type == BitObjType::Commit);
-        }
-
         let author = self.user_signature()?;
         let committer = author.clone();
+
+        if let Some(par) = parent {
+            let parent = self.read_obj(par)?;
+            ensure!(parent.is_commit());
+            // we use timestamps to order commits
+            // we can't enforce a strict ordering as it is valid for them to have the exact same time
+            ensure!(
+                parent.into_commit().committer.time <= committer.time,
+                "Attempted to create a commit that is older than it's parent. Please check the system clock."
+            );
+        }
+
         let commit = MutableCommit::new(tree, parent, message, author, committer);
         self.odb()?.write(&commit)
     }
@@ -237,9 +263,13 @@ impl DeserializeSized for MutableCommit {
     }
 }
 
-impl BitObject for Commit<'_> {
+impl<'rcx> BitObject<'rcx> for Commit<'rcx> {
     fn obj_cached(&self) -> &BitObjCached {
         &self.cached
+    }
+
+    fn owner(&self) -> BitRepo<'rcx> {
+        self.owner
     }
 }
 

@@ -30,9 +30,3 @@ impl DeserializeSized for RefDelta {
         // Ok(Self { obj, base_oid, delta })
     }
 }
-
-impl BitObject for RefDelta {
-    fn obj_cached(&self) -> &BitObjCached {
-        &self.obj
-    }
-}

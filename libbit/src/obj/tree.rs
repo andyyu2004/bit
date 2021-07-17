@@ -165,9 +165,13 @@ impl WritableObject for MutableTree {
     }
 }
 
-impl BitObject for Tree<'_> {
+impl<'rcx> BitObject<'rcx> for Tree<'rcx> {
     fn obj_cached(&self) -> &BitObjCached {
         &self.cached
+    }
+
+    fn owner(&self) -> BitRepo<'rcx> {
+        self.owner
     }
 }
 

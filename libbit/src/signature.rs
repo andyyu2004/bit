@@ -32,6 +32,7 @@ impl<'rcx> BitRepo<'rcx> {
 pub struct BitEpochTime(i64);
 
 impl BitEpochTime {
+    #[cfg(test)]
     pub fn new(i: i64) -> Self {
         Self(i)
     }
@@ -42,6 +43,7 @@ impl BitEpochTime {
 pub struct BitTimeZoneOffset(i32);
 
 impl BitTimeZoneOffset {
+    #[cfg(test)]
     pub fn new(offset: i32) -> Self {
         Self(offset)
     }

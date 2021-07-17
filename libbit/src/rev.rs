@@ -1,3 +1,7 @@
+mod revwalk;
+
+pub use revwalk::*;
+
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, Oid, PartialOid};
 use crate::refs::{BitRef, SymbolicRef};

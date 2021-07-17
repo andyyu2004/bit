@@ -196,6 +196,11 @@ impl<'rcx> BitObjKind<'rcx> {
             _ => panic!("expected tree, found `{}`", self.obj_ty()),
         }
     }
+
+    /// Returns `true` if the bit_obj_kind is [`Commit`].
+    pub fn is_commit(&self) -> bool {
+        matches!(self, Self::Commit(..))
+    }
 }
 
 impl<'rcx> BitObjKind<'rcx> {
@@ -293,7 +298,8 @@ pub trait WritableObject: Serialize {
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
 // implmentors of BitObj must never be mutated otherwise their `Oid` will be wrong
-pub trait BitObject {
+pub trait BitObject<'rcx> {
+    fn owner(&self) -> BitRepo<'rcx>;
     fn obj_cached(&self) -> &BitObjCached;
 
     fn obj_ty(&self) -> BitObjType {

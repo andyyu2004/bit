@@ -12,18 +12,31 @@ pub fn derive_bit_object(item: proc_macro::TokenStream) -> proc_macro::TokenStre
 
     let expanded = match input.data {
         Data::Enum(data) => {
-            let arms = data.variants.iter().map(|variant| {
+            let obj_cached_arms = data.variants.iter().map(|variant| {
                 let name = &variant.ident;
                 quote! {
                     Self::#name(x) => x.obj_cached(),
                 }
             });
 
+            let owner_arms = data.variants.iter().map(|variant| {
+                let name = &variant.ident;
+                quote! {
+                    Self::#name(x) => x.owner(),
+                }
+            });
+
             quote! {
-                impl #impl_generics crate::obj::BitObject for #name #ty_generics #where_clause {
+                impl #impl_generics crate::obj::BitObject<'rcx> for #name #ty_generics #where_clause {
+                    fn owner(&self) -> BitRepo<'rcx> {
+                        match self {
+                            #(#owner_arms)*
+                        }
+                    }
+
                     fn obj_cached(&self) -> &BitObjCached {
                         match self {
-                            #(#arms)*
+                            #(#obj_cached_arms)*
                         }
                     }
                 }

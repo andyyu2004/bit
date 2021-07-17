@@ -38,9 +38,13 @@ impl<'rcx> Deref for Tag<'rcx> {
     }
 }
 
-impl BitObject for Tag<'_> {
+impl<'rcx> BitObject<'rcx> for Tag<'rcx> {
     fn obj_cached(&self) -> &BitObjCached {
         todo!()
+    }
+
+    fn owner(&self) -> BitRepo<'rcx> {
+        self.owner
     }
 }
 

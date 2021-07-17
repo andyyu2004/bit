@@ -76,9 +76,13 @@ impl DeserializeSized for MutableBlob {
     }
 }
 
-impl BitObject for Blob<'_> {
+impl<'rcx> BitObject<'rcx> for Blob<'rcx> {
     fn obj_cached(&self) -> &BitObjCached {
         &self.cached
+    }
+
+    fn owner(&self) -> BitRepo<'rcx> {
+        self.owner
     }
 }
 
