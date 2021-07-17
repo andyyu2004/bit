@@ -19,6 +19,9 @@
 #![feature(array_methods)]
 #![feature(with_options)]
 
+#[macro_use]
+extern crate smallvec;
+
 #[cfg(test)]
 extern crate quickcheck;
 

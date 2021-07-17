@@ -52,9 +52,12 @@ impl<'rcx> BitRepo<'rcx> {
                 obj_type
             );
             let commit = self.read_obj(oid)?.into_commit();
-            match commit.parent {
-                Some(parent) => Ok(BitRef::Direct(parent)),
-                None => bail!("revision `{}` refers to the parent of an initial commit", rev),
+            match &commit.parents[..] {
+                [] => bail!("revision `{}` refers to the parent of an initial commit", rev),
+                &[sole_parent] => Ok(BitRef::Direct(sole_parent)),
+                _ => todo!(
+                    "parent of multiple commits (i think git somewhat unintuitively takes the last parent? to confirm)"
+                ),
             }
         };
 

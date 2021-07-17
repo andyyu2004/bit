@@ -13,7 +13,7 @@ fn test_commit_in_detached_head_state() -> BitResult<()> {
         modify!(repo: "bar");
         let summary = bit_commit_all!(repo);
 
-        assert_eq!(oid, summary.commit.parent.unwrap());
+        assert_eq!(oid, summary.commit.sole_parent());
         assert_eq!(summary.commit.oid(), repo.read_head()?.into_direct());
         Ok(())
     })

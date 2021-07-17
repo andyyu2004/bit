@@ -3,12 +3,17 @@ use crate::refs::{BitRef, SymbolicRef};
 use crate::repo::BitRepo;
 use crate::test_utils::*;
 use quickcheck::{Arbitrary, Gen};
+use rand::Rng;
+use smallvec::SmallVec;
 
 impl Arbitrary for MutableCommit {
     fn arbitrary(g: &mut Gen) -> Self {
+        let arbitrary_parents = (0..rand::thread_rng().gen_range(0..5))
+            .map(|_| Oid::arbitrary(g))
+            .collect::<SmallVec<_>>();
         Self::new_with_gpg(
             Arbitrary::arbitrary(g),
-            Arbitrary::arbitrary(g),
+            arbitrary_parents,
             Arbitrary::arbitrary(g),
             Arbitrary::arbitrary(g),
             Arbitrary::arbitrary(g),

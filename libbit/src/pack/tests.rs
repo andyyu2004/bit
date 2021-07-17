@@ -112,7 +112,7 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
                 },
             },
             message: CommitMessage { subject: "broken".to_owned(), message: "".into() },
-            parent: Some("4719f26c289d6bc2dbb3e68ac437537828cd8a11".into()),
+            parents: smallvec!["4719f26c289d6bc2dbb3e68ac437537828cd8a11".into()],
             gpgsig: None,
         };
         assert_eq!(&commit, &*obj.into_commit());

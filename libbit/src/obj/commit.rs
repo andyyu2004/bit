@@ -1,5 +1,3 @@
-use fallible_iterator::FallibleIterator;
-
 use super::{BitObjCached, ImmutableBitObject, Tree, Treeish, WritableObject};
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, BitObject, Oid};
@@ -8,7 +6,8 @@ use crate::repo::{BitRepo, Repo};
 use crate::rev::RevWalk;
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
-use std::collections::HashMap;
+use fallible_iterator::FallibleIterator;
+use smallvec::SmallVec;
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -57,13 +56,15 @@ impl Deref for Commit<'_> {
     }
 }
 
+pub type CommitParents = SmallVec<[Oid; 2]>;
+
 #[derive(PartialEq, Clone, Debug)]
 pub struct MutableCommit {
     pub(crate) tree: Oid,
     pub(crate) author: BitSignature,
     pub(crate) committer: BitSignature,
     pub(crate) message: CommitMessage,
-    pub(crate) parent: Option<Oid>,
+    pub(crate) parents: CommitParents,
     pub(crate) gpgsig: Option<String>,
 }
 
@@ -106,23 +107,33 @@ impl<'rcx> Treeish<'rcx> for Commit<'rcx> {
 impl MutableCommit {
     pub fn new(
         tree: Oid,
-        parent: Option<Oid>,
+        parents: CommitParents,
         message: CommitMessage,
         author: BitSignature,
         committer: BitSignature,
     ) -> Self {
-        Self::new_with_gpg(tree, parent, message, author, committer, None)
+        Self::new_with_gpg(tree, parents, message, author, committer, None)
     }
 
     pub fn new_with_gpg(
         tree: Oid,
-        parent: Option<Oid>,
+        parents: CommitParents,
         message: CommitMessage,
         author: BitSignature,
         committer: BitSignature,
         gpgsig: Option<String>,
     ) -> Self {
-        Self { tree, author, committer, message, parent, gpgsig }
+        Self { tree, author, committer, message, parents, gpgsig }
+    }
+
+    pub fn sole_parent(&self) -> Oid {
+        assert_eq!(
+            self.parents.len(),
+            1,
+            "expected exactly one commit parent, found `{}`",
+            self.parents.len()
+        );
+        self.parents[0]
     }
 }
 
@@ -132,14 +143,14 @@ impl<'rcx> BitRepo<'rcx> {
         self,
         tree: Oid,
         message: CommitMessage,
-        parent: Option<Oid>,
+        parents: CommitParents,
     ) -> BitResult<Oid> {
         ensure!(self.read_obj_header(tree)?.obj_type == BitObjType::Tree);
         let author = self.user_signature()?;
         let committer = author.clone();
 
-        if let Some(par) = parent {
-            let parent = self.read_obj(par)?;
+        for &parent in &parents {
+            let parent = self.read_obj(parent)?;
             ensure!(parent.is_commit());
             // we use timestamps to order commits
             // we can't enforce a strict ordering as it is valid for them to have the exact same time
@@ -149,7 +160,7 @@ impl<'rcx> BitRepo<'rcx> {
             );
         }
 
-        let commit = MutableCommit::new(tree, parent, message, author, committer);
+        let commit = MutableCommit::new(tree, parents, message, author, committer);
         self.odb()?.write(&commit)
     }
 
@@ -202,7 +213,7 @@ impl Serialize for MutableCommit {
         }
 
         w!(format!("tree {:}", self.tree))?;
-        if let Some(parent) = &self.parent {
+        for parent in &self.parents {
             w!(format!("parent {}", parent))?;
         }
         w!(format!("author {}", self.author))?;
@@ -219,47 +230,69 @@ impl Serialize for MutableCommit {
 
 impl DeserializeSized for MutableCommit {
     fn deserialize_sized(r: impl BufRead, size: u64) -> BitResult<Self> {
-        let mut lines = r.take(size).lines();
-        let mut attrs = HashMap::new();
-
-        let mut key: Option<String> = None;
-        let mut value: Option<String> = None;
-
-        for line in &mut lines {
-            let line = line?;
-
-            // line is a continuation of the previous line
-            if let Some(v) = &mut value {
-                if let Some(stripped) = line.strip_prefix(' ') {
-                    v.push('\n');
-                    v.push_str(stripped);
-                    continue;
-                } else {
-                    attrs.insert(key.take().unwrap(), value.take().unwrap());
-                }
-            }
-
-            // everything after the current (blank) line is part of the message
+        let lines = r.take(size).lines().collect::<Result<Vec<_>, _>>()?;
+        let mut builder = CommitBuilder::default();
+        let mut iter = lines.iter().peekable();
+        while let Some(line) = iter.next() {
             if line.is_empty() {
                 break;
             }
 
-            let (k, v) =
+            let (key, value) =
                 line.split_once(' ').unwrap_or_else(|| panic!("Failed to parse line `{}`", line));
-            key = Some(k.to_owned());
-            value = Some(v.to_owned());
+            let mut value = value.to_owned();
+
+            // if the line starts with space it is a continuation of the previous key
+            while let Some(line) = iter.peek() {
+                match line.strip_prefix(' ') {
+                    Some(stripped) => {
+                        value.push('\n');
+                        value.push_str(stripped);
+                        iter.next();
+                    }
+                    None => break,
+                }
+            }
+
+            match key {
+                "parent" => builder.parents.push(value.parse()?),
+                "tree" => builder.tree = Some(value.parse()?),
+                "author" => builder.author = Some(value.parse()?),
+                "committer" => builder.committer = Some(value.parse()?),
+                "gpgsig" => builder.gpgsig = Some(value.parse()?),
+                _ => bail!("unknown field `{}` when parsing commit", key),
+            }
         }
 
-        let message = lines.collect::<Result<Vec<_>, _>>()?.join("\n");
         // TODO could definitely do this more efficiently but its not urgent
-        let message = CommitMessage::from_str(&message)?;
+        // as we have a vector we could just slice it and join without doing any copying
+        // we would just have to keep track of where to slice it from
+        let message = iter.cloned().collect::<Vec<_>>().join("\n");
+        builder.message = Some(message.parse()?);
+        builder.build()
+    }
+}
 
-        let tree = attrs["tree"].parse().unwrap();
-        let parent = attrs.get("parent").map(|parent| parent.parse().unwrap());
-        let author = attrs["author"].parse().unwrap();
-        let committer = attrs["committer"].parse().unwrap();
-        let gpgsig = attrs.get("gpgsig").map(|sig| sig.to_owned());
-        Ok(Self::new_with_gpg(tree, parent, message, author, committer, gpgsig))
+#[derive(Default)]
+struct CommitBuilder {
+    pub tree: Option<Oid>,
+    pub author: Option<BitSignature>,
+    pub committer: Option<BitSignature>,
+    pub message: Option<CommitMessage>,
+    pub parents: CommitParents,
+    pub gpgsig: Option<String>,
+}
+
+impl CommitBuilder {
+    fn build(mut self) -> BitResult<MutableCommit> {
+        Ok(MutableCommit {
+            tree: self.tree.ok_or(anyhow!("commit missing tree"))?,
+            author: self.author.ok_or(anyhow!("commit missing author"))?,
+            committer: self.committer.ok_or(anyhow!("commit missing committer"))?,
+            message: self.message.ok_or(anyhow!("commit missing message"))?,
+            parents: self.parents,
+            gpgsig: self.gpgsig.take(),
+        })
     }
 }
 

@@ -17,7 +17,7 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn commit_tree(
         &self,
-        parent: Option<Oid>,
+        parents: Option<Oid>,
         message: Option<String>,
         tree: Oid,
     ) -> BitResult<Oid> {
@@ -27,6 +27,6 @@ impl<'rcx> BitRepo<'rcx> {
             None => self.read_commit_msg(),
         }?;
 
-        self.mk_commit(tree, message, parent)
+        self.mk_commit(tree, message, parents.into_iter().collect())
     }
 }

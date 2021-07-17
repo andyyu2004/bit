@@ -34,6 +34,8 @@ impl<'rcx> PartialOrd for Commit<'rcx> {
 }
 
 // probably not an entirely sound thing to do
+// necessary for the ord impl below
+// might be better to newtype commit
 impl Eq for Commit<'_> {
 }
 
@@ -41,7 +43,7 @@ impl<'rcx> Ord for Commit<'rcx> {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.partial_cmp(other) {
             Some(ordering) => ordering,
-            None => todo!(),
+            None => todo!("how to do a total order when timestamps are equal?"),
         }
     }
 }
@@ -90,7 +92,7 @@ impl<'rcx> FallibleIterator for RevWalk<'rcx> {
             None => return Ok(None),
         };
 
-        if let Some(parent) = commit.parent {
+        for &parent in &commit.parents {
             self.enqueue_commit(self.repo.read_obj(parent)?.into_commit());
         }
 
