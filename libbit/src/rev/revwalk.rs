@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::ops::Deref;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RevWalk<'rcx> {
     repo: BitRepo<'rcx>,
     // map of commit oid to their flags
@@ -21,7 +21,7 @@ pub struct RevWalk<'rcx> {
     index: usize,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct CommitNode<'rcx> {
     commit: Commit<'rcx>,
     /// The index which it was inserted into the queue.
