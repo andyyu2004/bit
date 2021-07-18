@@ -6,7 +6,7 @@ use libbit::rev::LazyRevspec;
 
 #[derive(Clap, Debug)]
 pub struct BitRevlistCliOpts {
-    // TODO require at least one revision
+    #[clap(required = true)]
     revisions: Vec<LazyRevspec>,
 }
 
@@ -24,8 +24,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_parse_revlist_requires_at_least_one_revision() {
+        assert!(BitRevlistCliOpts::try_parse_from(&["--"]).is_err());
+    }
+
+    #[test]
     fn test_parse_revlist_cli() -> BitResult<()> {
-        let opts = BitRevlistCliOpts::parse_from(&["--", "HEAD", "master", "branch"]);
+        let opts = BitRevlistCliOpts::try_parse_from(&["--", "HEAD", "master", "branch"])?;
         assert_eq!(opts.revisions.len(), 3);
         Ok(())
     }
