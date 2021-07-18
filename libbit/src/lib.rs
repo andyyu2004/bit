@@ -43,7 +43,7 @@ extern crate anyhow;
 
 #[cfg(test)]
 #[macro_use]
-mod test_utils;
+pub mod test_utils;
 
 #[macro_use]
 extern crate log;

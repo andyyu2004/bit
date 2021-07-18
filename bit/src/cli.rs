@@ -7,6 +7,7 @@ mod cli_commit_tree;
 mod cli_config;
 mod cli_ls_files;
 mod cli_reflog;
+mod cli_revlist;
 mod cli_status;
 mod cli_switch;
 mod cli_update_index;
@@ -22,22 +23,24 @@ use clap::{AppSettings, Clap};
 use cli_add::BitAddCliOpts;
 use cli_bit_diff::BitDiffCliOpts;
 use cli_branch::*;
+use cli_checkout::BitCheckoutCliOpts;
 use cli_commit::BitCommitCliOpts;
 use cli_commit_tree::BitCommitTreeCliOpts;
 use cli_config::BitConfigCliOpts;
 use cli_ls_files::BitLsFilesCliOpts;
+use cli_reflog::BitReflogCliOpts;
 use cli_status::BitStatusCliOpts;
+use cli_switch::BitSwitchCliOpts;
 use cli_update_index::BitUpdateIndexCliOpts;
 use libbit::cmd::*;
 use libbit::error::BitResult;
 use libbit::obj::BitObjType;
 use libbit::repo::BitRepo;
 use libbit::rev::LazyRevspec;
+use std::ffi::OsString;
 use std::path::PathBuf;
 
-use self::cli_checkout::BitCheckoutCliOpts;
-use self::cli_reflog::BitReflogCliOpts;
-use self::cli_switch::BitSwitchCliOpts;
+use self::cli_revlist::BitRevlistCliOpts;
 
 // experiment with changing structure of everything
 // more code should be in the binary
@@ -47,8 +50,8 @@ pub trait Cmd {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()>;
 }
 
-pub fn run() -> BitResult<()> {
-    let opts = BitCliOpts::parse();
+pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitResult<()> {
+    let opts = BitCliOpts::parse_from(args);
     let BitCliOpts { subcmd, root_path } = opts;
     if let BitSubCmd::Init(subcmd) = &subcmd {
         BitRepo::init(root_path.join(&subcmd.path))?;
@@ -82,6 +85,7 @@ pub fn run() -> BitResult<()> {
         BitSubCmd::Checkout(opts) => opts.exec(repo),
         BitSubCmd::Diff(opts) => opts.exec(repo),
         BitSubCmd::Reflog(opts) => opts.exec(repo),
+        BitSubCmd::Revlist(opts) => opts.exec(repo),
         BitSubCmd::Status(opts) => opts.exec(repo),
         BitSubCmd::Switch(opts) => opts.exec(repo),
     })
@@ -111,6 +115,8 @@ pub enum BitSubCmd {
     Log(BitLogCliOpts),
     LsFiles(BitLsFilesCliOpts),
     Reflog(BitReflogCliOpts),
+    #[clap(name = "rev-list")]
+    Revlist(BitRevlistCliOpts),
     Status(BitStatusCliOpts),
     Switch(BitSwitchCliOpts),
     UpdateIndex(BitUpdateIndexCliOpts),

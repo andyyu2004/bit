@@ -1,6 +1,8 @@
+mod revlist;
 mod revwalk;
 
 pub use revwalk::*;
+pub use revlist::*;
 
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, Oid, PartialOid};

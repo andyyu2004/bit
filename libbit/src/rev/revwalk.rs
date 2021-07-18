@@ -69,6 +69,12 @@ impl<'rcx> Ord for CommitNode<'rcx> {
     }
 }
 
+impl<'rcx> BitRepo<'rcx> {
+    pub fn revwalk(self, revspecs: &[&LazyRevspec]) -> BitResult<RevWalk<'rcx>> {
+        RevWalk::walk_revspecs(self, revspecs)
+    }
+}
+
 impl<'rcx> RevWalk<'rcx> {
     pub fn new(roots: SmallVec<[Commit<'rcx>; 2]>) -> Self {
         debug_assert!(!roots.is_empty());
