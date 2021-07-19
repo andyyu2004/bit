@@ -3,10 +3,8 @@ use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::odb::BitObjDbBackend;
 use crate::repo::{BitRepo, Repo};
-use crate::rev::RevWalk;
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
-use fallible_iterator::FallibleIterator;
 use smallvec::SmallVec;
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
@@ -26,25 +24,6 @@ impl<'rcx> Commit<'rcx> {
     /// Get a reference to the commit's tree.
     pub fn tree(&self) -> Oid {
         self.tree
-    }
-
-    pub fn revwalk(self) -> BitResult<RevWalk<'rcx>> {
-        RevWalk::walk_commit(self)
-    }
-
-    // just the first common ancestor found
-    pub fn find_merge_base(self, other: Commit<'rcx>) -> BitResult<Commit<'rcx>> {
-        debug_assert_eq!(self.owner, other.owner);
-
-        let mut xs = self.revwalk()?;
-        let mut ys = other.revwalk()?;
-        loop {
-            match (xs.next()?, ys.next()?) {
-                (Some(x), Some(y)) if x.oid() == y.oid() => return Ok(x),
-                (Some(_), Some(_)) => continue,
-                _ => bail!("todo no merge base found"),
-            }
-        }
     }
 }
 
@@ -66,6 +45,7 @@ pub struct MutableCommit {
     pub message: CommitMessage,
     pub parents: CommitParents,
     pub gpgsig: Option<String>,
+    pub mergetag: Option<MergeTag>,
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -123,7 +103,7 @@ impl MutableCommit {
         committer: BitSignature,
         gpgsig: Option<String>,
     ) -> Self {
-        Self { tree, author, committer, message, parents, gpgsig }
+        Self { tree, author, committer, message, parents, gpgsig, mergetag: None }
     }
 
     pub fn sole_parent(&self) -> Oid {
@@ -218,8 +198,13 @@ impl Serialize for MutableCommit {
         }
         w!(format!("author {}", self.author))?;
         w!(format!("committer {}", self.committer))?;
+
         if let Some(gpgsig) = &self.gpgsig {
             w!(format!("gpgsig {}", gpgsig))?;
+        }
+
+        if let Some(mergetag) = &self.mergetag {
+            w!(format!("mergetab {}", mergetag))?;
         }
 
         writeln!(writer)?;
@@ -230,7 +215,13 @@ impl Serialize for MutableCommit {
 
 impl DeserializeSized for MutableCommit {
     fn deserialize_sized(r: impl BufRead, size: u64) -> BitResult<Self> {
-        let lines = r.take(size).lines().collect::<Result<Vec<_>, _>>()?;
+        // WARNING the following line fails for non utf8 encodings with error `stream did not contain valid UTF-8 `
+        // not intending to support non-utf8 anytime soon
+        let lines = r
+            .take(size)
+            .lines()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap_or_else(|_| panic!("unsupported non-utf8 encoding detected in commit"));
         let mut builder = CommitBuilder::default();
         let mut iter = lines.iter().peekable();
         while let Some(line) = iter.next() {
@@ -238,7 +229,7 @@ impl DeserializeSized for MutableCommit {
                 break;
             }
 
-            let (key, value) =
+            let (field, value) =
                 line.split_once(' ').unwrap_or_else(|| panic!("Failed to parse line `{}`", line));
             let mut value = value.to_owned();
 
@@ -254,13 +245,17 @@ impl DeserializeSized for MutableCommit {
                 }
             }
 
-            match key {
+            match field {
                 "parent" => builder.parents.push(value.parse()?),
                 "tree" => builder.tree = Some(value.parse()?),
                 "author" => builder.author = Some(value.parse()?),
                 "committer" => builder.committer = Some(value.parse()?),
                 "gpgsig" => builder.gpgsig = Some(value.parse()?),
-                _ => bail!("unknown field `{}` when parsing commit", key),
+                "mergetag" => builder.mergetag = Some(value.parse()?),
+                _ => eprintln!(
+                    "ignoring unknown field `{}` when parsing commit (commit has parents = `{:?}`: field has value `{}`)",
+                    field, builder.parents, value
+                ),
             }
         }
 
@@ -273,6 +268,26 @@ impl DeserializeSized for MutableCommit {
     }
 }
 
+// don't really know what this is, just handling it to avoid errors above
+#[derive(Clone, Debug, PartialEq)]
+pub struct MergeTag {
+    todo_parse: String,
+}
+
+impl FromStr for MergeTag {
+    type Err = BitGenericError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self { todo_parse: s.to_owned() })
+    }
+}
+
+impl Display for MergeTag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.todo_parse)
+    }
+}
+
 #[derive(Default)]
 struct CommitBuilder {
     pub tree: Option<Oid>,
@@ -281,6 +296,7 @@ struct CommitBuilder {
     pub message: Option<CommitMessage>,
     pub parents: CommitParents,
     pub gpgsig: Option<String>,
+    pub mergetag: Option<MergeTag>,
 }
 
 impl CommitBuilder {
@@ -292,6 +308,7 @@ impl CommitBuilder {
             message: self.message.ok_or(anyhow!("commit missing message"))?,
             parents: self.parents,
             gpgsig: self.gpgsig.take(),
+            mergetag: self.mergetag.take(),
         })
     }
 }

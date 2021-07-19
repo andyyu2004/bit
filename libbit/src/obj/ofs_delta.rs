@@ -1,4 +1,4 @@
-use super::{BitObjCached, BitObject};
+use super::BitObjCached;
 use crate::delta::Delta;
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt};

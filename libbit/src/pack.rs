@@ -8,6 +8,7 @@ use crate::path::{BitFileStream, BitPath};
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
+use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
 use std::io::{BufRead, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
@@ -187,6 +188,7 @@ pub struct PackIndex {
 pub struct PackIndexReader<R> {
     reader: R,
     fanout: [u32; FANOUT_ENTRYC],
+    oid_cache: HashMap<u64, Vec<Oid>>,
     /// number of oids
     n: u64,
 }
@@ -204,7 +206,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         PackIndex::parse_header(&mut reader)?;
         let fanout = reader.read_array::<u32, FANOUT_ENTRYC>()?;
         let n = fanout[FANOUT_ENTRYC - 1] as u64;
-        Ok(Self { reader, fanout, n })
+        Ok(Self { reader, fanout, n, oid_cache: Default::default() })
     }
 }
 
@@ -301,7 +303,14 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         let high = self.fanout[prefix] as u64;
 
         self.seek(SeekFrom::Start(PACK_IDX_HEADER_SIZE + FANOUT_SIZE + low * OID_SIZE as u64))?;
-        let oids = self.reader.read_vec((high - low) as usize)?;
+        let oids = match self.oid_cache.get(&low) {
+            Some(oids) => oids,
+            None => {
+                let oids = self.reader.read_vec((high - low) as usize).unwrap();
+                self.oid_cache.insert(low, oids);
+                self.oid_cache.get(&low).unwrap()
+            }
+        };
         match oids.binary_search(&oid) {
             Ok(idx) => Ok(low + idx as u64),
             Err(idx) => Err(anyhow!(BitError::ObjectNotFoundInPackIndex(oid, low + idx as u64))),

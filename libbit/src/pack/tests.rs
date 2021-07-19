@@ -114,6 +114,7 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
             message: CommitMessage { subject: "broken".to_owned(), message: "".into() },
             parents: smallvec!["4719f26c289d6bc2dbb3e68ac437537828cd8a11".into()],
             gpgsig: None,
+            mergetag: None,
         };
         assert_eq!(&commit, &*obj.into_commit());
         Ok(())

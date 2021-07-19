@@ -1,6 +1,8 @@
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
+use libbit::iter::FallibleIterator;
+use libbit::obj::BitObject;
 use libbit::repo::BitRepo;
 use libbit::rev::LazyRevspec;
 
@@ -13,8 +15,13 @@ pub struct BitRevlistCliOpts {
 impl Cmd for BitRevlistCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
         let revisions = self.revisions.iter().collect::<Vec<_>>();
-        let revlist = repo.revlist(&revisions)?;
-        print!("{}", revlist);
+        let revwalk = repo.revwalk(&revisions)?;
+        revwalk
+            .for_each(|commit| {
+                println!("{}", commit.oid());
+                Ok(())
+            })
+            .unwrap();
         Ok(())
     }
 }

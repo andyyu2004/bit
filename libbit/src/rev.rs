@@ -1,11 +1,10 @@
-mod revlist;
 mod revwalk;
 
 pub use revwalk::*;
-pub use revlist::*;
 
 use crate::error::{BitGenericError, BitResult};
-use crate::obj::{BitObjType, Oid, PartialOid};
+use crate::obj::{BitObjType, Commit, Oid, PartialOid};
+use crate::peel::Peel;
 use crate::refs::{BitRef, SymbolicRef};
 use crate::repo::BitRepo;
 use lazy_static::lazy_static;
@@ -14,13 +13,22 @@ use std::fmt::{self, Display, Formatter};
 use std::lazy::OnceCell;
 use std::str::FromStr;
 
-// <rev> ::= <rev>^ | <rev>~<num> | <ref>  | <partial-oid>
+// TODO this is not quite right the difference between ~ and ^ is more subtle than this
+// <rev> ::=
+//   | <ref>
+//   | <partial-oid>
+//   | <rev>^<n>?
+//   | <rev>~<n>?
 #[derive(Debug, Clone, PartialEq)]
 pub enum Revspec {
     Ref(BitRef),
     Partial(PartialOid),
-    Parent(Box<Revspec>),
-    Ancestor(Box<Revspec>, u32),
+    /// nth parent selector ^2 means select the 2nd parent
+    /// defaults to 1 if unspecified
+    /// if n == 0, then this is a noop
+    Parent(Box<Revspec>, usize),
+    /// ~<n>
+    Ancestor(Box<Revspec>, usize),
 }
 
 impl<'rcx> BitRepo<'rcx> {
@@ -35,6 +43,10 @@ impl<'rcx> BitRepo<'rcx> {
         self.fully_resolve_rev_to_ref(rev.parse(self)?)
     }
 
+    pub fn resolve_rev_to_commit(self, rev: &LazyRevspec) -> BitResult<Commit<'rcx>> {
+        self.fully_resolve_rev(rev)?.peel(self)
+    }
+
     pub fn resolve_rev_to_branch(self, rev: &LazyRevspec) -> BitResult<SymbolicRef> {
         match self.resolve_rev(rev)? {
             BitRef::Direct(..) => bail!("expected branch, found commit `{}`", rev),
@@ -43,8 +55,13 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     fn fully_resolve_rev_to_ref(&self, rev: &Revspec) -> BitResult<BitRef> {
-        let get_parent = |reference: BitRef| -> BitResult<BitRef> {
+        let get_nth_parent = |reference: BitRef, n: usize| -> BitResult<BitRef> {
             let oid = self.fully_resolve_ref(reference)?;
+
+            if n == 0 {
+                return Ok(BitRef::Direct(oid));
+            }
+
             let obj_type = self.read_obj_header(oid)?.obj_type;
             ensure_eq!(
                 obj_type,
@@ -53,24 +70,38 @@ impl<'rcx> BitRepo<'rcx> {
                 oid,
                 obj_type
             );
+
             let commit = self.read_obj(oid)?.into_commit();
-            match &commit.parents[..] {
-                [] => bail!("revision `{}` refers to the parent of an initial commit", rev),
-                &[sole_parent] => Ok(BitRef::Direct(sole_parent)),
-                _ => todo!(
-                    "parent of multiple commits (i think git somewhat unintuitively takes the last parent? to confirm)"
+            let parentc = commit.parents.len();
+
+            if parentc == 0 {
+                bail!("revision `{}` refers to the parent of an initial commit", rev)
+            }
+
+            // TODO testing nth parent selection once we have merging
+            match commit.parents.get(n - 1) {
+                Some(&parent) => Ok(BitRef::Direct(parent)),
+                None => bail!(
+                    "attempted to access parent {} (indexed starting from 1) of commit `{}` but it only has {} parent{}",
+                    n,
+                    oid,
+                    parentc,
+                    pluralize!(parentc),
                 ),
             }
         };
+
+        let get_first_parent = |reference: BitRef| get_nth_parent(reference, 1);
 
         match *rev {
             // we want to resolve HEAD once
             Revspec::Ref(r) if r == BitRef::HEAD => self.read_head(),
             Revspec::Ref(r) => Ok(r),
             Revspec::Partial(prefix) => self.expand_prefix(prefix).map(BitRef::Direct),
-            Revspec::Parent(ref inner) => self.fully_resolve_rev_to_ref(inner).and_then(get_parent),
-            Revspec::Ancestor(ref rev, n) =>
-                (0..n).try_fold(self.fully_resolve_rev_to_ref(&rev)?, |oid, _| get_parent(oid)),
+            Revspec::Parent(ref inner, n) =>
+                self.fully_resolve_rev_to_ref(inner).and_then(|r| get_nth_parent(r, n)),
+            Revspec::Ancestor(ref rev, n) => (0..n)
+                .try_fold(self.fully_resolve_rev_to_ref(&rev)?, |oid, _| get_first_parent(oid)),
         }
     }
 }
@@ -80,8 +111,18 @@ impl Display for Revspec {
         match self {
             Revspec::Ref(r) => write!(f, "{}", r),
             Revspec::Partial(prefix) => write!(f, "{}", prefix),
-            Revspec::Parent(rev) => write!(f, "{}^", rev),
-            Revspec::Ancestor(rev, n) => write!(f, "{}~{}", rev, n),
+            Revspec::Parent(rev, n) =>
+                if *n == 1 {
+                    write!(f, "{}^", rev)
+                } else {
+                    write!(f, "{}^{}", rev, n)
+                },
+            Revspec::Ancestor(rev, n) =>
+                if *n == 1 {
+                    write!(f, "{}^", rev)
+                } else {
+                    write!(f, "{}~{}", rev, n)
+                },
         }
     }
 }
@@ -174,8 +215,12 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
         }
     }
 
-    fn expect_num(&mut self) -> BitResult<u32> {
-        Ok(u32::from_str(self.next()?)?)
+    fn expect_num(&mut self) -> BitResult<usize> {
+        Ok(usize::from_str(self.next()?)?)
+    }
+
+    fn accept_num(&mut self) -> Option<usize> {
+        self.expect_num().ok()
     }
 
     pub fn parse(mut self) -> BitResult<Revspec> {
@@ -184,9 +229,12 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
             let (c, cs) = self.src.split_at(1);
             self.src = cs;
             match c {
-                "^" => rev = Revspec::Parent(Box::new(rev)),
+                "^" => {
+                    let n = self.accept_num().unwrap_or(1);
+                    rev = Revspec::Parent(Box::new(rev), n)
+                }
                 "~" => {
-                    let n = self.expect_num()?;
+                    let n = self.accept_num().unwrap_or(1);
                     rev = Revspec::Ancestor(Box::new(rev), n);
                 }
                 _ => bail!("unexpected token `{}`, while parsing revspec", c),

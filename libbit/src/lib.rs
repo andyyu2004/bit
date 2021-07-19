@@ -44,6 +44,7 @@ extern crate anyhow;
 #[cfg(test)]
 #[macro_use]
 pub mod test_utils;
+mod merge;
 
 #[macro_use]
 extern crate log;

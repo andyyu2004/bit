@@ -302,10 +302,12 @@ pub trait BitObject<'rcx> {
     fn owner(&self) -> BitRepo<'rcx>;
     fn obj_cached(&self) -> &BitObjCached;
 
+    #[inline]
     fn obj_ty(&self) -> BitObjType {
         self.obj_cached().obj_type
     }
 
+    #[inline]
     fn oid(&self) -> Oid {
         self.obj_cached().oid
     }

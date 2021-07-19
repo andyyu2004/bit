@@ -19,6 +19,8 @@ Currently implements the following commands with a subset of the same options as
 - bit hash-object
 - bit log
 - bit ls-files
+- bit merge-base
+- bit rev-list
 - bit status
 - bit switch
 - bit write-tree

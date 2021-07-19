@@ -7,6 +7,7 @@ mod cli_commit_tree;
 mod cli_config;
 mod cli_log;
 mod cli_ls_files;
+mod cli_merge_base;
 mod cli_reflog;
 mod cli_revlist;
 mod cli_status;
@@ -42,6 +43,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use self::cli_log::BitLogCliOpts;
+use self::cli_merge_base::BitMergeBaseCliOpts;
 use self::cli_revlist::BitRevlistCliOpts;
 
 // experiment with changing structure of everything
@@ -81,6 +83,7 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
         BitSubCmd::Diff(opts) => opts.exec(repo),
         BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),
         BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
+        BitSubCmd::MergeBase(opts) => opts.exec(repo),
         BitSubCmd::Reflog(opts) => opts.exec(repo),
         BitSubCmd::Revlist(opts) => opts.exec(repo),
         BitSubCmd::Status(opts) => opts.exec(repo),
@@ -116,6 +119,7 @@ pub enum BitSubCmd {
     Init(BitInitCliOpts),
     Log(BitLogCliOpts),
     LsFiles(BitLsFilesCliOpts),
+    MergeBase(BitMergeBaseCliOpts),
     Reflog(BitReflogCliOpts),
     #[clap(name = "rev-list")]
     Revlist(BitRevlistCliOpts),

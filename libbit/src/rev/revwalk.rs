@@ -28,8 +28,21 @@ struct CommitNode<'rcx> {
     /// Used to break ties when timestamps are equal
     /// Larger index means it was inserted later, so we should order
     /// by highest timestamp first, followed by lowest index.
-    // Not sure this is actually required for correctness but haven't convinced myself either way
-    // so keeping this for safety
+    //
+    // Suppose we have the following commits each with the same timestamp. The situation will not arise naturally but since
+    // commits may be rewritten it is a possible state.
+    //
+    // A <- C
+    //  ^      \
+    //   \      E
+    //    \    /
+    //      D
+    //
+    // Suppose we are rooted at E which then inserts C and D into the queue. Then suppose D is yielded next which inserts A into the queue.
+    // Without the ordering of this index, there is nothing to prevent A from being yielded before C which is not good as we want don't want to
+    // yield any parent until all its children have been yielded.
+    //
+    // Empirically, the lack of the index does cause issues if we compare bit's rev-list output against git's on libgit2 for instance.
     index: usize,
 }
 
@@ -56,8 +69,7 @@ impl<'rcx> Deref for CommitNode<'rcx> {
 }
 
 // probably not an entirely sound thing to do
-// necessary for the ord impl below
-// might be better to newtype commit
+// but necessary for the ord impl below
 impl Eq for CommitNode<'_> {
 }
 
@@ -65,7 +77,17 @@ impl<'rcx> Ord for CommitNode<'rcx> {
     // we want this cmp to suit a maxheap
     // so we want the most recent (largest timestamp) commit to be >= and the smallest index to be >=
     fn cmp(&self, other: &Self) -> Ordering {
-        self.committer.time.cmp(&other.committer.time).then_with(|| other.index.cmp(&self.index))
+        self.committer
+            .time
+            .cmp(&other.committer.time)
+            .then_with(|| other.index.cmp(&self.index))
+            .then_with(|| bug!())
+    }
+}
+
+impl<'rcx> Commit<'rcx> {
+    pub fn revwalk(self) -> BitResult<RevWalk<'rcx>> {
+        RevWalk::walk_commit(self)
     }
 }
 
@@ -133,7 +155,12 @@ impl<'rcx> RevWalk<'rcx> {
     }
 }
 
-// return all commits reachable from the roots in reverse chronological order
+/// yields all commits reachable from the roots in reverse chronological order
+/// parents commits are guaranteed to be yielded only after *all* their children have been yielded
+// sketch proof:
+// - children have commit timestamp (non-strictly) greater than parents
+// - reachable children must be added to the queue before their parents (why?) and hence have a lower index
+// - by the ordering implementation (timestamp, index) each child will be yielded before its parents
 impl<'rcx> FallibleIterator for RevWalk<'rcx> {
     type Error = BitGenericError;
     type Item = Commit<'rcx>;

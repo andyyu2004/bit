@@ -6,7 +6,7 @@ fn test_parse_revspec_parent() -> BitResult<()> {
         let rev = rev!("HEAD^");
         assert_eq!(
             rev.parse(repo)?,
-            &Revspec::Parent(Box::new(Revspec::Ref(symbolic_ref!("HEAD"))))
+            &Revspec::Parent(Box::new(Revspec::Ref(symbolic_ref!("HEAD"))), 1)
         );
         Ok(())
     })
@@ -56,7 +56,7 @@ fn test_fully_resolve_revspec() -> BitResult<()> {
 }
 
 #[test]
-fn test_fully_resolve_revspec_parent() -> BitResult<()> {
+fn test_fully_resolve_revspec_first_parent() -> BitResult<()> {
     BitRepo::with_sample_repo_commits(|repo, commits| {
         let rev = rev!("HEAD^");
         let oid = repo.fully_resolve_rev(&rev)?;
@@ -71,6 +71,36 @@ fn test_fully_resolve_revspec_expansion_master() -> BitResult<()> {
         let master_oid = repo.fully_resolve_rev(&rev!("master"))?;
         let head_oid = repo.fully_resolve_rev(&rev!("HEAD"))?;
         assert_eq!(master_oid, head_oid);
+        Ok(())
+    })
+}
+
+#[test]
+fn test_0th_parent_is_noop() -> BitResult<()> {
+    BitRepo::with_sample_repo_commits(|repo, commits| {
+        let rev = rev!("HEAD^0");
+        let oid = repo.fully_resolve_rev(&rev)?;
+        assert_eq!(oid, *commits.last().unwrap());
+        Ok(())
+    })
+}
+
+#[test]
+fn test_0th_ancestor_is_noop() -> BitResult<()> {
+    BitRepo::with_sample_repo_commits(|repo, commits| {
+        let rev = rev!("HEAD~0");
+        let oid = repo.fully_resolve_rev(&rev)?;
+        assert_eq!(oid, *commits.last().unwrap());
+        Ok(())
+    })
+}
+
+#[test]
+fn test_ancestor_defaults_to_first_ancestor() -> BitResult<()> {
+    BitRepo::with_sample_repo_commits(|repo, _| {
+        let rev0 = rev!("HEAD^");
+        let rev1 = rev!("HEAD^1");
+        assert_eq!(repo.fully_resolve_rev(&rev0)?, repo.fully_resolve_rev(&rev1)?);
         Ok(())
     })
 }
