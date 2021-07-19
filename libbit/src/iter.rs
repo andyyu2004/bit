@@ -1,6 +1,7 @@
 mod index_tree_iter;
 mod tree_iter;
 
+pub use fallible_iterator::FallibleIterator;
 pub use index_tree_iter::IndexTreeIter;
 pub use tree_iter::*;
 
@@ -9,7 +10,7 @@ use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
 use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
-use fallible_iterator::{FallibleIterator, Peekable};
+use fallible_iterator::Peekable;
 use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
 use rustc_hash::FxHashSet;

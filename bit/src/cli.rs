@@ -5,6 +5,7 @@ mod cli_checkout;
 mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
+mod cli_log;
 mod cli_ls_files;
 mod cli_reflog;
 mod cli_revlist;
@@ -40,6 +41,7 @@ use libbit::rev::LazyRevspec;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use self::cli_log::BitLogCliOpts;
 use self::cli_revlist::BitRevlistCliOpts;
 
 // experiment with changing structure of everything
@@ -59,7 +61,6 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
     }
 
     BitRepo::find(root_path, |repo| match subcmd {
-        BitSubCmd::Log(..) => todo!(),
         BitSubCmd::Init(..) => unreachable!(),
         // TODO the real behaviour is more complex than this
         BitSubCmd::Add(opts) =>
@@ -70,24 +71,25 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
             } else {
                 repo.bit_add(&opts.pathspecs)
             },
-        BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),
-        BitSubCmd::WriteTree => repo.bit_write_tree(),
-        BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
-        BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
-        BitSubCmd::Config(opts) => opts.execute(repo),
-        BitSubCmd::UpdateIndex(opts) => {
-            dbg!(opts);
-            todo!()
-        }
+        BitSubCmd::Log(opts) => opts.exec(repo),
         BitSubCmd::Branch(opts) => opts.exec(repo),
+        BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
+        BitSubCmd::Checkout(opts) => opts.exec(repo),
+        BitSubCmd::Config(opts) => opts.execute(repo),
         BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
         BitSubCmd::Commit(opts) => opts.exec(repo),
-        BitSubCmd::Checkout(opts) => opts.exec(repo),
         BitSubCmd::Diff(opts) => opts.exec(repo),
+        BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),
+        BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
         BitSubCmd::Reflog(opts) => opts.exec(repo),
         BitSubCmd::Revlist(opts) => opts.exec(repo),
         BitSubCmd::Status(opts) => opts.exec(repo),
         BitSubCmd::Switch(opts) => opts.exec(repo),
+        BitSubCmd::UpdateIndex(opts) => {
+            dbg!(opts);
+            todo!()
+        }
+        BitSubCmd::WriteTree => repo.bit_write_tree(),
     })
 }
 
@@ -134,12 +136,6 @@ impl Into<BitInitOpts> for BitInitCliOpts {
         let Self { path } = self;
         BitInitOpts { path }
     }
-}
-
-#[derive(Clap, Debug)]
-pub struct BitLogCliOpts {
-    #[clap(default_value = ".")]
-    pub commit: PathBuf,
 }
 
 // bit hash-object [-w] [-t TYPE] PATH

@@ -60,12 +60,12 @@ pub type CommitParents = SmallVec<[Oid; 2]>;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct MutableCommit {
-    pub(crate) tree: Oid,
-    pub(crate) author: BitSignature,
-    pub(crate) committer: BitSignature,
-    pub(crate) message: CommitMessage,
-    pub(crate) parents: CommitParents,
-    pub(crate) gpgsig: Option<String>,
+    pub tree: Oid,
+    pub author: BitSignature,
+    pub committer: BitSignature,
+    pub message: CommitMessage,
+    pub parents: CommitParents,
+    pub gpgsig: Option<String>,
 }
 
 #[derive(PartialEq, Clone, Debug)]
