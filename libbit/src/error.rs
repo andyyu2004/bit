@@ -38,8 +38,8 @@ impl BitErrorExt for BitGenericError {
 
     fn into_bit_error(self) -> BitResult<BitError> {
         match self.downcast::<BitError>() {
-            Ok(err) => Ok(err),
-            Err(err) => Err(err),
+            Ok(bit_error) => Ok(bit_error),
+            Err(cast_failed_err) => Err(cast_failed_err),
         }
     }
 

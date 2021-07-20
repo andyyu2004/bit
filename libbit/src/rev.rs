@@ -131,7 +131,7 @@ impl Display for Revspec {
 // problem is revspec requires repo to be properly evaluated (as it requires some context to be parsed properly)
 // but we want FromStr to be implemented so clap can use it
 // this wrapper can lazily evaluated to get a parsed revspec (via `parse`)
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct LazyRevspec {
     src: String,
     parsed: OnceCell<Revspec>,
@@ -199,20 +199,26 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
         // rev's are ambiguous
         // how can we tell if something is a partial oid or a valid reference (e.g. nothing prevents "abcd" from being both a valid prefix and valid branch name)
         // (if a branch happens to have the same name as a valid prefix then bad luck I guess? but seems quite unlikely in practice)
-        if let Ok(r) = BitRef::from_str(s).and_then(|r| {
-            // if the ref is not "fully resolvable" then
-            repo.fully_resolve_ref(r)?;
+        let reference = if let Ok(r) = BitRef::from_str(s).and_then(|r| {
+            // if the ref is not "partially resolvable" then
             // we don't return the fully resolved ref as we want the original for better error messages
-            // we are just checking if it is resolvable
-            Ok(r)
+            // we are just checking if it is resolvable one level
+            if repo.partially_resolve_ref(r)? != r {
+                Ok(r)
+            } else {
+                bail!("ref was not partially resolvable")
+            }
         }) {
-            Ok(Revspec::Ref(r))
+            r
+        } else if let Ok(oid) = Oid::from_str(s).and_then(|oid| repo.fully_resolve_ref(oid)) {
+            BitRef::Direct(oid)
         } else {
             PartialOid::from_str(s)
                 .and_then(|prefix| repo.expand_prefix(prefix))
-                .map(BitRef::from)
-                .map(Revspec::Ref)
-        }
+                .map(BitRef::from)?
+        };
+
+        Ok(Revspec::Ref(reference))
     }
 
     fn expect_num(&mut self) -> BitResult<usize> {

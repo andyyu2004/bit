@@ -1,3 +1,7 @@
+use owo_colors::OwoColorize;
+
+use crate::error::{BitError, BitErrorExt};
+
 use super::*;
 
 #[test]
@@ -34,13 +38,23 @@ fn test_parse_revspec_with_symref_ancestor() -> BitResult<()> {
 }
 
 #[test]
-fn test_parse_revspec_with_symref() -> BitResult<()> {
-    BitRepo::with_empty_repo(|repo| {
+fn test_parse_revspec_with_non_existent_oid() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
         let rev = rev!("e3eaee01f47f98216f4160658179420ff5e30f50");
         assert_eq!(
-            rev.parse(repo)?,
-            &Revspec::Ref(BitRef::Direct("e3eaee01f47f98216f4160658179420ff5e30f50".into()))
+            rev.parse(repo).unwrap_err().into_bit_error()?,
+            BitError::ObjectNotFound("e3eaee01f47f98216f4160658179420ff5e30f50".into())
         );
+        Ok(())
+    })
+}
+
+#[test]
+fn test_parse_revspec_with_oid() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let empty_oid = Oid::EMPTY_BLOB.to_string();
+        let rev = rev!(&empty_oid);
+        assert_eq!(rev.parse(repo)?, &Revspec::Ref(BitRef::Direct(Oid::EMPTY_BLOB)));
         Ok(())
     })
 }

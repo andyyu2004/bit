@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::obj::{Commit, Oid, Tree};
+use crate::obj::{BitObject, Commit, Oid, Tree};
 use crate::repo::BitRepo;
 
 // experimental
@@ -24,6 +24,7 @@ impl<'rcx> Peel<'rcx> for Commit<'rcx> {
     type Peeled = Tree<'rcx>;
 
     fn peel(&self, repo: BitRepo<'rcx>) -> BitResult<Self::Peeled> {
-        repo.read_obj(self.tree)?.into_tree()
+        debug_assert!(repo == self.owner());
+        self.owner().read_obj(self.tree)?.into_tree()
     }
 }

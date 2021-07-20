@@ -1,7 +1,7 @@
 use super::BitReflogEntry;
 use crate::error::BitErrorExt;
 use crate::error::BitResult;
-use crate::refs::{is_valid_name, BitRef, BitRefDbBackend, BitReflog};
+use crate::refs::{is_valid_name, BitRef, BitRefDbBackend, BitReflog, SymbolicRef};
 use crate::repo::{BitRepo, Repo};
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
@@ -45,7 +45,7 @@ fn test_resolve_head_symref() -> BitResult<()> {
 #[test]
 fn test_create_branch_in_fresh() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        let err = repo.bit_create_branch("new-branch").unwrap_err();
+        let err = repo.bit_create_branch("new-branch", &rev!("HEAD")).unwrap_err();
         assert_eq!(err.into_nonexistent_symref_err()?, symbolic!("refs/heads/master"));
         Ok(())
     })
@@ -54,7 +54,7 @@ fn test_create_branch_in_fresh() -> BitResult<()> {
 #[test]
 fn test_create_branch() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        repo.bit_create_branch("new-branch")?;
+        repo.bit_create_branch("new-branch", &rev!("HEAD"))?;
         Ok(())
     })
 }

@@ -121,7 +121,12 @@ impl FromStr for PartialOid {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ensure!(s.len() < 40, "creating partial hash with an invalid hex string (too long)");
+        // a full oid is a valid partial oid
+        ensure!(s.len() != 40, "attempted to create partial oid from full oid");
+        ensure!(
+            s.len() < 40,
+            "attempted to create partial oid with an invalid hex string (too long)"
+        );
         ensure!(s.len() >= 4, "bit hash prefix must be at least 4 hex characters");
         ensure!(
             s.chars().all(|c| c.is_ascii_hexdigit()),
