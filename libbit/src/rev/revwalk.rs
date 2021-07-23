@@ -24,10 +24,15 @@ pub struct RevWalk<'rcx> {
 #[derive(Debug, Clone, PartialEq)]
 struct CommitNode<'rcx> {
     commit: Commit<'rcx>,
-    /// The index which it was inserted into the queue.
-    /// Used to break ties when timestamps are equal
-    /// Larger index means it was inserted later, so we should order
-    /// by highest timestamp first, followed by lowest index.
+    // *NOTE* We are reasoning under the assumption that committer timestamps are *non-decreasing*
+    // in the absolute worst case all timestamps will be equal but a child can never be committed before parent
+    // which is obviously true but maybe wrong systems times can cause issues. In bit, the committin has a check against this,
+    // but unsure if git itself enforces this.
+    //
+    // The index which it was inserted into the queue.
+    // Used to break ties when timestamps are equal
+    // Larger index means it was inserted later, so we should order
+    // by highest timestamp first, followed by lowest index.
     //
     // Suppose we have the following commits each with the same timestamp. The situation will not arise naturally but since
     // commits may be rewritten it is a possible state.
@@ -39,10 +44,25 @@ struct CommitNode<'rcx> {
     //      D
     //
     // Suppose we are rooted at E which then inserts C and D into the queue. Then suppose D is yielded next which inserts A into the queue.
-    // Without the ordering of this index, there is nothing to prevent A from being yielded before C which is not good as we want don't want to
-    // yield any parent until all its children have been yielded.
+    // Without the ordering of this index, there is nothing to prevent A from being yielded before C which is not ideal.
     //
-    // Empirically, the lack of the index does cause issues if we compare bit's rev-list output against git's on libgit2 for instance.
+    //  However, even with an index we don't guarantee a topological ordering. Consider the following DAG assuming all nodes have same timestamp.
+    //
+    //        X - Y
+    //      /
+    //    P
+    //      \
+    //        C
+    // Wuppose we are rooted at [C, Y] (ordering of roots is significant). Firstly we would dequeue C and then enqueue P. queue is currently [Y, P].
+    // Then we would dequeue Y and then enqueue X. But then Y would be yielded before X which is not in topological order.
+    //
+    // Empirically, the lack of the index does causes major differences if we compare bit's rev-list output against git's on libgit2 for instance.
+    // With the index it is very close but not identical. The only differences were cases such as the following where B and C have the same timestamp.
+    // GIT   BIT
+    // A     A
+    // B     C
+    // C     B
+    // D     D
     index: usize,
 }
 
@@ -157,10 +177,6 @@ impl<'rcx> RevWalk<'rcx> {
 
 /// yields all commits reachable from the roots in reverse chronological order
 /// parents commits are guaranteed to be yielded only after *all* their children have been yielded
-// sketch proof:
-// - children have commit timestamp (non-strictly) greater than parents
-// - reachable children must be added to the queue before their parents (why?) and hence have a lower index
-// - by the ordering implementation (timestamp, index) each child will be yielded before its parents
 impl<'rcx> FallibleIterator for RevWalk<'rcx> {
     type Error = BitGenericError;
     type Item = Commit<'rcx>;
