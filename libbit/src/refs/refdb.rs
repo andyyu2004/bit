@@ -54,7 +54,8 @@ impl<'rcx> BitRefDb<'rcx> {
 
 // unfortunately, doesn't seem like its easy to support a resolve operation on refdb as it will require reading
 // objects for validation but both refdb and odb are owned by the repo so not sure if this is feasible
-pub trait BitRefDbBackend {
+pub trait BitRefDbBackend<'rcx> {
+    fn repo(&self) -> BitRepo<'rcx>;
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()>;
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef>;
     // may implicitly create the ref
@@ -102,7 +103,7 @@ pub trait BitRefDbBackend {
     }
 }
 
-impl<'rcx> BitRefDbBackend for BitRefDb<'rcx> {
+impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
         if self.exists(sym)? {
             // todo improve error message by only leaving the branch name in a reliable manner somehow
@@ -160,7 +161,10 @@ impl<'rcx> BitRefDbBackend for BitRefDb<'rcx> {
 
     fn partially_resolve(&self, reference: BitRef) -> BitResult<BitRef> {
         match reference {
-            BitRef::Direct(..) => Ok(reference),
+            BitRef::Direct(oid) => {
+                self.repo.ensure_obj_exists(oid)?;
+                Ok(reference)
+            }
             BitRef::Symbolic(sym) => {
                 let repo = self.repo;
                 let expanded_sym = match self.expand_symref(sym) {
@@ -191,6 +195,10 @@ impl<'rcx> BitRefDbBackend for BitRefDb<'rcx> {
                 Ok(r)
             }
         }
+    }
+
+    fn repo(&self) -> BitRepo<'rcx> {
+        self.repo
     }
 }
 

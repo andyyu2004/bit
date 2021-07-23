@@ -1,4 +1,4 @@
-use crate::error::{BitGenericError, BitResult};
+use crate::error::{BitError, BitGenericError, BitResult};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
 use crate::obj::*;
@@ -49,7 +49,7 @@ pub struct RepoCtxt<'rcx> {
 
 pub trait Repo<'rcx> {
     type Odb: BitObjDbBackend;
-    type RefDb: BitRefDbBackend;
+    type RefDb: BitRefDbBackend<'rcx>;
 
     fn odb(&self) -> BitResult<&Self::Odb>;
     fn refdb(&self) -> BitResult<&Self::RefDb>;
@@ -349,6 +349,15 @@ impl<'rcx> BitRepo<'rcx> {
         self.odb()?.expand_prefix(prefix)
     }
 
+    pub fn ensure_obj_exists(self, id: impl Into<BitId>) -> BitResult<()> {
+        let id = id.into();
+        ensure!(self.odb()?.exists(id)?, BitError::ObjectNotFound(id));
+        Ok(())
+    }
+
+    #[must_use = "this call has no side effects (you may want to use `ensure_obj_exists` instead)"]
+    // note, the above annotation doesn't really do anything as "question marking" the return value counts as a use so...
+    // but nevertheless, its non-useless docs as I've made the mistake already
     pub fn obj_exists(self, id: impl Into<BitId>) -> BitResult<bool> {
         self.odb()?.exists(id.into())
     }

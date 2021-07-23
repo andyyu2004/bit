@@ -199,23 +199,18 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
         // rev's are ambiguous
         // how can we tell if something is a partial oid or a valid reference (e.g. nothing prevents "abcd" from being both a valid prefix and valid branch name)
         // (if a branch happens to have the same name as a valid prefix then bad luck I guess? but seems quite unlikely in practice)
-        let reference = if let Ok(r) = BitRef::from_str(s).and_then(|r| {
-            // if the ref is not "partially resolvable" then
-            // we don't return the fully resolved ref as we want the original for better error messages
-            // we are just checking if it is resolvable one level
-            if repo.partially_resolve_ref(r)? != r {
-                Ok(r)
-            } else {
-                bail!("ref was not partially resolvable")
-            }
-        }) {
+        let reference = if let Ok(r) =
+            PartialOid::from_str(s).and_then(|prefix| repo.expand_prefix(prefix)).map(BitRef::from)
+        {
             r
-        } else if let Ok(oid) = Oid::from_str(s).and_then(|oid| repo.fully_resolve_ref(oid)) {
-            BitRef::Direct(oid)
         } else {
-            PartialOid::from_str(s)
-                .and_then(|prefix| repo.expand_prefix(prefix))
-                .map(BitRef::from)?
+            BitRef::from_str(s).and_then(|r| {
+                // if the ref is not "partially resolvable" then
+                // we don't return the fully resolved ref as we want the original for better error messages
+                // we are just checking if it is resolvable one level
+                repo.partially_resolve_ref(r)?;
+                Ok(r)
+            })?
         };
 
         Ok(Revspec::Ref(reference))
