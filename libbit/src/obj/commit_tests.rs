@@ -1,5 +1,5 @@
 use super::*;
-use crate::refs::{BitRef, SymbolicRef};
+use crate::refs::{SymbolicRef, ValidatedRef};
 use crate::repo::BitRepo;
 use crate::test_utils::*;
 use quickcheck::{Arbitrary, Gen};
@@ -72,7 +72,7 @@ fn test_new_commit_moves_branch_not_head() -> BitResult<()> {
         // check HEAD has not moved
         assert_eq!(
             repo.partially_resolve_ref(SymbolicRef::HEAD)?,
-            BitRef::Symbolic(SymbolicRef::branch("master"))
+            ValidatedRef::Symbolic(SymbolicRef::branch("master"))
         );
         Ok(())
     })

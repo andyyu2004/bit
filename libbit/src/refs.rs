@@ -31,15 +31,24 @@ pub fn is_valid_name(s: &str) -> bool {
     !INVALID_REF_REGEX.is_match(s)
 }
 
+/// non-validated parsed representation of a reference
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum BitRef {
     /// refers directly to an object
     Direct(Oid),
     /// contains the path of another reference
-    /// if the ref is `ref: refs/remote/origin/master`
-    /// then the `BitPath` contains `refs/remote/origin/master`
+    /// if the ref is `ref: refs/remotes/origin/master`
+    /// then the `BitPath` contains `refs/remotes/origin/master`
     /// possibly bitpath is not the best representation but its ok for now
     Symbolic(SymbolicRef),
+}
+
+/// validated reference
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub enum ValidatedRef {
+    Direct(Oid),
+    Symbolic(SymbolicRef),
+    NonExistentSymbolic(SymbolicRef),
 }
 
 impl From<Oid> for BitRef {
@@ -92,7 +101,6 @@ impl FromStr for BitRef {
         if let Ok(oid) = Oid::from_str(s) {
             return Ok(Self::Direct(oid));
         }
-        // TODO validation of indirect?
         SymbolicRef::from_str(s).map(Self::Symbolic)
     }
 }

@@ -583,6 +583,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indent_write"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cfe9645a18782869361d9c8732246be7b410ad4e919d3609ebabdac00ba12c3"
+
+[[package]]
 name = "index_vec"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -658,6 +664,7 @@ dependencies = [
  "git-config",
  "hex",
  "ignore",
+ "indent_write",
  "index_vec",
  "indexmap",
  "itertools 0.10.0",

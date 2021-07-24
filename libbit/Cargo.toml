@@ -41,6 +41,7 @@ lazy_static = "1.4.0"
 tempfile = "3"
 owo-colors = "2.0.0"
 maplit = "1"
+indent_write = "2"
 rayon = "1.5"
 indexmap = "1.6.2"
 fallible-iterator = { git = "https://github.com/andyyu2004/rust-fallible-iterator" }

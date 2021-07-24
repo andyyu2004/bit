@@ -55,7 +55,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     fn fully_resolve_rev_to_ref(&self, rev: &Revspec) -> BitResult<BitRef> {
-        let get_nth_parent = |reference: BitRef, n: usize| -> BitResult<BitRef> {
+        let get_nth_parent = |reference, n| -> BitResult<BitRef> {
             let oid = self.fully_resolve_ref(reference)?;
 
             if n == 0 {
@@ -91,7 +91,7 @@ impl<'rcx> BitRepo<'rcx> {
             }
         };
 
-        let get_first_parent = |reference: BitRef| get_nth_parent(reference, 1);
+        let get_first_parent = |reference| get_nth_parent(reference, 1);
 
         match *rev {
             // we want to resolve HEAD once

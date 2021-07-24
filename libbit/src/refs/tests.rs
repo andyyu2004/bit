@@ -1,7 +1,7 @@
-use super::BitReflogEntry;
+use super::{BitReflogEntry, ValidatedRef};
 use crate::error::BitErrorExt;
 use crate::error::BitResult;
-use crate::refs::{is_valid_name, BitRef, BitRefDbBackend, BitReflog, SymbolicRef};
+use crate::refs::{is_valid_name, BitRef, BitRefDbBackend, BitReflog};
 use crate::repo::{BitRepo, Repo};
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
@@ -15,7 +15,7 @@ fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
         // resolving nonexistent symbolic ref should just return itself (minus the prefix)
         assert_eq!(
             repo.resolve_ref(symbolic_ref!("ref: refs/heads/master"))?,
-            symbolic_ref!("refs/heads/master"),
+            ValidatedRef::NonExistentSymbolic(symbolic!("refs/heads/master")),
         );
         Ok(())
     })
@@ -25,7 +25,10 @@ fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
 fn test_resolve_head_symref_in_fresh_repo() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         // it should only resolve until `refs/heads/master` as the branch file doesn't exist yet
-        assert_eq!(repo.resolve_ref(BitRef::HEAD)?, symbolic_ref!("refs/heads/master"));
+        assert_eq!(
+            repo.resolve_ref(BitRef::HEAD)?,
+            ValidatedRef::NonExistentSymbolic(symbolic!("refs/heads/master"))
+        );
         Ok(())
     })
 }
@@ -36,7 +39,7 @@ fn test_resolve_head_symref() -> BitResult<()> {
         // HEAD -> `refs/heads/master` should exist on a non empty repo, then it should resolve to the oid contained within master
         assert_eq!(
             repo.resolve_ref(BitRef::HEAD)?,
-            BitRef::Direct("902e59e7eadc1c44586354c9ecb3098fb316c2c4".into())
+            ValidatedRef::Direct("902e59e7eadc1c44586354c9ecb3098fb316c2c4".into())
         );
         Ok(())
     })

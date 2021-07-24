@@ -1,6 +1,7 @@
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
+use libbit::format::{Indentable, OwoColorize};
 use libbit::iter::FallibleIterator;
 use libbit::obj::BitObject;
 use libbit::repo::BitRepo;
@@ -21,11 +22,11 @@ impl Cmd for BitLogCliOpts {
         let mut pager = Command::new(&repo.config().pager()?).stdin(Stdio::piped()).spawn()?;
         let stdin = pager.stdin.as_mut().unwrap();
         revwalk.for_each(|commit| {
-            writeln!(stdin, "commit {}", commit.oid())?;
+            writeln!(stdin, "{} {}", "commit".yellow(), commit.oid().yellow())?;
             writeln!(stdin, "Author: {} <{}>", commit.author.name, commit.author.email)?;
             writeln!(stdin, "Date: {}", commit.author.time)?;
             writeln!(stdin)?;
-            writeln!(stdin, "   {}", commit.message)?;
+            writeln!(stdin, "{}", (&commit.message).indented("   "))?;
             writeln!(stdin)?;
             Ok(())
         })?;

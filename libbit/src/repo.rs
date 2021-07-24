@@ -4,7 +4,7 @@ use crate::io::ReadExt;
 use crate::obj::*;
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
-use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, SymbolicRef};
+use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, SymbolicRef, ValidatedRef};
 use crate::rev::LazyRevspec;
 use crate::signature::BitSignature;
 use crate::{hash, tls};
@@ -160,16 +160,16 @@ impl<'rcx> BitRepo<'rcx> {
     // which is not quite right
     pub fn try_fully_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<Option<Oid>> {
         match self.resolve_ref(reference)? {
-            BitRef::Direct(oid) => Ok(Some(oid)),
-            BitRef::Symbolic(_) => Ok(None),
+            ValidatedRef::Direct(oid) => Ok(Some(oid)),
+            _ => Ok(None),
         }
     }
 
-    pub fn partially_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+    pub fn partially_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<ValidatedRef> {
         self.refdb()?.partially_resolve(reference.into())
     }
 
-    pub fn resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+    pub fn resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<ValidatedRef> {
         self.refdb()?.resolve(reference.into())
     }
 
@@ -293,14 +293,14 @@ impl<'rcx> BitRepo<'rcx> {
     /// returns Oid::Unknown if there is no HEAD commit
     pub fn head_tree(self) -> BitResult<Oid> {
         let oid = match self.resolve_head()? {
-            BitRef::Direct(oid) => oid,
+            ValidatedRef::Direct(oid) => oid,
             _ => return Ok(Oid::UNKNOWN),
         };
         Ok(self.read_obj(oid)?.into_commit().tree)
     }
 
     /// returns the resolved hash of the HEAD symref
-    pub fn resolve_head(self) -> BitResult<BitRef> {
+    pub fn resolve_head(self) -> BitResult<ValidatedRef> {
         let head = self.read_head()?;
         self.resolve_ref(head)
     }

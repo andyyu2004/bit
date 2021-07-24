@@ -1,4 +1,4 @@
-use super::{BitRef, BitReflog, SymbolicRef};
+use super::{BitRef, BitReflog, SymbolicRef, ValidatedRef};
 use crate::error::{BitError, BitResult};
 use crate::lockfile::{Filelock, Lockfile, LockfileFlags};
 use crate::obj::Oid;
@@ -66,26 +66,26 @@ pub trait BitRefDbBackend<'rcx> {
 
     /// partially resolve means resolves the reference one layer
     /// e.g. HEAD -> refs/heads/master
-    fn partially_resolve(&self, reference: BitRef) -> BitResult<BitRef>;
+    fn partially_resolve(&self, reference: BitRef) -> BitResult<ValidatedRef>;
 
     /// resolves the reference as much as possible.
     /// if the symref points to a path that doesn't exist, then the value of the symref itself is returned.
     /// i.e. if `HEAD` -> `refs/heads/master` which doesn't yet exist, then `refs/heads/master` will be
     /// returned iff a symbolic ref points at a non-existing branch
-    fn resolve(&self, reference: BitRef) -> BitResult<BitRef> {
-        match self.partially_resolve(reference)? {
-            BitRef::Direct(oid) => Ok(BitRef::Direct(oid)),
-            // avoid infinite loops as partially resolve may return the reference unchanged
-            r @ BitRef::Symbolic(..) if r == reference => Ok(reference),
-            BitRef::Symbolic(sym) => self.resolve(BitRef::Symbolic(sym)),
+    fn resolve(&self, reference: BitRef) -> BitResult<ValidatedRef> {
+        let partial = self.partially_resolve(reference)?;
+        match partial {
+            ValidatedRef::Direct(..) | ValidatedRef::NonExistentSymbolic(..) => Ok(partial),
+            ValidatedRef::Symbolic(sym) => self.resolve(BitRef::Symbolic(sym)),
         }
     }
 
     /// resolves a reference to an oid
     fn fully_resolve(&self, reference: BitRef) -> BitResult<Oid> {
         match self.resolve(reference)? {
-            BitRef::Direct(oid) => Ok(oid),
-            BitRef::Symbolic(sym) => bail!(BitError::NonExistentSymRef(sym)),
+            ValidatedRef::Direct(oid) => Ok(oid),
+            ValidatedRef::NonExistentSymbolic(sym) => bail!(BitError::NonExistentSymRef(sym)),
+            ValidatedRef::Symbolic(sym) => unreachable!(),
         }
     }
 
@@ -115,9 +115,8 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
 
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
         Lockfile::with_readonly(self.join_ref(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
-            let head_file =
-                lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
-            BitRef::deserialize_unbuffered(head_file)
+            let file = lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
+            BitRef::deserialize_unbuffered(file)
         })
     }
 
@@ -159,17 +158,17 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
         Filelock::lock(path)
     }
 
-    fn partially_resolve(&self, reference: BitRef) -> BitResult<BitRef> {
+    fn partially_resolve(&self, reference: BitRef) -> BitResult<ValidatedRef> {
         match reference {
             BitRef::Direct(oid) => {
                 self.repo.ensure_obj_exists(oid)?;
-                Ok(reference)
+                Ok(ValidatedRef::Direct(oid))
             }
             BitRef::Symbolic(sym) => {
                 let repo = self.repo;
                 let expanded_sym = match self.expand_symref(sym) {
                     Ok(expanded) => expanded,
-                    Err(..) => return Ok(reference),
+                    Err(..) => return Ok(ValidatedRef::NonExistentSymbolic(sym)),
                 };
                 let ref_path = self.join_ref(expanded_sym.path);
 
@@ -180,19 +179,26 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
                     BitRef::from_str(contents.trim_end())
                 })?;
 
-                if let BitRef::Direct(oid) = r {
-                    ensure!(
-                        repo.obj_exists(oid)?,
-                        "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
-                        ref_path,
-                        oid,
-                        sym
-                    );
-                }
+                let validated = match self.read(expanded_sym)? {
+                    BitRef::Direct(oid) => {
+                        ensure!(
+                            repo.obj_exists(oid)?,
+                            "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
+                            ref_path,
+                            oid,
+                            sym
+                        );
+                        ValidatedRef::Direct(oid)
+                    }
+                    BitRef::Symbolic(sym) => match self.expand_symref(sym) {
+                        Ok(..) => ValidatedRef::Symbolic(sym),
+                        Err(..) => ValidatedRef::NonExistentSymbolic(sym),
+                    },
+                };
 
-                debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, r);
+                debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, validated);
 
-                Ok(r)
+                Ok(validated)
             }
         }
     }

@@ -222,8 +222,6 @@ impl BitObjDbBackend for BitLooseObjDb {
 }
 
 struct BitPackedObjDb {
-    /// path to .git/objects
-    objects_path: BitPath,
     /// [(packfile, idxfile)]
     packs: RefCell<SmallVec<[Pack; 1]>>,
 }
@@ -234,7 +232,7 @@ impl BitPackedObjDb {
         let packs = Default::default();
 
         if !pack_dir.exists() {
-            return Ok(Self { objects_path, packs });
+            return Ok(Self { packs });
         }
 
         for entry in std::fs::read_dir(pack_dir)? {
@@ -249,7 +247,7 @@ impl BitPackedObjDb {
             packs.borrow_mut().push(Pack::new(pack, idx)?);
         }
 
-        Ok(Self { objects_path, packs })
+        Ok(Self { packs })
     }
 
     fn read_raw_pack_obj(&self, oid: Oid) -> BitResult<BitPackObjRaw> {

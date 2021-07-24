@@ -60,6 +60,7 @@ pub mod cmd;
 pub mod config;
 pub mod diff;
 pub mod error;
+pub mod format;
 pub mod hash;
 pub mod index;
 pub mod iter;
