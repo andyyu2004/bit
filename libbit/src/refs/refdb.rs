@@ -6,6 +6,7 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
+use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
@@ -33,23 +34,6 @@ impl<'rcx> BitRefDb<'rcx> {
             BitRef::Symbolic(sym) => self.expand_symref(sym).map(BitRef::Symbolic),
         }
     }
-
-    // tries to expand the symbolic reference
-    // i.e. master -> refs/heads/master
-    fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef> {
-        const PREFIXES: &[BitPath] = &[BitPath::EMPTY, BitPath::REFSHEADS, BitPath::REFSTAGS];
-        // we only try to do expansion on single component paths (which all valid branches should be)
-        let prefixes =
-            if sym.path.as_path().components().count() == 1 { PREFIXES } else { &[BitPath::EMPTY] };
-        for prefix in prefixes {
-            let path = prefix.join(sym.path);
-            if self.join_ref(path).exists() {
-                return Ok(SymbolicRef::new(path));
-            }
-        }
-
-        bail!("failed to expand reference. no valid branch or tag found with name `{}`", sym)
-    }
 }
 
 // unfortunately, doesn't seem like its easy to support a resolve operation on refdb as it will require reading
@@ -63,10 +47,44 @@ pub trait BitRefDbBackend<'rcx> {
     fn delete(&self, sym: SymbolicRef) -> BitResult<()>;
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool>;
     fn read_reflog(&self, sym: SymbolicRef) -> BitResult<Filelock<BitReflog>>;
+    fn ls_refs(&self) -> BitResult<HashMap<SymbolicRef, BitRef>>;
+    // tries to expand the symbolic reference
+    // i.e. master -> refs/heads/master
+    fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef>;
+
+    fn validate(&self, reference: BitRef) -> BitResult<ValidatedRef> {
+        let validated = match reference {
+            BitRef::Direct(oid) => {
+                self.repo().ensure_obj_exists(oid)?;
+                ValidatedRef::Direct(oid)
+            }
+            BitRef::Symbolic(sym) => match self.expand_symref(sym) {
+                Ok(..) => ValidatedRef::Symbolic(sym),
+                Err(..) => ValidatedRef::NonExistentSymbolic(sym),
+            },
+        };
+        Ok(validated)
+    }
 
     /// partially resolve means resolves the reference one layer
     /// e.g. HEAD -> refs/heads/master
-    fn partially_resolve(&self, reference: BitRef) -> BitResult<ValidatedRef>;
+    fn partially_resolve(&self, reference: BitRef) -> BitResult<ValidatedRef> {
+        match reference {
+            BitRef::Direct(oid) => {
+                self.repo().ensure_obj_exists(oid)?;
+                Ok(ValidatedRef::Direct(oid))
+            }
+            BitRef::Symbolic(sym) => {
+                let expanded_sym = match self.expand_symref(sym) {
+                    Ok(expanded) => expanded,
+                    Err(..) => return Ok(ValidatedRef::NonExistentSymbolic(sym)),
+                };
+                let validated = self.validate(self.read(expanded_sym)?)?;
+                debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, validated);
+                Ok(validated)
+            }
+        }
+    }
 
     /// resolves the reference as much as possible.
     /// if the symref points to a path that doesn't exist, then the value of the symref itself is returned.
@@ -85,7 +103,7 @@ pub trait BitRefDbBackend<'rcx> {
         match self.resolve(reference)? {
             ValidatedRef::Direct(oid) => Ok(oid),
             ValidatedRef::NonExistentSymbolic(sym) => bail!(BitError::NonExistentSymRef(sym)),
-            ValidatedRef::Symbolic(sym) => unreachable!(),
+            ValidatedRef::Symbolic(..) => unreachable!("resolve should never return this variant"),
         }
     }
 
@@ -104,6 +122,11 @@ pub trait BitRefDbBackend<'rcx> {
 }
 
 impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
+    #[inline]
+    fn repo(&self) -> BitRepo<'rcx> {
+        self.repo
+    }
+
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
         if self.exists(sym)? {
             // todo improve error message by only leaving the branch name in a reliable manner somehow
@@ -111,6 +134,24 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
             bail!("a reference `{}` already exists", sym);
         }
         self.update(sym, from, RefUpdateCause::NewBranch { from })
+    }
+
+    // tries to expand the symbolic reference
+    // i.e. master -> refs/heads/master
+    fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef> {
+        const PREFIXES: &[BitPath] = &[BitPath::EMPTY, BitPath::REFSHEADS, BitPath::REFSTAGS];
+        // we only try to do expansion on single component paths (which all valid branches should be)
+        let prefixes =
+            if sym.path.as_path().components().count() == 1 { PREFIXES } else { &[BitPath::EMPTY] };
+
+        for prefix in prefixes {
+            let path = prefix.join(sym.path);
+            if self.join_ref(path).exists() {
+                return Ok(SymbolicRef::new(path));
+            }
+        }
+
+        bail!("failed to expand reference. no valid branch or tag found with name `{}`", sym)
     }
 
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
@@ -158,53 +199,8 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
         Filelock::lock(path)
     }
 
-    fn partially_resolve(&self, reference: BitRef) -> BitResult<ValidatedRef> {
-        match reference {
-            BitRef::Direct(oid) => {
-                self.repo.ensure_obj_exists(oid)?;
-                Ok(ValidatedRef::Direct(oid))
-            }
-            BitRef::Symbolic(sym) => {
-                let repo = self.repo;
-                let expanded_sym = match self.expand_symref(sym) {
-                    Ok(expanded) => expanded,
-                    Err(..) => return Ok(ValidatedRef::NonExistentSymbolic(sym)),
-                };
-                let ref_path = self.join_ref(expanded_sym.path);
-
-                let r = Lockfile::with_readonly(ref_path, LockfileFlags::SET_READONLY, |_| {
-                    let contents = std::fs::read_to_string(ref_path)?;
-                    // symbolic references can be recursive
-                    // i.e. HEAD -> refs/heads/master -> <oid>
-                    BitRef::from_str(contents.trim_end())
-                })?;
-
-                let validated = match self.read(expanded_sym)? {
-                    BitRef::Direct(oid) => {
-                        ensure!(
-                            repo.obj_exists(oid)?,
-                            "invalid reference: reference at `{}` which contains invalid object hash `{}` (from symbolic reference `{}`)",
-                            ref_path,
-                            oid,
-                            sym
-                        );
-                        ValidatedRef::Direct(oid)
-                    }
-                    BitRef::Symbolic(sym) => match self.expand_symref(sym) {
-                        Ok(..) => ValidatedRef::Symbolic(sym),
-                        Err(..) => ValidatedRef::NonExistentSymbolic(sym),
-                    },
-                };
-
-                debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, validated);
-
-                Ok(validated)
-            }
-        }
-    }
-
-    fn repo(&self) -> BitRepo<'rcx> {
-        self.repo
+    fn ls_refs(&self) -> BitResult<HashMap<SymbolicRef, BitRef>> {
+        todo!()
     }
 }
 

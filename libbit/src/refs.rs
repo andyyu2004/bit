@@ -105,7 +105,7 @@ impl FromStr for BitRef {
     }
 }
 
-// symbolic ref is of the form `ref: <ref>`
+// symbolic ref in a file is of the form `ref: <ref>`
 const SYMBOLIC_REF_PREFIX: &str = "ref: ";
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
