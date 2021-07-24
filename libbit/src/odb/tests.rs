@@ -8,7 +8,7 @@ fn test_loose_ambiguous_prefix_loose_odb() -> BitResult<()> {
         let partial = PartialOid::from("2341");
         let err = repo.read_obj(partial).unwrap_err();
         assert_eq!(
-            err.into_bit_error()?,
+            err.try_into_bit_error()?,
             BitError::AmbiguousPrefix(
                 partial,
                 vec![

@@ -42,7 +42,7 @@ fn test_parse_revspec_with_non_existent_oid() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let rev = rev!("e3eaee01f47f98216f4160658179420ff5e30f50");
         assert_eq!(
-            rev.parse(repo).unwrap_err().into_bit_error()?,
+            rev.parse(repo).unwrap_err().try_into_bit_error()?,
             BitError::ObjectNotFound("e3eaee01f47f98216f4160658179420ff5e30f50".into())
         );
         Ok(())

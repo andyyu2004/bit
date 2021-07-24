@@ -26,7 +26,7 @@ fn test_non_initial_empty_commit() -> BitResult<()> {
         Ok(())
     })
     .unwrap_err()
-    .into_status_error()?;
+    .try_into_status_error()?;
 
     assert!(status.is_empty());
     assert!(!status.is_initial());
@@ -40,7 +40,7 @@ fn test_initial_empty_commit() -> BitResult<()> {
         Ok(())
     })
     .unwrap_err()
-    .into_status_error()?;
+    .try_into_status_error()?;
 
     assert!(status.is_empty());
     assert!(status.is_initial());

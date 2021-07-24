@@ -93,7 +93,7 @@ impl Pack {
                 // as we extended prefix by using only zeroes
                 // so we just start scanning from `idx` until the prefixes change
                 trace!("Pack::prefix_matches: prefix not found, searching for candidates");
-                let (_, idx) = err.into_obj_not_found_in_pack_index_err()?;
+                let (_, idx) = err.try_into_obj_not_found_in_pack_index_err()?;
                 self.idx_reader().oid_iter(idx).take_while(|oid| oid.has_prefix(prefix)).collect()
             }
         };

@@ -19,38 +19,38 @@ pub enum BitError {
 }
 
 pub trait BitErrorExt {
-    fn into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)>;
-    fn into_nonexistent_symref_err(self) -> BitResult<SymbolicRef>;
-    fn into_bit_error(self) -> BitResult<BitError>;
-    fn into_status_error(self) -> BitResult<BitStatus>;
+    fn try_into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)>;
+    fn try_into_nonexistent_symref_err(self) -> BitResult<SymbolicRef>;
+    fn try_into_bit_error(self) -> BitResult<BitError>;
+    fn try_into_status_error(self) -> BitResult<BitStatus>;
 }
 
 impl BitErrorExt for BitGenericError {
     /// tries to convert generic error into specific error and just returns previous error on failure
     // this pattern feels pretty shit, not sure of a better way atm
     // usually don't have to catch errors that often so its not too bad (yet?)
-    fn into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)> {
-        match self.into_bit_error()? {
+    fn try_into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)> {
+        match self.try_into_bit_error()? {
             BitError::ObjectNotFoundInPackIndex(oid, idx) => Ok((oid, idx)),
             err => Err(anyhow!(err)),
         }
     }
 
-    fn into_bit_error(self) -> BitResult<BitError> {
+    fn try_into_bit_error(self) -> BitResult<BitError> {
         match self.downcast::<BitError>() {
             Ok(bit_error) => Ok(bit_error),
             Err(cast_failed_err) => Err(cast_failed_err),
         }
     }
 
-    fn into_nonexistent_symref_err(self) -> BitResult<SymbolicRef> {
-        match self.into_bit_error()? {
+    fn try_into_nonexistent_symref_err(self) -> BitResult<SymbolicRef> {
+        match self.try_into_bit_error()? {
             BitError::NonExistentSymRef(sym) => Ok(sym),
             err => Err(anyhow!(err)),
         }
     }
 
-    fn into_status_error(self) -> BitResult<BitStatus> {
+    fn try_into_status_error(self) -> BitResult<BitStatus> {
         self.downcast()
     }
 }
@@ -119,10 +119,8 @@ impl Display for BitError {
                 }
                 Ok(())
             }
-            BitError::NonExistentSymRef(sym) => {
-                writeln!(f, "branch `{:}` does not exist yet", sym)?;
-                write_hint!(f, "try creating a commit on `{:}` first", sym)
-            }
+            BitError::NonExistentSymRef(sym) =>
+                writeln!(f, "failed to resolve reference `{}`", sym),
         }
     }
 }

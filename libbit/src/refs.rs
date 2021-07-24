@@ -43,14 +43,6 @@ pub enum BitRef {
     Symbolic(SymbolicRef),
 }
 
-/// validated reference
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
-pub enum ValidatedRef {
-    Direct(Oid),
-    Symbolic(SymbolicRef),
-    NonExistentSymbolic(SymbolicRef),
-}
-
 impl From<Oid> for BitRef {
     fn from(oid: Oid) -> Self {
         Self::Direct(oid)
