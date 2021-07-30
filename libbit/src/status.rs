@@ -57,7 +57,7 @@ impl Display for BitStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.head {
             BitRef::Direct(oid) => writeln!(f, "HEAD detached at `{}`", oid)?,
-            BitRef::Symbolic(branch) => writeln!(f, "On branch `{}`", branch)?,
+            BitRef::Symbolic(branch) => writeln!(f, "On branch `{}`", branch.short())?,
         };
 
         writeln!(f)?;

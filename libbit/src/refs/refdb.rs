@@ -191,7 +191,8 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     // tries to expand the symbolic reference
     // i.e. master -> refs/heads/master
     fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef> {
-        const PREFIXES: &[BitPath] = &[BitPath::EMPTY, BitPath::REFS_HEADS, BitPath::REFS_TAGS];
+        const PREFIXES: &[BitPath] =
+            &[BitPath::EMPTY, BitPath::REFS_HEADS, BitPath::REFS_TAGS, BitPath::REFS_REMOTES];
         // we only try to do expansion on single component paths (which all valid branches should be)
         let prefixes =
             if sym.path.as_path().components().count() == 1 { PREFIXES } else { &[BitPath::EMPTY] };
