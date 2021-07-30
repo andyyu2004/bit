@@ -4,7 +4,7 @@ use libbit::error::BitResult;
 use libbit::format::{Indentable, OwoColorize};
 use libbit::iter::FallibleIterator;
 use libbit::obj::{BitObject, Oid};
-use libbit::refs::{BitRef, SymbolicRef, SymbolicRefKind};
+use libbit::refs::{BitRef, Refs, SymbolicRef, SymbolicRefKind};
 use libbit::repo::BitRepo;
 use libbit::rev::LazyRevspec;
 use owo_colors::colors::*;
@@ -19,6 +19,39 @@ use std::process::{Command, Stdio};
 pub struct BitLogCliOpts {
     #[clap(default_value = "HEAD")]
     revisions: Vec<LazyRevspec>,
+}
+
+impl Cmd for BitLogCliOpts {
+    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+        let revisions = self.revisions.iter().collect::<Vec<_>>();
+        let revwalk = repo.revwalk(&revisions)?;
+        let mut pager = Command::new(&repo.config().pager()?).stdin(Stdio::piped()).spawn()?;
+        let stdin = pager.stdin.as_mut().unwrap();
+
+        let refs = repo.ls_refs()?;
+        let decorations_map = calculate_decorations(repo, &refs)?;
+
+        revwalk.for_each(|commit| {
+            write!(stdin, "{} {}", "commit".yellow(), commit.oid().yellow())?;
+            if let Some(decorations) = decorations_map.get(&commit.oid()) {
+                let s = decorations
+                    .iter()
+                    .map(|d| d.to_string())
+                    .intersperse(", ".to_owned())
+                    .collect::<String>();
+                write!(stdin, " ({})", s)?;
+            }
+            writeln!(stdin)?;
+            writeln!(stdin, "Author: {} <{}>", commit.author.name, commit.author.email)?;
+            writeln!(stdin, "Date: {}", commit.author.time)?;
+            writeln!(stdin)?;
+            writeln!(stdin, "{}", (&commit.message).indented("   "))?;
+            writeln!(stdin)?;
+            Ok(())
+        })?;
+        pager.wait()?;
+        Ok(())
+    }
 }
 
 trait SymbolicRefStyleExt: Sized + Copy {
@@ -102,14 +135,18 @@ fn calculate_decoration(repo: BitRepo<'_>, sym: SymbolicRef) -> BitResult<(Oid, 
     }
 }
 
-fn calculate_decorations<'a>(
+fn calculate_decorations(
     repo: BitRepo<'_>,
-    refs: impl IntoIterator<Item = &'a SymbolicRef>,
+    refs: &Refs,
 ) -> BitResult<HashMap<Oid, BTreeSet<RefDecoration>>> {
     let mut decorations = HashMap::<Oid, BTreeSet<RefDecoration>>::new();
     let mut handled = HashSet::new();
     for sym in refs {
         // avoid printing out `HEAD -> master` and then `master` again
+        // we know that `refs` is in order (as it's a btreeset) and therefore symbolic refs
+        // come first (as HEAD and remotes are ordered before branches and tags)
+        // and therefore the following check is sufficient
+        // (i.e. it is not possible for a branch decoration to already be in `decorations`)
         if handled.contains(sym) {
             continue;
         }
@@ -120,38 +157,4 @@ fn calculate_decorations<'a>(
         decorations.entry(oid).or_default().insert(decoration);
     }
     Ok(decorations)
-}
-
-impl Cmd for BitLogCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
-        let revisions = self.revisions.iter().collect::<Vec<_>>();
-        let revwalk = repo.revwalk(&revisions)?;
-        let mut pager = Command::new(&repo.config().pager()?).stdin(Stdio::piped()).spawn()?;
-        let stdin = pager.stdin.as_mut().unwrap();
-
-        let refs = repo.ls_refs()?;
-        dbg!(&refs);
-        let decorations_map = calculate_decorations(repo, &refs)?;
-
-        revwalk.for_each(|commit| {
-            write!(stdin, "{} {}", "commit".yellow(), commit.oid().yellow())?;
-            if let Some(decorations) = decorations_map.get(&commit.oid()) {
-                let s = decorations
-                    .iter()
-                    .map(|d| d.to_string())
-                    .intersperse(", ".to_owned())
-                    .collect::<String>();
-                write!(stdin, " ({})", s)?;
-            }
-            writeln!(stdin)?;
-            writeln!(stdin, "Author: {} <{}>", commit.author.name, commit.author.email)?;
-            writeln!(stdin, "Date: {}", commit.author.time)?;
-            writeln!(stdin)?;
-            writeln!(stdin, "{}", (&commit.message).indented("   "))?;
-            writeln!(stdin)?;
-            Ok(())
-        })?;
-        pager.wait()?;
-        Ok(())
-    }
 }
