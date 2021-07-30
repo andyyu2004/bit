@@ -1,8 +1,5 @@
-use owo_colors::OwoColorize;
-
-use crate::error::{BitError, BitErrorExt};
-
 use super::*;
+use crate::error::{BitError, BitErrorExt};
 
 #[test]
 fn test_parse_revspec_parent() -> BitResult<()> {

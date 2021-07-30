@@ -4,13 +4,14 @@ use crate::io::ReadExt;
 use crate::obj::*;
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
-use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, SymbolicRef};
+use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, Refs, SymbolicRef};
 use crate::rev::LazyRevspec;
 use crate::signature::BitSignature;
 use crate::{hash, tls};
 use anyhow::Context;
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -310,6 +311,10 @@ impl<'rcx> BitRepo<'rcx> {
     /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
     pub fn read_head(self) -> BitResult<BitRef> {
         self.refdb()?.read(SymbolicRef::HEAD)
+    }
+
+    pub fn ls_refs(self) -> BitResult<Refs> {
+        self.refdb()?.ls_refs()
     }
 
     pub fn is_head_detached(self) -> BitResult<bool> {

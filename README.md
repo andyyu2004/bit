@@ -43,3 +43,5 @@ Alternatively, you can install `bit` locally as a binary using `cargo install --
 # Warning
 
 This does not currently support windows as it uses some unix specific path apis.
+
+Furthermore, even on unix, there is an assumption that path data is encoded in utf-8.

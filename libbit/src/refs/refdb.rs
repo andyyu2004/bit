@@ -6,8 +6,9 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
-use std::collections::HashMap;
+use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
+use std::path::Path;
 
 pub struct BitRefDb<'rcx> {
     repo: BitRepo<'rcx>,
@@ -19,7 +20,7 @@ impl<'rcx> BitRefDb<'rcx> {
         Self { repo, bitdir: repo.bitdir }
     }
 
-    pub fn join_ref(&self, path: BitPath) -> BitPath {
+    pub fn join(&self, path: impl AsRef<Path>) -> BitPath {
         self.bitdir.join(path)
     }
 
@@ -27,6 +28,8 @@ impl<'rcx> BitRefDb<'rcx> {
         self.bitdir.join("logs").join(path)
     }
 }
+
+pub type Refs = BTreeSet<SymbolicRef>;
 
 // unfortunately, doesn't seem like its easy to support a resolve operation on refdb as it will require reading
 // objects for validation but both refdb and odb are owned by the repo so not sure if this is feasible
@@ -39,7 +42,8 @@ pub trait BitRefDbBackend<'rcx> {
     fn delete(&self, sym: SymbolicRef) -> BitResult<()>;
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool>;
     fn read_reflog(&self, sym: SymbolicRef) -> BitResult<Filelock<BitReflog>>;
-    fn ls_refs(&self) -> BitResult<HashMap<SymbolicRef, BitRef>>;
+    // return path of all symbolic refs, branches, and tags
+    fn ls_refs(&self) -> BitResult<Refs>;
     // tries to expand the symbolic reference
     // i.e. master -> refs/heads/master
     fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef>;
@@ -126,33 +130,15 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
         self.update(sym, from, RefUpdateCause::NewBranch { from })
     }
 
-    // tries to expand the symbolic reference
-    // i.e. master -> refs/heads/master
-    fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef> {
-        const PREFIXES: &[BitPath] = &[BitPath::EMPTY, BitPath::REFSHEADS, BitPath::REFSTAGS];
-        // we only try to do expansion on single component paths (which all valid branches should be)
-        let prefixes =
-            if sym.path.as_path().components().count() == 1 { PREFIXES } else { &[BitPath::EMPTY] };
-
-        for prefix in prefixes {
-            let path = prefix.join(sym.path);
-            if self.join_ref(path).exists() {
-                return Ok(SymbolicRef::new(path));
-            }
-        }
-
-        bail!(BitError::NonExistentSymRef(sym))
-    }
-
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
-        Lockfile::with_readonly(self.join_ref(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
+        Lockfile::with_readonly(self.join(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
             let file = lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
             BitRef::deserialize_unbuffered(file)
         })
     }
 
     fn update(&self, sym: SymbolicRef, to: BitRef, cause: RefUpdateCause) -> BitResult<()> {
-        Lockfile::with_mut(self.join_ref(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
+        Lockfile::with_mut(self.join(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
             self.validate(to)?.serialize(lockfile)
         })?;
 
@@ -177,7 +163,7 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     }
 
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool> {
-        Ok(self.join_ref(sym.path).exists())
+        Ok(self.join(sym.path).exists())
     }
 
     // read_reflog is probably not a great method to have
@@ -187,8 +173,37 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
         Filelock::lock(path)
     }
 
-    fn ls_refs(&self) -> BitResult<HashMap<SymbolicRef, BitRef>> {
-        todo!()
+    fn ls_refs(&self) -> BitResult<Refs> {
+        let mut refs = btreeset! { SymbolicRef::HEAD };
+        let refs_dir = self.join("refs");
+        for entry in walkdir::WalkDir::new(refs_dir) {
+            let entry = entry?;
+            if entry.file_type().is_dir() {
+                continue;
+            }
+            let path = entry.path();
+            let sym = SymbolicRef::intern(path.strip_prefix(self.bitdir)?);
+            assert!(refs.insert(sym), "inserted duplicate ref `{}`", sym);
+        }
+        Ok(refs)
+    }
+
+    // tries to expand the symbolic reference
+    // i.e. master -> refs/heads/master
+    fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef> {
+        const PREFIXES: &[BitPath] = &[BitPath::EMPTY, BitPath::REFS_HEADS, BitPath::REFS_TAGS];
+        // we only try to do expansion on single component paths (which all valid branches should be)
+        let prefixes =
+            if sym.path.as_path().components().count() == 1 { PREFIXES } else { &[BitPath::EMPTY] };
+
+        for prefix in prefixes {
+            let path = prefix.join(sym.path);
+            if self.join(path).exists() {
+                return Ok(SymbolicRef::new(path));
+            }
+        }
+
+        bail!(BitError::NonExistentSymRef(sym))
     }
 }
 

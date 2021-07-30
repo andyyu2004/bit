@@ -34,16 +34,12 @@ impl Cmd for BitDiffCliOpts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use libbit::path::BitPath;
     use libbit::refs::SymbolicRef;
 
     #[test]
     fn test_cli_parse_bit_diff_staged() {
         let opts = BitDiffCliOpts::parse_from(&["--", "--staged", "foo"]);
-        assert_eq!(
-            opts.staged,
-            Some(Some(BitRef::Symbolic(SymbolicRef::new(BitPath::intern("foo"))))),
-        );
+        assert_eq!(opts.staged, Some(Some(BitRef::Symbolic(SymbolicRef::intern("foo")))),);
 
         let opts = BitDiffCliOpts::parse_from(&["--", "--staged"]);
         assert_eq!(opts.staged, Some(None));

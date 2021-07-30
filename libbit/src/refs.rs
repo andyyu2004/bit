@@ -9,6 +9,8 @@ use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::cmp::Ordering;
+use std::ffi::OsStr;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::str::FromStr;
@@ -105,6 +107,26 @@ pub struct SymbolicRef {
     path: BitPath,
 }
 
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum SymbolicRefKind {
+    Head,
+    Remote,
+    Branch,
+    Tag,
+}
+
+impl Ord for SymbolicRef {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.kind().cmp(&other.kind()).then_with(|| self.path.cmp(&other.path))
+    }
+}
+
+impl PartialOrd for SymbolicRef {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl SymbolicRef {
     pub const HEAD: Self = Self { path: BitPath::HEAD };
 
@@ -113,8 +135,42 @@ impl SymbolicRef {
         Self { path }
     }
 
+    pub fn kind(self) -> SymbolicRefKind {
+        if self.path == BitPath::HEAD {
+            SymbolicRefKind::Head
+        } else if self.path.starts_with(BitPath::REFS_HEADS) {
+            SymbolicRefKind::Branch
+        } else if self.path.starts_with(BitPath::REFS_REMOTES) {
+            SymbolicRefKind::Remote
+        } else if self.path.starts_with(BitPath::REFS_TAGS) {
+            SymbolicRefKind::Tag
+        } else {
+            panic!("unknown ref type for ref `{}`", self)
+        }
+    }
+
+    pub fn path(self) -> BitPath {
+        self.path
+    }
+
+    pub fn intern(path: impl AsRef<OsStr>) -> Self {
+        Self::new(BitPath::intern(path))
+    }
+
     pub fn branch(name: &str) -> Self {
         Self::new(BitPath::intern(format!("refs/heads/{}", name)))
+    }
+
+    // returns an abbreviated representation of the reference
+    pub fn short(self) -> &'static str {
+        const PREFIXES: &[BitPath] =
+            &[BitPath::REFS_HEADS, BitPath::REFS_TAGS, BitPath::REFS_REMOTES];
+        for prefix in PREFIXES {
+            if self.path.starts_with(prefix) {
+                return self.path.as_path().strip_prefix(prefix).unwrap().to_str().unwrap();
+            }
+        }
+        self.path.as_str()
     }
 }
 
@@ -149,7 +205,6 @@ impl FromStr for SymbolicRef {
             path = BitPath::HEAD;
         }
 
-        // TODO validation on r
         Ok(Self { path })
     }
 }

@@ -8,6 +8,31 @@ use std::io::BufReader;
 use std::str::FromStr;
 
 #[test]
+fn test_ls_refs_on_empty_repo() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let refs = repo.ls_refs()?;
+        // although refs/heads/master is pointed to by HEAD it doesn't actually on the file system
+        assert_eq!(refs, btreeset! { symbolic!("HEAD") });
+        Ok(())
+    })
+}
+
+#[test]
+fn test_ls_refs_on_sample_repo() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let refs = repo.ls_refs()?;
+        assert_eq!(
+            refs,
+            btreeset! {
+                symbolic!("HEAD") ,
+                symbolic!("refs/heads/master") ,
+            }
+        );
+        Ok(())
+    })
+}
+
+#[test]
 fn test_resolve_symref_that_points_to_nonexistent_file() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         // repo initializes with `HEAD` pointing to `refs/heads/master`
