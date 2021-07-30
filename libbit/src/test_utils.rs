@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::obj::{BitObjKind, BitObject, FileMode, Oid, TreeEntry, Treeish};
+use crate::obj::{BitObjKind, BitObject, FileMode, Oid, TreeEntry};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use rand::Rng;

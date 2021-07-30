@@ -11,7 +11,6 @@ use crate::{hash, tls};
 use anyhow::Context;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};

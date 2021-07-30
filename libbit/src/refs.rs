@@ -105,6 +105,7 @@ const SYMBOLIC_REF_PREFIX: &str = "ref: ";
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct SymbolicRef {
     path: BitPath,
+    kind: SymbolicRefKind,
 }
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -113,11 +114,12 @@ pub enum SymbolicRefKind {
     Remote,
     Branch,
     Tag,
+    Unknown,
 }
 
 impl Ord for SymbolicRef {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.kind().cmp(&other.kind()).then_with(|| self.path.cmp(&other.path))
+        self.kind.cmp(&other.kind).then_with(|| self.path.cmp(&other.path))
     }
 }
 
@@ -128,28 +130,41 @@ impl PartialOrd for SymbolicRef {
 }
 
 impl SymbolicRef {
-    pub const HEAD: Self = Self { path: BitPath::HEAD };
+    pub const HEAD: Self = Self { path: BitPath::HEAD, kind: SymbolicRefKind::Head };
 
     pub fn new(path: BitPath) -> Self {
         debug_assert!(path.is_relative());
-        Self { path }
+        Self { path, kind: Self::calculate_kind(path) }
     }
 
-    pub fn kind(self) -> SymbolicRefKind {
-        if self.path == BitPath::HEAD {
+    /// this variant of construction disallows the symref kind from being unknown
+    pub fn new_valid(path: BitPath) -> BitResult<Self> {
+        debug_assert!(path.is_relative());
+        let sym = Self::new(path);
+        ensure!(sym.kind != SymbolicRefKind::Unknown, "invalid symbolic ref `{}`", path);
+        Ok(Self { path, kind: Self::calculate_kind(path) })
+    }
+
+    pub fn kind(&self) -> SymbolicRefKind {
+        self.kind
+    }
+
+    fn calculate_kind(path: BitPath) -> SymbolicRefKind {
+        if path == BitPath::HEAD {
             SymbolicRefKind::Head
-        } else if self.path.starts_with(BitPath::REFS_HEADS) {
+        } else if path.starts_with(BitPath::REFS_HEADS) {
             SymbolicRefKind::Branch
-        } else if self.path.starts_with(BitPath::REFS_REMOTES) {
+        } else if path.starts_with(BitPath::REFS_REMOTES) {
             SymbolicRefKind::Remote
-        } else if self.path.starts_with(BitPath::REFS_TAGS) {
+        } else if path.starts_with(BitPath::REFS_TAGS) {
             SymbolicRefKind::Tag
         } else {
-            panic!("unknown ref type for ref `{}`", self)
+            // unexpanded and unvalidated
+            SymbolicRefKind::Unknown
         }
     }
 
-    pub fn path(self) -> BitPath {
+    pub fn path(&self) -> BitPath {
         self.path
     }
 
@@ -157,12 +172,17 @@ impl SymbolicRef {
         Self::new(BitPath::intern(path))
     }
 
-    pub fn branch(name: &str) -> Self {
-        Self::new(BitPath::intern(format!("refs/heads/{}", name)))
+    pub fn intern_valid(path: impl AsRef<OsStr>) -> BitResult<Self> {
+        Self::new_valid(BitPath::intern(path))
+    }
+
+    pub fn new_branch(name: &str) -> Self {
+        Self::intern_valid(&format!("refs/heads/{}", name))
+            .expect("we just set the prefix, must be valid")
     }
 
     // returns an abbreviated representation of the reference
-    pub fn short(self) -> &'static str {
+    pub fn short(&self) -> &'static str {
         const PREFIXES: &[BitPath] =
             &[BitPath::REFS_HEADS, BitPath::REFS_TAGS, BitPath::REFS_REMOTES];
         for prefix in PREFIXES {
@@ -205,7 +225,7 @@ impl FromStr for SymbolicRef {
             path = BitPath::HEAD;
         }
 
-        Ok(Self { path })
+        Ok(Self::new(path))
     }
 }
 

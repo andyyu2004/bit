@@ -182,7 +182,7 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
                 continue;
             }
             let path = entry.path();
-            let sym = SymbolicRef::intern(path.strip_prefix(self.bitdir)?);
+            let sym = SymbolicRef::intern_valid(path.strip_prefix(self.bitdir)?)?;
             assert!(refs.insert(sym), "inserted duplicate ref `{}`", sym);
         }
         Ok(refs)
@@ -200,7 +200,7 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
         for prefix in prefixes {
             let path = prefix.join(sym.path);
             if self.join(path).exists() {
-                return Ok(SymbolicRef::new(path));
+                return SymbolicRef::new_valid(path);
             }
         }
 

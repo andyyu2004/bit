@@ -67,6 +67,7 @@ impl SymbolicRefStyleExt for SymbolicRef {
             SymbolicRefKind::Branch => style.fg::<Green>(),
             SymbolicRefKind::Tag => todo!(),
             SymbolicRefKind::Remote => style.fg::<Red>(),
+            SymbolicRefKind::Unknown => unreachable!(),
         }
         .bold()
         .style(value)

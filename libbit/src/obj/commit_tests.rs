@@ -72,7 +72,7 @@ fn test_new_commit_moves_branch_not_head() -> BitResult<()> {
         // check HEAD has not moved
         assert_eq!(
             repo.partially_resolve_ref(SymbolicRef::HEAD)?,
-            BitRef::Symbolic(SymbolicRef::branch("master"))
+            BitRef::Symbolic(SymbolicRef::new_branch("master"))
         );
         Ok(())
     })
