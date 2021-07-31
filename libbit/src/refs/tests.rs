@@ -8,6 +8,23 @@ use std::io::BufReader;
 use std::str::FromStr;
 
 #[test]
+fn test_calculate_ref_decoration() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let refs = repo.ls_refs()?;
+        let decorations = repo.ref_decorations(&refs)?;
+        assert_eq!(decorations.len(), 1);
+        let mut values = decorations.values();
+        assert_eq!(
+            values.next().unwrap(),
+            &btreeset! {
+                RefDecoration::Symbolic(symbolic!("HEAD"), symbolic!("refs/heads/master"))
+            }
+        );
+        Ok(())
+    })
+}
+
+#[test]
 fn test_ls_refs_on_empty_repo() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let refs = repo.ls_refs()?;

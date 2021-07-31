@@ -1,8 +1,8 @@
+mod ref_decorations;
 mod refdb;
 mod reflog;
 
 use crate::error::{BitGenericError, BitResult};
-
 use crate::obj::{BitObjKind, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -15,6 +15,7 @@ use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::str::FromStr;
 
+pub use ref_decorations::*;
 pub use refdb::*;
 pub use reflog::*;
 
