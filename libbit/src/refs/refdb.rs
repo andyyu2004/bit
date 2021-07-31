@@ -169,7 +169,8 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     // read_reflog is probably not a great method to have
     // probably better to have method that directly manipulate the log instead
     fn read_reflog(&self, sym: SymbolicRef) -> BitResult<Filelock<BitReflog>> {
-        let path = self.join_log(sym.path);
+        let expanded = self.expand_symref(sym)?;
+        let path = self.join_log(expanded.path);
         Filelock::lock(path)
     }
 

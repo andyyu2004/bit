@@ -4,7 +4,7 @@ use crate::obj::Oid;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use std::io::{BufRead, Write};
-use std::ops::Deref;
+use std::ops::Index;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,7 +30,21 @@ pub struct BitReflog {
     entries: Vec<BitReflogEntry>,
 }
 
+impl Index<usize> for BitReflog {
+    type Output = BitReflogEntry;
+
+    /// indexed back to front as the most recent entry is appended on the end
+    fn index(&self, index: usize) -> &Self::Output {
+        debug_assert!(self.len() > index);
+        &self.entries[self.len() - index - 1]
+    }
+}
+
 impl BitReflog {
+    pub fn get(&self, index: usize) -> Option<&BitReflogEntry> {
+        if index >= self.len() { None } else { Some(&self[index]) }
+    }
+
     pub fn append(&mut self, new_oid: Oid, committer: BitSignature, msg: String) {
         let old_oid = match self.entries.last() {
             Some(entry) => entry.new_oid,
@@ -38,13 +52,9 @@ impl BitReflog {
         };
         self.entries.push(BitReflogEntry { old_oid, new_oid, committer, message: msg })
     }
-}
 
-impl Deref for BitReflog {
-    type Target = Vec<BitReflogEntry>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.entries
+    pub fn len(&self) -> usize {
+        self.entries.len()
     }
 }
 

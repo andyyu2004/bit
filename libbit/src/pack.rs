@@ -375,7 +375,6 @@ impl PackIndex {
 
 pub struct PackfileReader<R> {
     reader: R,
-    n: u32,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
@@ -425,8 +424,8 @@ impl Packfile {
 
 impl<R: BufReadSeek> PackfileReader<R> {
     pub fn new(mut reader: R) -> BitResult<Self> {
-        let n = Packfile::parse_header(&mut reader)?;
-        Ok(Self { reader, n })
+        let _n = Packfile::parse_header(&mut reader)?;
+        Ok(Self { reader })
     }
 
     // 3 bits object type

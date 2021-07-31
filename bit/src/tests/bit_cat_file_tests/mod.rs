@@ -6,7 +6,8 @@ fn test_cli_cat_file_blob() {
 author Andy Yu <andyyu2004@gmail.com> 1621330843 +1200
 committer Andy Yu <andyyu2004@gmail.com> 1621330907 +1200
 
-init"#;
+init
+"#;
     bit!("-C tests/repos/foo cat-file -p HEAD").stdout(expected);
 }
 

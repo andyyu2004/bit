@@ -2,6 +2,18 @@ use super::*;
 use crate::error::{BitError, BitErrorExt};
 
 #[test]
+fn test_parse_revspec_reflog() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let rev = rev!("@@{5}");
+        assert_eq!(
+            rev.parse(repo)?,
+            &Revspec::Reflog(Box::new(Revspec::Ref(symbolic_ref!("HEAD"))), 5)
+        );
+        Ok(())
+    })
+}
+
+#[test]
 fn test_parse_revspec_parent() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let rev = rev!("HEAD^");

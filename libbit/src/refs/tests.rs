@@ -10,6 +10,7 @@ use std::str::FromStr;
 #[test]
 fn test_calculate_ref_decoration() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
+        repo.bit_create_branch("a-new-branch", &rev!("HEAD"))?;
         let refs = repo.ls_refs()?;
         let decorations = repo.ref_decorations(&refs)?;
         assert_eq!(decorations.len(), 1);
@@ -17,7 +18,8 @@ fn test_calculate_ref_decoration() -> BitResult<()> {
         assert_eq!(
             values.next().unwrap(),
             &btreeset! {
-                RefDecoration::Symbolic(symbolic!("HEAD"), symbolic!("refs/heads/master"))
+                RefDecoration::Symbolic(symbolic!("HEAD"), symbolic!("refs/heads/master")),
+                RefDecoration::Branch(symbolic!("refs/heads/a-new-branch")),
             }
         );
         Ok(())
@@ -156,7 +158,7 @@ fn test_reflog_contents_on_commit() -> BitResult<()> {
         let expected_message = "commit (initial): arbitrary message".to_owned();
 
         let head_reflog = repo.refdb()?.read_reflog(symbolic!("HEAD"))?;
-        let master_reflog = repo.refdb()?.read_reflog(symbolic!("refs/heads/master"))?;
+        let master_reflog = repo.refdb()?.read_reflog(symbolic!("master"))?;
 
         assert_eq!(head_reflog.len(), 1);
         assert_eq!(head_reflog[0].committer, expected_committer);
@@ -177,15 +179,15 @@ fn test_reflog_contents_on_commit() -> BitResult<()> {
         // the key difference is that there is no initial note
         // and another detail is that HEAD's reflog is written to even though it's not actually moving itself
         let head_reflog = repo.refdb()?.read_reflog(symbolic!("HEAD"))?;
-        let master_reflog = repo.refdb()?.read_reflog(symbolic!("refs/heads/master"))?;
+        let master_reflog = repo.refdb()?.read_reflog(symbolic!("master"))?;
 
         let expected_message = "commit: arbitrary message".to_owned();
         assert_eq!(head_reflog.len(), 2);
-        assert_eq!(head_reflog[1].committer, expected_committer);
-        assert_eq!(head_reflog[1].message, expected_message);
+        assert_eq!(head_reflog[0].committer, expected_committer);
+        assert_eq!(head_reflog[0].message, expected_message);
         assert_eq!(master_reflog.len(), 2);
-        assert_eq!(master_reflog[1].committer, expected_committer);
-        assert_eq!(master_reflog[1].message, expected_message);
+        assert_eq!(master_reflog[0].committer, expected_committer);
+        assert_eq!(master_reflog[0].message, expected_message);
 
         Ok(())
     })

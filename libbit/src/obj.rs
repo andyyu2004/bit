@@ -83,6 +83,7 @@ impl Display for BitObjKind<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // we can't write the following as `write!(f, "{}", x)
         // as we would lose the flags on the formatter
+        // actually why would we lose the flags? we have to pass in f to write! anyway?
         match self {
             BitObjKind::Blob(blob) => Display::fmt(&blob, f),
             BitObjKind::Commit(commit) => Display::fmt(&commit, f),

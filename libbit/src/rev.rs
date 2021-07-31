@@ -5,8 +5,8 @@ pub use revwalk::*;
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, Commit, Oid, PartialOid};
 use crate::peel::Peel;
-use crate::refs::{BitRef, SymbolicRef};
-use crate::repo::BitRepo;
+use crate::refs::{BitRef, BitRefDbBackend, SymbolicRef};
+use crate::repo::{BitRepo, Repo};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
@@ -29,6 +29,8 @@ pub enum Revspec {
     Parent(Box<Revspec>, usize),
     /// ~<n>
     Ancestor(Box<Revspec>, usize),
+    /// <rev>@{<n>}
+    Reflog(Box<Revspec>, usize),
 }
 
 impl<'rcx> BitRepo<'rcx> {
@@ -102,6 +104,22 @@ impl<'rcx> BitRepo<'rcx> {
                 self.fully_resolve_rev_to_ref(inner).and_then(|r| get_nth_parent(r, n)),
             Revspec::Ancestor(ref rev, n) => (0..n)
                 .try_fold(self.fully_resolve_rev_to_ref(&rev)?, |oid, _| get_first_parent(oid)),
+            Revspec::Reflog(ref inner, n) => match self.fully_resolve_rev_to_ref(&inner)? {
+                BitRef::Direct(..) =>
+                    bail!("can't use reflog revision syntax on a direct reference"),
+                BitRef::Symbolic(sym) => {
+                    let reflog = self.refdb()?.read_reflog(sym)?;
+                    let entry = match reflog.get(n) {
+                        Some(entry) => entry,
+                        None => bail!(
+                            "index `{}` is out of range in reflog with `{}` entries",
+                            n,
+                            reflog.len()
+                        ),
+                    };
+                    Ok(BitRef::Direct(entry.new_oid))
+                }
+            },
         }
     }
 }
@@ -123,6 +141,7 @@ impl Display for Revspec {
                 } else {
                     write!(f, "{}~{}", rev, n)
                 },
+            Revspec::Reflog(rev, n) => write!(f, "{}@{{{}}}", rev, n),
         }
     }
 }
@@ -159,7 +178,7 @@ impl FromStr for LazyRevspec {
 
 lazy_static! {
     static ref REV_SEPS: HashSet<char> = hashset! {
-        '@', '~', '^'
+        '@', '~', '^', '{', '}'
     };
 }
 
@@ -216,6 +235,16 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
         Ok(Revspec::Ref(reference))
     }
 
+    fn expect(&mut self, s: &str) -> BitResult<()> {
+        let n = s.len();
+        if &self.src[..n] == s {
+            self.src = &self.src[n..];
+            Ok(())
+        } else {
+            bail!("expected `{}`, found `{}`", s, &self.src[..n])
+        }
+    }
+
     fn expect_num(&mut self) -> BitResult<usize> {
         Ok(usize::from_str(self.next()?)?)
     }
@@ -237,6 +266,12 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
                 "~" => {
                     let n = self.accept_num().unwrap_or(1);
                     rev = Revspec::Ancestor(Box::new(rev), n);
+                }
+                "@" => {
+                    self.expect("{")?;
+                    let n = self.expect_num()?;
+                    self.expect("}")?;
+                    rev = Revspec::Reflog(Box::new(rev), n);
                 }
                 _ => bail!("unexpected token `{}`, while parsing revspec", c),
             }
