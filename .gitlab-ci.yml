@@ -10,7 +10,7 @@ before_script:
 
 rust-nightly:
   stage: build
-  image: rustlang/rust:nightly
+  image: rustlang/rust:latest
   script:
     - cargo build --release --verbose
     - cargo test --release --verbose

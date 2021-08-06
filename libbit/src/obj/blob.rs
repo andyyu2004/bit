@@ -43,7 +43,6 @@ impl Display for Blob<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match std::str::from_utf8(&self.bytes) {
             Ok(utf8) => write!(f, "{}", utf8.trim_end()),
-
             Err(..) => write!(f, "<binary>"),
         }
     }
