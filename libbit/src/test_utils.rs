@@ -210,15 +210,15 @@ macro_rules! enable_log {
 macro_rules! stat {
     ($repo:ident: $path:literal) => {
         #[allow(unused_imports)]
-        use std::os::linux::fs::*;
+        use std::os::unix::fs::*;
         let metadata = std::fs::symlink_metadata($repo.workdir.join($path))?;
         eprintln!(
             "ctime {}:{}; mtime: {} {}; size: {}",
-            metadata.st_ctime(),
-            metadata.st_ctime_nsec(),
-            metadata.st_mtime(),
-            metadata.st_mtime_nsec() as u32,
-            metadata.st_size()
+            metadata.ctime(),
+            metadata.ctime_nsec(),
+            metadata.mtime(),
+            metadata.mtime_nsec() as u32,
+            metadata.size()
         );
     };
 }

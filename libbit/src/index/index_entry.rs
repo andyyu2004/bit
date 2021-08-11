@@ -5,7 +5,7 @@ use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use std::fmt::{self, Debug, Formatter};
 use std::iter::FromIterator;
-use std::os::linux::fs::MetadataExt;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -185,12 +185,12 @@ impl BitIndexEntry {
             path,
             ctime: Timespec::ctime(&metadata),
             mtime: Timespec::mtime(&metadata),
-            device: metadata.st_dev() as u32,
-            inode: metadata.st_ino() as u32,
+            device: metadata.dev() as u32,
+            inode: metadata.ino() as u32,
             mode: FileMode::from_metadata(&metadata),
-            uid: metadata.st_uid(),
-            gid: metadata.st_gid(),
-            filesize: metadata.st_size() as u32,
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+            filesize: metadata.size() as u32,
             oid: Oid::UNKNOWN,
             flags: BitIndexEntryFlags::with_path_len(path.len()),
             extended_flags: BitIndexEntryExtendedFlags::default(),
