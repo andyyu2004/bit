@@ -3,7 +3,7 @@ use crate::diff::{Diff, Differ, WorkspaceStatus};
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::iter::BitEntry;
-use crate::obj::Oid;
+use crate::obj::{Blob, Oid};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::xdiff;
@@ -49,7 +49,7 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
         let a = BitPath::A.join(new.path);
         let b = BitPath::B.join(new.path);
         let writer = &mut self.writer;
-        writeln!(writer, "diff --bit {} {}", a, b)?;
+        writeln!(writer, "diff --git {} {}", a, b)?;
         writeln!(writer, "new file mode {}", new.mode)?;
         writeln!(writer, "index {:#}..{:#}", Oid::UNKNOWN, new.oid)?;
 
@@ -60,6 +60,7 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
     }
 
     fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
+        debug_assert!(old.oid.is_known());
         let old_txt = self.read_blob(old)?;
         let new_txt = self.read_blob(new)?;
         let mut patch = xdiff::xdiff(&old_txt, &new_txt);
@@ -67,9 +68,11 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
         let b = BitPath::B.join(new.path);
 
         let writer = &mut self.writer;
-        writeln!(writer, "diff --bit {} {}", a, b)?;
+        writeln!(writer, "diff --git {} {}", a, b)?;
+
+        let new_oid = if new.oid.is_known() { new.oid } else { self.repo.hash_blob(new.path)? };
         // TODO what if the file has changed mode?
-        writeln!(writer, "index {:#}..{:#} {}", old.oid, new.oid, new.mode)?;
+        writeln!(writer, "index {:#}..{:#} {}", old.oid, new_oid, new.mode)?;
         patch.set_original(Cow::Borrowed(a.as_str()));
         patch.set_modified(Cow::Borrowed(b.as_str()));
         xdiff::format_patch_into(writer, &patch)?;
@@ -77,13 +80,14 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
     }
 
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+        debug_assert!(old.oid.is_known());
         let old_txt = self.read_blob(old)?;
         let mut patch = xdiff::xdiff(&old_txt, "");
 
         let a = BitPath::A.join(old.path);
         let b = BitPath::B.join(old.path);
         let writer = &mut self.writer;
-        writeln!(writer, "diff --bit {} {}", a, b)?;
+        writeln!(writer, "diff --git {} {}", a, b)?;
         writeln!(writer, "deleted file mode {}", old.mode)?;
         writeln!(writer, "index {:#}..{:#}", old.oid, Oid::UNKNOWN)?;
         patch.set_original(Cow::Borrowed(a.as_str()));

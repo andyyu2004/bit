@@ -5,7 +5,7 @@ use crate::path::BitPath;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
-use sha1::{Digest};
+use sha1::Digest;
 use std::ffi::OsStr;
 use std::fmt::Display;
 use std::io::{self, prelude::*, BufReader};

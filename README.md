@@ -40,6 +40,14 @@ The following should all be performed from within the cloned directory.
 To run, you can either use cargo as above `cargo r --release -- [<bit args>...]`.
 Alternatively, you can install `bit` locally as a binary using `cargo install --path bit`.
 
+Strongly recommended to use [delta](https://github.com/dandavison/delta) as the git pager for readable diffs.
+
+```
+# .gitconfig
+[core]
+    pager = delta
+```
+
 # Warning
 
 This does not currently support windows as it uses some unix specific path apis.
