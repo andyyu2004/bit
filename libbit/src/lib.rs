@@ -43,6 +43,7 @@ extern crate anyhow;
 #[cfg(test)]
 #[macro_use]
 pub mod test_utils;
+mod cache;
 mod graph;
 mod merge;
 

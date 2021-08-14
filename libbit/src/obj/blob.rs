@@ -7,14 +7,14 @@ use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::ops::Deref;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Blob<'rcx> {
     owner: BitRepo<'rcx>,
     cached: BitObjCached,
     inner: MutableBlob,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct MutableBlob {
     bytes: Vec<u8>,
 }

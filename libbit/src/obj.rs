@@ -179,7 +179,7 @@ pub struct BitObjHeader {
     pub size: u64,
 }
 
-#[derive(PartialEq, Debug, BitObject)]
+#[derive(PartialEq, Debug, Clone, BitObject)]
 pub enum BitObjKind<'rcx> {
     Blob(Box<Blob<'rcx>>),
     Commit(Box<Commit<'rcx>>),

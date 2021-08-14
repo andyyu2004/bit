@@ -11,6 +11,16 @@ impl<'rcx> BitRepo<'rcx> {
         let b = b.peel(self)?;
         a.find_merge_base(b)
     }
+
+    pub fn merge(self, base: Oid, target: Oid) -> BitResult<Oid> {
+        let base_commit = base.peel(self)?;
+        let target_commit = target.peel(self)?;
+        let merge_base = base_commit.find_merge_base(target_commit)?;
+        if merge_base.oid() == base {
+            todo!("ff merge")
+        }
+        todo!()
+    }
 }
 
 impl<'rcx> Commit<'rcx> {

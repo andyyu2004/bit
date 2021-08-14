@@ -1,3 +1,4 @@
+use crate::cache::BitObjCache;
 use crate::error::{BitError, BitGenericError, BitResult};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
@@ -43,6 +44,7 @@ pub struct RepoCtxt<'rcx> {
     config_filepath: BitPath,
     index_filepath: BitPath,
     odb_cell: OnceCell<BitObjDb>,
+    obj_cache: RefCell<BitObjCache<'rcx>>,
     refdb_cell: OnceCell<BitRefDb<'rcx>>,
     index_cell: OnceCell<RefCell<BitIndex<'rcx>>>,
 }
@@ -82,6 +84,7 @@ impl<'rcx> RepoCtxt<'rcx> {
             index_filepath,
             odb_cell: Default::default(),
             index_cell: Default::default(),
+            obj_cache: Default::default(),
             refdb_cell: Default::default(),
         };
 
@@ -345,8 +348,15 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
-        let raw = self.odb()?.read_raw(id.into())?;
-        BitObjKind::from_raw(self, raw)
+        let oid = self.expand_id(id)?;
+        self.obj_cache.borrow_mut().get_or_insert_with(oid, || {
+            let raw = self.odb()?.read_raw(BitId::Full(oid))?;
+            BitObjKind::from_raw(self, raw)
+        })
+    }
+
+    pub fn expand_id(self, id: impl Into<BitId>) -> BitResult<Oid> {
+        self.odb()?.expand_id(id.into())
     }
 
     pub fn expand_prefix(self, prefix: PartialOid) -> BitResult<Oid> {
