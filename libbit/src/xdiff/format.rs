@@ -3,7 +3,7 @@ use crate::diff::{Diff, Differ, WorkspaceStatus};
 use crate::error::BitResult;
 use crate::index::BitIndexEntry;
 use crate::iter::BitEntry;
-use crate::obj::{Blob, Oid};
+use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::xdiff;

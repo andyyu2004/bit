@@ -16,7 +16,7 @@ impl<'rcx> Peel<'rcx> for Oid {
     type Peeled = Commit<'rcx>;
 
     fn peel(&self, repo: BitRepo<'rcx>) -> BitResult<Self::Peeled> {
-        Ok(repo.read_obj(*self)?.into_commit())
+        repo.read_obj(*self)?.try_into_commit()
     }
 }
 

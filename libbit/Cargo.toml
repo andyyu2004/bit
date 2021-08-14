@@ -8,6 +8,8 @@ version = "0.1.0"
 # use_nsec = []
 
 [dependencies]
+arr_macro = "0.1"
+bit-set = "0.5"
 arrayvec = "0.7.0"
 flate2 = "1.0.20"
 hex = "0.4.2"
@@ -27,7 +29,7 @@ enumflags2 = "0.7.1"
 smallvec = "1.6.1"
 thiserror = "1.0"
 typed-arena = "2"
-index_vec = "0.1.2"
+indexed_vec = "1"
 itertools = "0.10"
 git-config = "0.1.0"
 bitflags = "1.2.1"

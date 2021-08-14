@@ -1,14 +1,14 @@
 use crate::error::BitResult;
-use crate::obj::{BitObject, Commit};
+use crate::obj::{BitObject, Commit, Oid};
+use crate::peel::Peel;
 use crate::repo::BitRepo;
-use crate::rev::LazyRevspec;
 use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashSet;
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn merge_base(self, a: &LazyRevspec, b: &LazyRevspec) -> BitResult<Commit<'rcx>> {
-        let a = self.resolve_rev_to_commit(a)?;
-        let b = self.resolve_rev_to_commit(b)?;
+    pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<Commit<'rcx>> {
+        let a = a.peel(self)?;
+        let b = b.peel(self)?;
         a.find_merge_base(b)
     }
 }
@@ -60,3 +60,6 @@ impl<'rcx> Commit<'rcx> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

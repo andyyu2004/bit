@@ -222,6 +222,22 @@ impl<'rcx> BitObjKind<'rcx> {
     //     }
     // }
 
+    pub fn obj_type(&self) -> BitObjType {
+        match self {
+            BitObjKind::Blob(_) => BitObjType::Blob,
+            BitObjKind::Commit(_) => BitObjType::Commit,
+            BitObjKind::Tree(_) => BitObjType::Tree,
+            BitObjKind::Tag(_) => BitObjType::Tag,
+        }
+    }
+
+    pub fn try_into_commit(self) -> BitResult<Commit<'rcx>> {
+        match self {
+            Self::Commit(commit) => Ok(*commit),
+            _ => Err(anyhow!("expected commit found `{}`", self.obj_type())),
+        }
+    }
+
     pub fn into_commit(self) -> Commit<'rcx> {
         match self {
             Self::Commit(commit) => *commit,
