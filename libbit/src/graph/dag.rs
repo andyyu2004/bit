@@ -9,10 +9,13 @@ mod reverse_topological;
 
 mod topological;
 
+// this needs more refactoring to be generally useful
+// as we can't just enumerate all nodes in the full commit graph
 pub trait Dag {
-    type Node: Idx;
+    type Node: Copy + Eq + std::hash::Hash;
+    type Nodes: IntoIterator<Item = Self::Node>;
     type NodeData: DagNode<Self>;
-    fn nodes(&self) -> &IndexVec<Self::Node, Self::NodeData>;
+    fn nodes(&self) -> Self::Nodes;
     fn node_data(&self, node: Self::Node) -> &Self::NodeData;
 
     fn topological(&self) -> TopologicalSort<'_, Self> {
@@ -27,8 +30,8 @@ pub trait Dag {
     #[cfg(test)]
     // iterate over all edges `u -> v` and check that `u` appears after `v` in `reverse_topological_sort`
     fn is_reverse_topological(&self, topological_sort: &[Self::Node]) -> bool {
-        for (u, node_data) in self.nodes().iter_enumerated() {
-            for &v in node_data.adjacent() {
+        for u in self.nodes() {
+            for v in self.node_data(u).adjacent() {
                 if topological_sort.iter().position(|&node| node == u)
                     < topological_sort.iter().position(|&node| node == v)
                 {
@@ -42,8 +45,8 @@ pub trait Dag {
     #[cfg(test)]
     // iterate over all edges `u -> v` and check that `u` appears before `v` in `topological_sort`
     fn is_topological(&self, topological_sort: &[Self::Node]) -> bool {
-        for (u, node_data) in self.nodes().iter_enumerated() {
-            for &v in node_data.adjacent() {
+        for u in self.nodes() {
+            for v in self.node_data(u).adjacent() {
                 if topological_sort.iter().position(|&node| node == u)
                     > topological_sort.iter().position(|&node| node == v)
                 {
@@ -56,7 +59,7 @@ pub trait Dag {
 }
 
 pub trait DagNode<G: Dag + ?Sized> {
-    fn adjacent(&self) -> &[G::Node];
+    fn adjacent(&self) -> G::Nodes;
 }
 
 newtype_index!(Node);
@@ -67,8 +70,8 @@ pub struct NodeData {
 }
 
 impl<'rcx> DagNode<DagBuilder> for NodeData {
-    fn adjacent(&self) -> &[Node] {
-        &self.parents
+    fn adjacent(&self) -> Vec<Node> {
+        self.parents.clone()
     }
 }
 
@@ -80,9 +83,10 @@ pub struct DagBuilder {
 impl Dag for DagBuilder {
     type Node = Node;
     type NodeData = NodeData;
+    type Nodes = Vec<Node>;
 
-    fn nodes(&self) -> &IndexVec<Self::Node, Self::NodeData> {
-        &self.nodes
+    fn nodes(&self) -> Self::Nodes {
+        (0..self.nodes.len()).map(Node::new).collect()
     }
 
     fn node_data(&self, node: Self::Node) -> &Self::NodeData {

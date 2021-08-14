@@ -16,6 +16,9 @@ impl<'rcx> BitRepo<'rcx> {
 impl<'rcx> Commit<'rcx> {
     /// Returns lowest common ancestor found.
     /// Only returns a single solution even when there may be multiple valid/optimal solutions.
+    // TODO
+    // I'm pretty sure this function will not work in all cases (i.e. return a non-optimal solution)
+    // Not sure if those cases will come up realistically though, to investigate
     pub fn find_merge_base(self, other: Commit<'rcx>) -> BitResult<Commit<'rcx>> {
         debug_assert_eq!(self.owner(), other.owner());
 
@@ -55,7 +58,7 @@ impl<'rcx> Commit<'rcx> {
                 }
                 (Some(x), _) => handle_x!(x),
                 (_, Some(y)) => handle_y!(y),
-                (None, None) => panic!("no merge base found two completely disjoint histories?"),
+                (None, None) => panic!("no merge base found, two completely disjoint histories?"),
             }
         }
     }

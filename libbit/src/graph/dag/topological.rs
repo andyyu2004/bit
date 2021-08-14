@@ -1,29 +1,29 @@
 use super::{Dag, DagNode};
-use indexed_vec::IndexVec;
+use rustc_hash::FxHashMap;
 use std::collections::VecDeque;
 
 // implement Kahn's algorithm
 pub struct TopologicalSort<'a, G: Dag + ?Sized> {
     dag: &'a G,
-    indegrees: IndexVec<G::Node, u32>,
+    indegrees: FxHashMap<G::Node, u32>,
     queue: VecDeque<G::Node>,
 }
 
 impl<'a, G: Dag + ?Sized> TopologicalSort<'a, G> {
     pub fn new(dag: &'a G) -> Self {
-        let mut indegrees = IndexVec::from_elem_n(0, dag.nodes().len());
+        let mut indegrees = FxHashMap::default();
 
-        for node_data in dag.nodes() {
-            for &parent in node_data.adjacent() {
-                indegrees[parent] += 1;
+        for node in dag.nodes() {
+            for parent in dag.node_data(node).adjacent() {
+                *indegrees.entry(parent).or_default() += 1;
             }
         }
 
         // start queue with all nodes that have no indegree
         let queue = indegrees
-            .iter_enumerated()
+            .iter()
             .filter(|(_, &indegree)| indegree == 0)
-            .map(|(node, _)| node)
+            .map(|(&node, _)| node)
             .collect();
 
         Self { dag, indegrees, queue }
@@ -35,11 +35,11 @@ impl<'a, G: Dag> Iterator for TopologicalSort<'a, G> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let node = self.queue.pop_front()?;
-        for &parent in self.dag.node_data(node).adjacent() {
-            let indegree = &mut self.indegrees[parent];
+        for parent in self.dag.node_data(node).adjacent() {
+            let indegree = self.indegrees.get_mut(&parent).unwrap();
             *indegree -= 1;
             if *indegree == 0 {
-                self.queue.push_back(parent)
+                self.queue.push_back(parent.clone())
             }
         }
         Some(node)

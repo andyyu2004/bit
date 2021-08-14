@@ -1,5 +1,6 @@
 use super::{BitObjCached, ImmutableBitObject, Tree, Treeish, WritableObject};
 use crate::error::{BitGenericError, BitResult};
+use crate::graph::{Dag, DagNode};
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::odb::BitObjDbBackend;
 use crate::repo::{BitRepo, Repo};
@@ -328,5 +329,26 @@ impl<'rcx> ImmutableBitObject<'rcx> for Commit<'rcx> {
 
     fn from_mutable(owner: BitRepo<'rcx>, cached: BitObjCached, inner: Self::Mutable) -> Self {
         Self { owner, cached, inner }
+    }
+}
+
+// trait needs some changes for commit to have a reasonable implementation
+impl<'rcx> Dag for Commit<'rcx> {
+    type Node = Oid;
+    type NodeData = Self;
+    type Nodes = SmallVec<[Oid; 2]>;
+
+    fn node_data(&self, node: Self::Node) -> &Self::NodeData {
+        todo!()
+    }
+
+    fn nodes(&self) -> Self::Nodes {
+        todo!()
+    }
+}
+
+impl<'rcx> DagNode<Commit<'rcx>> for Commit<'rcx> {
+    fn adjacent(&self) -> <Commit<'rcx> as Dag>::Nodes {
+        self.parents.clone()
     }
 }

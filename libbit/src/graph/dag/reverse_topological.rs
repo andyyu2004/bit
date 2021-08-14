@@ -1,12 +1,12 @@
 use super::*;
-use bit_set::BitSet;
+use rustc_hash::FxHashSet;
 use std::collections::VecDeque;
 
 // non-iterative implementation
 // this is only used in test code for now so doesn't matter too much
 pub struct ReverseTopologicalSort<'a, G: Dag + ?Sized> {
     dag: &'a G,
-    visited: BitSet<usize>,
+    visited: FxHashSet<G::Node>,
     solution: VecDeque<G::Node>,
 }
 
@@ -19,17 +19,18 @@ impl<'a, G: Dag + ?Sized> ReverseTopologicalSort<'a, G> {
 
     // populate `self.solution`
     fn solve(&mut self) {
-        for u in 0..self.dag.nodes().len() {
-            self.solve_node(G::Node::new(u))
+        for node in self.dag.nodes() {
+            self.solve_node(node)
         }
     }
 
     fn solve_node(&mut self, node: G::Node) {
-        if self.visited.contains(node.index()) {
+        if self.visited.contains(&node) {
             return;
         }
-        self.visited.insert(node.index());
-        for &v in self.dag.node_data(node).adjacent() {
+        self.visited.insert(node);
+
+        for v in self.dag.node_data(node).adjacent() {
             self.solve_node(v);
         }
         self.solution.push_back(node)
