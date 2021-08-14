@@ -3,6 +3,7 @@ use crate::graph::{Dag, DagBuilder, DagNode};
 use crate::obj::{BitObject, CommitMessage, Oid};
 use crate::repo::BitRepo;
 use crate::test_utils::generate_random_string;
+use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashMap;
 
 struct CommitGraphBuilder<'rcx> {
@@ -22,8 +23,8 @@ impl<'rcx> CommitGraphBuilder<'rcx> {
         // mapping from node to it's commit oid
         let mut commits = FxHashMap::<G::Node, Oid>::default();
 
-        for node in dag.reverse_topological() {
-            let node_data = dag.node_data(node);
+        dag.reverse_topological()?.for_each(|node| {
+            let node_data = dag.node_data(node)?;
             let parents = node_data.adjacent().into_iter().map(|parent| commits[&parent]).collect();
 
             let message = CommitMessage {
@@ -33,7 +34,9 @@ impl<'rcx> CommitGraphBuilder<'rcx> {
 
             let commit = self.repo.mk_commit(tree, message, parents)?;
             commits.insert(node, commit);
-        }
+            Ok(())
+        })?;
+
         Ok(commits)
     }
 }

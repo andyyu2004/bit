@@ -3,6 +3,7 @@ use crate::error::{BitGenericError, BitResult};
 use crate::graph::{Dag, DagNode};
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::odb::BitObjDbBackend;
+use crate::peel::Peel;
 use crate::repo::{BitRepo, Repo};
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
@@ -338,11 +339,11 @@ impl<'rcx> Dag for Commit<'rcx> {
     type NodeData = Self;
     type Nodes = SmallVec<[Oid; 2]>;
 
-    fn node_data(&self, node: Self::Node) -> &Self::NodeData {
-        todo!()
+    fn node_data(&self, oid: Oid) -> BitResult<Self::NodeData> {
+        oid.peel(self.owner)
     }
 
-    fn nodes(&self) -> Self::Nodes {
+    fn nodes(&self) -> BitResult<Self::Nodes> {
         todo!()
     }
 }

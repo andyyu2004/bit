@@ -4,6 +4,8 @@ pub use topological::TopologicalSort;
 
 #[cfg(test)]
 pub use reverse_topological::ReverseTopologicalSort;
+
+use crate::error::BitResult;
 #[cfg(test)]
 mod reverse_topological;
 
@@ -15,46 +17,47 @@ pub trait Dag {
     type Node: Copy + Eq + std::hash::Hash;
     type Nodes: IntoIterator<Item = Self::Node>;
     type NodeData: DagNode<Self>;
-    fn nodes(&self) -> Self::Nodes;
-    fn node_data(&self, node: Self::Node) -> &Self::NodeData;
 
-    fn topological(&self) -> TopologicalSort<'_, Self> {
+    fn nodes(&self) -> BitResult<Self::Nodes>;
+    fn node_data(&self, node: Self::Node) -> BitResult<Self::NodeData>;
+
+    fn topological(&self) -> BitResult<TopologicalSort<'_, Self>> {
         TopologicalSort::new(self)
     }
 
     #[cfg(test)]
-    fn reverse_topological(&self) -> ReverseTopologicalSort<'_, Self> {
+    fn reverse_topological(&self) -> BitResult<ReverseTopologicalSort<'_, Self>> {
         ReverseTopologicalSort::new(self)
     }
 
     #[cfg(test)]
     // iterate over all edges `u -> v` and check that `u` appears after `v` in `reverse_topological_sort`
-    fn is_reverse_topological(&self, topological_sort: &[Self::Node]) -> bool {
-        for u in self.nodes() {
-            for v in self.node_data(u).adjacent() {
+    fn is_reverse_topological(&self, topological_sort: &[Self::Node]) -> BitResult<bool> {
+        for u in self.nodes()? {
+            for v in self.node_data(u)?.adjacent() {
                 if topological_sort.iter().position(|&node| node == u)
                     < topological_sort.iter().position(|&node| node == v)
                 {
-                    return false;
+                    return Ok(false);
                 }
             }
         }
-        true
+        Ok(true)
     }
 
     #[cfg(test)]
     // iterate over all edges `u -> v` and check that `u` appears before `v` in `topological_sort`
-    fn is_topological(&self, topological_sort: &[Self::Node]) -> bool {
-        for u in self.nodes() {
-            for v in self.node_data(u).adjacent() {
+    fn is_topological(&self, topological_sort: &[Self::Node]) -> BitResult<bool> {
+        for u in self.nodes()? {
+            for v in self.node_data(u)?.adjacent() {
                 if topological_sort.iter().position(|&node| node == u)
                     > topological_sort.iter().position(|&node| node == v)
                 {
-                    return false;
+                    return Ok(false);
                 }
             }
         }
-        true
+        Ok(true)
     }
 }
 
@@ -85,12 +88,12 @@ impl Dag for DagBuilder {
     type NodeData = NodeData;
     type Nodes = Vec<Node>;
 
-    fn nodes(&self) -> Self::Nodes {
-        (0..self.nodes.len()).map(Node::new).collect()
+    fn nodes(&self) -> BitResult<Self::Nodes> {
+        Ok((0..self.nodes.len()).map(Node::new).collect())
     }
 
-    fn node_data(&self, node: Self::Node) -> &Self::NodeData {
-        &self.nodes[node]
+    fn node_data(&self, node: Self::Node) -> BitResult<Self::NodeData> {
+        Ok(self.nodes[node].clone())
     }
 }
 
