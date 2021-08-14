@@ -1,7 +1,6 @@
 # bit
 
-A fully git-compliant implementation that currently implements a small subset of git
-commands.
+A fully git-compliant implementation that currently implements a small subset of git commands.
 
 Wouldn't recommend using this to manipulate your valued repositories yet!
 
@@ -29,18 +28,20 @@ Run commands and subcommands with the `--help` flag to see all available options
 
 ## Installation
 
-Install that latest rust nightly build using [rustup](https://rustup.rs/).
+Install the latest rust nightly using [rustup](https://rustup.rs/).
 
-Clone repository and build using the cargo package manager.
+Clone this repository and build using `cargo`.
 
 The following should all be performed from within the cloned directory.
 
 `cargo b --release`
 
 To run, you can either use cargo as above `cargo r --release -- [<bit args>...]`.
-Alternatively, you can install `bit` locally as a binary using `cargo install --path bit`.
+Alternatively, you can install `bit` locally as a binary using `cargo install --path bit` and
+run as `bit <args>`.
 
-Strongly recommended to use [delta](https://github.com/dandavison/delta) as the git pager for readable diffs.
+It is strongly recommended to use [delta](https://github.com/dandavison/delta)
+as the git pager to produce readable diffs.
 
 ```
 # .gitconfig
@@ -48,8 +49,7 @@ Strongly recommended to use [delta](https://github.com/dandavison/delta) as the 
     pager = delta
 ```
 
-# Warning
+## Warning
 
-This does not currently support windows as it uses some unix specific path apis.
-
-Furthermore, even on unix, there is an assumption that path data is encoded in utf-8.
+`bit` does not currently support windows as it uses some Unix specific path apis.
+Furthermore, even on Unix, there is an assumption that paths are encoded in UTF-8.
