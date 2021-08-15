@@ -1,4 +1,5 @@
 use crate::error::BitResult;
+use crate::iter::BitTreeIterator;
 use crate::obj::{BitObject, Commit, Oid};
 use crate::peel::Peel;
 use crate::repo::BitRepo;
@@ -12,13 +13,33 @@ impl<'rcx> BitRepo<'rcx> {
         a.find_merge_base(b)
     }
 
-    pub fn merge(self, base: Oid, target: Oid) -> BitResult<Oid> {
-        let base_commit = base.peel(self)?;
-        let target_commit = target.peel(self)?;
-        let merge_base = base_commit.find_merge_base(target_commit)?;
-        if merge_base.oid() == base {
+    pub fn merge(self, a: Oid, b: Oid) -> BitResult<Oid> {
+        let commit_a = a.peel(self)?;
+        let commit_b = b.peel(self)?;
+        let merge_base = commit_a.find_merge_base(commit_b)?;
+
+        if merge_base.oid() == a {
             todo!("ff merge")
         }
+
+        if merge_base.oid() == b {
+            todo!("ff merge")
+        }
+
+        self.merge_iterators(
+            self.tree_iter(merge_base.oid()),
+            self.tree_iter(a),
+            self.tree_iter(b),
+        )?;
+        todo!()
+    }
+
+    pub fn merge_iterators(
+        self,
+        base: impl BitTreeIterator,
+        a: impl BitTreeIterator,
+        b: impl BitTreeIterator,
+    ) -> BitResult<()> {
         todo!()
     }
 }

@@ -24,12 +24,6 @@ pub trait IndexDiffer<'rcx>: Differ {
     fn index_mut(&mut self) -> &mut BitIndex<'rcx>;
 }
 
-// comparison function for differs
-// cares about paths first, then modes second
-fn diff_cmp(a: &impl BitEntry, b: &impl BitEntry) -> std::cmp::Ordering {
-    a.path().cmp(&b.path()).then_with(|| a.mode().cmp(&b.mode()))
-}
-
 pub trait DiffBuilder<'rcx>: IndexDiffer<'rcx> {
     /// the type of the resulting diff (returned by `Self::build_diff`)
     type Diff;
@@ -104,7 +98,7 @@ where
                 (Some(old), Some(new)) => {
                     // there is an old record that no longer has a matching new record
                     // therefore it has been deleted
-                    match diff_cmp(old, new) {
+                    match old.entry_cmp(new) {
                         Ordering::Less => on_deleted!(old),
                         Ordering::Equal => on_modified!(old => new),
                         Ordering::Greater => on_created!(new),

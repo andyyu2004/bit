@@ -79,7 +79,7 @@ where
                 (None, None) => break,
                 (None, Some(new)) => self.on_created(new)?,
                 (Some(old), None) => self.on_deleted(old)?,
-                (Some(old), Some(new)) => match diff_cmp(&old, &new) {
+                (Some(old), Some(new)) => match old.entry_cmp(&new) {
                     Ordering::Less => self.on_deleted(old)?,
                     Ordering::Equal => self.on_matched(old, new)?,
                     Ordering::Greater => self.on_created(new)?,

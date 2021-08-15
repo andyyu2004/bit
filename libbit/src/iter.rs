@@ -1,5 +1,6 @@
 mod index_tree_iter;
 mod tree_iter;
+mod walk;
 
 pub use fallible_iterator::FallibleIterator;
 pub use index_tree_iter::IndexTreeIter;
@@ -23,6 +24,13 @@ pub trait BitEntry {
     fn oid(&self) -> Oid;
     fn path(&self) -> BitPath;
     fn mode(&self) -> FileMode;
+
+    // comparison function for differs
+    // cares about paths first, then modes second
+    // otherwise they are considered equal
+    fn entry_cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.path().cmp(&other.path()).then_with(|| self.mode().cmp(&other.mode()))
+    }
 
     fn is_tree(&self) -> bool {
         self.mode().is_tree()
