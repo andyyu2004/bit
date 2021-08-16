@@ -36,11 +36,12 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn merge_iterators(
         self,
-        base: impl BitTreeIterator,
-        a: impl BitTreeIterator,
-        b: impl BitTreeIterator,
+        base_iter: impl BitTreeIterator,
+        a_iter: impl BitTreeIterator,
+        b_iter: impl BitTreeIterator,
     ) -> BitResult<()> {
-        todo!()
+        let walk = self.walk_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
+        walk.for_each(|[a, b, c]| Ok(()))
     }
 }
 

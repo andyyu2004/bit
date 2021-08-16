@@ -47,11 +47,12 @@ impl Ord for RefDecoration {
         // symbolic refs come first, otherwise defer to the ordering of the decoration style
         // least comes first in btreeset iterator
         match (self, other) {
-            (RefDecoration::Branch(a), RefDecoration::Branch(b)) => a.kind().cmp(&b.kind()),
+            (RefDecoration::Branch(a), RefDecoration::Branch(b)) =>
+                a.kind().cmp(&b.kind()).then_with(|| a.cmp(b)),
             (RefDecoration::Branch(..), RefDecoration::Symbolic(..)) => Ordering::Greater,
             (RefDecoration::Symbolic(..), RefDecoration::Branch(..)) => Ordering::Less,
-            (RefDecoration::Symbolic(a, _), RefDecoration::Symbolic(b, _)) =>
-                a.kind().cmp(&b.kind()),
+            (RefDecoration::Symbolic(a, x), RefDecoration::Symbolic(b, y)) =>
+                a.kind().cmp(&b.kind()).then_with(|| a.cmp(b)).then_with(|| x.cmp(y)),
         }
     }
 }
@@ -89,7 +90,7 @@ impl BitRepo<'_> {
             if let RefDecoration::Symbolic(_, branch) = decoration {
                 handled.insert(branch);
             }
-            decorations.entry(oid).or_default().insert(decoration);
+            assert!(decorations.entry(oid).or_default().insert(decoration));
         }
         Ok(decorations)
     }

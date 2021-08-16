@@ -11,6 +11,8 @@ use std::str::FromStr;
 fn test_calculate_ref_decoration() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         repo.bit_create_branch("a-new-branch", &rev!("HEAD"))?;
+        repo.bit_create_branch("b-new-branch", &rev!("HEAD"))?;
+        repo.bit_create_branch("c-new-branch", &rev!("HEAD"))?;
         let refs = repo.ls_refs()?;
         let decorations = repo.ref_decorations(&refs)?;
         assert_eq!(decorations.len(), 1);
@@ -20,6 +22,8 @@ fn test_calculate_ref_decoration() -> BitResult<()> {
             &btreeset! {
                 RefDecoration::Symbolic(symbolic!("HEAD"), symbolic!("refs/heads/master")),
                 RefDecoration::Branch(symbolic!("refs/heads/a-new-branch")),
+                RefDecoration::Branch(symbolic!("refs/heads/b-new-branch")),
+                RefDecoration::Branch(symbolic!("refs/heads/c-new-branch")),
             }
         );
         Ok(())
