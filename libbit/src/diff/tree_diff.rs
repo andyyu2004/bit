@@ -127,7 +127,13 @@ where
                     If two entries have the same path then files should come before directories (as per `diff_cmp`).
                     We do not currently detect type changes, and instead treat this as an add/remove pair"
                 );
-                // non matching files
+                // non-matching files
+                trace!(
+                    "TreeDifferGeneric::on_matched modified `{}`, {} -> {}",
+                    old.path,
+                    old.oid,
+                    new.oid
+                );
                 self.differ.modified_blob(old, new)?;
                 self.old_iter.next()?;
                 self.new_iter.next()?;

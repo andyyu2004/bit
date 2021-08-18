@@ -479,8 +479,34 @@ fn test_bit_index_entry_flags() {
     let flags = BitIndexEntryFlags::new(0xb9fa);
     assert!(flags.assume_valid());
     assert!(!flags.extended());
-    assert_eq!(flags.stage(), MergeStage::Stage3);
+    assert_eq!(flags.stage(), MergeStage::Three);
     assert_eq!(flags.path_len(), 0x9fa);
+}
+
+#[test]
+fn test_bit_index_entry_set_stage() {
+    let assert_everything_else_is_still_zero = |flags: BitIndexEntryFlags| {
+        assert!(!flags.assume_valid());
+        assert!(!flags.extended());
+        assert_eq!(flags.path_len(), 0);
+    };
+    let mut flags = BitIndexEntryFlags::new(0);
+
+    flags.set_stage(MergeStage::Two);
+    assert_eq!(flags.stage(), MergeStage::Two);
+    assert_everything_else_is_still_zero(flags);
+
+    flags.set_stage(MergeStage::One);
+    assert_eq!(flags.stage(), MergeStage::One);
+    assert_everything_else_is_still_zero(flags);
+
+    flags.set_stage(MergeStage::Three);
+    assert_eq!(flags.stage(), MergeStage::Three);
+    assert_everything_else_is_still_zero(flags);
+
+    flags.set_stage(MergeStage::None);
+    assert_eq!(flags.stage(), MergeStage::None);
+    assert_everything_else_is_still_zero(flags);
 }
 
 #[test]

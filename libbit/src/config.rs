@@ -7,6 +7,7 @@
 
 use crate::error::BitResult;
 use crate::interner::Intern;
+use crate::merge::ConflictStyle;
 use crate::repo::RepoCtxt;
 use git_config::file::GitConfig;
 use git_config::values::{Boolean, Integer};
@@ -108,17 +109,17 @@ impl<'c> BitConfig<'c> {
 }
 
 pub trait BitConfigValue: Sized {
-    fn get(bytes: &str) -> BitResult<Self>;
+    fn parse(s: &str) -> BitResult<Self>;
 }
 
 impl BitConfigValue for String {
-    fn get(s: &str) -> BitResult<Self> {
+    fn parse(s: &str) -> BitResult<Self> {
         Ok(s.to_owned())
     }
 }
 
 impl BitConfigValue for i64 {
-    fn get(s: &str) -> BitResult<Self> {
+    fn parse(s: &str) -> BitResult<Self> {
         let i = Integer::from_str(s).unwrap_or_else(|err| {
             panic!("failed to parse config value as integer `{}`: {}", s, err)
         });
@@ -127,13 +128,23 @@ impl BitConfigValue for i64 {
 }
 
 impl BitConfigValue for bool {
-    fn get(s: &str) -> BitResult<Self> {
+    fn parse(s: &str) -> BitResult<Self> {
         let b = Boolean::try_from(s.to_owned()).unwrap_or_else(|err| {
             panic!("failed to parse config value as boolean `{}`: {}", s, err)
         });
         match b {
             Boolean::True(_) => Ok(true),
             Boolean::False(_) => Ok(false),
+        }
+    }
+}
+
+impl BitConfigValue for ConflictStyle {
+    fn parse(s: &str) -> BitResult<Self> {
+        match s {
+            "merge" => Ok(ConflictStyle::Merge),
+            "diff3" => Ok(ConflictStyle::Diff3),
+            _ => bail!("unknown merge style `{}`", s),
         }
     }
 }
@@ -145,7 +156,7 @@ impl<'c> BitConfig<'c> {
 
     pub fn get<T: BitConfigValue>(&self, section: &str, key: &str) -> BitResult<Option<T>> {
         self.get_raw(section, key)
-            .map(|bytes| T::get(std::str::from_utf8(&bytes).expect("invalid utf8 in bitconfig")))
+            .map(|bytes| T::parse(std::str::from_utf8(&bytes).expect("invalid utf8 in bitconfig")))
             .transpose()
     }
 
@@ -190,12 +201,14 @@ macro_rules! get_opt {
 macro_rules! get {
     ($section:ident.$field:ident:$ty:ty, $default:expr) => {
         impl<'a, 'rcx> Config<'a, 'rcx> {
+            #[allow(non_snake_case)]
             pub fn $field(&self) -> BitResult<$ty> {
                 self.repo.with_local_config(|config| config.$field())
             }
         }
 
         impl<'c> BitConfig<'c> {
+            #[allow(non_snake_case)]
             pub fn $field(&self) -> BitResult<$ty> {
                 let section = stringify!($section);
                 let field = stringify!($field);
@@ -213,6 +226,8 @@ macro_rules! get {
 
 get!(core.filemode: bool, false);
 get!(core.pager: String, "less".to_owned());
+
+get!(merge.conflictStyle: ConflictStyle, ConflictStyle::Merge);
 
 get_opt!(core.repositoryformatversion: i64);
 get_opt!(core.bare: bool);

@@ -2,6 +2,8 @@ use super::*;
 use crate::obj::MutableTree;
 use std::iter::FromIterator;
 
+pub type SkipTrees<I> = fallible_iterator::Filter<I, fn(&BitIndexEntry) -> BitResult<bool>>;
+
 /// Tree iterators allow stepping over entire trees (skipping all entries recursively)
 // The methods on this trait yield index_entries rather than tree_entries as index_entries are strictly more general
 // In particular, the index tree iterator implements this trait and we don't want to lose the information in the index entry.
@@ -16,6 +18,23 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
     /// and its contents skipped over
     /// full paths should be returned (relative to repo root), not just relative to the parent
     fn over(&mut self) -> BitResult<Option<Self::Item>>;
+
+    // seems difficult to provide a peek method just via an adaptor
+    // unclear how to implement peek in terms of `over` and `next`
+    // in particular for the case of `TreeIter`,
+    // if `peek` uses `next`, then all the subdirectories would already
+    // be added to the stack and its awkward to implement `over` after `peek`
+    // similar problems arise with implementing `peek` using `over`
+    // probably better to just let the implementor deal with it
+    // especially as the implementation is probably trivial
+    fn peek(&mut self) -> BitResult<Option<Self::Item>>;
+
+    fn ignore_trees(self) -> SkipTrees<Self>
+    where
+        Self: Sized,
+    {
+        self.filter(|entry| Ok(!entry.is_tree()))
+    }
 
     // TODO these names all suck
     fn collect_over_tree_files(
@@ -64,16 +83,6 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
         debug_assert!(root.oid.is_unknown() || root.oid == oid);
         Ok(oid)
     }
-
-    // seems difficult to provide a peek method just via an adaptor
-    // unclear how to implement peek in terms of `over` and `next`
-    // in particular for the case of `TreeIter`,
-    // if `peek` uses `next`, then all the subdirectories would already
-    // be added to the stack and its awkward to implement `over` after `peek`
-    // similar problems arise with implementing `peek` using `over`
-    // probably better to just let the implementor deal with it
-    // especially as the implementation is probably trivial
-    fn peek(&mut self) -> BitResult<Option<Self::Item>>;
 }
 
 impl<'a, I: BitTreeIterator> BitTreeIterator for &'a mut I {

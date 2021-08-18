@@ -75,7 +75,7 @@ impl Display for CommitSummary<'_> {
         if self.sym == SymbolicRef::HEAD {
             writeln!(f, "[detached HEAD {}]", self.commit.oid())?;
         } else {
-            writeln!(f, "[{} {}]", self.sym, self.commit.oid())?;
+            writeln!(f, "[{} {}]", self.sym.short(), self.commit.oid())?;
         }
 
         let files_changed = self.status.len();

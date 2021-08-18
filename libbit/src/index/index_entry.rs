@@ -144,7 +144,7 @@ impl From<TreeEntry> for BitIndexEntry {
             gid: 0,
             filesize: 0,
             oid: entry.oid,
-            flags: BitIndexEntryFlags::new(0),
+            flags: BitIndexEntryFlags::with_path_len(entry.path.len()),
             extended_flags: BitIndexEntryExtendedFlags::default(),
             path: entry.path,
         }
@@ -199,6 +199,14 @@ impl BitIndexEntry {
 
     pub fn stage(&self) -> MergeStage {
         self.flags.stage()
+    }
+
+    pub fn set_stage(&mut self, stage: MergeStage) {
+        self.flags.set_stage(stage)
+    }
+
+    pub fn is_unmerged(&self) -> bool {
+        self.stage().is_unmerged()
     }
 
     pub(super) fn padding_len(&self) -> usize {
@@ -278,6 +286,13 @@ impl BitIndexEntryFlags {
     pub fn stage(self) -> MergeStage {
         let stage = (self.0 & 0x3000) >> 12;
         MergeStage::try_from(stage as u8).unwrap()
+    }
+
+    pub fn set_stage(&mut self, stage: MergeStage) {
+        // reset relevant bits to 0
+        self.0 &= 0 & !0x3000;
+        // and then set them again
+        self.0 |= (stage as u16) << 12
     }
 
     pub fn path_len(self) -> u16 {

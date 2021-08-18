@@ -7,6 +7,7 @@ mod cli_commit_tree;
 mod cli_config;
 mod cli_log;
 mod cli_ls_files;
+mod cli_merge;
 mod cli_merge_base;
 mod cli_reflog;
 mod cli_revlist;
@@ -30,6 +31,7 @@ use cli_commit::BitCommitCliOpts;
 use cli_commit_tree::BitCommitTreeCliOpts;
 use cli_config::BitConfigCliOpts;
 use cli_ls_files::BitLsFilesCliOpts;
+use cli_merge::BitMergeCliOpts;
 use cli_reflog::BitReflogCliOpts;
 use cli_status::BitStatusCliOpts;
 use cli_switch::BitSwitchCliOpts;
@@ -83,6 +85,7 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
         BitSubCmd::Diff(opts) => opts.exec(repo),
         BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),
         BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
+        BitSubCmd::Merge(opts) => opts.exec(repo),
         BitSubCmd::MergeBase(opts) => opts.exec(repo),
         BitSubCmd::Reflog(opts) => opts.exec(repo),
         BitSubCmd::Revlist(opts) => opts.exec(repo),
@@ -119,6 +122,7 @@ pub enum BitSubCmd {
     Init(BitInitCliOpts),
     Log(BitLogCliOpts),
     LsFiles(BitLsFilesCliOpts),
+    Merge(BitMergeCliOpts),
     MergeBase(BitMergeBaseCliOpts),
     Reflog(BitReflogCliOpts),
     #[clap(name = "rev-list")]

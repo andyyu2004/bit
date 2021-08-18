@@ -1,3 +1,6 @@
+use arrayvec::ArrayVec;
+use indexmap::IndexMap;
+
 use super::*;
 
 /// representation of the index file
@@ -17,6 +20,41 @@ pub struct BitIndexInner {
     entries: BitIndexEntries,
     tree_cache: Option<BitTreeCache>,
     reuc: Option<BitReuc>,
+}
+
+pub type Conflicts = Vec<Conflict>;
+
+#[derive(Debug, PartialEq)]
+pub struct Conflict {
+    pub path: BitPath,
+    pub conflict_type: ConflictType,
+}
+
+impl Conflict {
+    /// `stages` are what stages exist for `path` in the index
+    pub fn new((path, stages): (BitPath, ArrayVec<MergeStage, 3>)) -> Self {
+        Self { path, conflict_type: ConflictType::new(stages) }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ConflictType {
+    BothModified,
+    BothAdded,
+    ModifyDelete,
+    DeleteModify,
+}
+
+impl ConflictType {
+    fn new(stages: ArrayVec<MergeStage, 3>) -> Self {
+        match &stages[..] {
+            [MergeStage::One, MergeStage::Two, MergeStage::Three] => Self::BothModified,
+            [MergeStage::Two, MergeStage::Three] => Self::BothAdded,
+            [MergeStage::One, MergeStage::Two] => Self::ModifyDelete,
+            [MergeStage::One, MergeStage::Three] => Self::DeleteModify,
+            _ => unreachable!("probably missing some cases"),
+        }
+    }
 }
 
 impl BitIndexInner {
@@ -40,7 +78,7 @@ impl BitIndexInner {
         &self.entries
     }
 
-    pub fn insert_entry(&mut self, entry: BitIndexEntry) {
+    pub(super) fn insert_entry(&mut self, entry: BitIndexEntry) {
         self.entries.insert(entry.key(), entry);
         self.invalidate_tree_cache_path(entry.path)
     }
@@ -54,10 +92,19 @@ impl BitIndexInner {
         exists
     }
 
-    pub fn invalidate_tree_cache_path(&mut self, path: BitPath) {
+    fn invalidate_tree_cache_path(&mut self, path: BitPath) {
         if let Some(tree_cache) = &mut self.tree_cache {
             tree_cache.invalidate_path(path)
         }
+    }
+
+    pub fn conflicts(&self) -> Conflicts {
+        let mut conflict_map = IndexMap::<BitPath, ArrayVec<MergeStage, 3>>::new();
+        self.entries.values().filter(|entry| entry.stage().is_unmerged()).for_each(|entry| {
+            conflict_map.entry(entry.path).or_default().push(entry.stage());
+        });
+
+        conflict_map.into_iter().map(Conflict::new).collect()
     }
 
     pub fn std_iter(&self) -> IndexStdIterator {
@@ -123,7 +170,7 @@ impl BitIndexInner {
     }
 
     pub fn has_conflicts(&self) -> bool {
-        self.entries.keys().any(|(_, stage)| stage.is_merging())
+        self.entries.keys().any(|(_, stage)| stage.is_unmerged())
     }
 }
 

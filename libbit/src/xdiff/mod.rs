@@ -6,6 +6,8 @@ use diffy::PatchFormatter;
 use std::io::{self, Write};
 use std::ops::{Index, IndexMut};
 
+use crate::merge::ConflictStyle;
+
 pub type BitPatch<'a> = diffy::Patch<'a, str>;
 
 // TODO too lazy to implement all this rn so just using a library and see how it goes
@@ -15,6 +17,15 @@ pub fn xdiff<'a>(original: &'a str, modified: &'a str) -> BitPatch<'a> {
 
 pub fn format_patch_into<W: Write>(writer: W, patch: &BitPatch<'_>) -> io::Result<()> {
     PatchFormatter::new().write_patch_into(patch, writer)
+}
+
+pub fn merge(
+    conflict_style: ConflictStyle,
+    base: &str,
+    a: &str,
+    b: &str,
+) -> Result<String, String> {
+    diffy::MergeOptions::new().set_conflict_style(conflict_style).merge(base, a, b)
 }
 
 struct OffsetVec<T> {

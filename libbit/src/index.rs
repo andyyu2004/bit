@@ -4,7 +4,7 @@ mod reuc;
 mod tree_cache;
 
 pub use index_entry::*;
-pub use index_inner::BitIndexInner;
+pub use index_inner::{BitIndexInner, Conflict, ConflictType, Conflicts};
 
 use self::reuc::BitReuc;
 use self::tree_cache::BitTreeCache;
@@ -97,11 +97,31 @@ impl<'rcx> BitIndex<'rcx> {
     /// if entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
+        self.remove_conflicted(entry.path);
 
         entry.oid = self.repo.write_blob(entry.path)?;
         assert!(entry.oid.is_known());
         self.insert_entry(entry);
         Ok(())
+    }
+
+    pub fn add_conflicted_entry(
+        &mut self,
+        mut entry: BitIndexEntry,
+        stage: MergeStage,
+    ) -> BitResult<()> {
+        assert!(entry.oid.is_known());
+        self.remove_entry((entry.path, MergeStage::None));
+
+        entry.set_stage(stage);
+        self.add_entry(entry)?;
+        Ok(())
+    }
+
+    fn remove_conflicted(&mut self, path: BitPath) {
+        self.remove_entry((path, MergeStage::One));
+        self.remove_entry((path, MergeStage::Two));
+        self.remove_entry((path, MergeStage::Three));
     }
 
     /// makes the index exactly match the working tree (removes, updates, and adds)
@@ -177,10 +197,10 @@ pub struct BitIndexExtension {
 #[repr(u8)]
 pub enum MergeStage {
     /// not merging
-    None   = 0,
-    Stage1 = 1,
-    Stage2 = 2,
-    Stage3 = 3,
+    None  = 0,
+    One   = 1,
+    Two   = 2,
+    Three = 3,
 }
 
 #[cfg(test)]
@@ -197,7 +217,7 @@ impl Default for MergeStage {
 }
 
 impl MergeStage {
-    pub fn is_merging(self) -> bool {
+    pub fn is_unmerged(self) -> bool {
         self as u8 > 0
     }
 }

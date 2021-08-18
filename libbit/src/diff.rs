@@ -263,7 +263,6 @@ impl<'rcx> BitIndex<'rcx> {
         debug_assert_eq!(old.path, new.path);
         // the "old" entry should always have a calculated hash
         debug_assert!(old.oid.is_known());
-        debug_assert_eq!(old.stage(), MergeStage::None);
 
         match self.has_changes_inner(old, new)? {
             Changed::Yes => Ok(true),

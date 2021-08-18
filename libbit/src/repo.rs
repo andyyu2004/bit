@@ -302,10 +302,16 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(self.read_obj(oid)?.into_commit().tree)
     }
 
-    /// returns the resolved hash of the HEAD symref
+    /// returns the resolved reference of HEAD
     pub fn resolve_head(self) -> BitResult<BitRef> {
         let head = self.read_head()?;
         self.resolve_ref(head)
+    }
+
+    /// returns the resolved oid of HEAD
+    pub fn fully_resolve_head(self) -> BitResult<Oid> {
+        let head = self.read_head()?;
+        self.fully_resolve_ref(head)
     }
 
     /// reads the contents of `HEAD`
