@@ -100,7 +100,7 @@ impl BitStatus {
         if !self.conflicted.is_empty() {
             writeln!(f, "You have unmerged paths")?;
             writeln!(f, "  (fix conflicts and run `bit commit`)")?;
-            writeln!(f, "  (use `git merge --abort` to abort the merge)")?;
+            writeln!(f, "  (use `bit merge --abort` to abort the merge)")?;
         }
         Ok(())
     }
@@ -183,6 +183,7 @@ impl BitStatus {
 
     fn fmt_summary(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // print status summary
+        // TODO this should only consider the unmerged entries
         if !self.unstaged.is_empty() && self.staged.is_empty() {
             writeln!(f, "no changes added to commit (use `bit add`) to stage")?;
         } else if self.is_empty() {
@@ -204,7 +205,7 @@ impl BitStatus {
 
 impl Display for Conflict {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}:\t{}", self.conflict_type, self.path)
+        write!(f, "{}:\t{}", self.conflict_type, self.path)
     }
 }
 
