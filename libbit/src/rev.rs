@@ -34,7 +34,7 @@ pub enum Revspec {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    /// resolve a revision to an oid
+    /// resolve a revision to a commit oid
     pub fn fully_resolve_rev(self, rev: &LazyRevspec) -> BitResult<Oid> {
         let reference = self.resolve_rev(rev)?;
         self.fully_resolve_ref(reference)

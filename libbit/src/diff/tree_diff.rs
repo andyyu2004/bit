@@ -101,7 +101,8 @@ where
 
     fn on_matched(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         trace!("TreeDifferGeneric::on_match(path: {})", new.path());
-        // one of the oid's may be unknown due to being a pseudotree
+        // One of the oid's may be unknown due to being either a pseudotree (index_tree_iter)
+        // or just a tree (worktree_tree_iter)
         debug_assert!(old.oid().is_known() || new.oid().is_known());
         match (old.mode(), new.mode()) {
             (FileMode::TREE, FileMode::TREE) if old == new => {
@@ -126,6 +127,10 @@ where
                     "A tree vs nontree should not call `on_match`, check the ordering function.
                     If two entries have the same path then files should come before directories (as per `diff_cmp`).
                     We do not currently detect type changes, and instead treat this as an add/remove pair"
+                );
+                debug_assert!(
+                    old.oid().is_known() && new.oid().is_known(),
+                    "all non-tree entries should have known oids"
                 );
                 // non-matching files
                 trace!(

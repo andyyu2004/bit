@@ -61,7 +61,7 @@ impl BitRepo<'_> {
     }
 
     fn debug_tree_internal(self, oid: Oid, path: BitPath) -> BitResult<DebugTree> {
-        let tree = self.read_obj(oid)?.into_tree()?;
+        let tree = self.read_obj(oid)?.into_tree();
         let mut entries = Vec::with_capacity(tree.entries.len());
         for &entry in &tree.entries {
             let path = path.join(entry.path);
@@ -338,6 +338,7 @@ macro_rules! symbolic_ref {
     }};
 }
 
+#[macro_export]
 macro_rules! rev {
     ($rev:expr) => {{
         #[allow(unused_imports)]

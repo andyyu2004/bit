@@ -2,13 +2,14 @@ mod tree_diff;
 pub use tree_diff::*;
 
 use crate::error::BitResult;
-use crate::index::{BitIndex, BitIndexEntry, MergeStage};
+use crate::index::{BitIndex, BitIndexEntry};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
-use crate::obj::Oid;
+use crate::obj::{Oid, Treeish};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
+use crate::rev::LazyRevspec;
 use crate::time::Timespec;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
@@ -116,18 +117,44 @@ where
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    /// diff the tree belonging to the commit pointed to by `reference` with the index
+    pub fn diff_treeish_index(
+        self,
+        treeish: impl Treeish<'rcx>,
+        pathspec: Pathspec,
+    ) -> BitResult<WorkspaceStatus> {
+        self.diff_tree_index(treeish.treeish_oid(self)?, pathspec)
+    }
+
     pub fn diff_ref_index(
         self,
         reference: BitRef,
         pathspec: Pathspec,
     ) -> BitResult<WorkspaceStatus> {
-        let commit_oid = self.try_fully_resolve_ref(reference)?;
-        let tree_oid = match commit_oid {
-            Some(oid) => self.read_obj(oid)?.into_commit().tree(),
-            None => Oid::UNKNOWN,
+        // we need to ensure diff still works even if HEAD points to a nonexistent branch
+        // in which case we just do a diff against an empty tree
+        let tree_oid = match self.resolve_ref(reference)? {
+            BitRef::Direct(oid) => oid.treeish_oid(self)?,
+            BitRef::Symbolic(..) => Oid::UNKNOWN,
         };
         self.diff_tree_index(tree_oid, pathspec)
+    }
+
+    /// diff the tree belonging to the commit pointed to by `reference` with the index
+    pub fn diff_rev_index(
+        self,
+        rev: &LazyRevspec,
+        pathspec: Pathspec,
+    ) -> BitResult<WorkspaceStatus> {
+        let reference = self.resolve_rev(rev)?;
+        self.diff_ref_index(reference, pathspec)
+    }
+
+    pub fn diff_tree_worktree(self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+        self.with_index(|index| {
+            let tree_iter = pathspec.match_tree_iter(self.tree_iter(tree));
+            let worktree_iter = pathspec.match_tree_iter(index.worktree_tree_iter()?);
+            TreeStatusDiffer::default().build_diff(tree_iter, worktree_iter)
+        })
     }
 
     pub fn diff_tree_index(self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {

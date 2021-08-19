@@ -84,6 +84,10 @@ impl<'rcx> Treeish<'rcx> for Commit<'rcx> {
     fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
         self.tree.treeish(repo)
     }
+
+    fn treeish_oid(&self, _repo: BitRepo<'rcx>) -> BitResult<Oid> {
+        Ok(self.tree())
+    }
 }
 
 impl MutableCommit {

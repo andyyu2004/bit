@@ -20,6 +20,7 @@ pub enum BitError {
 
 pub trait BitErrorExt {
     fn try_into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)>;
+    fn try_into_obj_not_found_err(self) -> BitResult<BitId>;
     fn try_into_nonexistent_symref_err(self) -> BitResult<SymbolicRef>;
     fn try_into_bit_error(self) -> BitResult<BitError>;
     fn try_into_status_error(self) -> BitResult<BitStatus>;
@@ -36,13 +37,6 @@ impl BitErrorExt for BitGenericError {
         }
     }
 
-    fn try_into_bit_error(self) -> BitResult<BitError> {
-        match self.downcast::<BitError>() {
-            Ok(bit_error) => Ok(bit_error),
-            Err(cast_failed_err) => Err(cast_failed_err),
-        }
-    }
-
     fn try_into_nonexistent_symref_err(self) -> BitResult<SymbolicRef> {
         match self.try_into_bit_error()? {
             BitError::NonExistentSymRef(sym) => Ok(sym),
@@ -50,8 +44,22 @@ impl BitErrorExt for BitGenericError {
         }
     }
 
+    fn try_into_bit_error(self) -> BitResult<BitError> {
+        match self.downcast::<BitError>() {
+            Ok(bit_error) => Ok(bit_error),
+            Err(cast_failed_err) => Err(cast_failed_err),
+        }
+    }
+
     fn try_into_status_error(self) -> BitResult<BitStatus> {
         self.downcast()
+    }
+
+    fn try_into_obj_not_found_err(self) -> BitResult<BitId> {
+        match self.try_into_bit_error()? {
+            BitError::ObjectNotFound(id) => Ok(id),
+            err => Err(anyhow!(err)),
+        }
     }
 }
 

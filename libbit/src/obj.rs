@@ -188,11 +188,9 @@ pub enum BitObjKind<'rcx> {
 }
 
 impl<'rcx> BitObjKind<'rcx> {
-    // TODO bitobjkind doesn't impl `Treeish` as the signature isn't ideal as we don't actually need the repo here
-    // to consider later
-    pub fn into_tree(self) -> BitResult<Tree<'rcx>> {
+    pub fn into_tree(self) -> Tree<'rcx> {
         match self {
-            Self::Tree(tree) => Ok(*tree),
+            Self::Tree(tree) => *tree,
             // panicking instead of erroring as this should be called only with certainty
             _ => panic!("expected tree, found `{}`", self.obj_ty()),
         }

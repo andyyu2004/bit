@@ -1,27 +1,51 @@
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
+use libbit::obj::Treeish;
 use libbit::pathspec::Pathspec;
-use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
+use libbit::rev::LazyRevspec;
 use std::process::{Command, Stdio};
 
 #[derive(Clap, Debug, PartialEq)]
 pub struct BitDiffCliOpts {
     #[clap(long = "staged")]
-    // can't seem to get the `default_missing_value` to work so just nesting options instead
-    // and create the default in code
-    staged: Option<Option<BitRef>>,
-    pathspec: Option<Pathspec>,
+    staged: bool,
+    #[clap(max_values = 2)]
+    revs: Vec<LazyRevspec>,
+    // pathspec: Option<Pathspec>,
 }
 
 impl Cmd for BitDiffCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
-        let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
-        let diff = if let Some(r) = self.staged {
-            repo.diff_ref_index(r.unwrap_or(BitRef::HEAD), pathspec)?
-        } else {
-            repo.diff_index_worktree(pathspec)?
+        // let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
+        let pathspec = Pathspec::MATCH_ALL;
+        let diff = match &self.revs[..] {
+            [] =>
+                if self.staged {
+                    repo.diff_head_index(pathspec)?
+                } else {
+                    repo.diff_index_worktree(pathspec)?
+                },
+            [rev] => {
+                let commit_oid = repo.fully_resolve_rev(rev)?;
+                let tree_oid = commit_oid.treeish_oid(repo)?;
+                if self.staged {
+                    repo.diff_tree_index(tree_oid, pathspec)?
+                } else {
+                    repo.diff_tree_worktree(tree_oid, pathspec)?
+                }
+            }
+            [a, b] => {
+                ensure!(
+                    !self.staged,
+                    "`--staged` has no effect when passing two revisions to diff"
+                );
+                let a = repo.fully_resolve_rev(a)?.treeish_oid(repo)?;
+                let b = repo.fully_resolve_rev(b)?.treeish_oid(repo)?;
+                repo.diff_tree_to_tree(a, b)?
+            }
+            _ => unreachable!(),
         };
 
         let mut pager = Command::new(&repo.config().pager()?).stdin(Stdio::piped()).spawn()?;
@@ -34,17 +58,26 @@ impl Cmd for BitDiffCliOpts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use libbit::refs::SymbolicRef;
 
     #[test]
     fn test_cli_parse_bit_diff_staged() {
         let opts = BitDiffCliOpts::parse_from(&["--", "--staged", "foo"]);
-        assert_eq!(opts.staged, Some(Some(BitRef::Symbolic(SymbolicRef::intern("foo")))));
+        assert_eq!(opts.staged, true);
+        assert_eq!(opts.revs.len(), 1);
 
         let opts = BitDiffCliOpts::parse_from(&["--", "--staged"]);
-        assert_eq!(opts.staged, Some(None));
+        assert_eq!(opts.staged, true);
+        assert!(opts.revs.is_empty());
 
         let opts = BitDiffCliOpts::parse_from(&["--"]);
-        assert_eq!(opts.staged, None);
+        assert_eq!(opts.staged, false);
+        assert!(opts.revs.is_empty());
+    }
+
+    #[test]
+    fn test_cli_parse_bit_diff_two_revs() {
+        let opts = BitDiffCliOpts::parse_from(&["--", "foo", "bar"]);
+        assert_eq!(opts.staged, false);
+        assert_eq!(opts.revs.len(), 2);
     }
 }

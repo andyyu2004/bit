@@ -11,6 +11,9 @@ mod tests;
 #[cfg(test)]
 extern crate pretty_assertions;
 
+#[macro_use]
+extern crate anyhow;
+
 pub fn main() -> libbit::error::BitResult<()> {
     env_logger::builder().parse_env("BIT_LOG").init();
     if let Err(err) = cli::run(std::env::args_os()) {

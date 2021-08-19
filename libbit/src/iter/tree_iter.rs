@@ -1,5 +1,6 @@
 use super::*;
 use crate::obj::MutableTree;
+use crate::pathspec::Pathspec;
 use std::iter::FromIterator;
 
 pub type SkipTrees<I> = fallible_iterator::Filter<I, fn(&BitIndexEntry) -> BitResult<bool>>;

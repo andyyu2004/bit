@@ -97,7 +97,8 @@ pub trait BitRefDbBackend<'rcx> {
     fn fully_resolve(&self, reference: BitRef) -> BitResult<Oid> {
         match self.resolve(reference)? {
             BitRef::Direct(oid) => Ok(oid),
-            BitRef::Symbolic(..) => unreachable!("resolve should never return this variant"),
+            BitRef::Symbolic(..) =>
+                bail!("todo proper error message something about branch not existing yet"),
         }
     }
 

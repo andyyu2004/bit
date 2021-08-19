@@ -16,19 +16,32 @@ use std::io::prelude::*;
 use std::iter::FromIterator;
 use std::ops::Deref;
 
-pub trait Treeish<'rcx> {
-    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>>;
+/// Represents entities that have a straightforward way of being converted/dereferenced into a tree
+/// This includes commits and oids (and also trivially tree's themselves),
+/// but probaby should not extend so far as to include refs/revisions
+pub trait Treeish<'rcx>: Sized {
+    fn treeish_oid(&self, repo: BitRepo<'rcx>) -> BitResult<Oid>;
+
+    // override this default implementation if a more efficient one is available
+    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
+        let tree_oid = self.treeish_oid(repo)?;
+        repo.read_obj(tree_oid).map(|obj| obj.into_tree())
+    }
 }
 
 impl<'rcx> Treeish<'rcx> for Tree<'rcx> {
     fn treeish(self, _repo: BitRepo<'rcx>) -> BitResult<Self> {
         Ok(self)
     }
+
+    fn treeish_oid(&self, _repo: BitRepo<'rcx>) -> BitResult<Oid> {
+        Ok(self.oid())
+    }
 }
 
 impl<'rcx> Treeish<'rcx> for Oid {
-    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
-        repo.read_obj(self)?.treeish(repo)
+    fn treeish_oid(&self, repo: BitRepo<'rcx>) -> BitResult<Oid> {
+        repo.read_obj(*self)?.treeish_oid(repo)
     }
 }
 
@@ -37,7 +50,16 @@ impl<'rcx> Treeish<'rcx> for BitObjKind<'rcx> {
         match self {
             BitObjKind::Commit(commit) => commit.peel(repo),
             BitObjKind::Tree(tree) => Ok(*tree),
-            BitObjKind::Tag(_) => todo!(),
+            BitObjKind::Tag(..) => todo!(),
+            BitObjKind::Blob(..) => bug!("blob is not treeish"),
+        }
+    }
+
+    fn treeish_oid(&self, repo: BitRepo<'rcx>) -> BitResult<Oid> {
+        match self {
+            BitObjKind::Commit(commit) => Ok(commit.tree()),
+            BitObjKind::Tree(tree) => Ok(tree.oid()),
+            BitObjKind::Tag(..) => todo!(),
             BitObjKind::Blob(..) => bug!("blob is not treeish"),
         }
     }

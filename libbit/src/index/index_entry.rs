@@ -191,6 +191,8 @@ impl BitIndexEntry {
             uid: metadata.uid(),
             gid: metadata.gid(),
             filesize: metadata.size() as u32,
+            // we don't calculate oid upfront as an optimization
+            // we first try to use the index metadata to detect change
             oid: Oid::UNKNOWN,
             flags: BitIndexEntryFlags::with_path_len(path.len()),
             extended_flags: BitIndexEntryExtendedFlags::default(),

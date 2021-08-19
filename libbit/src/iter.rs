@@ -1,12 +1,15 @@
 mod index_tree_iter;
+
 mod tree_iter;
 mod walk;
+mod worktree_tree_iter;
 
 pub use fallible_iterator::FallibleIterator;
 pub use index_tree_iter::IndexTreeIter;
 pub use tree_iter::*;
+pub use worktree_tree_iter::WorktreeTreeIter;
 
-use crate::error::{BitGenericError, BitResult};
+use crate::error::{BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
 use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
@@ -40,26 +43,21 @@ pub trait BitEntry {
         self.mode().is_blob()
     }
 
-    // NOTES:
-    // Don't know how correct the following reasoning is.
-    // Where to read the blob from given an entry`?
-    // If `entry.hash.is_unknown()` then it must be a worktree entry as otherwise the hash
-    // would be definitely known as tree_entries and index_entries store the hash.
-    //
-    // However, does the converse hold? I think it currently does. Even though hashes for worktree entries
-    // maybe sometimes be calculated due to racy git, I don't think the change is recorded in the entry we access
-    // in the Differ trait.
-    // if this is the case, we could just have two cases
-    // - if the hash is known, then we read it from the object store
-    // - otherwise, we read it from disk
     fn read_to_bytes(&self, repo: BitRepo<'_>) -> BitResult<Vec<u8>> {
         let oid = self.oid();
+        // if object is known we try to read it from the object store
+        // however, it's possible the object does not live there as the hash may have just been calculated to allow for comparisons
+        // if it's not in the object store, then it must live on disk so we just read it from there
+        // if the oid is not known, then it's definitely on disk (as otherwise it would have a known `oid`)
         if oid.is_known() {
-            Ok(repo.read_obj(oid)?.into_blob().into_bytes())
-        } else {
-            let absolute_path = repo.normalize(self.path().as_path())?;
-            Ok(std::fs::read(absolute_path)?)
+            match repo.read_obj(oid) {
+                Ok(obj) => return Ok(obj.into_blob().into_bytes()),
+                Err(err) => err.try_into_obj_not_found_err()?,
+            };
         }
+
+        let absolute_path = repo.normalize(self.path().as_path())?;
+        Ok(std::fs::read(absolute_path)?)
     }
 
     // we must have files sorted before directories
@@ -126,7 +124,9 @@ impl FallibleIterator for DirIter {
     }
 }
 
-struct WorktreeIter<'rcx> {
+/// Iterator that yields filesystem entries accounting for gitignore and tracked files
+// Intended to be used as a building block for higher level worktree iterators
+struct WorktreeRawIter<'rcx> {
     repo: BitRepo<'rcx>,
     tracked: FxHashSet<&'static OsStr>,
     // TODO ignoring all nonroot ignores for now
@@ -135,7 +135,7 @@ struct WorktreeIter<'rcx> {
     walk: walkdir::IntoIter,
 }
 
-impl<'rcx> WorktreeIter<'rcx> {
+impl<'rcx> WorktreeRawIter<'rcx> {
     pub fn new(index: &BitIndex<'rcx>) -> BitResult<Self> {
         let repo = index.repo;
         // ignoring any gitignore errors for now
@@ -170,9 +170,7 @@ impl<'rcx> WorktreeIter<'rcx> {
 
     // we need to explicitly ignore our root `.bit/.git` directories
     // TODO testing
-    fn is_ignored(&self, path: &Path) -> BitResult<bool> {
-        // should only run this on files
-        debug_assert!(path.is_file());
+    fn is_ignored(&self, path: &Path, is_dir: bool) -> BitResult<bool> {
         debug_assert!(path.is_absolute());
 
         let relative = self.repo.to_relative_path(path)?;
@@ -185,11 +183,6 @@ impl<'rcx> WorktreeIter<'rcx> {
         }
 
         for ignore in &self.ignore {
-            // TODO we need to not ignore files that are already tracked
-            // where a file is tracked if its in the index
-            // we need a different api for the index
-            // the with_index api is not good
-
             // TODO the matcher wants a path relative to where the gitignore file is
             // currently just assuming its the repo root (which all paths are relative to)
             // `ignore.matched_path` doesn't work here as it doesn't seem to match directories
@@ -205,12 +198,52 @@ impl<'rcx> WorktreeIter<'rcx> {
             // }
             // path ignoreme/a will not be ignored by `matched_path`
             // using `matched_path_or_any_parents` for now
-            if ignore.matched_path_or_any_parents(path, false).is_ignore() {
+            if ignore.matched_path_or_any_parents(path, is_dir).is_ignore() {
                 return Ok(true);
             }
         }
 
         Ok(false)
+    }
+
+    pub(super) fn skip_current_dir(&mut self) {
+        self.walk.skip_current_dir()
+    }
+}
+
+impl FallibleIterator for WorktreeRawIter<'_> {
+    type Error = BitGenericError;
+    type Item = walkdir::DirEntry;
+
+    fn next(&mut self) -> BitResult<Option<Self::Item>> {
+        loop {
+            match self.walk.next().transpose()? {
+                Some(entry) => {
+                    let path = entry.path();
+                    let is_dir = entry.file_type().is_dir();
+                    // explicitly stepover .git directory,
+                    // not actually checking whether this is at the root or not
+                    // but no one should be writing their own .git folder anyway
+                    if is_dir && BitPath::DOT_GIT == entry.file_name() {
+                        self.walk.skip_current_dir();
+                    } else if !self.is_ignored(path, is_dir)? {
+                        // this iterator doesn't yield directory entries
+                        return Ok(Some(entry));
+                    }
+                }
+                None => return Ok(None),
+            }
+        }
+    }
+}
+
+pub struct WorktreeIter<'rcx> {
+    inner: WorktreeRawIter<'rcx>,
+}
+
+impl<'rcx> WorktreeIter<'rcx> {
+    pub fn new(index: &BitIndex<'rcx>) -> BitResult<Self> {
+        Ok(Self { inner: WorktreeRawIter::new(index)? })
     }
 }
 
@@ -219,25 +252,19 @@ impl FallibleIterator for WorktreeIter<'_> {
     type Item = BitIndexEntry;
 
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
-        // ignore directories
-        let direntry = loop {
-            match self.walk.next().transpose()? {
-                Some(entry) => {
-                    let path = entry.path();
-                    let is_dir = entry.file_type().is_dir();
-                    // explicitly stepover .git directory
-                    if is_dir && BitPath::DOT_GIT == entry.file_name() {
-                        self.walk.skip_current_dir();
-                    } else if !is_dir && !self.is_ignored(path)? {
-                        // this iterator doesn't yield directory entries
-                        break entry;
-                    }
-                }
+        loop {
+            let entry = match self.inner.next()? {
+                Some(path) => path,
                 None => return Ok(None),
-            }
-        };
+            };
 
-        BitIndexEntry::from_path(self.repo, direntry.path()).map(Some)
+            // we don't yield directory entries in this type of iterator
+            if entry.file_type().is_dir() {
+                continue;
+            }
+
+            return BitIndexEntry::from_path(self.inner.repo, entry.path()).map(Some);
+        }
     }
 }
 
@@ -249,6 +276,11 @@ impl<'rcx> BitIndex<'rcx> {
     pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + 'rcx> {
         trace!("worktree_iter()");
         WorktreeIter::new(self)
+    }
+
+    pub fn worktree_tree_iter(&self) -> BitResult<impl BitTreeIterator + 'rcx> {
+        trace!("worktree_tree_iter()");
+        WorktreeTreeIter::new(self)
     }
 }
 
