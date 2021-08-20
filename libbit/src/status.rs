@@ -70,8 +70,6 @@ impl Display for BitStatus {
         self.fmt_unmerged(f)?;
         self.fmt_summary(f)?;
 
-        writeln!(f)?;
-
         Ok(())
     }
 }
@@ -132,6 +130,8 @@ impl BitStatus {
             writeln!(f, "\t{}:   {}", "deleted".green(), entry.path.green())?;
         }
 
+        writeln!(f)?;
+
         Ok(())
     }
 
@@ -142,7 +142,6 @@ impl BitStatus {
         let mut deleted = filter_unmerged(&self.unstaged.deleted);
 
         if !modified.is_empty() || !deleted.is_empty() {
-            writeln!(f)?;
             writeln!(f, "Changes not staged for commit")?;
             writeln!(f, "  (use `bit add <file>...` to update what will be committed)")?;
             writeln!(f, "  (use 'bit restore <file>...' to discard changes in working directory)")?;
@@ -154,16 +153,18 @@ impl BitStatus {
             for entry in deleted {
                 writeln!(f, "\t{}:   {}", "deleted".red(), entry.path.red())?;
             }
+
+            writeln!(f)?;
         }
 
         let mut untracked = filter_unmerged(&self.unstaged.new);
         if !untracked.is_empty() {
-            writeln!(f)?;
             writeln!(f, "Untracked files:")?;
             writeln!(f, "  (use `bit add <file>...` to include in what will be committed)")?;
             for entry in untracked {
                 writeln!(f, "\t{}", entry.path.red())?;
             }
+            writeln!(f)?;
         }
 
         Ok(())
@@ -171,13 +172,14 @@ impl BitStatus {
 
     fn fmt_unmerged(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if !self.conflicted.is_empty() {
-            writeln!(f)?;
             writeln!(f, "Unmerged paths:")?;
             writeln!(f, "  (use `bit add <file>...` to mark resolution)")?;
             for conflict in &self.conflicted {
                 writeln!(f, "\t{}", conflict.red())?;
             }
+            writeln!(f)?;
         }
+
         Ok(())
     }
 
