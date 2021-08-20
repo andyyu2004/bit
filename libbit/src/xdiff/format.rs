@@ -161,6 +161,7 @@ impl Display for DiffStatLines {
         let line_width =
             terminal_size::terminal_size().map(|width| width.0.0 as usize).unwrap_or(80);
         let remaining_width = line_width - self.max_path_len - 10;
+        let max_change_width = self.max_changes.to_string().len();
 
         let mut scale = 1.0;
         if self.max_changes > remaining_width {
@@ -174,9 +175,10 @@ impl Display for DiffStatLines {
 
             writeln!(
                 f,
-                " {} {}|  {} {}{}",
+                " {} {}| {}{} {}{}",
                 line.path,
                 " ".repeat(self.max_path_len - line.path.len()),
+                " ".repeat(max_change_width - changes.to_string().len()),
                 changes,
                 "+".repeat(scaled_insertions.ceil() as usize).green(),
                 "-".repeat(scaled_deletions.ceil() as usize).red(),
