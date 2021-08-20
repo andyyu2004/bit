@@ -197,6 +197,8 @@ impl TreeDiffBuilder for TreeStatusDiffer {
     type Output = WorkspaceStatus;
 
     fn get_output(self) -> Self::Output {
+        debug_assert!(self.status.new.is_sorted_by(BitEntry::entry_partial_cmp));
+        debug_assert!(self.status.deleted.is_sorted_by(BitEntry::entry_partial_cmp));
         self.status
     }
 }

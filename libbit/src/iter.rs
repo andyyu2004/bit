@@ -35,12 +35,21 @@ pub trait BitEntry {
         self.path().cmp(&other.path()).then_with(|| self.mode().cmp(&other.mode()))
     }
 
+    fn entry_partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.entry_cmp(other))
+    }
+
     fn is_tree(&self) -> bool {
         self.mode().is_tree()
     }
 
     fn is_file(&self) -> bool {
         self.mode().is_blob()
+    }
+
+    fn read_to_string(&self, repo: BitRepo<'_>) -> BitResult<String> {
+        let bytes = self.read_to_bytes(repo)?;
+        Ok(String::from_utf8(bytes).unwrap_or_else(|_| "<binary>".to_string()))
     }
 
     fn read_to_bytes(&self, repo: BitRepo<'_>) -> BitResult<Vec<u8>> {
