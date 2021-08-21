@@ -124,8 +124,6 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
 
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
         if self.exists(sym)? {
-            // todo improve error message by only leaving the branch name in a reliable manner somehow
-            // how do we differentiate something that lives in refs/heads vs HEAD
             bail!("a reference `{}` already exists", sym);
         }
         self.update(sym, from, RefUpdateCause::NewBranch { from })

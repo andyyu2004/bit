@@ -17,8 +17,8 @@
       },
       // "sourceLanguages": ["rust"],
       // "cwd": "${workspaceFolder}/examples/test3",
-      "cwd": "/home/andy/dev/rust/lark",
-      "args": ["checkout", "quicklex"]
+      "cwd": "/home/andyyu/dev/random",
+      "args": ["switch", "-c", "a"]
     }
     // {
     //   "type": "lldb",
