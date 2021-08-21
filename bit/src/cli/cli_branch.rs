@@ -20,7 +20,7 @@ impl Cmd for BitBranchCliOpts {
             // all that exists is the reference to it in HEAD.
             // all sorts of edge cases come up on an empty repos unfortunately
             None => bail!(
-                "cannot create new branch on an empty branch (use `bit switch -c <branch>` to change your branch)"
+                "cannot create new branch in an empty repository (use `bit switch -c <branch>` to change your branch)"
             ),
         }?;
         Ok(())
