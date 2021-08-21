@@ -408,7 +408,7 @@ impl<'rcx> BitRepo<'rcx> {
     /// converts relative_paths to absolute paths
     /// checks absolute paths exist and have a base relative to the bit directory
     // can't figure out how to make this take an impl AsRef<Path> and make lifetimes work out
-    pub fn normalize<'p>(self, path: &'p Path) -> BitResult<Cow<'p, Path>> {
+    pub fn normalize<'p>(self, path: &Path) -> BitResult<Cow<'_, Path>> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
@@ -432,7 +432,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// converts an absolute path into a path relative to the workdir of the repository
-    pub fn to_relative_path<'p>(self, path: &'p Path) -> BitResult<&'p Path> {
+    pub fn to_relative_path(self, path: &Path) -> BitResult<&Path> {
         // this seems to work just as well as the pathdiff crate
         debug_assert!(path.is_absolute());
         Ok(path.strip_prefix(&self.workdir)?)

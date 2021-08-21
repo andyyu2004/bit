@@ -55,7 +55,7 @@ impl<'rcx> Treeish<'rcx> for BitObjKind<'rcx> {
         }
     }
 
-    fn treeish_oid(&self, repo: BitRepo<'rcx>) -> BitResult<Oid> {
+    fn treeish_oid(&self, _repo: BitRepo<'rcx>) -> BitResult<Oid> {
         match self {
             BitObjKind::Commit(commit) => Ok(commit.tree()),
             BitObjKind::Tree(tree) => Ok(tree.oid()),

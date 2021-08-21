@@ -107,8 +107,8 @@ impl<'rcx> BitRepo<'rcx> {
             ParsedRevspec::Parent(ref inner, n) =>
                 self.resolve_rev_internal(inner).and_then(|r| get_nth_parent(r, n)),
             ParsedRevspec::Ancestor(ref rev, n) =>
-                (0..n).try_fold(self.resolve_rev_internal(&rev)?, |oid, _| get_first_parent(oid)),
-            ParsedRevspec::Reflog(ref inner, n) => match self.resolve_rev_internal(&inner)? {
+                (0..n).try_fold(self.resolve_rev_internal(rev)?, |oid, _| get_first_parent(oid)),
+            ParsedRevspec::Reflog(ref inner, n) => match self.resolve_rev_internal(inner)? {
                 BitRef::Direct(..) =>
                     bail!("can't use reflog revision syntax on a direct reference"),
                 BitRef::Symbolic(sym) => {

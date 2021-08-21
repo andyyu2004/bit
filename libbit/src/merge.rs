@@ -96,7 +96,7 @@ impl<'rcx> MergeCtxt<'rcx> {
                             index.add_entry(TreeEntry { oid, path: y.path, mode: y.mode }.into())
                         }
                         Err(conflicted) => {
-                            let oid = repo.write_obj(&MutableBlob::new(conflicted.into_bytes()))?;
+                            let _oid = repo.write_obj(&MutableBlob::new(conflicted.into_bytes()))?;
                             todo!()
                         }
                     }

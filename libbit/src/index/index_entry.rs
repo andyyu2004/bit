@@ -292,7 +292,7 @@ impl BitIndexEntryFlags {
 
     pub fn set_stage(&mut self, stage: MergeStage) {
         // reset relevant bits to 0
-        self.0 &= 0 & !0x3000;
+        self.0 &= !0x3000;
         // and then set them again
         self.0 |= (stage as u16) << 12
     }

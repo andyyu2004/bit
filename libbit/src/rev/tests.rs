@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::{BitError, BitErrorExt};
+
 
 #[test]
 fn test_parse_revspec_reflog() -> BitResult<()> {

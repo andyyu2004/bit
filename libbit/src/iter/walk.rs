@@ -68,21 +68,20 @@ impl<'a, const N: usize> FallibleIterator for WalkIterators<'a, N> {
         let mut oid = None;
 
         // check if all entries are the same tree in which case we can step over the entire subtree
-        for entry in next_entries.iter() {
-            if let Some(entry) = entry {
-                if !entry.is_tree() {
-                    is_same_tree = false;
-                    break;
-                }
+        // `flatten` essentially filters out all the Nones
+        for entry in next_entries.iter().flatten() {
+            if !entry.is_tree() {
+                is_same_tree = false;
+                break;
+            }
 
-                match oid {
-                    Some(oid) =>
-                        if entry.oid() != oid {
-                            is_same_tree = false;
-                            break;
-                        },
-                    None => oid = Some(entry.oid()),
-                }
+            match oid {
+                Some(oid) =>
+                    if entry.oid() != oid {
+                        is_same_tree = false;
+                        break;
+                    },
+                None => oid = Some(entry.oid()),
             }
         }
 
@@ -98,6 +97,6 @@ impl<'a, const N: usize> FallibleIterator for WalkIterators<'a, N> {
             }
         }
 
-        return Ok(Some(next_entries));
+        Ok(Some(next_entries))
     }
 }

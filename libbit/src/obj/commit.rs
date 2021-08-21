@@ -308,10 +308,10 @@ struct CommitBuilder {
 impl CommitBuilder {
     fn build(mut self) -> BitResult<MutableCommit> {
         Ok(MutableCommit {
-            tree: self.tree.ok_or(anyhow!("commit missing tree"))?,
-            author: self.author.ok_or(anyhow!("commit missing author"))?,
-            committer: self.committer.ok_or(anyhow!("commit missing committer"))?,
-            message: self.message.ok_or(anyhow!("commit missing message"))?,
+            tree: self.tree.ok_or_else(|| anyhow!("commit missing tree"))?,
+            author: self.author.ok_or_else(|| anyhow!("commit missing author"))?,
+            committer: self.committer.ok_or_else(|| anyhow!("commit missing committer"))?,
+            message: self.message.ok_or_else(|| anyhow!("commit missing message"))?,
             parents: self.parents,
             gpgsig: self.gpgsig.take(),
             mergetag: self.mergetag.take(),
