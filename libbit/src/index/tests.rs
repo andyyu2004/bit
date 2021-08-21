@@ -269,18 +269,16 @@ fn index_nested_file_directory_collision() -> BitResult<()> {
 fn index_directory_file_collision() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         repo.with_index_mut(|index| {
-            let foo = repo.workdir.join("foo");
-            // TODO can rewrite this using macros
-            std::fs::create_dir(foo)?;
-            File::create(foo.join("a"))?;
-            File::create(foo.join("b"))?;
-            std::fs::create_dir(foo.join("bar"))?;
-            File::create(foo.join("bar/baz"))?;
-            index.add_str("foo")?;
+            mkdir!(repo: "foo");
+            touch!(repo: "foo/a");
+            touch!(repo: "foo/b");
+            mkdir!(repo: "foo/bar");
+            touch!(repo: "foo/bar/baz");
+            index.add(&pathspec!("foo"))?;
             assert_eq!(index.len(), 3);
-            std::fs::remove_dir_all(foo)?;
-            File::create(foo)?;
-            index.add_str("foo")?;
+            rmdir!(repo: "foo");
+            touch!(repo: "foo");
+            index.add(&pathspec!("foo"))?;
 
             assert_eq!(index.len(), 1);
             let mut iter = index.entries().values();

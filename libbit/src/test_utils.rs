@@ -347,6 +347,15 @@ macro_rules! rev {
     }};
 }
 
+#[macro_export]
+macro_rules! pathspec {
+    ($pathspec:expr) => {{
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        crate::pathspec::Pathspec::from_str($pathspec)?
+    }};
+}
+
 macro_rules! file_entry {
     ($path:expr) => {{
         let oid =
