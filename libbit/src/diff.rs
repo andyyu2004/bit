@@ -9,7 +9,7 @@ use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
-use crate::rev::LazyRevspec;
+use crate::rev::Revspec;
 use crate::time::Timespec;
 use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
@@ -140,11 +140,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// diff the tree belonging to the commit pointed to by `reference` with the index
-    pub fn diff_rev_index(
-        self,
-        rev: &LazyRevspec,
-        pathspec: Pathspec,
-    ) -> BitResult<WorkspaceStatus> {
+    pub fn diff_rev_index(self, rev: &Revspec, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         let reference = self.resolve_rev(rev)?;
         self.diff_ref_index(reference, pathspec)
     }

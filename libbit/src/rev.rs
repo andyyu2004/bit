@@ -13,50 +13,49 @@ use std::fmt::{self, Display, Formatter};
 use std::lazy::OnceCell;
 use std::str::FromStr;
 
-// TODO this is not quite right the difference between ~ and ^ is more subtle than this
 // <rev> ::=
 //   | <ref>
 //   | <partial-oid>
 //   | <rev>^<n>?
 //   | <rev>~<n>?
 #[derive(Debug, Clone, PartialEq)]
-pub enum Revspec {
+pub enum ParsedRevspec {
     Ref(BitRef),
     Partial(PartialOid),
     /// nth parent selector ^2 means select the 2nd parent
     /// defaults to 1 if unspecified
     /// if n == 0, then this is a noop
-    Parent(Box<Revspec>, usize),
+    Parent(Box<ParsedRevspec>, usize),
     /// ~<n>
-    Ancestor(Box<Revspec>, usize),
+    Ancestor(Box<ParsedRevspec>, usize),
     /// <rev>@{<n>}
-    Reflog(Box<Revspec>, usize),
+    Reflog(Box<ParsedRevspec>, usize),
 }
 
 impl<'rcx> BitRepo<'rcx> {
     /// resolve a revision to a commit oid
-    pub fn fully_resolve_rev(self, rev: &LazyRevspec) -> BitResult<Oid> {
+    pub fn fully_resolve_rev(self, rev: &Revspec) -> BitResult<Oid> {
         let reference = self.resolve_rev(rev)?;
         self.fully_resolve_ref(reference)
     }
 
     /// resolve a revision to a reference (either a branch or a commit, never HEAD itself)
-    pub fn resolve_rev(self, rev: &LazyRevspec) -> BitResult<BitRef> {
+    pub fn resolve_rev(self, rev: &Revspec) -> BitResult<BitRef> {
         self.fully_resolve_rev_to_ref(rev.parse(self)?)
     }
 
-    pub fn resolve_rev_to_commit(self, rev: &LazyRevspec) -> BitResult<Commit<'rcx>> {
+    pub fn resolve_rev_to_commit(self, rev: &Revspec) -> BitResult<Commit<'rcx>> {
         self.fully_resolve_rev(rev)?.peel(self)
     }
 
-    pub fn resolve_rev_to_branch(self, rev: &LazyRevspec) -> BitResult<SymbolicRef> {
+    pub fn resolve_rev_to_branch(self, rev: &Revspec) -> BitResult<SymbolicRef> {
         match self.resolve_rev(rev)? {
             BitRef::Direct(..) => bail!("expected branch, found commit `{}`", rev),
             BitRef::Symbolic(sym) => Ok(sym),
         }
     }
 
-    fn fully_resolve_rev_to_ref(&self, rev: &Revspec) -> BitResult<BitRef> {
+    fn fully_resolve_rev_to_ref(&self, rev: &ParsedRevspec) -> BitResult<BitRef> {
         let get_nth_parent = |reference, n| -> BitResult<BitRef> {
             let oid = self.fully_resolve_ref(reference)?;
 
@@ -97,14 +96,14 @@ impl<'rcx> BitRepo<'rcx> {
 
         match *rev {
             // we want to resolve HEAD once
-            Revspec::Ref(r) if r == BitRef::HEAD => self.read_head(),
-            Revspec::Ref(r) => Ok(r),
-            Revspec::Partial(prefix) => self.expand_prefix(prefix).map(BitRef::Direct),
-            Revspec::Parent(ref inner, n) =>
+            ParsedRevspec::Ref(r) if r == BitRef::HEAD => self.read_head(),
+            ParsedRevspec::Ref(r) => Ok(r),
+            ParsedRevspec::Partial(prefix) => self.expand_prefix(prefix).map(BitRef::Direct),
+            ParsedRevspec::Parent(ref inner, n) =>
                 self.fully_resolve_rev_to_ref(inner).and_then(|r| get_nth_parent(r, n)),
-            Revspec::Ancestor(ref rev, n) => (0..n)
+            ParsedRevspec::Ancestor(ref rev, n) => (0..n)
                 .try_fold(self.fully_resolve_rev_to_ref(&rev)?, |oid, _| get_first_parent(oid)),
-            Revspec::Reflog(ref inner, n) => match self.fully_resolve_rev_to_ref(&inner)? {
+            ParsedRevspec::Reflog(ref inner, n) => match self.fully_resolve_rev_to_ref(&inner)? {
                 BitRef::Direct(..) =>
                     bail!("can't use reflog revision syntax on a direct reference"),
                 BitRef::Symbolic(sym) => {
@@ -124,24 +123,24 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
-impl Display for Revspec {
+impl Display for ParsedRevspec {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Revspec::Ref(r) => write!(f, "{}", r),
-            Revspec::Partial(prefix) => write!(f, "{}", prefix),
-            Revspec::Parent(rev, n) =>
+            ParsedRevspec::Ref(r) => write!(f, "{}", r),
+            ParsedRevspec::Partial(prefix) => write!(f, "{}", prefix),
+            ParsedRevspec::Parent(rev, n) =>
                 if *n == 1 {
                     write!(f, "{}^", rev)
                 } else {
                     write!(f, "{}^{}", rev, n)
                 },
-            Revspec::Ancestor(rev, n) =>
+            ParsedRevspec::Ancestor(rev, n) =>
                 if *n == 1 {
                     write!(f, "{}^", rev)
                 } else {
                     write!(f, "{}~{}", rev, n)
                 },
-            Revspec::Reflog(rev, n) => write!(f, "{}@{{{}}}", rev, n),
+            ParsedRevspec::Reflog(rev, n) => write!(f, "{}@{{{}}}", rev, n),
         }
     }
 }
@@ -151,24 +150,24 @@ impl Display for Revspec {
 // but we want FromStr to be implemented so clap can use it
 // this wrapper can lazily evaluated to get a parsed revspec (via `parse`)
 #[derive(Debug, PartialEq)]
-pub struct LazyRevspec {
+pub struct Revspec {
     src: String,
-    parsed: OnceCell<Revspec>,
+    parsed: OnceCell<ParsedRevspec>,
 }
 
-impl Display for LazyRevspec {
+impl Display for Revspec {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.src)
     }
 }
 
-impl LazyRevspec {
-    pub fn parse(&self, repo: BitRepo<'_>) -> BitResult<&Revspec> {
+impl Revspec {
+    pub fn parse(&self, repo: BitRepo<'_>) -> BitResult<&ParsedRevspec> {
         self.parsed.get_or_try_init(|| RevspecParser::new(repo, &self.src).parse())
     }
 }
 
-impl FromStr for LazyRevspec {
+impl FromStr for Revspec {
     type Err = BitGenericError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -201,7 +200,7 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
     }
 
     /// either a partialoid or a ref
-    fn parse_base(&mut self) -> BitResult<Revspec> {
+    fn parse_base(&mut self) -> BitResult<ParsedRevspec> {
         let repo = self.repo;
         // some hacky special case for parsing the alias @ for HEAD
         // it's a bit annoying as @ is both a separator and a valid base
@@ -232,7 +231,7 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
             })?
         };
 
-        Ok(Revspec::Ref(reference))
+        Ok(ParsedRevspec::Ref(reference))
     }
 
     fn expect(&mut self, s: &str) -> BitResult<()> {
@@ -253,7 +252,7 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
         self.expect_num().ok()
     }
 
-    pub fn parse(mut self) -> BitResult<Revspec> {
+    pub fn parse(mut self) -> BitResult<ParsedRevspec> {
         let mut rev = self.parse_base()?;
         while !self.src.is_empty() {
             let (c, cs) = self.src.split_at(1);
@@ -261,17 +260,17 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
             match c {
                 "^" => {
                     let n = self.accept_num().unwrap_or(1);
-                    rev = Revspec::Parent(Box::new(rev), n)
+                    rev = ParsedRevspec::Parent(Box::new(rev), n)
                 }
                 "~" => {
                     let n = self.accept_num().unwrap_or(1);
-                    rev = Revspec::Ancestor(Box::new(rev), n);
+                    rev = ParsedRevspec::Ancestor(Box::new(rev), n);
                 }
                 "@" => {
                     self.expect("{")?;
                     let n = self.expect_num()?;
                     self.expect("}")?;
-                    rev = Revspec::Reflog(Box::new(rev), n);
+                    rev = ParsedRevspec::Reflog(Box::new(rev), n);
                 }
                 _ => bail!("unexpected token `{}`, while parsing revspec", c),
             }

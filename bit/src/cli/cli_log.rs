@@ -5,14 +5,14 @@ use libbit::format::{Indentable, OwoColorize};
 use libbit::iter::FallibleIterator;
 use libbit::obj::BitObject;
 use libbit::repo::BitRepo;
-use libbit::rev::LazyRevspec;
+use libbit::rev::Revspec;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
 #[derive(Clap, Debug)]
 pub struct BitLogCliOpts {
     #[clap(default_value = "HEAD")]
-    revisions: Vec<LazyRevspec>,
+    revisions: Vec<Revspec>,
 }
 
 impl Cmd for BitLogCliOpts {

@@ -4,7 +4,7 @@ use libbit::error::BitResult;
 use libbit::obj::Treeish;
 use libbit::pathspec::Pathspec;
 use libbit::repo::BitRepo;
-use libbit::rev::LazyRevspec;
+use libbit::rev::Revspec;
 use std::process::{Command, Stdio};
 
 #[derive(Clap, Debug, PartialEq)]
@@ -14,7 +14,7 @@ pub struct BitDiffCliOpts {
     #[clap(long = "staged")]
     staged: bool,
     #[clap(max_values = 2)]
-    revs: Vec<LazyRevspec>,
+    revs: Vec<Revspec>,
     // pathspec: Option<Pathspec>,
 }
 

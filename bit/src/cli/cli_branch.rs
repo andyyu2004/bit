@@ -2,13 +2,13 @@ use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
-use libbit::rev::LazyRevspec;
+use libbit::rev::Revspec;
 
 #[derive(Clap, Debug)]
 pub struct BitBranchCliOpts {
     name: String,
     #[clap(default_value = "HEAD")]
-    revision: LazyRevspec,
+    revision: Revspec,
 }
 
 impl Cmd for BitBranchCliOpts {

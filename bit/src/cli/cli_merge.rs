@@ -2,11 +2,11 @@ use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
-use libbit::rev::LazyRevspec;
+use libbit::rev::Revspec;
 
 #[derive(Clap, Debug)]
 pub struct BitMergeCliOpts {
-    revision: LazyRevspec,
+    revision: Revspec,
 }
 
 impl Cmd for BitMergeCliOpts {

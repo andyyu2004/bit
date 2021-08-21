@@ -6,7 +6,7 @@ use crate::obj::*;
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
 use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, Refs, SymbolicRef};
-use crate::rev::LazyRevspec;
+use crate::rev::Revspec;
 use crate::signature::BitSignature;
 use crate::{hash, tls};
 use anyhow::Context;
@@ -333,7 +333,7 @@ impl<'rcx> BitRepo<'rcx> {
         self.update_ref(SymbolicRef::HEAD, bitref.into(), cause)
     }
 
-    pub fn create_branch(self, sym: SymbolicRef, from: &LazyRevspec) -> BitResult<()> {
+    pub fn create_branch(self, sym: SymbolicRef, from: &Revspec) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
         let resolved = self.fully_resolve_rev(from)?;
         self.refdb()?.create_branch(sym, resolved.into())

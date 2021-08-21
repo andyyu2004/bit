@@ -2,7 +2,7 @@ use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
-use libbit::rev::LazyRevspec;
+use libbit::rev::Revspec;
 
 #[derive(Clap, Debug, PartialEq)]
 pub struct BitSwitchCliOpts {
@@ -11,7 +11,7 @@ pub struct BitSwitchCliOpts {
     /// The revision to checkout
     /// If -c is passed, then this revision becomes the starting point for the new branch
     #[clap(required_unless_present("create"), default_value = "HEAD")]
-    revision: LazyRevspec,
+    revision: Revspec,
 }
 
 impl Cmd for BitSwitchCliOpts {

@@ -4,12 +4,12 @@ use libbit::error::BitResult;
 use libbit::iter::FallibleIterator;
 use libbit::obj::BitObject;
 use libbit::repo::BitRepo;
-use libbit::rev::LazyRevspec;
+use libbit::rev::Revspec;
 
 #[derive(Clap, Debug)]
 pub struct BitRevlistCliOpts {
     #[clap(required = true)]
-    revisions: Vec<LazyRevspec>,
+    revisions: Vec<Revspec>,
 }
 
 impl Cmd for BitRevlistCliOpts {

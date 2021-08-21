@@ -343,7 +343,7 @@ macro_rules! rev {
     ($rev:expr) => {{
         #[allow(unused_imports)]
         use std::str::FromStr;
-        crate::rev::LazyRevspec::from_str($rev)?
+        crate::rev::Revspec::from_str($rev)?
     }};
 }
 

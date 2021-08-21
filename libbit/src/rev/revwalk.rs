@@ -1,4 +1,4 @@
-use super::LazyRevspec;
+use super::Revspec;
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObject, Commit, Oid};
 use crate::peel::Peel;
@@ -114,7 +114,7 @@ impl<'rcx> Commit<'rcx> {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn revwalk(self, revspecs: &[&LazyRevspec]) -> BitResult<RevWalk<'rcx>> {
+    pub fn revwalk(self, revspecs: &[&Revspec]) -> BitResult<RevWalk<'rcx>> {
         RevWalk::walk_revspecs(self, revspecs)
     }
 }
@@ -153,7 +153,7 @@ impl<'rcx> RevWalk<'rcx> {
         self.pqueue.push(node)
     }
 
-    pub fn walk_revspecs(repo: BitRepo<'rcx>, revspecs: &[&LazyRevspec]) -> BitResult<Self> {
+    pub fn walk_revspecs(repo: BitRepo<'rcx>, revspecs: &[&Revspec]) -> BitResult<Self> {
         let roots = revspecs
             .iter()
             .map(|&rev| repo.fully_resolve_rev(rev)?.peel(repo))
@@ -161,7 +161,7 @@ impl<'rcx> RevWalk<'rcx> {
         Ok(Self::new(roots))
     }
 
-    pub fn walk_revspec(repo: BitRepo<'rcx>, rev: &LazyRevspec) -> BitResult<Self> {
+    pub fn walk_revspec(repo: BitRepo<'rcx>, rev: &Revspec) -> BitResult<Self> {
         let root = repo.fully_resolve_rev(rev)?.peel(repo)?;
         Ok(Self::new(smallvec![root]))
     }

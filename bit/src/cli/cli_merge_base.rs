@@ -3,12 +3,12 @@ use clap::Clap;
 use libbit::error::BitResult;
 use libbit::obj::BitObject;
 use libbit::repo::BitRepo;
-use libbit::rev::LazyRevspec;
+use libbit::rev::Revspec;
 
 #[derive(Clap, Debug)]
 pub struct BitMergeBaseCliOpts {
-    a: LazyRevspec,
-    b: LazyRevspec,
+    a: Revspec,
+    b: Revspec,
 }
 
 impl Cmd for BitMergeBaseCliOpts {

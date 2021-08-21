@@ -1,11 +1,11 @@
 use crate::error::BitResult;
 use crate::obj::BitObjType;
 use crate::repo::BitRepo;
-use crate::rev::LazyRevspec;
+use crate::rev::Revspec;
 
 #[derive(Debug)]
 pub struct BitCatFileOpts {
-    pub rev: LazyRevspec,
+    pub rev: Revspec,
     pub op: BitCatFileOperation,
 }
 

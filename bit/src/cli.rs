@@ -40,7 +40,7 @@ use libbit::cmd::*;
 use libbit::error::BitResult;
 use libbit::obj::BitObjType;
 use libbit::repo::BitRepo;
-use libbit::rev::LazyRevspec;
+use libbit::rev::Revspec;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -183,7 +183,7 @@ pub struct BitCatFileCliOpts {
     #[clap(required_unless_present_any(&["pp", "ty", "size", "exit"]))]
     pub objtype: Option<BitObjType>,
     #[clap(required = true)]
-    pub revision: LazyRevspec,
+    pub revision: Revspec,
 }
 
 impl Into<BitCatFileOpts> for BitCatFileCliOpts {

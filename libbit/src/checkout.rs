@@ -6,7 +6,7 @@ use crate::obj::{FileMode, TreeEntry};
 use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause};
 use crate::repo::BitRepo;
-use crate::rev::LazyRevspec;
+use crate::rev::Revspec;
 use std::ffi::OsStr;
 use std::fs::Permissions;
 use std::io::Write;
@@ -16,7 +16,7 @@ impl<'rcx> BitRepo<'rcx> {
     /// checkout the branch/commit specified by the revision
     /// - updates the worktree to match the tree represented by the tree of the commit
     /// - moves HEAD to point at the branch/commit
-    pub fn checkout(self, rev: &LazyRevspec) -> BitResult<()> {
+    pub fn checkout(self, rev: &Revspec) -> BitResult<()> {
         let reference = self.resolve_rev(rev)?;
         self.checkout_reference(reference)
     }

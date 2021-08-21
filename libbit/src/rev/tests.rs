@@ -7,7 +7,7 @@ fn test_parse_revspec_reflog() -> BitResult<()> {
         let rev = rev!("@@{5}");
         assert_eq!(
             rev.parse(repo)?,
-            &Revspec::Reflog(Box::new(Revspec::Ref(symbolic_ref!("HEAD"))), 5)
+            &ParsedRevspec::Reflog(Box::new(ParsedRevspec::Ref(symbolic_ref!("HEAD"))), 5)
         );
         Ok(())
     })
@@ -19,7 +19,7 @@ fn test_parse_revspec_parent() -> BitResult<()> {
         let rev = rev!("HEAD^");
         assert_eq!(
             rev.parse(repo)?,
-            &Revspec::Parent(Box::new(Revspec::Ref(symbolic_ref!("HEAD"))), 1)
+            &ParsedRevspec::Parent(Box::new(ParsedRevspec::Ref(symbolic_ref!("HEAD"))), 1)
         );
         Ok(())
     })
@@ -40,7 +40,7 @@ fn test_parse_revspec_with_symref_ancestor() -> BitResult<()> {
         let rev = rev!("HEAD~5");
         assert_eq!(
             rev.parse(repo)?,
-            &Revspec::Ancestor(Box::new(Revspec::Ref(symbolic_ref!("HEAD"))), 5)
+            &ParsedRevspec::Ancestor(Box::new(ParsedRevspec::Ref(symbolic_ref!("HEAD"))), 5)
         );
         Ok(())
     })
@@ -63,7 +63,7 @@ fn test_parse_revspec_with_oid() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let empty_oid = Oid::EMPTY_BLOB.to_string();
         let rev = rev!(&empty_oid);
-        assert_eq!(rev.parse(repo)?, &Revspec::Ref(BitRef::Direct(Oid::EMPTY_BLOB)));
+        assert_eq!(rev.parse(repo)?, &ParsedRevspec::Ref(BitRef::Direct(Oid::EMPTY_BLOB)));
         Ok(())
     })
 }
