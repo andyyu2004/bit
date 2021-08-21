@@ -1,11 +1,19 @@
 use super::*;
-use crate::error::BitErrorExt;
 use crate::error::BitResult;
 use crate::repo::{BitRepo, Repo};
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use std::io::BufReader;
 use std::str::FromStr;
+
+#[test]
+fn test_create_branch_on_empty_repo() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        repo.bit_create_branch("some-branch", &rev!("HEAD"))?;
+        assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/some-branch"));
+        Ok(())
+    })
+}
 
 #[test]
 fn test_calculate_ref_decoration() -> BitResult<()> {
@@ -16,16 +24,16 @@ fn test_calculate_ref_decoration() -> BitResult<()> {
         let refs = repo.ls_refs()?;
         let decorations = repo.ref_decorations(&refs)?;
         assert_eq!(decorations.len(), 1);
+
         let mut values = decorations.values();
-        assert_eq!(
-            values.next().unwrap(),
-            &btreeset! {
-                RefDecoration::Symbolic(symbolic!("HEAD"), symbolic!("refs/heads/master")),
-                RefDecoration::Branch(symbolic!("refs/heads/a-new-branch")),
-                RefDecoration::Branch(symbolic!("refs/heads/b-new-branch")),
-                RefDecoration::Branch(symbolic!("refs/heads/c-new-branch")),
-            }
-        );
+        let expected = btreeset! {
+            RefDecoration::Symbolic(symbolic!("HEAD"), symbolic!("refs/heads/master")),
+            RefDecoration::Branch(symbolic!("refs/heads/a-new-branch")),
+            RefDecoration::Branch(symbolic!("refs/heads/b-new-branch")),
+            RefDecoration::Branch(symbolic!("refs/heads/c-new-branch")),
+        };
+        let actual = values.next().unwrap();
+        assert_eq!(actual, &expected);
         Ok(())
     })
 }
@@ -82,15 +90,6 @@ fn test_resolve_head_symref() -> BitResult<()> {
             repo.resolve_ref(BitRef::HEAD)?,
             BitRef::Direct("902e59e7eadc1c44586354c9ecb3098fb316c2c4".into())
         );
-        Ok(())
-    })
-}
-
-#[test]
-fn test_create_branch_in_fresh() -> BitResult<()> {
-    BitRepo::with_empty_repo(|repo| {
-        let err = repo.bit_create_branch("new-branch", &rev!("HEAD")).unwrap_err();
-        assert_eq!(err.try_into_nonexistent_symref_err()?, symbolic!("refs/heads/master"));
         Ok(())
     })
 }

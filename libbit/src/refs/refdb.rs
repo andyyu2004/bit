@@ -4,6 +4,7 @@ use crate::lockfile::{Filelock, Lockfile, LockfileFlags};
 use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
+use crate::rev::Revspec;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use std::collections::BTreeSet;
@@ -27,6 +28,23 @@ impl<'rcx> BitRefDb<'rcx> {
     pub fn join_log(&self, path: BitPath) -> BitPath {
         self.bitdir.join("logs").join(path)
     }
+
+    /// See [`Self::set_ref`].
+    /// This does not validate the reference and assumes it is fully expanded and correct
+    /// Useful for pointing `HEAD` at branches that don't yet exist
+    fn set_ref_unvalidated(&self, sym: SymbolicRef, to: BitRef) -> BitResult<()> {
+        Lockfile::with_mut(self.join(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
+            to.serialize(lockfile)
+        })
+    }
+
+    /// Set the symbolic reference `sym` to point at reference to `to` which
+    /// may itself be symbolic reference or a direct reference.
+    /// This will create `sym` if it doesn't exist
+    fn set_ref(&self, sym: SymbolicRef, to: BitRef) -> BitResult<()> {
+        let validated = self.validate(to)?;
+        self.set_ref_unvalidated(sym, validated)
+    }
 }
 
 pub type Refs = BTreeSet<SymbolicRef>;
@@ -35,7 +53,8 @@ pub type Refs = BTreeSet<SymbolicRef>;
 // objects for validation but both refdb and odb are owned by the repo so not sure if this is feasible
 pub trait BitRefDbBackend<'rcx> {
     fn repo(&self) -> BitRepo<'rcx>;
-    fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()>;
+    /// Create a bit branch from a revision
+    fn create_branch(&self, sym: SymbolicRef, from: &Revspec) -> BitResult<()>;
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef>;
     // may implicitly create the ref
     fn update(&self, sym: SymbolicRef, to: BitRef, cause: RefUpdateCause) -> BitResult<()>;
@@ -86,9 +105,9 @@ pub trait BitRefDbBackend<'rcx> {
                 BitRef::Direct(..) => Ok(partial),
                 BitRef::Symbolic(sym) => self.resolve(BitRef::Symbolic(sym)),
             },
-            // if partial resolution failed on a symref, then we return that symbolic reference
-            // e.g. sym = refs/heads/master, but that file doesn't exist
-            // otherwise, propogate the error
+            // If partial resolution failed on a symref, then we return that symbolic reference
+            // e.g. sym = refs/heads/master, but that file doesn't exist.
+            // Otherwise, propogate the error
             Err(err) => err.try_into_nonexistent_symref_err().map(BitRef::Symbolic),
         }
     }
@@ -122,11 +141,24 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
         self.repo
     }
 
-    fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
+    fn create_branch(&self, sym: SymbolicRef, from_rev: &Revspec) -> BitResult<()> {
         if self.exists(sym)? {
             bail!("a reference `{}` already exists", sym);
         }
-        self.update(sym, from, RefUpdateCause::NewBranch { from })
+
+        let repo = self.repo();
+        let reference = repo.resolve_rev(from_rev)?;
+        match repo.try_fully_resolve_ref(reference)? {
+            Some(oid) => {
+                let from = BitRef::Direct(oid);
+                self.update(sym, from, RefUpdateCause::NewBranch { from: reference })
+            }
+            // The following handles the case where `HEAD` points to an empty branch
+            // i.e. on an empty repository and `HEAD -> heads/refs/master`.
+            // All creating a new branch does is change the content of head
+            // from `ref: refs/heads/master` to `ref: refs/heads/<new-branch>`
+            None => self.set_ref_unvalidated(SymbolicRef::HEAD, BitRef::Symbolic(sym)),
+        }
     }
 
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
@@ -137,10 +169,7 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     }
 
     fn update(&self, sym: SymbolicRef, to: BitRef, cause: RefUpdateCause) -> BitResult<()> {
-        Lockfile::with_mut(self.join(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
-            self.validate(to)?.serialize(lockfile)
-        })?;
-
+        self.set_ref(sym, to)?;
         let new_oid = self.repo.fully_resolve_ref(to)?;
         let committer = self.repo.user_signature()?;
 
@@ -154,7 +183,8 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
             }
         }
 
-        self.log(sym, new_oid, committer, cause_str)
+        self.log(sym, new_oid, committer, cause_str)?;
+        Ok(())
     }
 
     fn delete(&self, _sym: SymbolicRef) -> BitResult<()> {

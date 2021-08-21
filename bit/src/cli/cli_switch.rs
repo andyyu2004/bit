@@ -16,20 +16,20 @@ pub struct BitSwitchCliOpts {
 
 impl Cmd for BitSwitchCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
-        let branch = if let Some(branch_name) = self.create {
-            repo.bit_create_branch(&branch_name, &self.revision)?
+        if let Some(branch_name) = self.create {
+            let new_branch = repo.bit_create_branch(&branch_name, &self.revision)?;
+            println!("switched to a new branch `{}`", new_branch.short());
+            Ok(())
         } else {
             // switch is currently a limited form of checkout where only branches are allowed (can't checkout commits)
-            repo.resolve_rev_to_branch(&self.revision)?
-        };
-        repo.checkout_reference(branch)
+            let branch = repo.resolve_rev_to_branch(&self.revision)?;
+            repo.checkout_reference(branch)
+        }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn parse_switch_opts() {
         let opts = BitSwitchCliOpts::try_parse_from(&["HEAD"]).unwrap();

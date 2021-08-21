@@ -39,9 +39,14 @@ impl<'rcx> BitRepo<'rcx> {
         self.fully_resolve_ref(reference)
     }
 
+    pub fn try_fully_resolve_rev(self, rev: &Revspec) -> BitResult<Option<Oid>> {
+        let reference = self.resolve_rev(rev)?;
+        self.try_fully_resolve_ref(reference)
+    }
+
     /// resolve a revision to a reference (either a branch or a commit, never HEAD itself)
     pub fn resolve_rev(self, rev: &Revspec) -> BitResult<BitRef> {
-        self.fully_resolve_rev_to_ref(rev.parse(self)?)
+        self.resolve_rev_internal(rev.parse(self)?)
     }
 
     pub fn resolve_rev_to_commit(self, rev: &Revspec) -> BitResult<Commit<'rcx>> {
@@ -55,7 +60,7 @@ impl<'rcx> BitRepo<'rcx> {
         }
     }
 
-    fn fully_resolve_rev_to_ref(&self, rev: &ParsedRevspec) -> BitResult<BitRef> {
+    fn resolve_rev_internal(&self, rev: &ParsedRevspec) -> BitResult<BitRef> {
         let get_nth_parent = |reference, n| -> BitResult<BitRef> {
             let oid = self.fully_resolve_ref(reference)?;
 
@@ -100,10 +105,10 @@ impl<'rcx> BitRepo<'rcx> {
             ParsedRevspec::Ref(r) => Ok(r),
             ParsedRevspec::Partial(prefix) => self.expand_prefix(prefix).map(BitRef::Direct),
             ParsedRevspec::Parent(ref inner, n) =>
-                self.fully_resolve_rev_to_ref(inner).and_then(|r| get_nth_parent(r, n)),
-            ParsedRevspec::Ancestor(ref rev, n) => (0..n)
-                .try_fold(self.fully_resolve_rev_to_ref(&rev)?, |oid, _| get_first_parent(oid)),
-            ParsedRevspec::Reflog(ref inner, n) => match self.fully_resolve_rev_to_ref(&inner)? {
+                self.resolve_rev_internal(inner).and_then(|r| get_nth_parent(r, n)),
+            ParsedRevspec::Ancestor(ref rev, n) =>
+                (0..n).try_fold(self.resolve_rev_internal(&rev)?, |oid, _| get_first_parent(oid)),
+            ParsedRevspec::Reflog(ref inner, n) => match self.resolve_rev_internal(&inner)? {
                 BitRef::Direct(..) =>
                     bail!("can't use reflog revision syntax on a direct reference"),
                 BitRef::Symbolic(sym) => {
@@ -211,24 +216,15 @@ impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
             self.next()?
         };
 
-        // try to interpret as a ref first and if it parses, then expand it to see if it resolves to something valid
-        // this is better than doing it as a partialoid first as partialoid might fail either due to being ambiguous or due to not existing
-        // but refs will only fail for not existing
-        // rev's are ambiguous
-        // how can we tell if something is a partial oid or a valid reference (e.g. nothing prevents "abcd" from being both a valid prefix and valid branch name)
-        // (if a branch happens to have the same name as a valid prefix then bad luck I guess? but seems quite unlikely in practice)
+        // try parse as a `partial_oid` first and try expand it
+        // otherwise just parse it as a ref (either symbolic or direct)
+        // there is no guarantee the ref is valid
         let reference = if let Ok(r) =
             PartialOid::from_str(s).and_then(|prefix| repo.expand_prefix(prefix)).map(BitRef::from)
         {
             r
         } else {
-            BitRef::from_str(s).and_then(|r| {
-                // if the ref is not "partially resolvable" then
-                // we don't return the fully resolved ref as we want the original for better error messages
-                // we are just checking if it is resolvable one level
-                repo.partially_resolve_ref(r)?;
-                Ok(r)
-            })?
+            BitRef::from_str(s)?
         };
 
         Ok(ParsedRevspec::Ref(reference))

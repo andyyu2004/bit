@@ -103,7 +103,7 @@ impl FromStr for BitRef {
 // symbolic ref in a file is of the form `ref: <ref>`
 const SYMBOLIC_REF_PREFIX: &str = "ref: ";
 
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 pub struct SymbolicRef {
     path: BitPath,
     kind: SymbolicRefKind,

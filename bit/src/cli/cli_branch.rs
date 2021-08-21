@@ -13,7 +13,16 @@ pub struct BitBranchCliOpts {
 
 impl Cmd for BitBranchCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
-        repo.bit_create_branch(&self.name, &self.revision)?;
+        match repo.try_fully_resolve_rev(&self.revision)? {
+            Some(..) => repo.bit_create_branch(&self.name, &self.revision),
+            // we can't actually create a new branch on an `empty branch`
+            // as the branch doesn't actually exist yet.
+            // all that exists is the reference to it in HEAD.
+            // all sorts of edge cases come up on an empty repos unfortunately
+            None => bail!(
+                "cannot create new branch on an empty branch (use `bit switch -c <branch>` to change your branch)"
+            ),
+        }?;
         Ok(())
     }
 }
