@@ -126,6 +126,7 @@ thread_local! {
     static INTERNER: RefCell<Interner> = RefCell::new(Interner::prefill(prefill! {
         EMPTY => "",
         HEAD => "HEAD",
+        MASTER => "master",
         DOT_GIT => ".git",
         REMOVED => "removed",
         REFS_HEADS => "refs/heads",

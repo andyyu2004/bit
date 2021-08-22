@@ -357,6 +357,24 @@ macro_rules! pathspec {
 }
 
 macro_rules! file_entry {
+    ($path:ident < $content:literal) => {{
+        let oid = crate::tls::with_repo(|repo| {
+            repo.write_obj(&$crate::obj::MutableBlob::new($content.as_bytes().to_vec()))
+        })
+        .unwrap();
+        crate::obj::TreeEntry {
+            oid,
+            path: stringify!($path).into(),
+            mode: $crate::obj::FileMode::REG,
+        }
+    }};
+    ($path:literal < $content:literal) => {{
+        let oid = crate::tls::with_repo(|repo| {
+            repo.write_obj(&$crate::obj::MutableBlob::new($content.as_bytes().to_vec()))
+        })
+        .unwrap();
+        crate::obj::TreeEntry { oid, path: $path.into(), mode: $crate::obj::FileMode::REG }
+    }};
     ($path:expr) => {{
         let oid =
             crate::tls::with_repo(|repo| repo.write_obj(&$crate::obj::MutableBlob::new(vec![])))
@@ -378,6 +396,12 @@ macro_rules! tree_entry {
     };
     ($path:literal) => {
         file_entry!($path)
+    };
+    ($path:ident < $content:literal) => {
+        file_entry!($path < $content)
+    };
+    ($path:literal < $content:literal) => {
+        file_entry!($path < $content)
     };
     ($path:literal { $($subtree:tt)* }) => {{
         let tree = tree_obj!( $($subtree)* );
@@ -402,6 +426,12 @@ macro_rules! tree_entries {
     };
     ([ $($entries:expr,)* ] $next:literal { $($subtree:tt)* } $($rest:tt)*) => {
         tree_entries!([ $($entries,)* tree_entry!($next { $($subtree)* }), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ] $next:ident < $content:literal $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next < $content), ] $($rest)*)
+    };
+    ([ $($entries:expr,)* ] $next:literal < $content:literal $($rest:tt)*) => {
+        tree_entries!([ $($entries,)* tree_entry!($next < $content), ] $($rest)*)
     };
     ([ $($entries:expr,)* ] $next:ident $($rest:tt)*) => {
         tree_entries!([ $($entries,)* tree_entry!($next), ] $($rest)*)

@@ -201,7 +201,7 @@ impl<'rcx> FallibleIterator for TreeIter<'rcx> {
                     FileMode::TREE => {
                         let tree = entry.oid.treeish(self.repo)?;
                         let path = base.join(entry.path);
-                        debug!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
+                        trace!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
 
                         self.previous_len = self.entry_stack.len();
                         self.entry_stack.extend(
@@ -217,7 +217,7 @@ impl<'rcx> FallibleIterator for TreeIter<'rcx> {
                         return Ok(Some(TreeEntry { path, ..entry }.into()));
                     }
                     FileMode::REG | FileMode::LINK | FileMode::EXEC => {
-                        debug!("TreeIter::next: entry: {:?}", entry);
+                        trace!("TreeIter::next: entry: {:?}", entry);
                         entry.path = base.join(entry.path);
                         return Ok(Some(entry.into()));
                     }

@@ -386,7 +386,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn get_blob(self, path: BitPath) -> BitResult<MutableBlob> {
-        let path = self.normalize(path.as_ref())?;
+        let path = self.normalize_path(path.as_ref())?;
         let bytes = if path.symlink_metadata()?.file_type().is_symlink() {
             // we literally hash the contents of the symlink without following
             std::fs::read_link(path)?.as_os_str().as_bytes().to_vec()
@@ -405,10 +405,16 @@ impl<'rcx> BitRepo<'rcx> {
         self.get_blob(path).and_then(|blob| hash::hash_obj(&blob))
     }
 
+    /// convert a relative path to be absolute based off the repository root
+    /// use [`Self::normalize_path`] if you expect the path to exist
+    pub fn to_absolute_path(self, path: impl AsRef<Path>) -> BitPath {
+        self.workdir.join(path)
+    }
+
     /// converts relative_paths to absolute paths
     /// checks absolute paths exist and have a base relative to the bit directory
     // can't figure out how to make this take an impl AsRef<Path> and make lifetimes work out
-    pub fn normalize<'p>(self, path: &Path) -> BitResult<Cow<'_, Path>> {
+    pub fn normalize_path<'p>(self, path: &Path) -> BitResult<Cow<'_, Path>> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
@@ -436,11 +442,6 @@ impl<'rcx> BitRepo<'rcx> {
         // this seems to work just as well as the pathdiff crate
         debug_assert!(path.is_absolute());
         Ok(path.strip_prefix(&self.workdir)?)
-    }
-
-    /// convert a relative path to be absolute based off the repository root
-    pub fn to_absolute_path(self, path: impl AsRef<Path>) -> BitPath {
-        self.workdir.join(path)
     }
 
     #[cfg(test)]

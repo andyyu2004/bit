@@ -1,9 +1,13 @@
+use std::io::Write;
+
 use crate::error::BitResult;
 use crate::index::{BitIndexEntry, MergeStage};
-use crate::iter::BitTreeIterator;
+use crate::iter::{BitEntry, BitTreeIterator};
 use crate::obj::{BitObject, Commit, MutableBlob, Oid, TreeEntry};
 use crate::peel::Peel;
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
+use crate::rev::Revspec;
 use crate::xdiff;
 use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashSet;
@@ -17,29 +21,40 @@ impl<'rcx> BitRepo<'rcx> {
         a.find_merge_base(b)
     }
 
-    pub fn merge(self, their_head: Oid) -> BitResult<()> {
-        MergeCtxt { repo: self }.merge(their_head)
+    pub fn merge_ref(self, their_head_ref: BitRef) -> BitResult<()> {
+        MergeCtxt::new(self, their_head_ref)?.merge()
+    }
+
+    pub fn merge(self, their_head: &Revspec) -> BitResult<()> {
+        self.merge_ref(self.resolve_rev(their_head)?)
     }
 }
 
 #[derive(Debug)]
 struct MergeCtxt<'rcx> {
     repo: BitRepo<'rcx>,
+    // description of `their_head`
+    their_head_desc: String,
+    their_head_ref: BitRef,
+    their_head: Oid,
 }
 
 impl<'rcx> MergeCtxt<'rcx> {
-    fn new(repo: BitRepo<'rcx>) -> Self {
-        Self { repo }
+    fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef) -> BitResult<Self> {
+        let their_head = repo.fully_resolve_ref(their_head_ref)?;
+        let their_head_desc = their_head_ref.short(repo);
+        Ok(Self { repo, their_head_ref, their_head, their_head_desc })
     }
 
-    pub fn merge(&mut self, their_head: Oid) -> BitResult<()> {
+    pub fn merge(&mut self) -> BitResult<()> {
         let repo = self.repo;
+        let their_head = self.their_head;
         let our_head = repo.fully_resolve_head()?;
         let our_head_commit = our_head.peel(repo)?;
         let their_head_commit = their_head.peel(repo)?;
         let merge_base = our_head_commit.find_merge_base(their_head_commit)?;
 
-        if merge_base.oid() == their_head {
+        if merge_base.oid() == self.their_head {
             bail!("Already up to date")
         }
 
@@ -51,8 +66,7 @@ impl<'rcx> MergeCtxt<'rcx> {
             repo.tree_iter(merge_base.oid()).ignore_trees(),
             repo.tree_iter(our_head).ignore_trees(),
             repo.tree_iter(their_head).ignore_trees(),
-        )?;
-        todo!()
+        )
     }
 
     pub fn merge_from_iterators(
@@ -72,13 +86,24 @@ impl<'rcx> MergeCtxt<'rcx> {
         a: Option<BitIndexEntry>,
         b: Option<BitIndexEntry>,
     ) -> BitResult<()> {
+        debug!(
+            "merge_entries(path: {:?}, {:?}, {:?}, {:?})",
+            base.or(a).or(b).map(|entry| entry.path),
+            base.as_ref().map(BitEntry::oid),
+            a.as_ref().map(BitEntry::oid),
+            b.as_ref().map(BitEntry::oid)
+        );
+
         let repo = self.repo;
         repo.with_index_mut(|index| {
             let mut three_way_merge =
                 |base: Option<BitIndexEntry>, y: BitIndexEntry, z: BitIndexEntry| {
-                    let base_str = match base {
-                        Some(b) => b.read_to_string(repo)?,
-                        None => String::new(),
+                    debug_assert_eq!(y.path, z.path);
+                    let path = y.path;
+
+                    let base_bytes = match base {
+                        Some(b) => b.read_to_bytes(repo)?,
+                        None => vec![],
                     };
 
                     if y.mode != z.mode {
@@ -87,17 +112,28 @@ impl<'rcx> MergeCtxt<'rcx> {
 
                     match xdiff::merge(
                         repo.config().conflictStyle()?,
-                        &base_str,
-                        &y.read_to_string(repo)?,
-                        &z.read_to_string(repo)?,
+                        "HEAD",
+                        &self.their_head_desc,
+                        &base_bytes,
+                        &y.read_to_bytes(repo)?,
+                        &z.read_to_bytes(repo)?,
                     ) {
                         Ok(merged) => {
-                            let oid = repo.write_obj(&MutableBlob::new(merged.into_bytes()))?;
+                            let oid = repo.write_obj(&MutableBlob::new(merged))?;
                             index.add_entry(TreeEntry { oid, path: y.path, mode: y.mode }.into())
                         }
                         Err(conflicted) => {
-                            let _oid = repo.write_obj(&MutableBlob::new(conflicted.into_bytes()))?;
-                            todo!()
+                            // write the conflicted file to disk
+                            let full_path = repo.normalize_path(path.as_path())?;
+
+                            if let Some(b) = base {
+                                index.add_conflicted_entry(b, MergeStage::Base)?;
+                            }
+                            index.add_conflicted_entry(y, MergeStage::Left)?;
+                            index.add_conflicted_entry(z, MergeStage::Right)?;
+
+                            std::fs::File::create(full_path)?.write_all(&conflicted)?;
+                            Ok(())
                         }
                     }
                 };
@@ -118,12 +154,12 @@ impl<'rcx> MergeCtxt<'rcx> {
                 }
                 // modify/delete conflict
                 (Some(b), Some(y), None) => {
-                    index.add_conflicted_entry(b, MergeStage::One)?;
-                    index.add_conflicted_entry(y, MergeStage::Two)
+                    index.add_conflicted_entry(b, MergeStage::Base)?;
+                    index.add_conflicted_entry(y, MergeStage::Left)
                 }
                 (Some(b), None, Some(z)) => {
-                    index.add_conflicted_entry(b, MergeStage::One)?;
-                    index.add_conflicted_entry(z, MergeStage::Three)
+                    index.add_conflicted_entry(b, MergeStage::Base)?;
+                    index.add_conflicted_entry(z, MergeStage::Right)
                 }
                 // merge
                 (None, Some(y), Some(z)) => three_way_merge(None, y, z),

@@ -47,11 +47,6 @@ pub trait BitEntry {
         self.mode().is_blob()
     }
 
-    fn read_to_string(&self, repo: BitRepo<'_>) -> BitResult<String> {
-        let bytes = self.read_to_bytes(repo)?;
-        Ok(String::from_utf8(bytes).unwrap_or_else(|_| "<binary>".to_string()))
-    }
-
     fn read_to_bytes(&self, repo: BitRepo<'_>) -> BitResult<Vec<u8>> {
         let oid = self.oid();
         // if object is known we try to read it from the object store
@@ -65,7 +60,7 @@ pub trait BitEntry {
             };
         }
 
-        let absolute_path = repo.normalize(self.path().as_path())?;
+        let absolute_path = repo.normalize_path(self.path().as_path())?;
         Ok(std::fs::read(absolute_path)?)
     }
 

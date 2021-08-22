@@ -94,15 +94,18 @@ impl<'rcx> BitIndex<'rcx> {
         self.mtime.map(|mtime| mtime <= worktree_entry.mtime).unwrap_or(true)
     }
 
-    /// if entry with the same path already exists, it will be replaced
-    pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
+    fn add_entry_common(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
-        self.remove_conflicted(entry.path);
-
         entry.oid = self.repo.write_blob(entry.path)?;
         assert!(entry.oid.is_known());
         self.insert_entry(entry);
         Ok(())
+    }
+
+    /// if entry with the same path already exists, it will be replaced
+    pub fn add_entry(&mut self, entry: BitIndexEntry) -> BitResult<()> {
+        self.remove_conflicted(entry.path);
+        self.add_entry_common(entry)
     }
 
     pub fn add_conflicted_entry(
@@ -114,14 +117,14 @@ impl<'rcx> BitIndex<'rcx> {
         self.remove_entry((entry.path, MergeStage::None));
 
         entry.set_stage(stage);
-        self.add_entry(entry)?;
+        self.add_entry_common(entry)?;
         Ok(())
     }
 
     fn remove_conflicted(&mut self, path: BitPath) {
-        self.remove_entry((path, MergeStage::One));
-        self.remove_entry((path, MergeStage::Two));
-        self.remove_entry((path, MergeStage::Three));
+        self.remove_entry((path, MergeStage::Base));
+        self.remove_entry((path, MergeStage::Left));
+        self.remove_entry((path, MergeStage::Right));
     }
 
     /// makes the index exactly match the working tree (removes, updates, and adds)
@@ -198,9 +201,9 @@ pub struct BitIndexExtension {
 pub enum MergeStage {
     /// not merging
     None  = 0,
-    One   = 1,
-    Two   = 2,
-    Three = 3,
+    Base  = 1,
+    Left  = 2,
+    Right = 3,
 }
 
 #[cfg(test)]

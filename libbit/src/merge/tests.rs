@@ -1,6 +1,7 @@
 use crate::error::BitResult;
 use crate::graph::{Dag, DagBuilder, DagNode};
 use crate::obj::{BitObject, CommitMessage, Oid};
+use crate::refs::SymbolicRef;
 use crate::repo::BitRepo;
 use crate::test_utils::generate_random_string;
 use fallible_iterator::FallibleIterator;
@@ -71,6 +72,22 @@ fn test_best_common_ancestors() -> BitResult<()> {
         let merge_base = repo.merge_base(a, b)?;
         assert_eq!(merge_base.oid(), commit_oids[&d]);
 
+        Ok(())
+    })
+}
+
+#[test]
+fn test_simple_merge() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let tree_a = tree! {
+            foo < "foo"
+            shared < "hello from a"
+        };
+        let tree_b = tree! {
+            foo < "foo"
+            shared < "hello from b"
+        };
+        // TODO
         Ok(())
     })
 }

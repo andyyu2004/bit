@@ -36,9 +36,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_revlist_cli() -> BitResult<()> {
-        let opts = BitRevlistCliOpts::try_parse_from(&["--", "HEAD", "master", "branch"])?;
+    fn test_parse_revlist_cli() {
+        let opts = BitRevlistCliOpts::try_parse_from(&["--", "HEAD", "master", "branch"]).unwrap();
         assert_eq!(opts.revisions.len(), 3);
-        Ok(())
     }
 }

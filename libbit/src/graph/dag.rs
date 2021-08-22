@@ -1,15 +1,10 @@
-use arrayvec::ArrayVec;
-use indexed_vec::{newtype_index, Idx, IndexVec};
+mod topological;
+
 pub use topological::TopologicalSort;
 
-#[cfg(test)]
-pub use reverse_topological::ReverseTopologicalSort;
-
 use crate::error::BitResult;
-#[cfg(test)]
-mod reverse_topological;
-
-mod topological;
+use arrayvec::ArrayVec;
+use indexed_vec::{newtype_index, Idx, IndexVec};
 
 // this needs more refactoring to be generally useful
 // as we can't just enumerate all nodes in the full commit graph
@@ -123,3 +118,9 @@ impl<'rcx> DagBuilder {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod reverse_topological;
+
+#[cfg(test)]
+pub use reverse_topological::ReverseTopologicalSort;

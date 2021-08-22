@@ -132,6 +132,7 @@ impl PartialOrd for SymbolicRef {
 
 impl SymbolicRef {
     pub const HEAD: Self = Self { path: BitPath::HEAD, kind: SymbolicRefKind::Head };
+    pub const MASTER: Self = Self { path: BitPath::MASTER, kind: SymbolicRefKind::Branch };
 
     pub fn new(path: BitPath) -> Self {
         debug_assert!(path.is_relative());
@@ -232,6 +233,7 @@ impl FromStr for SymbolicRef {
 
 impl BitRef {
     pub const HEAD: Self = Self::Symbolic(SymbolicRef::HEAD);
+    pub const MASTER: Self = Self::Symbolic(SymbolicRef::MASTER);
 
     pub fn resolve_to_tree(self, repo: BitRepo<'_>) -> BitResult<Tree<'_>> {
         let oid = repo.fully_resolve_ref(self)?;
@@ -240,6 +242,13 @@ impl BitRef {
             BitObjKind::Commit(commit) => commit.tree.treeish(repo),
             BitObjKind::Tree(tree) => Ok(*tree),
             BitObjKind::Tag(..) => todo!(),
+        }
+    }
+
+    pub fn short(&self, _repo: BitRepo<'_>) -> String {
+        match self {
+            BitRef::Direct(oid) => todo!("short (unambiguous) oid"),
+            BitRef::Symbolic(sym) => sym.short().to_owned(),
         }
     }
 

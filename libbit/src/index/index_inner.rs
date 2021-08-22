@@ -48,11 +48,11 @@ pub enum ConflictType {
 impl ConflictType {
     fn new(stages: ArrayVec<MergeStage, 3>) -> Self {
         match &stages[..] {
-            [MergeStage::One, MergeStage::Two, MergeStage::Three] => Self::BothModified,
-            [MergeStage::Two, MergeStage::Three] => Self::BothAdded,
-            [MergeStage::One, MergeStage::Two] => Self::ModifyDelete,
-            [MergeStage::One, MergeStage::Three] => Self::DeleteModify,
-            _ => unreachable!("probably missing some cases"),
+            [MergeStage::Base, MergeStage::Left, MergeStage::Right] => Self::BothModified,
+            [MergeStage::Left, MergeStage::Right] => Self::BothAdded,
+            [MergeStage::Base, MergeStage::Left] => Self::ModifyDelete,
+            [MergeStage::Base, MergeStage::Right] => Self::DeleteModify,
+            _ => unreachable!("probably missing some cases `{:?}`", stages),
         }
     }
 }
@@ -140,7 +140,8 @@ impl BitIndexInner {
         let mut to_remove = vec![];
 
         for (&(path, stage), _) in self.entries.range((entry_path, MergeStage::None)..) {
-            if !path.starts_with(entry_path) {
+            // don't remove conflict entries
+            if stage != MergeStage::None || !path.starts_with(entry_path) {
                 break;
             }
             to_remove.push((path, stage));

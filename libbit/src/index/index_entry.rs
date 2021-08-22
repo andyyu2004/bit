@@ -171,7 +171,7 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
 
 impl BitIndexEntry {
     pub fn from_path(repo: BitRepo<'_>, path: &Path) -> BitResult<Self> {
-        let normalized = repo.normalize(path)?;
+        let normalized = repo.normalize_path(path)?;
         let relative = repo.to_relative_path(&normalized)?;
 
         debug_assert!(!normalized.is_dir(), "bit index entry should not be a directory");
@@ -294,7 +294,8 @@ impl BitIndexEntryFlags {
         // reset relevant bits to 0
         self.0 &= !0x3000;
         // and then set them again
-        self.0 |= (stage as u16) << 12
+        self.0 |= (stage as u16) << 12;
+        assert_eq!(self.stage(), stage);
     }
 
     pub fn path_len(self) -> u16 {

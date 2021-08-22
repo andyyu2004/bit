@@ -477,7 +477,7 @@ fn test_bit_index_entry_flags() {
     let flags = BitIndexEntryFlags::new(0xb9fa);
     assert!(flags.assume_valid());
     assert!(!flags.extended());
-    assert_eq!(flags.stage(), MergeStage::Three);
+    assert_eq!(flags.stage(), MergeStage::Right);
     assert_eq!(flags.path_len(), 0x9fa);
 }
 
@@ -491,16 +491,16 @@ fn test_bit_index_entry_set_stage() {
 
     let mut flags = BitIndexEntryFlags::with_path_len(200);
 
-    flags.set_stage(MergeStage::Two);
-    assert_eq!(flags.stage(), MergeStage::Two);
+    flags.set_stage(MergeStage::Left);
+    assert_eq!(flags.stage(), MergeStage::Left);
     assert_everything_else_is_unchanged(flags);
 
-    flags.set_stage(MergeStage::One);
-    assert_eq!(flags.stage(), MergeStage::One);
+    flags.set_stage(MergeStage::Base);
+    assert_eq!(flags.stage(), MergeStage::Base);
     assert_everything_else_is_unchanged(flags);
 
-    flags.set_stage(MergeStage::Three);
-    assert_eq!(flags.stage(), MergeStage::Three);
+    flags.set_stage(MergeStage::Right);
+    assert_eq!(flags.stage(), MergeStage::Right);
     assert_everything_else_is_unchanged(flags);
 
     flags.set_stage(MergeStage::None);
@@ -541,4 +541,24 @@ fn index_entry_padding_test_without_extended_flags() {
     assert_eq!(BitIndexEntry::padding_len_for_filepath(16, false), 2);
     assert_eq!(BitIndexEntry::padding_len_for_filepath(17, false), 1);
     assert_eq!(BitIndexEntry::padding_len_for_filepath(18, false), 8);
+}
+
+#[test]
+fn index_add_conflicts() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let entry =
+            TreeEntry { mode: FileMode::REG, oid: Oid::EMPTY_BLOB, path: BitPath::A }.into();
+        repo.with_index_mut(|index| {
+            touch!(repo: "a");
+            index.add_conflicted_entry(entry, MergeStage::Left)?;
+            index.add_conflicted_entry(entry, MergeStage::Right)?;
+            let conflicts = index.conflicts();
+            assert_eq!(conflicts.len(), 1);
+            assert_eq!(
+                conflicts[0],
+                Conflict { path: BitPath::A, conflict_type: ConflictType::BothAdded }
+            );
+            Ok(())
+        })
+    })
 }

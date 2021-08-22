@@ -13,7 +13,6 @@ use std::iter::Peekable;
 pub struct BitStatus {
     head: BitRef,
     flags: BitStatusFlags,
-    // TODO can use bitflags if more bools pop up here
     pub staged: WorkspaceStatus,
     pub unstaged: WorkspaceStatus,
     pub conflicted: Conflicts,
@@ -74,6 +73,7 @@ impl Display for BitStatus {
     }
 }
 
+/// filter's out unmerged entries, keeping only MergeStage::None
 fn filter_unmerged<'a>(
     iter: impl IntoIterator<Item = &'a BitIndexEntry>,
 ) -> Peekable<impl Iterator<Item = &'a BitIndexEntry>> {
@@ -99,6 +99,7 @@ impl BitStatus {
             writeln!(f, "You have unmerged paths")?;
             writeln!(f, "  (fix conflicts and run `bit commit`)")?;
             writeln!(f, "  (use `bit merge --abort` to abort the merge)")?;
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -106,7 +107,7 @@ impl BitStatus {
     fn fmt_staged(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut new = filter_unmerged(&self.staged.new);
         let mut modified =
-            self.staged.modified.iter().filter(|(old, _)| !old.is_unmerged()).peekable();
+            self.staged.modified.iter().filter(|(_, new)| !new.is_unmerged()).peekable();
         let mut deleted = filter_unmerged(&self.staged.deleted);
 
         if new.is_empty() && modified.is_empty() && deleted.is_empty() {
@@ -121,9 +122,7 @@ impl BitStatus {
         }
 
         for (_, entry) in modified {
-            if !entry.is_unmerged() {
-                writeln!(f, "\t{}:   {}", "modified".green(), entry.path.green())?;
-            }
+            writeln!(f, "\t{}:   {}", "modified".green(), entry.path.green())?;
         }
 
         for entry in deleted {
@@ -137,6 +136,7 @@ impl BitStatus {
 
     fn fmt_unstaged(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // we filter by `old` here as that is the index entry with the relevant merge stage
+        // TODO is the above statement even correct?
         let mut modified =
             self.unstaged.modified.iter().filter(|(old, _)| !old.is_unmerged()).peekable();
         let mut deleted = filter_unmerged(&self.unstaged.deleted);

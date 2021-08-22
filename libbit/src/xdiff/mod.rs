@@ -21,11 +21,17 @@ pub fn format_patch_into<W: Write>(writer: W, patch: &BitPatch<'_>) -> io::Resul
 
 pub fn merge(
     conflict_style: ConflictStyle,
-    base: &str,
-    a: &str,
-    b: &str,
-) -> Result<String, String> {
-    diffy::MergeOptions::new().set_conflict_style(conflict_style).merge(base, a, b)
+    ours_marker: impl AsRef<str>,
+    theirs_marker: impl AsRef<str>,
+    base: &[u8],
+    a: &[u8],
+    b: &[u8],
+) -> Result<Vec<u8>, Vec<u8>> {
+    diffy::MergeOptions::new()
+        .set_conflict_style(conflict_style)
+        .set_ours_marker(ours_marker.as_ref().to_owned())
+        .set_theirs_marker(theirs_marker.as_ref().to_owned())
+        .merge_bytes(base, a, b)
 }
 
 struct OffsetVec<T> {
