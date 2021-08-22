@@ -46,7 +46,7 @@ impl<'rcx> BitRepo<'rcx> {
             )?,
         };
 
-        // doing the `checkout` before the index `read_tree` as `checkout` will touch the index too
+        // doing the `checkout` before the index `read_tree` as `checkout` will touch the index too,
         // but we want to `read_tree` to have the final say on the state of the index
         if kind > ResetKind::Mixed {
             // force checkout the tree, `checkout_tree` is always a force checkout for now

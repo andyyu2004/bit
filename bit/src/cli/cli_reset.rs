@@ -31,8 +31,7 @@ impl Cmd for BitResetCliOpts {
         };
 
         repo.reset(&self.target, kind)?;
-        let head = repo.read_head()?;
-        println!("HEAD is not at `{}`", head);
+        println!("HEAD is now at `{}`", repo.resolve_head()?);
         Ok(())
     }
 }
