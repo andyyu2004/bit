@@ -11,6 +11,6 @@ impl<'rcx> BitRepo<'rcx> {
 
     /// create a tree from the index
     pub fn write_tree(&self) -> BitResult<Oid> {
-        self.with_index(|index| index.write_tree())
+        self.with_index_mut(|index| index.write_tree())
     }
 }

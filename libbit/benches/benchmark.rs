@@ -24,7 +24,7 @@ pub fn bench_write_tree(c: &mut Criterion) {
     BitRepo::init(&path).unwrap();
     std::fs::copy(test_files_dir!("lg2index"), path.join(".git/index")).unwrap();
     c.bench_function("index_write_tree", |b| {
-        b.iter(|| BitRepo::find(&path, |repo| repo.with_index(|index| index.write_tree())))
+        b.iter(|| BitRepo::find(&path, |repo| repo.with_index_mut(|index| index.write_tree())))
     });
 }
 

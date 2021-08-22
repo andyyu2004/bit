@@ -429,7 +429,7 @@ fn parse_index_header() -> BitResult<()> {
 #[test]
 fn bit_index_build_tree_test() -> BitResult<()> {
     BitRepo::find("tests/repos/indextest", |repo| {
-        let oid = repo.with_index(|index| index.write_tree())?;
+        let oid = repo.with_index_mut(|index| index.write_tree())?;
         let tree = repo.read_obj(oid)?.into_tree();
 
         let entries = tree.entries.iter().collect_vec();

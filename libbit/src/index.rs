@@ -81,6 +81,12 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(Self { repo, inner, mtime })
     }
 
+    fn tree_cache_read(&mut self, tree: Oid) -> BitResult<()> {
+        // TODO this is really slow and a definite bottleneck
+        self.tree_cache = Some(BitTreeCache::read_tree_cache(self.repo, tree)?);
+        Ok(())
+    }
+
     /// Read a tree object into the index. The current contents of the index will be replaced.
     pub fn read_tree(&mut self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
         let repo = self.repo;
@@ -88,8 +94,7 @@ impl<'rcx> BitIndex<'rcx> {
         let diff = self.diff_tree(tree, Pathspec::MATCH_ALL)?;
         self.apply_diff(&diff)?;
 
-        // TODO this is really slow and a definite bottleneck
-        self.tree_cache = Some(BitTreeCache::read_tree_cache(self.repo, tree)?);
+        self.tree_cache_read(tree)?;
 
         // index should now exactly match the tree
         debug_assert!(self.diff_tree(tree, Pathspec::MATCH_ALL)?.is_empty());
@@ -97,12 +102,15 @@ impl<'rcx> BitIndex<'rcx> {
     }
 
     /// Builds a tree object from the current index entries and writes it and all subtrees to disk
-    pub fn write_tree(&self) -> BitResult<Oid> {
+    pub fn write_tree(&mut self) -> BitResult<Oid> {
         if self.has_conflicts() {
             bail!("cannot write-tree an an index that is not fully merged");
         }
 
-        self.index_tree_iter().build_tree(self.repo)
+        let tree_oid = self.index_tree_iter().build_tree(self.repo)?;
+        // refresh the tree_cache using the tree we just built
+        self.tree_cache_read(tree_oid)?;
+        Ok(tree_oid)
     }
 
     pub fn is_racy_entry(&self, worktree_entry: &BitIndexEntry) -> bool {
