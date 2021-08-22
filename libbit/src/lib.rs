@@ -70,6 +70,7 @@ pub mod path;
 pub mod pathspec;
 pub mod refs;
 pub mod repo;
+pub mod reset;
 pub mod rev;
 pub mod serialize;
 pub mod status;

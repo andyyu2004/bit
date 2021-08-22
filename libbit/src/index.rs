@@ -3,6 +3,7 @@ mod index_inner;
 mod reuc;
 mod tree_cache;
 
+use fallible_iterator::FallibleIterator;
 pub use index_entry::*;
 pub use index_inner::{BitIndexInner, Conflict, ConflictType, Conflicts};
 
@@ -14,7 +15,7 @@ use crate::hash::OID_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
 use crate::iter::{BitEntryIterator, BitTreeIterator, IndexTreeIter};
 use crate::lockfile::Filelock;
-use crate::obj::{FileMode, Oid, TreeEntry};
+use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
@@ -80,13 +81,27 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(Self { repo, inner, mtime })
     }
 
-    /// builds a tree object from the current index entries and writes it and all subtrees to disk
+    /// Read a tree object into the index. The current contents of the index will be replaced.
+    pub fn read_tree(&mut self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
+        let repo = self.repo;
+        let tree = treeish.treeish_oid(repo)?;
+        let diff = self.diff_tree(tree, Pathspec::MATCH_ALL)?;
+        self.apply_diff(&diff)?;
+
+        self.tree_cache = Some(BitTreeCache::read_tree_cache(self.repo, tree)?);
+
+        // index should now exactly match the tree
+        debug_assert!(self.diff_tree(tree, Pathspec::MATCH_ALL)?.is_empty());
+        Ok(())
+    }
+
+    /// Builds a tree object from the current index entries and writes it and all subtrees to disk
     pub fn write_tree(&self) -> BitResult<Oid> {
         if self.has_conflicts() {
             bail!("cannot write-tree an an index that is not fully merged");
         }
 
-        self.tree_iter().build_tree(self.repo)
+        self.index_tree_iter().build_tree(self.repo)
     }
 
     pub fn is_racy_entry(&self, worktree_entry: &BitIndexEntry) -> bool {
@@ -121,19 +136,22 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(())
     }
 
-    fn remove_conflicted(&mut self, path: BitPath) {
-        self.remove_entry((path, MergeStage::Base));
-        self.remove_entry((path, MergeStage::Left));
-        self.remove_entry((path, MergeStage::Right));
-    }
-
     /// makes the index exactly match the working tree (removes, updates, and adds)
     pub fn add_all(&mut self) -> BitResult<()> {
-        struct AddAll<'a, 'rcx> {
+        let diff = self.diff_worktree(Pathspec::MATCH_ALL)?;
+        self.apply_diff(&diff)?;
+
+        // worktree should exactly match the index after `add_all`
+        debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
+        Ok(())
+    }
+
+    fn apply_diff(&mut self, diff: &WorkspaceStatus) -> BitResult<()> {
+        struct IndexApplier<'a, 'rcx> {
             index: &'a mut BitIndex<'rcx>,
         }
 
-        impl<'a, 'rcx> Differ for AddAll<'a, 'rcx> {
+        impl<'a, 'rcx> Differ for IndexApplier<'a, 'rcx> {
             fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
                 self.index.add_entry(*new)
             }
@@ -147,12 +165,8 @@ impl<'rcx> BitIndex<'rcx> {
                 Ok(())
             }
         }
-        let diff = self.diff_worktree(Pathspec::MATCH_ALL)?;
-        diff.apply_with(&mut AddAll { index: self })?;
 
-        // worktree should exactly match the index after `add_all`
-        debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
-        Ok(())
+        diff.apply_with(&mut IndexApplier { index: self })
     }
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {

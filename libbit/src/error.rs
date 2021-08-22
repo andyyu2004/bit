@@ -127,8 +127,7 @@ impl Display for BitError {
                 }
                 Ok(())
             }
-            BitError::NonExistentSymRef(sym) =>
-                writeln!(f, "failed to resolve reference `{}`", sym),
+            BitError::NonExistentSymRef(sym) => write!(f, "failed to resolve reference `{}`", sym),
         }
     }
 }

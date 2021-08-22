@@ -175,13 +175,13 @@ impl<'rcx> BitIndex<'rcx> {
         IndexWorktreeDiffer::new(self, pathspec).build_diff()
     }
 
-    pub fn diff_tree(&mut self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+    pub fn diff_tree(&self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         let tree_iter = pathspec.match_tree_iter(self.repo.tree_iter(tree));
-        let index_iter = pathspec.match_tree_iter(self.tree_iter());
+        let index_iter = pathspec.match_tree_iter(self.index_tree_iter());
         TreeStatusDiffer::default().build_diff(tree_iter, index_iter)
     }
 
-    pub fn diff_head(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+    pub fn diff_head(&self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         self.diff_tree(self.repo.head_tree()?, pathspec)
     }
 }

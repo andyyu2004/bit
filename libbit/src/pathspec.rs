@@ -106,11 +106,6 @@ impl Pathspec {
     }
 }
 
-pub struct FnMatch {
-    path: BitPath,
-    parent: BitPath,
-}
-
 impl FromStr for Pathspec {
     type Err = BitGenericError;
 

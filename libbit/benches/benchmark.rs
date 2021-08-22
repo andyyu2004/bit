@@ -7,7 +7,7 @@ use libbit::serialize::Deserialize;
 pub fn bench_index_tree_iter(c: &mut Criterion) {
     let bytes = include_bytes!("../tests/files/lg2index") as &[u8];
     let index = BitIndexInner::deserialize_unbuffered(bytes).unwrap();
-    c.bench_function("index_tree_iter", |b| b.iter(|| index.tree_iter().count().unwrap()));
+    c.bench_function("index_tree_iter", |b| b.iter(|| index.index_tree_iter().count().unwrap()));
 }
 
 macro_rules! test_files_dir {

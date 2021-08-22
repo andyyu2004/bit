@@ -19,6 +19,7 @@ Currently implements the following commands with a subset of the same options as
 - bit log
 - bit ls-files
 - bit merge-base
+- bit reset
 - bit rev-list
 - bit status
 - bit switch

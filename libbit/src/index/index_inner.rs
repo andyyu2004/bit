@@ -18,7 +18,7 @@ pub struct BitIndexInner {
     // DO NOT mutate this field directly
     // instead use one of the mutators
     entries: BitIndexEntries,
-    tree_cache: Option<BitTreeCache>,
+    pub(super) tree_cache: Option<BitTreeCache>,
     reuc: Option<BitReuc>,
 }
 
@@ -66,7 +66,7 @@ impl BitIndexInner {
         Self { entries, tree_cache, reuc }
     }
 
-    pub fn tree_iter(&self) -> IndexTreeIter<'_> {
+    pub fn index_tree_iter(&self) -> IndexTreeIter<'_> {
         IndexTreeIter::new(self)
     }
 
@@ -90,6 +90,12 @@ impl BitIndexInner {
             self.invalidate_tree_cache_path(path)
         }
         exists
+    }
+
+    pub(super) fn remove_conflicted(&mut self, path: BitPath) {
+        self.remove_entry((path, MergeStage::Base));
+        self.remove_entry((path, MergeStage::Left));
+        self.remove_entry((path, MergeStage::Right));
     }
 
     fn invalidate_tree_cache_path(&mut self, path: BitPath) {

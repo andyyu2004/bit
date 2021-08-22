@@ -136,6 +136,34 @@ macro_rules! bit_commit {
     };
 }
 
+macro_rules! bit_checkout {
+    ($repo:ident: $rev:literal) => {{
+        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+        $repo.checkout(&revision)?;
+    }};
+}
+
+macro_rules! bit_branch {
+    ($repo:ident: $branch:literal) => {
+        $repo.bit_create_branch($branch, &rev!("HEAD"))?
+    };
+}
+
+macro_rules! bit_reset {
+    ($repo:ident: --soft $rev:literal) => {{
+        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+        $repo.reset(&revision, $crate::reset::ResetKind::Soft)?;
+    }};
+    ($repo:ident: --hard $rev:literal) => {{
+        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+        $repo.reset(&revision, $crate::reset::ResetKind::Hard)?;
+    }};
+    ($repo:ident: $rev:literal) => {{
+        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+        $repo.reset(&revision, $crate::reset::ResetKind::Mixed)?;
+    }};
+}
+
 macro_rules! bit_commit_all {
     ($repo:expr) => {{
         bit_add_all!($repo);

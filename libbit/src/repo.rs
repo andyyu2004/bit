@@ -156,7 +156,21 @@ impl<'rcx> RepoCtxt<'rcx> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum RepoState {
+    None,
+    Merging,
+}
+
 impl<'rcx> BitRepo<'rcx> {
+    pub fn repo_state(self) -> RepoState {
+        if self.bitdir.join(BitPath::MERGE_HEAD).exists() {
+            RepoState::Merging
+        } else {
+            RepoState::None
+        }
+    }
+
     /// returns `None` if the reference does not yet exist
     // don't think this can be written in terms of `fully_resolve_ref` below
     // if we were to do something like `fully_resolve_ref().ok()`, then all errors will result in None
@@ -331,6 +345,10 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn update_head(self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
         self.update_ref(SymbolicRef::HEAD, bitref.into(), cause)
+    }
+
+    pub fn read_ref(self, sym: SymbolicRef) -> BitResult<BitRef> {
+        self.refdb()?.read(sym)
     }
 
     pub fn create_branch(self, sym: SymbolicRef, from: &Revspec) -> BitResult<()> {

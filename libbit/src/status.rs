@@ -1,6 +1,6 @@
 use crate::diff::WorkspaceStatus;
 use crate::error::BitResult;
-use crate::index::{BitIndexEntry, Conflict, ConflictType, Conflicts};
+use crate::index::{BitIndex, BitIndexEntry, Conflict, ConflictType, Conflicts};
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
@@ -38,19 +38,23 @@ impl BitStatus {
 
 impl<'rcx> BitRepo<'rcx> {
     pub fn status(self, pathspec: Pathspec) -> BitResult<BitStatus> {
-        self.with_index_mut(|index| {
-            let head = self.read_head()?;
-            let staged = index.diff_head(pathspec)?;
-            let unstaged = index.diff_worktree(pathspec)?;
-            let conflicted = index.conflicts();
+        self.with_index_mut(|index| index.status(pathspec))
+    }
+}
 
-            let is_initial = self.try_fully_resolve_ref(head)?.is_none();
+impl<'rcx> BitIndex<'rcx> {
+    pub fn status(&mut self, pathspec: Pathspec) -> BitResult<BitStatus> {
+        let head = self.repo.read_head()?;
+        let staged = self.diff_head(pathspec)?;
+        let unstaged = self.diff_worktree(pathspec)?;
+        let conflicted = self.conflicts();
 
-            let mut flags = BitStatusFlags::default();
-            flags.set(BitStatusFlags::INITIAL, is_initial);
+        let is_initial = self.repo.try_fully_resolve_ref(head)?.is_none();
 
-            Ok(BitStatus { head, staged, unstaged, conflicted, flags })
-        })
+        let mut flags = BitStatusFlags::default();
+        flags.set(BitStatusFlags::INITIAL, is_initial);
+
+        Ok(BitStatus { head, staged, unstaged, conflicted, flags })
     }
 }
 

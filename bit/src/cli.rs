@@ -10,6 +10,7 @@ mod cli_ls_files;
 mod cli_merge;
 mod cli_merge_base;
 mod cli_reflog;
+mod cli_reset;
 mod cli_revlist;
 mod cli_status;
 mod cli_switch;
@@ -30,9 +31,13 @@ use cli_checkout::BitCheckoutCliOpts;
 use cli_commit::BitCommitCliOpts;
 use cli_commit_tree::BitCommitTreeCliOpts;
 use cli_config::BitConfigCliOpts;
+use cli_log::BitLogCliOpts;
 use cli_ls_files::BitLsFilesCliOpts;
 use cli_merge::BitMergeCliOpts;
+use cli_merge_base::BitMergeBaseCliOpts;
 use cli_reflog::BitReflogCliOpts;
+use cli_reset::BitResetCliOpts;
+use cli_revlist::BitRevlistCliOpts;
 use cli_status::BitStatusCliOpts;
 use cli_switch::BitSwitchCliOpts;
 use cli_update_index::BitUpdateIndexCliOpts;
@@ -43,10 +48,6 @@ use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
 use std::ffi::OsString;
 use std::path::PathBuf;
-
-use self::cli_log::BitLogCliOpts;
-use self::cli_merge_base::BitMergeBaseCliOpts;
-use self::cli_revlist::BitRevlistCliOpts;
 
 // experiment with changing structure of everything
 // more code should be in the binary
@@ -75,7 +76,6 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
             } else {
                 repo.bit_add(&opts.pathspecs)
             },
-        BitSubCmd::Log(opts) => opts.exec(repo),
         BitSubCmd::Branch(opts) => opts.exec(repo),
         BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
         BitSubCmd::Checkout(opts) => opts.exec(repo),
@@ -84,10 +84,12 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
         BitSubCmd::Commit(opts) => opts.exec(repo),
         BitSubCmd::Diff(opts) => opts.exec(repo),
         BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),
+        BitSubCmd::Log(opts) => opts.exec(repo),
         BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
         BitSubCmd::Merge(opts) => opts.exec(repo),
         BitSubCmd::MergeBase(opts) => opts.exec(repo),
         BitSubCmd::Reflog(opts) => opts.exec(repo),
+        BitSubCmd::Reset(opts) => opts.exec(repo),
         BitSubCmd::Revlist(opts) => opts.exec(repo),
         BitSubCmd::Status(opts) => opts.exec(repo),
         BitSubCmd::Switch(opts) => opts.exec(repo),
@@ -125,6 +127,7 @@ pub enum BitSubCmd {
     Merge(BitMergeCliOpts),
     MergeBase(BitMergeBaseCliOpts),
     Reflog(BitReflogCliOpts),
+    Reset(BitResetCliOpts),
     #[clap(name = "rev-list")]
     Revlist(BitRevlistCliOpts),
     Status(BitStatusCliOpts),

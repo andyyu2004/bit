@@ -1,8 +1,8 @@
 use crate::diff::{TreeDiffBuilder, TreeDiffer, TreeEntriesConsumer};
 use crate::error::BitResult;
-use crate::index::{BitIndexEntry, MergeStage};
+use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitTreeIterator};
-use crate::obj::{FileMode, TreeEntry};
+use crate::obj::{FileMode, TreeEntry, Treeish};
 use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause};
 use crate::repo::BitRepo;
@@ -25,77 +25,89 @@ impl<'rcx> BitRepo<'rcx> {
         let reference = reference.into();
         // doesn't make sense to move HEAD -> HEAD
         assert_ne!(reference, BitRef::HEAD);
-        let commit_oid = self.fully_resolve_ref(reference)?;
-        let commit = self.read_obj(commit_oid)?.into_commit();
-        let target_tree = commit.tree;
-        let status = self.status(Pathspec::MATCH_ALL)?;
 
+        let status = self.status(Pathspec::MATCH_ALL)?;
         // only allow checkout on fully clean states for now
         if !status.is_empty() {
             bail!("cannot checkout: unclean state")
         }
 
-        let baseline = self.head_tree_iter()?;
-        let target = self.tree_iter(target_tree);
-
-        // let workdir = self.with_index(|index| index.worktree_iter())?;
-
-        let migration = Migration::generate(baseline, target)?;
-        self.apply_migration(&migration)?;
-
+        let commit_oid = self.fully_resolve_ref(reference)?;
+        self.checkout_tree(commit_oid)?;
         self.update_head(
             reference,
             RefUpdateCause::Checkout { from: self.read_head()?, to: reference },
         )?;
 
         // TODO make this a debug_assertion (as it's quite expensive) when checkout is more tested
-        assert!(self.status(Pathspec::MATCH_ALL)?.is_empty());
+        assert!(
+            self.status(Pathspec::MATCH_ALL)?.is_empty(),
+            "the working tree and index should exactly match"
+        );
+
         Ok(())
     }
 
-    fn apply_migration(self, migration: &Migration) -> BitResult<()> {
+    /// Update working directory and index to match the tree referenced by `treeish`
+    // there are currently no safety checks here! (i.e. it does a force checkout)
+    pub fn checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
+        let target_tree = treeish.treeish_oid(self)?;
+        let baseline = self.head_tree_iter()?;
+        let target = self.tree_iter(target_tree);
+        // TODO take current workdir into account (and weaken the assertions in checkout that require a clean status)
+        // let workdir = self.worktree_iter()?;
+        let migration = Migration::generate(baseline, target)?;
         self.with_index_mut(|index| {
-            for rmrf in &migration.rmrfs {
-                std::fs::remove_dir_all(self.to_absolute_path(&rmrf.path))?;
-                index.remove_directory(rmrf.path)?;
-            }
-
-            for rm in &migration.rms {
-                std::fs::remove_file(self.to_absolute_path(&rm.path))?;
-                index.remove_entry((rm.path, MergeStage::None));
-            }
-
-            for mkdir in &migration.mkdirs {
-                std::fs::create_dir(self.to_absolute_path(&mkdir.path))?;
-            }
-
-            for create in &migration.creates {
-                let path = self.to_absolute_path(&create.path);
-                let bytes = create.read_to_bytes(self)?;
-
-                if create.mode.is_link() {
-                    //? is it guaranteed that a symlink contains the path of the target, or is it fs impl dependent?
-                    let symlink_target = OsStr::from_bytes(&bytes);
-                    std::os::unix::fs::symlink(symlink_target, path)?;
-                } else {
-                    debug_assert!(create.mode.is_file());
-                    let mut file = std::fs::File::with_options()
-                        .create_new(true)
-                        .read(false)
-                        .write(true)
-                        .open(&path)?;
-                    file.write_all(&bytes)?;
-                    file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
-                }
-
-                index.add_entry(BitIndexEntry::from_path(self, &path)?)?;
-            }
+            index.apply_migration(&migration)?;
+            debug_assert!(index.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
+            debug_assert!(index.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
             Ok(())
-        })
+        })?;
+        Ok(())
     }
 }
 
-pub struct CheckoutCtxt {}
+impl<'rcx> BitIndex<'rcx> {
+    fn apply_migration(&mut self, migration: &Migration) -> BitResult<()> {
+        let repo = self.repo;
+        for rmrf in &migration.rmrfs {
+            std::fs::remove_dir_all(repo.to_absolute_path(&rmrf.path))?;
+            self.remove_directory(rmrf.path)?;
+        }
+
+        for rm in &migration.rms {
+            std::fs::remove_file(repo.to_absolute_path(&rm.path))?;
+            self.remove_entry((rm.path, MergeStage::None));
+        }
+
+        for mkdir in &migration.mkdirs {
+            std::fs::create_dir(repo.to_absolute_path(&mkdir.path))?;
+        }
+
+        for create in &migration.creates {
+            let path = repo.to_absolute_path(&create.path);
+            let bytes = create.read_to_bytes(repo)?;
+
+            if create.mode.is_link() {
+                //? is it guaranteed that a symlink contains the path of the target, or is it fs impl dependent?
+                let symlink_target = OsStr::from_bytes(&bytes);
+                std::os::unix::fs::symlink(symlink_target, path)?;
+            } else {
+                debug_assert!(create.mode.is_file());
+                let mut file = std::fs::File::with_options()
+                    .create_new(true)
+                    .read(false)
+                    .write(true)
+                    .open(&path)?;
+                file.write_all(&bytes)?;
+                file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
+            }
+
+            self.add_entry(BitIndexEntry::from_path(repo, &path)?)?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Default, Debug)]
 pub struct Migration {

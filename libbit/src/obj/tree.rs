@@ -57,7 +57,7 @@ impl<'rcx> Treeish<'rcx> for BitObjKind<'rcx> {
 
     fn treeish_oid(&self, _repo: BitRepo<'rcx>) -> BitResult<Oid> {
         match self {
-            BitObjKind::Commit(commit) => Ok(commit.tree()),
+            BitObjKind::Commit(commit) => Ok(commit.tree_oid()),
             BitObjKind::Tree(tree) => Ok(tree.oid()),
             BitObjKind::Tag(..) => todo!(),
             BitObjKind::Blob(..) => bug!("blob is not treeish"),

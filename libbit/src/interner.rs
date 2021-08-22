@@ -127,6 +127,7 @@ thread_local! {
         EMPTY => "",
         HEAD => "HEAD",
         MASTER => "master",
+        MERGE_HEAD => "MERGE_HEAD",
         DOT_GIT => ".git",
         REMOVED => "removed",
         REFS_HEADS => "refs/heads",

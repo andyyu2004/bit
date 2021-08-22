@@ -1,7 +1,6 @@
 use crate::error::BitResult;
 use crate::graph::{Dag, DagBuilder, DagNode};
 use crate::obj::{BitObject, CommitMessage, Oid};
-use crate::refs::SymbolicRef;
 use crate::repo::BitRepo;
 use crate::test_utils::generate_random_string;
 use fallible_iterator::FallibleIterator;

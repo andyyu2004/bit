@@ -87,8 +87,7 @@ pub trait BitRefDbBackend<'rcx> {
                 Ok(BitRef::Direct(oid))
             }
             BitRef::Symbolic(sym) => {
-                let expanded_sym = self.expand_symref(sym)?;
-                let validated = self.validate(self.read(expanded_sym)?)?;
+                let validated = self.validate(self.read(sym)?)?;
                 debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, validated);
                 Ok(validated)
             }
@@ -162,7 +161,8 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     }
 
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
-        Lockfile::with_readonly(self.join(sym.path), LockfileFlags::SET_READONLY, |lockfile| {
+        let expanded = self.expand_symref(sym)?;
+        Lockfile::with_readonly(self.join(expanded.path), LockfileFlags::SET_READONLY, |lockfile| {
             let file = lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
             BitRef::deserialize_unbuffered(file)
         })
@@ -250,6 +250,7 @@ pub enum RefUpdateCause {
     NewBranch { from: BitRef },
     Commit { subject: String, kind: RefUpdateCommitKind },
     Checkout { from: BitRef, to: BitRef },
+    Reset { target: BitRef },
 }
 
 impl Display for RefUpdateCause {
@@ -263,6 +264,7 @@ impl Display for RefUpdateCause {
             },
             RefUpdateCause::Checkout { from, to } =>
                 write!(f, "checkout: moving from `{}` to `{}`", from, to),
+            RefUpdateCause::Reset { target } => write!(f, "reset: moving to `{}`", target),
         }
     }
 }

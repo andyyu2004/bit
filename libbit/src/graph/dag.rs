@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod topological;
 
 pub use topological::TopologicalSort;

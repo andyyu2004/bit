@@ -24,7 +24,7 @@ pub struct Commit<'rcx> {
 
 impl<'rcx> Commit<'rcx> {
     /// Get a reference to the commit's tree.
-    pub fn tree(&self) -> Oid {
+    pub fn tree_oid(&self) -> Oid {
         self.tree
     }
 }
@@ -86,7 +86,7 @@ impl<'rcx> Treeish<'rcx> for Commit<'rcx> {
     }
 
     fn treeish_oid(&self, _repo: BitRepo<'rcx>) -> BitResult<Oid> {
-        Ok(self.tree())
+        Ok(self.tree_oid())
     }
 }
 
