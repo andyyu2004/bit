@@ -88,6 +88,7 @@ impl<'rcx> BitIndex<'rcx> {
         let diff = self.diff_tree(tree, Pathspec::MATCH_ALL)?;
         self.apply_diff(&diff)?;
 
+        // TODO this is really slow and a definite bottleneck
         self.tree_cache = Some(BitTreeCache::read_tree_cache(self.repo, tree)?);
 
         // index should now exactly match the tree

@@ -379,7 +379,7 @@ impl<'a> HashReader<'a, sha1::Sha1> {
     }
 }
 
-/// hashes all the bytes written into the writer
+/// hashes all the bytes written into the writer using `D`
 pub(crate) struct HashWriter<'a, D> {
     writer: &'a mut dyn Write,
     hasher: D,
@@ -408,8 +408,9 @@ impl<'a> HashWriter<'a, sha1::Sha1> {
         Self::new(writer)
     }
 
-    pub fn finalize_sha1_hash(&mut self) -> SHA1Hash {
-        SHA1Hash::from(self.hasher.finalize_reset())
+    pub fn write_hash(self) -> io::Result<()> {
+        let hash = SHA1Hash::from(self.hasher.finalize());
+        self.writer.write_oid(hash)
     }
 }
 

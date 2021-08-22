@@ -1,7 +1,7 @@
+use super::*;
 use arrayvec::ArrayVec;
 use indexmap::IndexMap;
-
-use super::*;
+use std::io::BufWriter;
 
 /// representation of the index file
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
@@ -212,7 +212,7 @@ impl BitIndexInner {
 
 impl Serialize for BitIndexInner {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
-        let mut hash_writer = HashWriter::new_sha1(writer);
+        let mut hash_writer = BufWriter::new(HashWriter::new_sha1(writer));
 
         let header = BitIndexHeader {
             signature: *BIT_INDEX_HEADER_SIG,
@@ -235,8 +235,11 @@ impl Serialize for BitIndexInner {
             hash_writer.write_with_size(reuc)?;
         }
 
-        let hash = hash_writer.finalize_sha1_hash();
-        hash_writer.write_oid(hash)?;
+        // can't unwrap as `hash_writer` doesn't implement Debug
+        match hash_writer.into_inner() {
+            Ok(writer) => writer.write_hash()?,
+            Err(..) => panic!(),
+        };
         Ok(())
     }
 }

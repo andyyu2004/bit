@@ -4,7 +4,10 @@ use crate::obj::{BitObjKind, BitObject, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
+#[cfg(test)]
 use indexmap::IndexMap;
+#[cfg(not(test))]
+use rustc_hash::FxHashMap;
 use std::io::{BufRead, Write};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,7 +20,10 @@ pub struct BitTreeCache {
     pub entry_count: isize,
     // this datastructure preserves insertion order *provided there are no removals*
     // don't think that the order of this actually matters, but it is useful for testing that deserialize and serialization are inverses
+    #[cfg(test)]
     pub children: IndexMap<BitPath, BitTreeCache>,
+    #[cfg(not(test))]
+    pub children: FxHashMap<BitPath, BitTreeCache>,
     pub oid: Oid,
 }
 
@@ -100,8 +106,10 @@ impl BitTreeCache {
             oid: tree.oid(),
             entry_count: 0,
             path,
-            // allocate a conservative amount of space assuming all entries are trees
-            children: IndexMap::with_capacity(tree.entries.len()),
+            #[cfg(test)]
+            children: IndexMap::with_capacity(tree.entries.len() / 8),
+            #[cfg(not(test))]
+            children: FxHashMap::default(),
         };
 
         for entry in &tree.entries {
