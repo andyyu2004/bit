@@ -78,6 +78,7 @@ impl Display for CommitSummary<'_> {
             writeln!(f, "[{} {}]", self.sym.short(), self.commit.oid())?;
         }
 
+        // TODO show full diffstat summary (deletions, insertions)
         let files_changed = self.status.len();
         writeln!(f, "{} file{} changed", files_changed, pluralize!(files_changed))?;
 
