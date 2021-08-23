@@ -1,5 +1,5 @@
 use crate::cache::BitObjCache;
-use crate::error::{BitError, BitGenericError, BitResult};
+use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
 use crate::obj::*;
@@ -332,7 +332,13 @@ impl<'rcx> BitRepo<'rcx> {
     /// e.g. if `HEAD` -> `ref: refs/heads/master`
     /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
     pub fn read_head(self) -> BitResult<BitRef> {
-        self.refdb()?.read(SymbolicRef::HEAD)
+        // another pain point where we have to handle the case where HEAD points at a nonexistent ref
+        // `refdb.read(sym)` validates the ref it reads so would fail as it doesn't exist so we just "catch"
+        // the error and return that ref anyway
+        match self.refdb()?.read(SymbolicRef::HEAD) {
+            Ok(r) => Ok(r),
+            Err(err) => err.try_into_nonexistent_symref_err().map(Into::into),
+        }
     }
 
     pub fn ls_refs(self) -> BitResult<Refs> {
