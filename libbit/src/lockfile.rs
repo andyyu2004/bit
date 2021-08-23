@@ -4,8 +4,8 @@ use crate::serialize::Serialize;
 use anyhow::Context;
 use bitflags::bitflags;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::{self, prelude::*};
+use std::io::{BufReader, BufWriter};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,7 +26,7 @@ pub struct Lockfile {
     // None if it does not exist
     file: Option<File>,
     // the lockfile itself
-    lockfile: File,
+    lockfile: BufWriter<File>,
     flags: LockfileFlags,
     path: PathBuf,
     lockfile_path: PathBuf,
@@ -80,9 +80,9 @@ impl Lockfile {
 
         Ok(Self {
             file,
-            lockfile,
             flags,
             lockfile_path,
+            lockfile: BufWriter::new(lockfile),
             path: path.to_path_buf(),
             committed: Default::default(),
             rolled_back: Default::default(),
