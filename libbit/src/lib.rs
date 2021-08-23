@@ -1,4 +1,5 @@
 #![deny(rust_2018_idioms)]
+#![feature(iter_intersperse)]
 #![feature(pattern)]
 #![feature(never_type)]
 #![feature(const_transmute_copy)]

@@ -99,14 +99,13 @@ impl PartialOid {
         Ok(hex::decode(&self.bytes)?.as_slice().read_oid()?)
     }
 
-    pub fn split(&self) -> (BitPath, BitPath) {
-        let (dir, file) = unsafe {
+    pub fn split(&self) -> (&str, &str) {
+        unsafe {
             (
                 std::str::from_utf8_unchecked(&self[0..2]),
                 std::str::from_utf8_unchecked(&self[2..self.len]),
             )
-        };
-        (BitPath::intern(dir), BitPath::intern(file))
+        }
     }
 }
 

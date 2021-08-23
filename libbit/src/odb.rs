@@ -11,6 +11,7 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use parking_lot::RwLock;
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use smallvec::SmallVec;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -208,7 +209,7 @@ impl BitObjDbBackend for BitLooseObjDb {
             .filter_map(|entry| {
                 let filename = entry.file_name().to_str().unwrap();
                 // we must use `str::start_with` not `path::starts_with` as the latter only considers it component wise
-                if !filename.starts_with(file_prefix.as_str()) {
+                if !filename.starts_with(file_prefix) {
                     Ok(None)
                 } else {
                     debug_assert_eq!(filename.len(), 38);
@@ -252,6 +253,7 @@ impl BitPackedObjDb {
 
     fn read_raw_pack_obj(&self, oid: Oid) -> BitResult<BitPackObjRaw> {
         trace!("BitPackedObjDb::read_raw(id: {})", oid);
+        // TODO try parallelize with rayon
         for pack in self.packs.write().iter_mut() {
             process!(pack.read_obj_raw(oid));
         }
@@ -287,7 +289,7 @@ impl BitObjDbBackend for BitPackedObjDb {
         Ok(self
             .packs
             .write()
-            .iter_mut()
+            .par_iter_mut()
             .map(|pack| pack.prefix_matches(prefix))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()

@@ -265,10 +265,7 @@ impl DeserializeSized for MutableCommit {
             }
         }
 
-        // TODO could definitely do this more efficiently but its not urgent
-        // as we have a vector we could just slice it and join without doing any copying
-        // we would just have to keep track of where to slice it from
-        let message = iter.cloned().collect::<Vec<_>>().join("\n");
+        let message = iter.map(AsRef::as_ref).intersperse("\n").collect::<String>();
         builder.message = Some(message.parse()?);
         builder.build()
     }

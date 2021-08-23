@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{Oid, WritableObject};
-
+use rustc_hex::FromHex;
 use sha1::digest::Output;
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
@@ -88,13 +88,9 @@ impl FromStr for SHA1Hash {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim_end();
         ensure!(s.len() == 40, "creating SHA1 with invalid hex string (incorrect length)");
-        ensure!(
-            s.chars().all(|c| c.is_ascii_hexdigit()),
-            "bit hashes should only contain ascii hex digits"
-        );
-        let mut buf = [0u8; 20];
-        hex::decode_to_slice(s, &mut buf)?;
-        Ok(Self(buf))
+        let bytes = s.from_hex::<arrayvec::ArrayVec<u8, 20>>()?;
+        // SAFETY, we just checked the length
+        Ok(Self(unsafe { bytes.into_inner_unchecked() }))
     }
 }
 

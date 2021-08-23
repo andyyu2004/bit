@@ -8,7 +8,7 @@ use crate::path::{BitFileStream, BitPath};
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fmt::{self, Debug, Formatter};
 use std::io::{BufRead, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
@@ -72,10 +72,12 @@ impl Pack {
         &mut self.idx_reader
     }
 
+    #[inline]
     pub fn obj_crc_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
         self.idx_reader().find_oid_crc_offset(oid)
     }
 
+    #[inline]
     pub fn obj_offset(&mut self, oid: Oid) -> BitResult<u64> {
         self.obj_crc_offset(oid).map(|(_crc, offset)| offset)
     }
@@ -188,7 +190,7 @@ pub struct PackIndex {
 pub struct PackIndexReader<R> {
     reader: R,
     fanout: [u32; FANOUT_ENTRYC],
-    oid_cache: HashMap<u64, Vec<Oid>>,
+    oid_cache: FxHashMap<u64, Vec<Oid>>,
     /// number of oids
     n: u64,
 }
