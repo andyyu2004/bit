@@ -366,6 +366,12 @@ macro_rules! symbolic_ref {
     }};
 }
 
+macro_rules! HEAD {
+    () => {
+        &rev!("HEAD")
+    };
+}
+
 #[macro_export]
 macro_rules! rev {
     ($rev:expr) => {{

@@ -55,6 +55,7 @@ pub trait BitRefDbBackend<'rcx> {
     fn repo(&self) -> BitRepo<'rcx>;
     /// Create a bit branch from a revision
     fn create_branch(&self, sym: SymbolicRef, from: &Revspec) -> BitResult<()>;
+    /// read the reference pointed to by `sym` and returns the validated reference
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef>;
     // may implicitly create the ref
     fn update(&self, sym: SymbolicRef, to: BitRef, cause: RefUpdateCause) -> BitResult<()>;
@@ -87,9 +88,9 @@ pub trait BitRefDbBackend<'rcx> {
                 Ok(BitRef::Direct(oid))
             }
             BitRef::Symbolic(sym) => {
-                let validated = self.validate(self.read(sym)?)?;
-                debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, validated);
-                Ok(validated)
+                let reference = self.read(sym)?;
+                debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, reference);
+                Ok(reference)
             }
         }
     }
@@ -163,7 +164,8 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
         let expanded = self.expand_symref(sym)?;
         Lockfile::with_readonly(self.join(expanded.path), LockfileFlags::SET_READONLY, |lockfile| {
             let file = lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
-            BitRef::deserialize_unbuffered(file)
+            let r = BitRef::deserialize_unbuffered(file)?;
+            self.validate(r)
         })
     }
 

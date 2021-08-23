@@ -22,7 +22,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn checkout_reference(self, reference: impl Into<BitRef>) -> BitResult<()> {
-        let reference = reference.into();
+        let reference: BitRef = reference.into();
         // doesn't make sense to move HEAD -> HEAD
         assert_ne!(reference, BitRef::HEAD);
 
@@ -34,18 +34,23 @@ impl<'rcx> BitRepo<'rcx> {
 
         let commit_oid = self.fully_resolve_ref(reference)?;
         self.checkout_tree(commit_oid)?;
-        self.update_head(
-            reference,
-            RefUpdateCause::Checkout { from: self.read_head()?, to: reference },
-        )?;
 
-        // TODO make this a debug_assertion (as it's quite expensive) when checkout is more tested
-        assert!(
+        // checking out a remote reference should puts us in detached head state
+        // as we should not be allowed to modify remote branches locally
+        let new_head = if reference.is_remote() { commit_oid.into() } else { reference };
+        self.update_head_for_checkout(new_head)?;
+
+        debug_assert!(
             self.status(Pathspec::MATCH_ALL)?.is_empty(),
             "the working tree and index should exactly match"
         );
 
         Ok(())
+    }
+
+    fn update_head_for_checkout(self, to: impl Into<BitRef>) -> BitResult<()> {
+        let to = to.into();
+        self.update_head(to, RefUpdateCause::Checkout { from: self.read_head()?, to })
     }
 
     /// Update working directory and index to match the tree referenced by `treeish`
@@ -59,11 +64,10 @@ impl<'rcx> BitRepo<'rcx> {
         let migration = Migration::generate(baseline, target)?;
         self.with_index_mut(|index| {
             index.apply_migration(&migration)?;
-            debug_assert!(index.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
             debug_assert!(index.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
+            debug_assert!(index.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
             Ok(())
-        })?;
-        Ok(())
+        })
     }
 }
 

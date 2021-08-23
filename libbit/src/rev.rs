@@ -102,7 +102,7 @@ impl<'rcx> BitRepo<'rcx> {
         match *rev {
             // we want to resolve HEAD once
             ParsedRevspec::Ref(r) if r == BitRef::HEAD => self.read_head(),
-            ParsedRevspec::Ref(r) => Ok(r),
+            ParsedRevspec::Ref(r) => self.validate_ref(r),
             ParsedRevspec::Partial(prefix) => self.expand_prefix(prefix).map(BitRef::Direct),
             ParsedRevspec::Parent(ref inner, n) =>
                 self.resolve_rev_internal(inner).and_then(|r| get_nth_parent(r, n)),

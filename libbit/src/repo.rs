@@ -351,6 +351,10 @@ impl<'rcx> BitRepo<'rcx> {
         self.refdb()?.read(sym)
     }
 
+    pub fn validate_ref(self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+        self.refdb()?.validate(reference.into())
+    }
+
     pub fn create_branch(self, sym: SymbolicRef, from: &Revspec) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
         self.refdb()?.create_branch(sym, from)

@@ -166,6 +166,10 @@ impl SymbolicRef {
         }
     }
 
+    pub fn is_remote(&self) -> bool {
+        matches!(self.kind, SymbolicRefKind::Remote)
+    }
+
     pub fn path(&self) -> BitPath {
         self.path
     }
@@ -247,7 +251,7 @@ impl BitRef {
 
     pub fn short(&self, _repo: BitRepo<'_>) -> String {
         match self {
-            BitRef::Direct(oid) => todo!("short (unambiguous) oid"),
+            BitRef::Direct(_oid) => todo!("short (unambiguous) oid"),
             BitRef::Symbolic(sym) => sym.short().to_owned(),
         }
     }
@@ -260,6 +264,13 @@ impl BitRef {
     /// Returns `true` if the bit_ref is [`Symbolic`].
     pub fn is_symbolic(&self) -> bool {
         matches!(self, Self::Symbolic(..))
+    }
+
+    pub fn is_remote(&self) -> bool {
+        match self {
+            BitRef::Direct(..) => false,
+            BitRef::Symbolic(sym) => sym.is_remote(),
+        }
     }
 
     pub fn into_direct(self) -> Oid {
