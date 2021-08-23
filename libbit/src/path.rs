@@ -18,14 +18,22 @@ use std::path::{Component, Path, PathBuf};
 // its now just an integer compare
 #[derive(Eq, Clone, Copy)]
 pub struct BitPath {
+    // used for constant time hashing/equality
+    index: u32,
+    // but we also store the path pointer inline rather than grabbing it from the interner
+    // - firstly, this is for performance to avoid lookups and refcell etc
+    // - secondly, it's much easier to debug when you can actually see the value of the path in the debugger
+    //   rather than just an opaque index
+    // One may ask why even bother interning? It's less for performance rather than just convenience of having
+    // our path representation be a copy type
     path: &'static OsStr,
 }
 
 pub type BitFileStream = impl BufReadSeek;
 
 impl BitPath {
-    pub(crate) const fn new(path: &'static OsStr) -> Self {
-        Self { path }
+    pub(crate) const fn new(index: u32, path: &'static OsStr) -> Self {
+        Self { index, path }
     }
 
     pub fn is_empty(self) -> bool {
@@ -74,15 +82,15 @@ impl BitPath {
     }
 
     pub fn intern_str(s: impl AsRef<str>) -> Self {
+        // this must be outside the `interner` closure as the `as_ref` impl may use the interner
+        // leading to refcell panics
+        // quite questionable turning paths into strings and then bytes
+        // probably not very platform agnostic
         let s = s.as_ref();
         with_path_interner(|interner| interner.intern_path(s))
     }
 
     pub fn intern(path: impl AsRef<OsStr>) -> Self {
-        // this must be outside the `interner` closure as the `as_ref` impl may use the interner
-        // leading to refcell panics
-        // quite questionable turning paths into strings and then bytes
-        // probably not very platform agnostic
         with_path_interner(|interner| interner.intern_path(path))
     }
 
@@ -129,31 +137,13 @@ impl BitPath {
 
 impl PartialEq for BitPath {
     fn eq(&self, other: &Self) -> bool {
-        // there are definitely some issues with how the path constants are being done
-        // probably to do with dealing with pointer addresses in const_eval
-        // it's not too urgent as the performance with full path comparisons is fine
-        // #[cfg(debug_assertions)]
-        // if self.path == other.path {
-        //     assert!(
-        //         std::ptr::eq(self.path, other.path),
-        //         "path `{}` matched but had different addresses: {:?} <> {:?}",
-        //         self,
-        //         self.path as *const _,
-        //         other.path as *const _,
-        //     );
-        // }
-        // std::ptr::eq(self.path, other.path)
-
-        // keep consistent with below
-        self.path == other.path
+        self.index == other.index
     }
 }
 
 impl Hash for BitPath {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // keep consistent with above
-        self.path.hash(state)
-        // std::ptr::hash(self.path, state)
+        self.index.hash(state)
     }
 }
 
