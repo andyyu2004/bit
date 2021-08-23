@@ -19,6 +19,13 @@ impl Cmd for BitSwitchCliOpts {
         let target = if let Some(branch_name) = self.create {
             let new_branch = repo.bit_create_branch(&branch_name, &self.revision)?;
             println!("switched to a new branch `{}`", new_branch.short());
+
+            // the "annoying" case of nonexistent branch, trying to check it out will fail.
+            // the branch changing logic for this special case is handled in `create_branch`
+            // so we are already done, so just exit early
+            if repo.try_fully_resolve_ref(new_branch)?.is_none() {
+                return Ok(());
+            }
             new_branch
         } else {
             // switch is currently a limited form of checkout where only branches are allowed (can't checkout commits)

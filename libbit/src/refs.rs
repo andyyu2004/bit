@@ -274,7 +274,11 @@ impl BitRef {
     }
 
     pub fn into_direct(self) -> Oid {
-        if let Self::Direct(oid) = self { oid } else { panic!() }
+        if let Self::Direct(oid) = self { oid } else { panic!("expected direct reference") }
+    }
+
+    pub fn into_symbolic(self) -> SymbolicRef {
+        if let Self::Symbolic(sym) = self { sym } else { panic!("expected symbolic reference") }
     }
 }
 

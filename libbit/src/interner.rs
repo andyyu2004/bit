@@ -137,6 +137,7 @@ thread_local! {
         MASTER => "master",
         MERGE_HEAD => "MERGE_HEAD",
         DOT_GIT => ".git",
+        DOT_BIT => ".bit",
         REMOVED => "removed",
         REFS_HEADS => "refs/heads",
         ATSYM => "@",
