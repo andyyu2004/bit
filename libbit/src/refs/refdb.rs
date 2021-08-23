@@ -115,8 +115,7 @@ pub trait BitRefDbBackend<'rcx> {
     fn fully_resolve(&self, reference: BitRef) -> BitResult<Oid> {
         match self.resolve(reference)? {
             BitRef::Direct(oid) => Ok(oid),
-            BitRef::Symbolic(..) =>
-                bail!("todo proper error message something about branch not existing yet"),
+            BitRef::Symbolic(..) => bail!("failed to resolve reference `{}`", reference),
         }
     }
 
@@ -223,11 +222,8 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     fn expand_symref(&self, sym: SymbolicRef) -> BitResult<SymbolicRef> {
         const PREFIXES: &[BitPath] =
             &[BitPath::EMPTY, BitPath::REFS_HEADS, BitPath::REFS_TAGS, BitPath::REFS_REMOTES];
-        // we only try to do expansion on single component paths (which all valid branches should be)
-        let prefixes =
-            if sym.path.as_path().components().count() == 1 { PREFIXES } else { &[BitPath::EMPTY] };
 
-        for prefix in prefixes {
+        for prefix in PREFIXES {
             let path = prefix.join(sym.path);
             if self.join(path).exists() {
                 return SymbolicRef::new_valid(path);

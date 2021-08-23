@@ -428,7 +428,7 @@ fn parse_index_header() -> BitResult<()> {
 // TODO be nice to have some way to quickcheck some of this
 #[test]
 fn bit_index_build_tree_test() -> BitResult<()> {
-    BitRepo::find("tests/repos/indextest", |repo| {
+    BitRepo::find(repos_dir!("indextest"), |repo| {
         let oid = repo.with_index_mut(|index| index.write_tree())?;
         let tree = repo.read_obj(oid)?.into_tree();
 
