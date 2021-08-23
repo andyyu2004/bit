@@ -10,12 +10,12 @@ use crate::rev::Revspec;
 use crate::signature::BitSignature;
 use crate::{hash, tls};
 use anyhow::Context;
+use parking_lot::RwLock;
 use std::borrow::Cow;
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::lazy::OnceCell;
+use std::lazy::SyncOnceCell;
 use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -43,10 +43,10 @@ pub struct RepoCtxt<'rcx> {
     pub bitdir: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
-    odb_cell: OnceCell<BitObjDb>,
-    obj_cache: RefCell<BitObjCache<'rcx>>,
-    refdb_cell: OnceCell<BitRefDb<'rcx>>,
-    index_cell: OnceCell<RefCell<BitIndex<'rcx>>>,
+    odb_cell: SyncOnceCell<BitObjDb>,
+    obj_cache: RwLock<BitObjCache<'rcx>>,
+    refdb_cell: SyncOnceCell<BitRefDb<'rcx>>,
+    index_cell: SyncOnceCell<RwLock<BitIndex<'rcx>>>,
 }
 
 pub trait Repo<'rcx> {
@@ -225,14 +225,14 @@ impl<'rcx> BitRepo<'rcx> {
         tls::enter_repo(&ctxt, f)
     }
 
-    fn index_ref(&self) -> BitResult<&RefCell<BitIndex<'rcx>>> {
+    fn index_ref(&self) -> BitResult<&RwLock<BitIndex<'rcx>>> {
         self.index_cell
-            .get_or_try_init::<_, BitGenericError>(|| Ok(RefCell::new(BitIndex::new(*self)?)))
+            .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(*self)?)))
     }
 
     pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
         // don't have to error check here as the index only
-        f(&*self.index_ref()?.borrow())
+        f(&*self.index_ref()?.read())
     }
 
     pub fn with_index_mut<R>(
@@ -240,7 +240,7 @@ impl<'rcx> BitRepo<'rcx> {
         f: impl FnOnce(&mut BitIndex<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
         let index_ref = self.index_ref()?;
-        let index = &mut *index_ref.borrow_mut();
+        let index = &mut *index_ref.write();
         match f(index) {
             Ok(r) => Ok(r),
             Err(err) => {
@@ -372,7 +372,7 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
         let oid = self.expand_id(id)?;
-        self.obj_cache.borrow_mut().get_or_insert_with(oid, || {
+        self.obj_cache.write().get_or_insert_with(oid, || {
             let raw = self.odb()?.read_raw(BitId::Full(oid))?;
             BitObjKind::from_raw(self, raw)
         })

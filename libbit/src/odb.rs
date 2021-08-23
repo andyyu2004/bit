@@ -10,8 +10,8 @@ use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
+use parking_lot::RwLock;
 use smallvec::SmallVec;
-use std::cell::RefCell;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::str::FromStr;
@@ -93,7 +93,7 @@ impl BitObjDbBackend for BitObjDb {
     }
 }
 
-pub trait BitObjDbBackend {
+pub trait BitObjDbBackend: Send + Sync {
     fn read_raw(&self, id: BitId) -> BitResult<BitRawObj>;
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader>;
     fn write(&self, obj: &dyn WritableObject) -> BitResult<Oid>;
@@ -223,7 +223,7 @@ impl BitObjDbBackend for BitLooseObjDb {
 
 struct BitPackedObjDb {
     /// [(packfile, idxfile)]
-    packs: RefCell<SmallVec<[Pack; 1]>>,
+    packs: RwLock<SmallVec<[Pack; 1]>>,
 }
 
 impl BitPackedObjDb {
@@ -244,7 +244,7 @@ impl BitPackedObjDb {
 
             let idx = pack.with_extension("idx");
             ensure!(idx.exists(), "packfile `{}` is missing a corresponding index file", pack);
-            packs.borrow_mut().push(Pack::new(pack, idx)?);
+            packs.write().push(Pack::new(pack, idx)?);
         }
 
         Ok(Self { packs })
@@ -252,7 +252,7 @@ impl BitPackedObjDb {
 
     fn read_raw_pack_obj(&self, oid: Oid) -> BitResult<BitPackObjRaw> {
         trace!("BitPackedObjDb::read_raw(id: {})", oid);
-        for pack in self.packs.borrow_mut().iter_mut() {
+        for pack in self.packs.write().iter_mut() {
             process!(pack.read_obj_raw(oid));
         }
         bail!(BitError::ObjectNotFound(oid.into()))
@@ -268,7 +268,7 @@ impl BitObjDbBackend for BitPackedObjDb {
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
         let oid = self.expand_id(id)?;
-        for pack in self.packs.borrow_mut().iter_mut() {
+        for pack in self.packs.write().iter_mut() {
             process!(pack.read_obj_header(oid));
         }
         bail!(BitError::ObjectNotFound(id))
@@ -280,13 +280,13 @@ impl BitObjDbBackend for BitPackedObjDb {
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
         let oid = self.expand_id(id)?;
-        Ok(self.packs.borrow_mut().iter_mut().any(|pack| pack.obj_exists(oid).unwrap_or_default()))
+        Ok(self.packs.write().iter_mut().any(|pack| pack.obj_exists(oid).unwrap_or_default()))
     }
 
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
         Ok(self
             .packs
-            .borrow_mut()
+            .write()
             .iter_mut()
             .map(|pack| pack.prefix_matches(prefix))
             .collect::<Result<Vec<_>, _>>()?

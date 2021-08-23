@@ -3,12 +3,12 @@ use crate::serialize::Deserialize;
 use crate::serialize::Serialize;
 use anyhow::Context;
 use bitflags::bitflags;
-use std::cell::Cell;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::{self, prelude::*};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const LOCK_FILE_EXT: &str = "lock";
 
@@ -30,8 +30,8 @@ pub struct Lockfile {
     flags: LockfileFlags,
     path: PathBuf,
     lockfile_path: PathBuf,
-    committed: Cell<bool>,
-    rolled_back: Cell<bool>,
+    committed: AtomicBool,
+    rolled_back: AtomicBool,
 }
 
 impl Write for Lockfile {
@@ -84,8 +84,8 @@ impl Lockfile {
             flags,
             lockfile_path,
             path: path.to_path_buf(),
-            committed: Cell::new(false),
-            rolled_back: Cell::new(false),
+            committed: Default::default(),
+            rolled_back: Default::default(),
         })
     }
 
@@ -143,9 +143,9 @@ impl Lockfile {
     /// commits this file by renaming it to the target file
     /// replaces the old file if it exists
     /// commits on drop unless rollback was called
-    fn commit(&self) -> io::Result<()> {
+    fn commit(&mut self) -> io::Result<()> {
         // ignore commit after a rollback
-        if self.rolled_back.get() {
+        if self.rolled_back.load(Ordering::Acquire) {
             return Ok(());
         }
         let set_readonly = self.flags.contains(LockfileFlags::SET_READONLY);
@@ -158,7 +158,7 @@ impl Lockfile {
         }
 
         std::fs::rename(&self.lockfile_path, &self.path)?;
-        self.committed.set(true);
+        self.committed.store(true, Ordering::Relaxed);
 
         if set_readonly {
             let mut permissions = self.path.metadata()?.permissions();
@@ -177,16 +177,18 @@ impl Lockfile {
 
     pub fn rollback(&self) {
         // don't do anything until the drop impl
-        self.rolled_back.set(true);
+        self.rolled_back.store(true, Ordering::Relaxed);
     }
 }
 
 impl Drop for Lockfile {
     fn drop(&mut self) {
         // can't be both rolled_back and committed
-        assert!(!self.rolled_back.get() || !self.committed.get());
+        assert!(
+            !self.rolled_back.load(Ordering::Relaxed) || !self.committed.load(Ordering::Relaxed)
+        );
         // if either explicitly rolled back, or not explicitly committed, then rollback
-        if self.rolled_back.get() || !self.committed.get() {
+        if self.rolled_back.load(Ordering::Relaxed) || !self.committed.load(Ordering::Relaxed) {
             self.cleanup().unwrap();
         }
     }
@@ -200,7 +202,7 @@ pub struct Filelock<T: Serialize> {
     data: T,
     lockfile: Lockfile,
     dirty: bool,
-    rolled_back: Cell<bool>,
+    rolled_back: AtomicBool,
 }
 
 impl<T: Serialize + Deserialize + Default> Filelock<T> {
@@ -210,7 +212,7 @@ impl<T: Serialize + Deserialize + Default> Filelock<T> {
             Some(file) => T::deserialize(BufReader::new(file))?,
             None => T::default(),
         };
-        Ok(Filelock { lockfile, data, dirty: false, rolled_back: Cell::new(false) })
+        Ok(Filelock { lockfile, data, dirty: false, rolled_back: Default::default() })
     }
 
     pub fn lock(path: impl AsRef<Path>) -> BitResult<Self> {
@@ -220,14 +222,14 @@ impl<T: Serialize + Deserialize + Default> Filelock<T> {
 
 impl<T: Serialize> Filelock<T> {
     pub fn rollback(&self) {
-        self.rolled_back.set(true);
+        self.rolled_back.store(true, Ordering::Relaxed);
         self.lockfile.rollback();
     }
 }
 
 impl<T: Serialize> Drop for Filelock<T> {
     fn drop(&mut self) {
-        if self.rolled_back.get() || !self.dirty {
+        if self.rolled_back.load(Ordering::Relaxed) || !self.dirty {
             // the lockfile drop impl will do the necessary cleanup
             return;
         }
@@ -241,7 +243,7 @@ impl<T: Serialize> Deref for Filelock<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        debug_assert!(!self.rolled_back.get());
+        debug_assert!(!self.rolled_back.load(Ordering::Relaxed));
         &self.data
     }
 }
@@ -253,7 +255,7 @@ impl<T: Serialize> DerefMut for Filelock<T> {
         // this is conservative in the sense it assumes chances are made if `inner` is borrowed mutably
         // furthermore, we cannot use interior mutability anywhere in `BitIndexInner`
         // also, all data in `BitIndex` must just be metadata that is not persisted otherwise that will be lost
-        debug_assert!(!self.rolled_back.get());
+        debug_assert!(!self.rolled_back.load(Ordering::Relaxed));
         self.dirty = true;
         &mut self.data
     }
