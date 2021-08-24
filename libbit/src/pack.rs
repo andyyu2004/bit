@@ -9,6 +9,7 @@ use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rustc_hash::FxHashMap;
+use std::collections::hash_map::Entry;
 use std::fmt::{self, Debug, Formatter};
 use std::io::{BufRead, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
@@ -191,6 +192,7 @@ pub struct PackIndexReader<R> {
     reader: R,
     fanout: [u32; FANOUT_ENTRYC],
     oid_cache: FxHashMap<u64, Vec<Oid>>,
+    crc_offset_cache: FxHashMap<Oid, (u32, u64)>,
     /// number of oids
     n: u64,
 }
@@ -208,13 +210,39 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         PackIndex::parse_header(&mut reader)?;
         let fanout = reader.read_array::<u32, FANOUT_ENTRYC>()?;
         let n = fanout[FANOUT_ENTRYC - 1] as u64;
-        Ok(Self { reader, fanout, n, oid_cache: Default::default() })
+        Ok(Self {
+            reader,
+            fanout,
+            n,
+            oid_cache: Default::default(),
+            crc_offset_cache: Default::default(),
+        })
     }
 }
 
 impl<R: BufReadSeek> PackIndexReader<R> {
     /// returns the offset of the object with oid `oid` in the packfile
     pub fn find_oid_crc_offset(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
+        match self.crc_offset_cache.get(&oid) {
+            Some(&crc_offset) => Ok(crc_offset),
+            None => {
+                let crc_offset = self.find_oid_crc_offset_inner(oid)?;
+                self.crc_offset_cache.insert(oid, crc_offset);
+                Ok(crc_offset)
+            }
+        }
+        // the following is nicer as we can avoid calculating the hash twice
+        // it's violating the borrow checker in it's current form though
+        // match self.crc_offset_cache.entry(oid) {
+        //     Entry::Occupied(entry) => Ok(*entry.get()),
+        //     Entry::Vacant(entry) => self
+        //         .find_oid_crc_offset_inner(oid)
+        //         .map(|crc_offset| entry.insert(crc_offset))
+        //         .copied(),
+        // }
+    }
+
+    fn find_oid_crc_offset_inner(&mut self, oid: Oid) -> BitResult<(u32, u64)> {
         trace!("PackIndexReader::find_oid_crc_offset(oid: {})", oid);
         let index = self.find_oid_index(oid)?;
         debug_assert_eq!(oid, self.read_from(Layer::Oid, index)?);
