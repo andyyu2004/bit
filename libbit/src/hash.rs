@@ -1,6 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{Oid, WritableObject};
-use rustc_hex::FromHex;
+use rustc_hex::{FromHex, ToHex};
 use sha1::digest::Output;
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
@@ -68,10 +68,8 @@ impl SHA1Hash {
         self != Self::UNKNOWN
     }
 
-    /// split hash into the first two hex digits (hence first byte)
-    /// and the rest for use in finding <directory>/<file>
-    pub fn split(&self) -> (String, String) {
-        (hex::encode(&self[0..1]), hex::encode(&self[1..]))
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex()
     }
 }
 
@@ -119,7 +117,7 @@ impl Debug for SHA1Hash {
 
 impl Display for SHA1Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let hex = hex::encode(self);
+        let hex = self.0.to_hex::<String>();
         if f.alternate() { write!(f, "{}", &hex[..7]) } else { write!(f, "{}", hex) }
     }
 }

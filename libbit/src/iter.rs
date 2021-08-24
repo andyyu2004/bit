@@ -1,5 +1,4 @@
 mod index_tree_iter;
-
 mod tree_iter;
 mod walk;
 mod worktree_tree_iter;

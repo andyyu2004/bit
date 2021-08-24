@@ -37,10 +37,15 @@ pub struct BitObjDb {
 impl BitObjDb {
     pub fn new(objects_path: BitPath) -> BitResult<Self> {
         Ok(Self {
-            //? we want to search the loose backend first as its cheaper (at least intuitively)
+            // the ordering of these actually matters for performance significantly
+            // I think in most repositories that have been pulled from git(hub|lab) etc have been packed
+            // and so the majority of objects are in pack so we search that first.
+            // I think it will always be true that pack contains far more objects than loose, and
+            // so in terms of chance we will have a much higher success rate if we look in pack first
+            // and save the wasted work from searching in loose.
             backends: ArrayVec::from([
-                Box::new(BitLooseObjDb::new(objects_path)) as Box<dyn BitObjDbBackend>,
                 Box::new(BitPackedObjDb::new(objects_path)?),
+                Box::new(BitLooseObjDb::new(objects_path)) as Box<dyn BitObjDbBackend>,
             ]),
         })
     }
@@ -100,10 +105,10 @@ macro_rules! backend_method_parallel_any {
 impl BitObjDbBackend for BitObjDb {
     backend_method!(read_header: BitId => BitObjHeader);
 
+    backend_method!(read_raw: BitId => BitRawObj);
+
     // not much point making write parallel as pack backend is not writable anyway
     backend_method!(write: &dyn WritableObject => Oid);
-
-    backend_method!(read_raw: BitId => BitRawObj);
 
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
         self.backends
@@ -119,7 +124,7 @@ impl BitObjDbBackend for BitObjDb {
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
-        Ok(self.backends.par_iter().any(|backend| backend.exists(id).unwrap_or_default()))
+        Ok(self.backends.iter().any(|backend| backend.exists(id).unwrap_or_default()))
     }
 }
 
@@ -165,11 +170,19 @@ impl BitLooseObjDb {
     // this should be infallible as it is used by write
     // in particular, this should *not* check for the existence of the path
     fn obj_path(&self, oid: Oid) -> PathBuf {
-        let (dir, file) = oid.split();
-        let mut path = self.objects_path.to_path_buf();
-        path.push(dir);
-        path.push(file);
-        path
+        let s = oid.to_hex();
+        let mut path = self.objects_path.as_str().to_owned();
+        let (dir, file) = (&s[..2], &s[2..]);
+        // preallocate the extra 42 bytes for the 2 slashes and the hash
+        path.reserve(42);
+        // we are doing this so manually to avoid certain checks that `Path::join` does
+        // that are slow enough to become a bottleneck
+        // we don't need the validation as we know the exact format of what we are pushing on
+        path.push('/');
+        path.push_str(&dir);
+        path.push('/');
+        path.push_str(&file);
+        PathBuf::from(path)
     }
 
     fn locate_obj(&self, id: impl Into<BitId>) -> BitResult<PathBuf> {

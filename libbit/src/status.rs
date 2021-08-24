@@ -62,11 +62,6 @@ impl<'rcx> BitIndex<'rcx> {
 // it should just print the directory and not its contents
 impl Display for BitStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self.head {
-            BitRef::Direct(oid) => writeln!(f, "HEAD detached at `{}`", oid)?,
-            BitRef::Symbolic(branch) => writeln!(f, "On branch `{}`", branch.short())?,
-        };
-
         self.fmt_state(f)?;
         self.fmt_staged(f)?;
         self.fmt_unstaged(f)?;
@@ -99,12 +94,19 @@ where
 
 impl BitStatus {
     fn fmt_state(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self.head {
+            BitRef::Direct(oid) => writeln!(f, "HEAD detached at `{}`", oid)?,
+            BitRef::Symbolic(branch) => writeln!(f, "On branch `{}`", branch.short())?,
+        };
+        writeln!(f)?;
+
         if !self.conflicted.is_empty() {
             writeln!(f, "You have unmerged paths")?;
             writeln!(f, "  (fix conflicts and run `bit commit`)")?;
             writeln!(f, "  (use `bit merge --abort` to abort the merge)")?;
             writeln!(f)?;
         }
+
         Ok(())
     }
 

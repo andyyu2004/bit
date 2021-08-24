@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::obj::{BitObjKind, BitObjType, BitObject, Oid, Tree, Treeish};
+use crate::obj::{BitObjType, BitObject, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};

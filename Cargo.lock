@@ -746,6 +746,7 @@ dependencies = [
  "bumpalo",
  "chrono",
  "criterion",
+ "crossbeam",
  "diffy",
  "dirs",
  "enumflags2",
