@@ -59,11 +59,11 @@ impl BitObjCached {
 
 pub struct BitRawObj {
     cached: BitObjCached,
-    stream: Box<dyn BufRead>,
+    stream: Box<dyn BufRead + Send>,
 }
 
 impl BitRawObj {
-    pub fn new(oid: Oid, obj_type: BitObjType, size: u64, stream: Box<dyn BufRead>) -> Self {
+    pub fn new(oid: Oid, obj_type: BitObjType, size: u64, stream: Box<dyn BufRead + Send>) -> Self {
         Self { stream, cached: BitObjCached { oid, size, obj_type } }
     }
 
@@ -292,7 +292,7 @@ impl Serialize for BitObjKind<'_> {
     }
 }
 
-pub trait WritableObject: Serialize {
+pub trait WritableObject: Serialize + Send + Sync {
     fn obj_ty(&self) -> BitObjType;
 
     /// serialize objects with the header of `<type> <size>\0`

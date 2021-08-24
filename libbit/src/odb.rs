@@ -1,4 +1,4 @@
-use crate::error::{BitError, BitResult, BitResultExt};
+use crate::error::{BitError, BitGenericError, BitResult, BitResultExt};
 use crate::hash;
 use crate::iter::DirIter;
 use crate::lockfile::{Lockfile, LockfileFlags};
@@ -10,8 +10,8 @@ use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
-use parking_lot::RwLock;
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use parking_lot::{Mutex, RwLock};
+use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use smallvec::SmallVec;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -68,29 +68,56 @@ macro_rules! backend_method {
     };
 }
 
+// returns the first success or if everything failed, then one of the errors
+macro_rules! backend_method_parallel_any {
+    ($f:ident: $arg_ty:ty => $ret_ty:ty) => {
+        fn $f(&self, arg: $arg_ty) -> BitResult<$ret_ty> {
+            let error = Mutex::new(None);
+            let output = self
+                .backends
+                .par_iter()
+                .filter_map(|backend| match backend.$f(arg) {
+                    Ok(raw) => Some(raw),
+                    Err(err) => {
+                        *error.lock() = Some(err);
+                        None
+                    }
+                })
+                .find_any(|_| true);
+
+            match output {
+                // if anything succeeded return that
+                Some(result) => Ok(result),
+                // otherwise there must have been an error we just arbitrarily return one of the errors
+                None => Err(error.into_inner().unwrap()),
+            }
+        }
+    };
+}
+
 impl BitObjDbBackend for BitObjDb {
     backend_method!(read_header: BitId => BitObjHeader);
 
+    // not much point making write parallel as pack backend is not writable anyway
     backend_method!(write: &dyn WritableObject => Oid);
-
-    backend_method!(expand_prefix: PartialOid => Oid);
 
     backend_method!(read_raw: BitId => BitRawObj);
 
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
-        //? better way to write this?
-        Ok(self
-            .backends
-            .iter()
-            .map(|backend| backend.prefix_candidates(prefix))
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .flatten()
-            .collect())
+        self.backends
+            .par_iter()
+            .try_fold(Vec::new, |mut candidates, backend| {
+                candidates.extend(backend.prefix_candidates(prefix)?);
+                Ok::<_, BitGenericError>(candidates)
+            })
+            .try_reduce(Vec::new, |mut a, b| {
+                a.extend(b);
+                Ok(a)
+            })
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
-        Ok(self.backends.iter().any(|backend| backend.exists(id).unwrap_or_default()))
+        Ok(self.backends.par_iter().any(|backend| backend.exists(id).unwrap_or_default()))
     }
 }
 
@@ -100,6 +127,8 @@ pub trait BitObjDbBackend: Send + Sync {
     fn write(&self, obj: &dyn WritableObject) -> BitResult<Oid>;
     fn exists(&self, id: BitId) -> BitResult<bool>;
     /// return a vector of oids that have a matching prefix
+    // this method should NOT return an error if no candidates are found,
+    // but instead represent that as an empty list of candidates
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>>;
 
     fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
@@ -195,9 +224,9 @@ impl BitObjDbBackend for BitLooseObjDb {
 
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
         let (dir, file_prefix) = prefix.split();
-        let full_dir = self.objects_path.join(dir);
+        let full_dir = self.objects_path.as_path().join(dir);
         if !full_dir.exists() {
-            return Err(anyhow!(BitError::ObjectNotFound(prefix.into())));
+            return Ok(vec![]);
         }
 
         // looks into the relevant folder (determined by the two hash digit prefix)
@@ -253,11 +282,24 @@ impl BitPackedObjDb {
 
     fn read_raw_pack_obj(&self, oid: Oid) -> BitResult<BitPackObjRaw> {
         trace!("BitPackedObjDb::read_raw(id: {})", oid);
-        // TODO try parallelize with rayon
-        for pack in self.packs.write().iter_mut() {
-            process!(pack.read_obj_raw(oid));
+        // for pack in self.packs.write().iter_mut() {
+        //     process!(pack.read_obj_raw(oid));
+        // }
+        // the issue with the following is that we lose the real error and we just assume it's an object not found error
+        match self.packs.write().iter_mut().flat_map(|pack| pack.read_obj_raw(oid)).find(|_| true) {
+            Some(raw) => Ok(raw),
+            None => bail!(BitError::ObjectNotFound(oid.into())),
         }
-        bail!(BitError::ObjectNotFound(oid.into()))
+        // match self
+        //     .packs
+        //     .write()
+        //     .par_iter_mut()
+        //     .flat_map(|pack| pack.read_obj_raw(oid))
+        //     .find_any(|_| true)
+        // {
+        //     Some(raw) => Ok(raw),
+        //     None => bail!(BitError::ObjectNotFound(oid.into())),
+        // }
     }
 }
 
@@ -277,7 +319,7 @@ impl BitObjDbBackend for BitPackedObjDb {
     }
 
     fn write(&self, _obj: &dyn WritableObject) -> BitResult<Oid> {
-        bug!("writing directly to pack backend")
+        bail!("cannot write to pack odb backend")
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {

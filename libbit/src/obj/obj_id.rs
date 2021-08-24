@@ -1,7 +1,6 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::hash::SHA1Hash;
 use crate::io::ReadExt;
-use crate::path::BitPath;
 use std::fmt::{self, Display, Formatter};
 use std::io::Write;
 use std::ops::Index;

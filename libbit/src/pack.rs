@@ -435,6 +435,7 @@ impl<R: BufReadSeek> PackfileReader<R> {
     // the `size` here is the `size` shown in `git verify-pack` (not the `size-in-packfile`)
     // so the uncompressed size (i.e. we can call `take` on the zlib (decompressed) stream, rather than the compressed stream)
     // https://git-scm.com/docs/git-verify-pack
+    #[inline]
     fn read_pack_obj_header(&mut self) -> BitResult<BitPackObjHeader> {
         let (ty, size) = self.read_le_varint_with_shift(3)?;
         let obj_type = BitPackObjType::from_u8(ty).expect("invalid bit object type");
@@ -442,6 +443,7 @@ impl<R: BufReadSeek> PackfileReader<R> {
     }
 
     /// seek to `offset` and read pack object header
+    #[inline]
     fn read_header_from_offset(&mut self, offset: u64) -> BitResult<BitPackObjHeader> {
         self.seek(SeekFrom::Start(offset))?;
         self.read_pack_obj_header()

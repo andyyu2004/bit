@@ -5,10 +5,6 @@ members = [
     "libbit",
 ]
 
-[profile.dev]
-# opt-level = 0
-# debug = true
-
 [profile.release]
 debug = true
 # lto = "thin"
