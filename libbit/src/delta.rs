@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use crate::error::BitResult;
-use crate::io::{BufReadExt, BufReadExtSized, ReadExt};
+use crate::io::{BufReadExt, ReadExt};
 use crate::serialize::{Deserialize, DeserializeSized};
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -86,7 +86,9 @@ impl Deserialize for DeltaOp {
             Ok(Self::Copy(offset, size))
         } else {
             assert_ne!(byte, 0);
-            reader.read_vec::<u8>(byte as usize & 0x7f).map(Self::Insert)
+            let n = byte as usize & 0x7f;
+            let bytes = reader.take(n as u64).read_to_vec()?;
+            Ok(Self::Insert(bytes))
         }
     }
 }
