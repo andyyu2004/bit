@@ -313,6 +313,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
                 self.oid_cache.get(&low).unwrap()
             }
         };
+
         match oids.binary_search(&oid) {
             Ok(idx) => Ok(low + idx as u64),
             Err(idx) => Err(anyhow!(BitError::ObjectNotFoundInPackIndex(oid, low + idx as u64))),

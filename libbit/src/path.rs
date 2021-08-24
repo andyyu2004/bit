@@ -12,10 +12,9 @@ use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
 
-/// interned path (where path is just a string)
-// interning paths is likely not worth it, but its nice to have it as a copy type
-// since its used so muchthis will also lend itself to faster comparisons as
-// its now just an integer compare
+/// interned path (where path is just a ut8 encoded string)
+// interning is not free, and should only be used if a `Copy` representation of a path is required,
+// otherwise just use [std::path::Path]
 #[derive(Eq, Clone, Copy)]
 pub struct BitPath {
     // used for constant time hashing/equality

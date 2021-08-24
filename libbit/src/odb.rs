@@ -10,11 +10,12 @@ use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use smallvec::SmallVec;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 //? questionable name, questionable macro is there a better way to express this pattern
@@ -69,10 +70,11 @@ macro_rules! backend_method {
 }
 
 // returns the first success or if everything failed, then one of the errors
+#[allow(unused)]
 macro_rules! backend_method_parallel_any {
     ($f:ident: $arg_ty:ty => $ret_ty:ty) => {
         fn $f(&self, arg: $arg_ty) -> BitResult<$ret_ty> {
-            let error = Mutex::new(None);
+            let error = parking_lot::Mutex::new(None);
             let output = self
                 .backends
                 .par_iter()
@@ -162,12 +164,15 @@ impl BitLooseObjDb {
 
     // this should be infallible as it is used by write
     // in particular, this should *not* check for the existence of the path
-    fn obj_path(&self, oid: Oid) -> BitPath {
+    fn obj_path(&self, oid: Oid) -> PathBuf {
         let (dir, file) = oid.split();
-        self.objects_path.join(dir).join(file)
+        let mut path = self.objects_path.to_path_buf();
+        path.push(dir);
+        path.push(file);
+        path
     }
 
-    fn locate_obj(&self, id: impl Into<BitId>) -> BitResult<BitPath> {
+    fn locate_obj(&self, id: impl Into<BitId>) -> BitResult<PathBuf> {
         let oid = self.expand_id(id.into())?;
         let path = self.obj_path(oid);
         if path.exists() { Ok(path) } else { Err(anyhow!(BitError::ObjectNotFound(oid.into()))) }
@@ -282,14 +287,12 @@ impl BitPackedObjDb {
 
     fn read_raw_pack_obj(&self, oid: Oid) -> BitResult<BitPackObjRaw> {
         trace!("BitPackedObjDb::read_raw(id: {})", oid);
-        // for pack in self.packs.write().iter_mut() {
-        //     process!(pack.read_obj_raw(oid));
-        // }
-        // the issue with the following is that we lose the real error and we just assume it's an object not found error
-        match self.packs.write().iter_mut().flat_map(|pack| pack.read_obj_raw(oid)).find(|_| true) {
-            Some(raw) => Ok(raw),
-            None => bail!(BitError::ObjectNotFound(oid.into())),
+        for pack in self.packs.write().iter_mut() {
+            process!(pack.read_obj_raw(oid));
         }
+        bail!(BitError::ObjectNotFound(oid.into()))
+
+        // the issue with the following is that we lose the real error and we just assume it's an object not found error
         // match self
         //     .packs
         //     .write()
