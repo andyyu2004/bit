@@ -193,7 +193,7 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
             .collect(),
         );
 
-        assert_eq!(&tree, &*obj.into_tree());
+        assert_eq!(tree, obj.into_tree().into_mutable());
         Ok(())
     })
 }
@@ -349,7 +349,7 @@ fn test_read_pack_deltified_oid2() -> BitResult<()> {
             .into_iter()
             .collect(),
         );
-        assert_eq!(&tree, &*obj.into_tree());
+        assert_eq!(tree, obj.into_tree().into_mutable());
         Ok(())
     })
 }

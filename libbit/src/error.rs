@@ -16,6 +16,7 @@ pub enum BitError {
     ObjectNotFoundInPackIndex(Oid, u64),
     AmbiguousPrefix(PartialOid, Vec<Oid>),
     NonExistentSymRef(SymbolicRef),
+    PackBackendWrite,
 }
 
 pub trait BitErrorExt {
@@ -100,7 +101,9 @@ impl BitResultExt for BitGenericError {
         match self.downcast_ref::<BitError>() {
             Some(err) => !matches!(
                 err,
-                BitError::ObjectNotFound(..) | BitError::ObjectNotFoundInPackIndex(..)
+                BitError::ObjectNotFound(..)
+                    | BitError::ObjectNotFoundInPackIndex(..)
+                    | BitError::PackBackendWrite
             ),
             None => true,
         }
@@ -118,7 +121,6 @@ impl Display for BitError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             BitError::ObjectNotFound(id) => write!(f, "bit object with hash `{}` not found", id),
-            BitError::ObjectNotFoundInPackIndex(..) => unreachable!("not a user facing error"),
             BitError::AmbiguousPrefix(prefix, candidates) => {
                 writeln!(f, "prefix oid `{}` is ambiguous", prefix)?;
                 write_hint!(f, "the candidates are:")?;
@@ -129,6 +131,8 @@ impl Display for BitError {
             }
             BitError::NonExistentSymRef(sym) =>
                 write!(f, "failed to resolve symbolic reference `{}`", sym),
+            BitError::PackBackendWrite | BitError::ObjectNotFoundInPackIndex(..) =>
+                bug!("not a user facing error"),
         }
     }
 }

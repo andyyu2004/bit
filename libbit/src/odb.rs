@@ -335,7 +335,7 @@ impl BitObjDbBackend for BitPackedObjDb {
     }
 
     fn write(&self, _obj: &dyn WritableObject) -> BitResult<Oid> {
-        bail!("cannot write to pack odb backend")
+        bail!(BitError::PackBackendWrite)
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {

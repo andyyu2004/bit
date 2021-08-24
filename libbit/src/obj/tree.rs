@@ -14,7 +14,6 @@ use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::iter::FromIterator;
-use std::ops::Deref;
 
 /// Represents entities that have a straightforward way of being converted/dereferenced into a tree
 /// This includes commits and oids (and also trivially tree's themselves),
@@ -102,29 +101,74 @@ impl Display for TreeEntry {
 pub struct Tree<'rcx> {
     owner: BitRepo<'rcx>,
     cached: BitObjCached,
-    inner: MutableTree,
+    // This is an exception to the other objects where immutable is not just a wrapper over mutable
+    // we prefer a vec here as btreeset takes O(nlogn) to build which is unnecessarily slow
+    // as the only reason that structure was used was to guarantee correct ordering after insertions/deletions.
+    // We can implement deserialization more efficiently for immutable trees by just using a vector
+    pub(crate) entries: Vec<TreeEntry>,
 }
 
+impl Serialize for Tree<'_> {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        for entry in &self.entries {
+            entry.serialize(writer)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'rcx> BitObject<'rcx> for Tree<'rcx> {
+    fn obj_cached(&self) -> &BitObjCached {
+        &self.cached
+    }
+
+    fn owner(&self) -> BitRepo<'rcx> {
+        self.owner
+    }
+}
+
+impl<'rcx> ImmutableBitObject<'rcx> for Tree<'rcx> {
+    type Mutable = MutableTree;
+
+    fn new(owner: BitRepo<'rcx>, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self>
+    where
+        Self: Sized,
+    {
+        Ok(Self { owner, cached, entries: Self::read_entries(reader, cached.size)? })
+    }
+
+    fn from_mutable(_owner: BitRepo<'rcx>, _cached: BitObjCached, _inner: Self::Mutable) -> Self {
+        unreachable!(
+            "method unnecessary for this new design (as it's only used for a reasonable default impl for `ImmutableBitObject::new`), so this trait probably needs a rethink"
+        )
+    }
+}
 impl Tree<'_> {
     pub const EMPTY_SIZE: u64 = 0;
 
+    fn read_entries(r: impl BufRead, size: u64) -> BitResult<Vec<TreeEntry>>
+    where
+        Self: Sized,
+    {
+        let mut r = r.take(size);
+        let mut entries = vec![];
+        while !r.is_at_eof()? {
+            let entry = TreeEntry::deserialize(&mut r)?;
+            entries.push(entry);
+        }
+
+        Ok(entries)
+    }
+
     #[cfg(test)]
     pub fn into_mutable(self) -> MutableTree {
-        self.inner
+        MutableTree::new(self.entries.into_iter().collect())
     }
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct MutableTree {
     pub entries: BTreeSet<TreeEntry>,
-}
-
-impl Deref for Tree<'_> {
-    type Target = MutableTree;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
 }
 
 impl FromIterator<TreeEntry> for MutableTree {
@@ -184,24 +228,6 @@ impl DeserializeSized for MutableTree {
 impl WritableObject for MutableTree {
     fn obj_ty(&self) -> BitObjType {
         BitObjType::Tree
-    }
-}
-
-impl<'rcx> BitObject<'rcx> for Tree<'rcx> {
-    fn obj_cached(&self) -> &BitObjCached {
-        &self.cached
-    }
-
-    fn owner(&self) -> BitRepo<'rcx> {
-        self.owner
-    }
-}
-
-impl<'rcx> ImmutableBitObject<'rcx> for Tree<'rcx> {
-    type Mutable = MutableTree;
-
-    fn from_mutable(owner: BitRepo<'rcx>, cached: BitObjCached, inner: Self::Mutable) -> Self {
-        Self { owner, cached, inner }
     }
 }
 

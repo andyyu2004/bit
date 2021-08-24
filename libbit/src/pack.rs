@@ -9,7 +9,6 @@ use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rustc_hash::FxHashMap;
-use std::collections::hash_map::Entry;
 use std::fmt::{self, Debug, Formatter};
 use std::io::{BufRead, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
