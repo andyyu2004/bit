@@ -234,7 +234,11 @@ pub trait BufReadExtSized: BufRead + Sized {
     }
 
     fn read_vec<T: Deserialize>(&mut self, n: usize) -> BitResult<Vec<T>> {
-        (0..n).map(|_| T::deserialize(&mut *self)).collect::<Result<_, _>>()
+        let mut vec = Vec::with_capacity(n);
+        for _ in 0..n {
+            vec.push(T::deserialize(&mut *self)?);
+        }
+        Ok(vec)
     }
 }
 
