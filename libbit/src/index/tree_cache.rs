@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::obj::{BitObjKind, BitObject, Oid, Tree, Treeish};
+use crate::obj::{BitObjKind, BitObjType, BitObject, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -113,14 +113,15 @@ impl BitTreeCache {
         };
 
         for entry in &tree.entries {
-            match repo.read_obj(entry.oid)? {
-                BitObjKind::Blob(..) => cache_tree.entry_count += 1,
-                BitObjKind::Tree(subtree) => {
+            match repo.read_obj_header(entry.oid)?.obj_type {
+                BitObjType::Blob => cache_tree.entry_count += 1,
+                BitObjType::Tree => {
+                    let subtree = repo.read_obj(entry.oid)?.into_tree();
                     let child = Self::read_tree_internal(repo, &subtree, entry.path)?;
                     cache_tree.entry_count += child.entry_count;
                     cache_tree.children.insert(entry.path, child);
                 }
-                BitObjKind::Commit(..) | BitObjKind::Tag(..) => unreachable!(),
+                BitObjType::Commit | BitObjType::Tag => unreachable!(),
             }
         }
 
