@@ -1,4 +1,5 @@
 use super::*;
+use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::signature::{BitEpochTime, BitSignature, BitTime, BitTimeZoneOffset};
 use lazy_static::lazy_static;

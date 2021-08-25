@@ -28,7 +28,7 @@ pub struct BitPath {
     path: &'static OsStr,
 }
 
-pub type BitFileStream = impl BufReadSeek;
+pub type BufferedFileStream = std::io::BufReader<File>;
 
 impl BitPath {
     pub(crate) const fn new(index: u32, path: &'static OsStr) -> Self {
@@ -39,7 +39,7 @@ impl BitPath {
         self == Self::EMPTY
     }
 
-    pub fn stream(self) -> BitResult<BitFileStream> {
+    pub fn stream(self) -> BitResult<BufferedFileStream> {
         let file = File::open(self)
             .with_context(|| anyhow!("BitPath::stream: failed to open file `{}`", self))?;
         Ok(BufReader::new(file))

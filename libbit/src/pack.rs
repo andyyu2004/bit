@@ -2,17 +2,19 @@ use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::hash::{MakeHash, SHA1Hash, OID_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
-use crate::iter::{BitEntryIterator, BitIterator};
+use crate::iter::BitIterator;
 use crate::obj::*;
-use crate::path::{BitFileStream, BitPath};
+use crate::path::BufferedFileStream;
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rustc_hash::FxHashMap;
 use std::collections::hash_map::RawEntryMut;
 use std::fmt::{self, Debug, Formatter};
-use std::io::{BufRead, Read, SeekFrom};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
+use std::path::Path;
 
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
 const FANOUT_ENTRYC: usize = 256;
@@ -52,24 +54,30 @@ impl Debug for BitPackObjRawKind {
 }
 
 pub struct Pack {
-    pack_reader: PackfileReader<BitFileStream>,
-    idx_reader: PackIndexReader<BitFileStream>,
+    pack_reader: PackfileReader<BufferedFileStream>,
+    idx_reader: PackIndexReader<BufferedFileStream>,
 }
 
 impl Pack {
-    pub fn new(pack: BitPath, idx: BitPath) -> BitResult<Self> {
-        let pack_reader = pack.stream().and_then(PackfileReader::new)?;
-        let idx_reader = idx.stream().and_then(PackIndexReader::new)?;
+    pub fn new(pack: impl AsRef<Path>, idx: impl AsRef<Path>) -> BitResult<Self> {
+        let pack_reader = File::open(pack)
+            .map(BufReader::new)
+            .map_err(Into::into)
+            .and_then(PackfileReader::new)?;
+        let idx_reader = File::open(idx)
+            .map(BufReader::new)
+            .map_err(Into::into)
+            .and_then(PackIndexReader::new)?;
         Ok(Self { pack_reader, idx_reader })
     }
 
     #[inline]
-    pub fn pack_reader(&mut self) -> &mut PackfileReader<BitFileStream> {
+    pub fn pack_reader(&mut self) -> &mut PackfileReader<BufferedFileStream> {
         &mut self.pack_reader
     }
 
     #[inline]
-    pub fn idx_reader(&mut self) -> &mut PackIndexReader<BitFileStream> {
+    pub fn idx_reader(&mut self) -> &mut PackIndexReader<BufferedFileStream> {
         &mut self.idx_reader
     }
 

@@ -285,14 +285,18 @@ impl BitPackedObjDb {
 
         for entry in std::fs::read_dir(pack_dir)? {
             let entry = entry?;
-            let pack = BitPath::intern(entry.path());
-            if pack.extension() != Some("pack".as_ref()) {
+            let pack_path = entry.path();
+            if pack_path.extension() != Some("pack".as_ref()) {
                 continue;
             }
 
-            let idx = pack.with_extension("idx");
-            ensure!(idx.exists(), "packfile `{}` is missing a corresponding index file", pack);
-            packs.write().push(Pack::new(pack, idx)?);
+            let idx = pack_path.with_extension("idx");
+            ensure!(
+                idx.exists(),
+                "packfile `{}` is missing a corresponding index file",
+                pack_path.display()
+            );
+            packs.write().push(Pack::new(pack_path, idx)?);
         }
 
         Ok(Self { packs })
