@@ -303,7 +303,7 @@ impl<'rcx> BitIndex<'rcx> {
                 // file may have changed, but we are not certain, so check the hash
                 let mut new_hash = new.oid;
                 if new_hash.is_unknown() {
-                    new_hash = self.repo.hash_blob(new.path)?;
+                    new_hash = self.repo.hash_blob_from_worktree(new.path)?;
                 }
 
                 let changed = old.oid != new_hash;

@@ -69,7 +69,11 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
         let writer = &mut self.writer;
         writeln!(writer, "diff --git {} {}", a, b)?;
 
-        let new_oid = if new.oid.is_known() { new.oid } else { self.repo.hash_blob(new.path)? };
+        let new_oid = if new.oid.is_known() {
+            new.oid
+        } else {
+            self.repo.hash_blob_from_worktree(new.path)?
+        };
         // TODO what if the file has changed mode?
         writeln!(writer, "index {:#}..{:#} {}", old.oid, new_oid, new.mode)?;
         patch.set_original(Cow::Borrowed(a.as_str()));

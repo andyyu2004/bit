@@ -62,9 +62,9 @@ impl<'rcx> MergeCtxt<'rcx> {
         }
 
         self.merge_from_iterators(
-            repo.tree_iter(merge_base.oid()).ignore_trees(),
-            repo.tree_iter(our_head).ignore_trees(),
-            repo.tree_iter(their_head).ignore_trees(),
+            repo.tree_iter(merge_base.oid()).skip_trees(),
+            repo.tree_iter(our_head).skip_trees(),
+            repo.tree_iter(their_head).skip_trees(),
         )
     }
 
@@ -101,7 +101,7 @@ impl<'rcx> MergeCtxt<'rcx> {
                     let path = y.path;
 
                     let base_bytes = match base {
-                        Some(b) => b.read_to_bytes(repo)?,
+                        Some(b) => b.read_to_blob(repo)?.into_bytes(),
                         None => vec![],
                     };
 
@@ -114,8 +114,8 @@ impl<'rcx> MergeCtxt<'rcx> {
                         "HEAD",
                         &self.their_head_desc,
                         &base_bytes,
-                        &y.read_to_bytes(repo)?,
-                        &z.read_to_bytes(repo)?,
+                        &y.read_to_blob(repo)?,
+                        &z.read_to_blob(repo)?,
                     ) {
                         Ok(merged) => {
                             let oid = repo.write_obj(&MutableBlob::new(merged))?;

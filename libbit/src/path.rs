@@ -1,13 +1,12 @@
 use crate::error::BitResult;
 use crate::interner::with_path_interner;
 use crate::io::ReadExt;
-use crate::serialize::{BufReadSeek, Deserialize};
-use anyhow::Context;
+use crate::serialize::Deserialize;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path, PathBuf};
@@ -28,8 +27,6 @@ pub struct BitPath {
     path: &'static OsStr,
 }
 
-pub type BufferedFileStream = std::io::BufReader<File>;
-
 impl BitPath {
     pub(crate) const fn new(index: u32, path: &'static OsStr) -> Self {
         Self { index, path }
@@ -37,12 +34,6 @@ impl BitPath {
 
     pub fn is_empty(self) -> bool {
         self == Self::EMPTY
-    }
-
-    pub fn stream(self) -> BitResult<BufferedFileStream> {
-        let file = File::open(self)
-            .with_context(|| anyhow!("BitPath::stream: failed to open file `{}`", self))?;
-        Ok(BufReader::new(file))
     }
 
     pub fn with_extension(self, ext: impl AsRef<OsStr>) -> Self {

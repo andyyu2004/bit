@@ -413,7 +413,8 @@ impl<'rcx> BitRepo<'rcx> {
         self.odb()?.read_header(id.into())
     }
 
-    pub fn get_blob(self, path: BitPath) -> BitResult<MutableBlob> {
+    /// Read the file at `path` on the worktree into a mutable blob object
+    pub fn read_blob_from_worktree(self, path: impl AsRef<Path>) -> BitResult<MutableBlob> {
         let path = self.normalize_path(path.as_ref())?;
         let bytes = if path.symlink_metadata()?.file_type().is_symlink() {
             // we literally hash the contents of the symlink without following
@@ -424,13 +425,9 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(MutableBlob::new(bytes))
     }
 
-    pub fn write_blob(self, path: BitPath) -> BitResult<Oid> {
-        let blob = self.get_blob(path)?;
-        self.write_obj(&blob)
-    }
-
-    pub fn hash_blob(self, path: BitPath) -> BitResult<Oid> {
-        self.get_blob(path).and_then(|blob| hash::hash_obj(&blob))
+    /// Get the blob at `path` on the worktree and return its hash
+    pub fn hash_blob_from_worktree(self, path: BitPath) -> BitResult<Oid> {
+        self.read_blob_from_worktree(path).and_then(|blob| hash::hash_obj(&blob))
     }
 
     /// convert a relative path to be absolute based off the repository root

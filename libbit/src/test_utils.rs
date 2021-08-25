@@ -150,16 +150,16 @@ macro_rules! bit_branch {
 }
 
 macro_rules! bit_reset {
-    ($repo:ident: --soft $rev:literal) => {{
-        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+    ($repo:ident: --soft $rev:expr) => {{
+        let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
         $repo.reset(&revision, $crate::reset::ResetKind::Soft)?;
     }};
-    ($repo:ident: --hard $rev:literal) => {{
-        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+    ($repo:ident: --hard $rev:expr) => {{
+        let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
         $repo.reset(&revision, $crate::reset::ResetKind::Hard)?;
     }};
-    ($repo:ident: $rev:literal) => {{
-        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+    ($repo:ident: $rev:expr) => {{
+        let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
         $repo.reset(&revision, $crate::reset::ResetKind::Mixed)?;
     }};
 }
@@ -168,6 +168,13 @@ macro_rules! bit_commit_all {
     ($repo:expr) => {{
         bit_add_all!($repo);
         bit_commit!($repo)
+    }};
+}
+
+macro_rules! bit_merge {
+    ($repo:ident: $rev:expr) => {{
+        let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
+        $repo.merge(&revision)?
     }};
 }
 
@@ -354,7 +361,7 @@ macro_rules! symbolic {
     ($sym:expr) => {{
         #[allow(unused_imports)]
         use std::str::FromStr;
-        crate::refs::SymbolicRef::from_str($sym).unwrap()
+        $crate::refs::SymbolicRef::from_str($sym).unwrap()
     }};
 }
 
@@ -362,7 +369,7 @@ macro_rules! symbolic_ref {
     ($sym:expr) => {{
         #[allow(unused_imports)]
         use std::str::FromStr;
-        crate::refs::BitRef::Symbolic(symbolic!($sym))
+        $crate::refs::BitRef::Symbolic(symbolic!($sym))
     }};
 }
 
@@ -377,7 +384,7 @@ macro_rules! rev {
     ($rev:expr) => {{
         #[allow(unused_imports)]
         use std::str::FromStr;
-        crate::rev::Revspec::from_str($rev)?
+        $crate::rev::Revspec::from_str($rev)?
     }};
 }
 
@@ -386,13 +393,13 @@ macro_rules! pathspec {
     ($pathspec:expr) => {{
         #[allow(unused_imports)]
         use std::str::FromStr;
-        crate::pathspec::Pathspec::from_str($pathspec)?
+        $crate::pathspec::Pathspec::from_str($pathspec)?
     }};
 }
 
 macro_rules! file_entry {
     ($path:ident < $content:literal) => {{
-        let oid = crate::tls::with_repo(|repo| {
+        let oid = $crate::tls::with_repo(|repo| {
             repo.write_obj(&$crate::obj::MutableBlob::new($content.as_bytes().to_vec()))
         })
         .unwrap();
@@ -490,13 +497,13 @@ macro_rules! tree_entries {
 /// i.e. tree! { .. } not tree! ( .. ) or tree! [ .. ]
 macro_rules! tree_obj {
     ( $($entries:tt)* ) => {
-        crate::obj::MutableTree::new(tree_entries!([] $($entries)* ))
+        $crate::obj::MutableTree::new(tree_entries!([] $($entries)* ))
     };
 }
 
 macro_rules! p {
     ($path:expr) => {
-        BitPath::intern($path)
+        $crate::path::BitPath::intern($path)
     };
 }
 
@@ -504,7 +511,7 @@ macro_rules! p {
 macro_rules! tree {
     ( $($entries:tt)* ) => {{
         let tree = tree_obj! { $($entries)* };
-        crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap()
+        $crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap()
     }};
 }
 

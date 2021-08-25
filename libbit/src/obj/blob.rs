@@ -34,6 +34,10 @@ impl WritableObject for MutableBlob {
 }
 
 impl Blob<'_> {
+    pub fn into_inner(self) -> MutableBlob {
+        self.inner
+    }
+
     pub fn into_bytes(self) -> Vec<u8> {
         self.inner.bytes
     }
@@ -48,9 +52,21 @@ impl Display for Blob<'_> {
     }
 }
 
+impl Deref for MutableBlob {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.bytes
+    }
+}
+
 impl MutableBlob {
     pub fn new(bytes: Vec<u8>) -> Self {
         Self { bytes }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
     }
 
     pub fn bytes(&self) -> &[u8] {

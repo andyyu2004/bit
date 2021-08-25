@@ -8,10 +8,13 @@ use crate::{error::BitResult, serialize::Serialize};
 use sha1::Digest;
 use std::ffi::OsStr;
 use std::fmt::Display;
+use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
 use std::os::unix::prelude::OsStrExt;
 use std::str::FromStr;
+
+pub type BufferedFileStream = std::io::BufReader<File>;
 
 // all big-endian
 pub(crate) trait ReadExt: Read {

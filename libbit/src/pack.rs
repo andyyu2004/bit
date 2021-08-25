@@ -1,10 +1,9 @@
 use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::hash::{MakeHash, SHA1Hash, OID_SIZE};
-use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
+use crate::io::{BufReadExt, BufReadExtSized, BufferedFileStream, HashReader, ReadExt};
 use crate::iter::BitIterator;
 use crate::obj::*;
-use crate::path::BufferedFileStream;
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};

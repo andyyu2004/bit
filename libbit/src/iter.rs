@@ -10,7 +10,7 @@ pub use worktree_tree_iter::WorktreeTreeIter;
 
 use crate::error::{BitErrorExt, BitGenericError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
-use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
+use crate::obj::{FileMode, MutableBlob, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::Peekable;
@@ -46,7 +46,16 @@ pub trait BitEntry {
         self.mode().is_blob()
     }
 
-    fn read_to_bytes(&self, repo: BitRepo<'_>) -> BitResult<Vec<u8>> {
+    fn write(&self, repo: BitRepo<'_>) -> BitResult<Oid> {
+        let oid = self.oid();
+        if oid.is_known() {
+            return Ok(oid);
+        }
+        let blob = self.read_to_blob(repo)?;
+        repo.write_obj(&blob)
+    }
+
+    fn read_to_blob(&self, repo: BitRepo<'_>) -> BitResult<MutableBlob> {
         let oid = self.oid();
         // if object is known we try to read it from the object store
         // however, it's possible the object does not live there as the hash may have just been calculated to allow for comparisons
@@ -54,13 +63,12 @@ pub trait BitEntry {
         // if the oid is not known, then it's definitely on disk (as otherwise it would have a known `oid`)
         if oid.is_known() {
             match repo.read_obj(oid) {
-                Ok(obj) => return Ok(obj.into_blob().into_bytes()),
+                Ok(obj) => return Ok(obj.into_blob().into_inner()),
                 Err(err) => err.try_into_obj_not_found_err()?,
             };
         }
 
-        let absolute_path = repo.normalize_path(self.path().as_path())?;
-        Ok(std::fs::read(absolute_path)?)
+        repo.read_blob_from_worktree(self.path())
     }
 
     // we must have files sorted before directories

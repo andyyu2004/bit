@@ -29,7 +29,7 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
     // especially as the implementation is probably trivial
     fn peek(&mut self) -> BitResult<Option<Self::Item>>;
 
-    fn ignore_trees(self) -> SkipTrees<Self>
+    fn skip_trees(self) -> SkipTrees<Self>
     where
         Self: Sized,
     {

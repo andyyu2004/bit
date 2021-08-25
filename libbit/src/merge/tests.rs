@@ -1,11 +1,11 @@
 use crate::error::BitResult;
 use crate::graph::{Dag, DagBuilder, DagNode};
+use crate::index::{Conflict, ConflictType};
 use crate::obj::{BitObject, CommitMessage, Oid};
 use crate::repo::BitRepo;
 use crate::test_utils::generate_random_string;
 use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashMap;
-
 struct CommitGraphBuilder<'rcx> {
     repo: BitRepo<'rcx>,
 }
@@ -77,16 +77,73 @@ fn test_best_common_ancestors() -> BitResult<()> {
 
 #[test]
 fn test_simple_merge() -> BitResult<()> {
-    BitRepo::with_empty_repo(|repo| {
-        let tree_a = tree! {
-            foo < "foo"
-            shared < "hello from a"
-        };
-        let tree_b = tree! {
-            foo < "foo"
-            shared < "hello from b"
-        };
-        // TODO
-        Ok(())
+    BitRepo::with_sample_repo(|repo| {
+        bit_branch!(repo: "a");
+        bit_branch!(repo: "b");
+
+        bit_checkout!(repo: "a");
+        repo.checkout_tree(tree! {
+            sameaddition < "foo"
+            conflicted < "hello from a"
+        })?;
+        bit_commit_all!(repo);
+
+        bit_checkout!(repo: "b");
+        repo.checkout_tree(tree! {
+            sameaddition < "foo"
+            conflicted < "hello from b"
+        })?;
+        bit_commit_all!(repo);
+
+        assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/b"));
+        bit_merge!(repo: "a");
+
+        repo.with_index(|index| {
+            assert!(index.has_conflicts());
+            let conflicts = index.conflicts();
+            assert_eq!(conflicts.len(), 1);
+            let conflict = &conflicts[0];
+            assert_eq!(
+                conflict,
+                &Conflict { path: p!("conflicted"), conflict_type: ConflictType::BothAdded }
+            );
+            Ok(())
+        })
+    })
+}
+
+#[test]
+fn test_merge_conflict_types() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        bit_branch!(repo: "alternative");
+
+        // on `master`
+        modify!(repo: "bar");
+        modify!(repo: "dir/baz");
+        rm!(repo: "foo");
+        bit_commit_all!(repo);
+
+        // on `alternative`
+        bit_checkout!(repo: "alternative");
+        modify!(repo: "foo");
+        modify!(repo: "dir/baz");
+        rm!(repo: "bar");
+        bit_commit_all!(repo);
+
+        bit_merge!(repo: "master");
+
+        repo.with_index(|index| {
+            assert!(index.has_conflicts());
+            let conflicts = index.conflicts();
+            assert_eq!(
+                conflicts,
+                vec![
+                    Conflict { path: p!("bar"), conflict_type: ConflictType::DeleteModify },
+                    Conflict { path: p!("dir/baz"), conflict_type: ConflictType::BothModified },
+                    Conflict { path: p!("foo"), conflict_type: ConflictType::ModifyDelete }
+                ]
+            );
+            Ok(())
+        })
     })
 }

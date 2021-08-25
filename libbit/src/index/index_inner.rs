@@ -22,6 +22,7 @@ pub struct BitIndexInner {
     reuc: Option<BitReuc>,
 }
 
+/// Stores all the conflicts in the index ordered by path
 pub type Conflicts = Vec<Conflict>;
 
 #[derive(Debug, PartialEq)]

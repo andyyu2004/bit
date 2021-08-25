@@ -13,7 +13,7 @@ use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::OID_SIZE;
 use crate::io::{HashWriter, ReadExt, WriteExt};
-use crate::iter::{BitEntryIterator, BitTreeIterator, IndexTreeIter};
+use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator, IndexTreeIter};
 use crate::lockfile::Filelock;
 use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
@@ -120,7 +120,7 @@ impl<'rcx> BitIndex<'rcx> {
 
     fn add_entry_common(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(&entry)?;
-        entry.oid = self.repo.write_blob(entry.path)?;
+        entry.oid = entry.write(self.repo)?;
         assert!(entry.oid.is_known());
         self.insert_entry(entry);
         Ok(())
