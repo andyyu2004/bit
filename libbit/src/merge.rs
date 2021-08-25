@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use crate::error::BitResult;
 use crate::index::{BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitTreeIterator};
@@ -11,6 +9,7 @@ use crate::rev::Revspec;
 use crate::xdiff;
 use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashSet;
+use std::io::Write;
 
 pub type ConflictStyle = diffy::ConflictStyle;
 

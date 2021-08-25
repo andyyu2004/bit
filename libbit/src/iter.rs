@@ -224,11 +224,8 @@ impl FallibleIterator for WorktreeRawIter<'_> {
                 Some(entry) => {
                     let path = entry.path();
                     let is_dir = entry.file_type().is_dir();
-                    // explicitly stepover .git directory,
-                    // not actually checking whether this is at the root or not
-                    // but no one should be writing their own .git folder anyway
-                    let is_git_dir = BitPath::DOT_GIT == entry.file_name()
-                        || BitPath::DOT_BIT == entry.file_name();
+                    // Explicitly stepover any .git directory.
+                    let is_git_dir = BitPath::DOT_GIT == entry.file_name();
                     if is_dir && is_git_dir {
                         self.walk.skip_current_dir();
                     } else if !self.is_ignored(path, is_dir)? {
