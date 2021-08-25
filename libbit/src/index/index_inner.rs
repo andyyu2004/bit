@@ -2,6 +2,7 @@ use super::*;
 use arrayvec::ArrayVec;
 use indexmap::IndexMap;
 use std::io::BufWriter;
+use std::path::Path;
 
 /// representation of the index file
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
@@ -85,12 +86,11 @@ impl BitIndexInner {
     }
 
     // remove an entry with the given key if it exists
-    pub fn remove_entry(&mut self, key @ (path, _): (BitPath, MergeStage)) -> bool {
+    pub fn remove_entry(&mut self, key @ (path, _): (BitPath, MergeStage)) {
         let exists = self.entries.remove(&key).is_some();
         if exists {
             self.invalidate_tree_cache_path(path)
         }
-        exists
     }
 
     pub(super) fn remove_conflicted(&mut self, path: BitPath) {
@@ -139,24 +139,41 @@ impl BitIndexInner {
     }
 
     /// remove directory and all subentries (recursively)
-    pub fn remove_directory(&mut self, entry_path: BitPath) -> BitResult<()> {
+    pub fn remove_directory(&mut self, entry_path: &Path) -> BitResult<()> {
         debug_assert!(entry_path.is_relative());
-        //? unsure which implementation is better
-        // doesn't seem to be a nice way to remove a range of a btreemap
-        // self.entries.retain(|(path, _), _| !path.starts_with(index_entry.path));
-        let mut to_remove = vec![];
+        // TODO revisit this for a more efficient implementation as this will iterate the entire index just to remove a single directory
 
-        for (&(path, stage), _) in self.entries.range((entry_path, MergeStage::None)..) {
-            // don't remove conflict entries
-            if stage != MergeStage::None || !path.starts_with(entry_path) {
-                break;
-            }
-            to_remove.push((path, stage));
-        }
+        // there is a bug in the implementation below where we try to use a range where not all relevant entries are removed
+        // probably a bug in the annoying path ordering or something
+        // I've reproduced this bug in neovim and libgit2 by simply going something along the lines of
+        // bit checkout @~100
+        // following by
+        // bit checkout @~1000
+        // One checkout is probably enough anyway, but there will be some staged additions, and some unstaged deletions for the same file
+        // which just implies the index has some entries it shouldn't.
+        let to_remove = self
+            .entries
+            .drain_filter(|&(path, stage), _| {
+                stage == MergeStage::None && path.starts_with(entry_path)
+            })
+            .map(|(key, _)| key)
+            .collect::<Vec<_>>();
 
         for key in to_remove {
-            assert!(self.remove_entry(key));
+            self.remove_entry(key);
         }
+
+        // for (&(path, stage), _) in self.entries.range((entry_path, MergeStage::None)..) {
+        //     // don't remove conflict entries
+        //     if stage != MergeStage::None || !path.starts_with(entry_path) {
+        //         break;
+        //     }
+        //     self.remove_entry((path, stage));
+        // }
+
+        // for key in to_remove {
+        //     assert!(self.remove_entry(key));
+        // }
 
         Ok(())
     }
@@ -164,7 +181,7 @@ impl BitIndexInner {
     /// removes collisions where there was originally a directory but was replaced by a file
     // implemented by just removing the directory
     fn remove_dir_file_collisions(&mut self, index_entry: &BitIndexEntry) -> BitResult<()> {
-        self.remove_directory(index_entry.path)
+        self.remove_directory(&index_entry.path)
     }
 
     /// remove directory/file and file/directory collisions that are possible in the index

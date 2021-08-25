@@ -76,7 +76,7 @@ impl<'rcx> BitIndex<'rcx> {
         let repo = self.repo;
         for rmrf in &migration.rmrfs {
             std::fs::remove_dir_all(repo.to_absolute_path(&rmrf.path))?;
-            self.remove_directory(rmrf.path)?;
+            self.remove_directory(&rmrf.path)?;
         }
 
         for rm in &migration.rms {
