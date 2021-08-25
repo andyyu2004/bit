@@ -1,6 +1,7 @@
 #![deny(rust_2018_idioms)]
 #![feature(result_copied)]
 #![feature(iter_intersperse)]
+#![feature(hash_raw_entry)]
 #![feature(thread_local)]
 #![feature(pattern)]
 #![feature(never_type)]

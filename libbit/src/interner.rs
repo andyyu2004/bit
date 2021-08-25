@@ -1,8 +1,10 @@
+use crate::hash::MakeHash;
 use crate::path::BitPath;
 use bumpalo::Bump as Arena;
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::hash_map::RawEntryMut;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -15,7 +17,7 @@ pub(crate) struct Interner {
     map: FxHashMap<&'static OsStr, BitPath>,
     set: FxHashSet<&'static str>,
     // paths: Vec<&'static OsStr>,
-    pathc: u32,
+    pathc: Cell<u32>,
     components: FxHashMap<BitPath, &'static [BitPath]>,
 }
 
@@ -38,7 +40,7 @@ impl Interner {
                 .enumerate()
                 .map(|(i, os_str)| (os_str, BitPath::new(i as u32, os_str)))
                 .collect(),
-            pathc: init.len() as u32,
+            pathc: Cell::new(init.len() as u32),
             // paths: init.iter().copied().collect(),
             ..Default::default()
         }
@@ -60,23 +62,25 @@ impl Interner {
 
     pub fn intern_path(&mut self, path: impl AsRef<OsStr>) -> BitPath {
         let path = path.as_ref();
-        if let Some(&bitpath) = self.map.get(path) {
-            return bitpath;
+        let hash = path.mk_fx_hash();
+        match self.map.raw_entry_mut().from_key_hashed_nocheck(hash, path) {
+            RawEntryMut::Occupied(entry) => *entry.get(),
+            RawEntryMut::Vacant(entry) => {
+                let ptr = self.arena.alloc_slice_copy(path.as_bytes());
+                // // SAFETY it is safe to cast to &'static as we will only access it while the arena contained in `self` is alive
+                let static_path = OsStr::from_bytes(unsafe { &*(ptr as *const [u8]) });
+                let next_idx = self.pathc.get();
+                self.pathc.set(next_idx + 1);
+                let bitpath = BitPath::new(next_idx, static_path);
+                debug_assert_eq!(
+                    static_path.mk_fx_hash(),
+                    hash,
+                    "hash of the interned path is different from the hash of the original path"
+                );
+                entry.insert_hashed_nocheck(hash, static_path, bitpath);
+                bitpath
+            }
         }
-        let ptr = self.arena.alloc_slice_copy(path.as_bytes());
-        // SAFETY it is safe to cast to &'static as we will only access it while the arena contained in `self` is alive
-        let static_path = OsStr::from_bytes(unsafe { &*(ptr as *const [u8]) });
-        let bitpath = BitPath::new(self.next_index(), static_path);
-
-        self.map.insert(static_path, bitpath);
-
-        bitpath
-    }
-
-    fn next_index(&mut self) -> u32 {
-        let next = self.pathc;
-        self.pathc += 1;
-        next
     }
 
     fn intern_components(&mut self, path: impl AsRef<Path>) -> &'static [BitPath] {

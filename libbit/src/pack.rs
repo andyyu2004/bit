@@ -1,6 +1,6 @@
 use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
-use crate::hash::{SHA1Hash, OID_SIZE};
+use crate::hash::{MakeHash, SHA1Hash, OID_SIZE};
 use crate::io::{BufReadExt, BufReadExtSized, HashReader, ReadExt};
 use crate::iter::{BitEntryIterator, BitIterator};
 use crate::obj::*;
@@ -9,6 +9,7 @@ use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rustc_hash::FxHashMap;
+use std::collections::hash_map::RawEntryMut;
 use std::fmt::{self, Debug, Formatter};
 use std::io::{BufRead, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
@@ -332,18 +333,19 @@ impl<R: BufReadSeek> PackIndexReader<R> {
         let high = self.fanout[prefix] as u64;
 
         self.seek(SeekFrom::Start(PACK_IDX_HEADER_SIZE + FANOUT_SIZE + low * OID_SIZE as u64))?;
-        let oids = match self.oid_cache.get(&low) {
-            Some(oids) => oids,
-            None => {
-                let oids = self.reader.read_vec((high - low) as usize).unwrap();
-                self.oid_cache.insert(low, oids);
-                self.oid_cache.get(&low).unwrap()
-            }
-        };
 
-        match oids.binary_search(&oid) {
+        let search = |oids: &[Oid]| match oids.binary_search(&oid) {
             Ok(idx) => Ok(low + idx as u64),
             Err(idx) => Err(anyhow!(BitError::ObjectNotFoundInPackIndex(oid, low + idx as u64))),
+        };
+
+        let hash = low.mk_fx_hash();
+        match self.oid_cache.raw_entry_mut().from_key_hashed_nocheck(hash, &low) {
+            RawEntryMut::Occupied(entry) => search(entry.get()),
+            RawEntryMut::Vacant(entry) => {
+                let oids = self.reader.read_vec((high - low) as usize).unwrap();
+                search(entry.insert_hashed_nocheck(hash, low, oids).1)
+            }
         }
     }
 }

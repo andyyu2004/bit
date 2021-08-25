@@ -1,10 +1,12 @@
 use crate::error::{BitGenericError, BitResult};
 use crate::obj::{Oid, WritableObject};
+use rustc_hash::FxHasher;
 use rustc_hex::{FromHex, ToHex};
 use sha1::digest::Output;
 use sha1::{Digest, Sha1};
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::hash::Hasher;
 use std::ops::Index;
 use std::slice::SliceIndex;
 use std::str::FromStr;
@@ -138,4 +140,17 @@ pub fn hash_bytes(bytes: impl AsRef<[u8]>) -> SHA1Hash {
 pub fn hash_obj<O: WritableObject + ?Sized>(obj: &O) -> BitResult<SHA1Hash> {
     let bytes = obj.serialize_with_headers()?;
     Ok(hash_bytes(bytes.as_slice()))
+}
+
+pub trait MakeHash {
+    fn mk_fx_hash(&self) -> u64;
+}
+
+impl<H: std::hash::Hash + ?Sized> MakeHash for H {
+    #[inline]
+    fn mk_fx_hash(&self) -> u64 {
+        let mut state = FxHasher::default();
+        self.hash(&mut state);
+        state.finish()
+    }
 }
