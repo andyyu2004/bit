@@ -15,16 +15,16 @@ pub type ConflictStyle = diffy::ConflictStyle;
 
 impl<'rcx> BitRepo<'rcx> {
     pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<Commit<'rcx>> {
-        let a = a.peel(self)?;
-        let b = b.peel(self)?;
-        a.find_merge_base(b)
+        let commit_a = a.peel(self)?;
+        let commit_b = b.peel(self)?;
+        commit_a.find_merge_base(commit_b)
     }
 
-    pub fn merge_ref(self, their_head_ref: BitRef) -> BitResult<()> {
+    pub fn merge_ref(self, their_head_ref: BitRef) -> BitResult<MergeKind> {
         MergeCtxt::new(self, their_head_ref)?.merge()
     }
 
-    pub fn merge(self, their_head: &Revspec) -> BitResult<()> {
+    pub fn merge(self, their_head: &Revspec) -> BitResult<MergeKind> {
         self.merge_ref(self.resolve_rev(their_head)?)
     }
 }
@@ -38,6 +38,16 @@ struct MergeCtxt<'rcx> {
     their_head: Oid,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum MergeKind {
+    FastForward,
+    Null,
+    Merge(MergeSummary),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MergeSummary {}
+
 impl<'rcx> MergeCtxt<'rcx> {
     fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef) -> BitResult<Self> {
         let their_head = repo.fully_resolve_ref(their_head_ref)?;
@@ -45,7 +55,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         Ok(Self { repo, their_head_ref, their_head, their_head_desc })
     }
 
-    pub fn merge(&mut self) -> BitResult<()> {
+    pub fn merge(&mut self) -> BitResult<MergeKind> {
         let repo = self.repo;
         let their_head = self.their_head;
         let our_head = repo.fully_resolve_head()?;
@@ -54,18 +64,20 @@ impl<'rcx> MergeCtxt<'rcx> {
         let merge_base = our_head_commit.find_merge_base(their_head_commit)?;
 
         if merge_base.oid() == self.their_head {
-            bail!("Already up to date")
+            return Ok(MergeKind::Null);
         }
 
         if merge_base.oid() == our_head {
-            todo!("ff merge?")
+            return Ok(MergeKind::FastForward);
         }
 
-        self.merge_from_iterators(
+        let summary = self.merge_from_iterators(
             repo.tree_iter(merge_base.oid()).skip_trees(),
             repo.tree_iter(our_head).skip_trees(),
             repo.tree_iter(their_head).skip_trees(),
-        )
+        )?;
+
+        Ok(MergeKind::Merge(summary))
     }
 
     pub fn merge_from_iterators(
@@ -73,10 +85,11 @@ impl<'rcx> MergeCtxt<'rcx> {
         base_iter: impl BitTreeIterator,
         a_iter: impl BitTreeIterator,
         b_iter: impl BitTreeIterator,
-    ) -> BitResult<()> {
+    ) -> BitResult<MergeSummary> {
         let repo = self.repo;
         let walk = repo.walk_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
-        walk.for_each(|[base, a, b]| self.merge_entries(base, a, b))
+        walk.for_each(|[base, a, b]| self.merge_entries(base, a, b))?;
+        Ok(MergeSummary {})
     }
 
     fn merge_entries(

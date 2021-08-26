@@ -1,6 +1,7 @@
 use crate::error::BitResult;
 use crate::graph::{Dag, DagBuilder, DagNode};
 use crate::index::{Conflict, ConflictType};
+use crate::merge::MergeKind;
 use crate::obj::{BitObject, CommitMessage, Oid};
 use crate::repo::BitRepo;
 use crate::test_utils::generate_random_string;
@@ -145,5 +146,32 @@ fn test_merge_conflict_types() -> BitResult<()> {
             );
             Ok(())
         })
+    })
+}
+
+#[test]
+fn test_null_merge() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        bit_branch!(repo: "b");
+        bit_checkout!(repo: "b");
+        modify!(repo: "foo");
+        bit_commit_all!(repo);
+        let merge_kind = bit_merge!(repo: "master");
+        assert_eq!(merge_kind, MergeKind::Null);
+        Ok(())
+    })
+}
+
+#[test]
+fn test_ff_merge() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        bit_branch!(repo: "b");
+        bit_checkout!(repo: "b");
+        modify!(repo: "foo");
+        bit_commit_all!(repo);
+        bit_checkout!(repo: "master");
+        let merge_kind = bit_merge!(repo: "b");
+        assert_eq!(merge_kind, MergeKind::FastForward);
+        Ok(())
     })
 }
