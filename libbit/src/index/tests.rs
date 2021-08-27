@@ -68,7 +68,7 @@ impl BitTreeCache {
             // just test non-negative numbers
             // otherwise will generate nonzero oid with negative entry_count and stuff will go wrong
             entry_count: u16::arbitrary(g) as isize,
-            oid: Arbitrary::arbitrary(g),
+            tree_oid: Arbitrary::arbitrary(g),
         }
     }
 }

@@ -1,5 +1,6 @@
 use super::BitTreeCache;
 use crate::error::BitResult;
+use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use indexmap::indexmap;
@@ -16,17 +17,17 @@ const CACHE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
             children: indexmap! {
                 "bar".into() => CACHE_TREE_DIR_BAR.clone()
             },
-            oid: "9ffa74fdebe76f339dfc5d40a63ddf9d0cba4b06".into(),
+            tree_oid: "9ffa74fdebe76f339dfc5d40a63ddf9d0cba4b06".into(),
         }
     },
-    oid: "f3560f770ad0986e851d302b1d400588d5792f67".into(),
+    tree_oid: "f3560f770ad0986e851d302b1d400588d5792f67".into(),
 });
 
 const CACHE_TREE_DIR_BAR: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
     path: "bar".into(),
     entry_count: 1,
     children: indexmap! {},
-    oid: "29ba47b07d262ad717095f2d94ec771194c4c083".into(),
+    tree_oid: "29ba47b07d262ad717095f2d94ec771194c4c083".into(),
 });
 
 #[test]
@@ -53,6 +54,7 @@ fn test_tree_cache_invalidate_path() {
 
     let mut expected_tree = CACHE_TREE.clone();
     expected_tree.entry_count = -1;
+    expected_tree.tree_oid = Oid::UNKNOWN;
     expected_tree.find_child_mut("dir".into()).unwrap().entry_count = -1;
 
     assert_eq!(cache_tree, expected_tree);
@@ -68,13 +70,13 @@ fn test_tree_cache_find_valid_child() {
                 path: "zs".into(),
                 entry_count: 1,
                 children: indexmap! {},
-                oid: "2d7f016d4251e5ad28c1a88bf34e849f33fc772c".into(),
+                tree_oid: "2d7f016d4251e5ad28c1a88bf34e849f33fc772c".into(),
             },
             "dir".into() => BitTreeCache {
                 path: "dir".into(),
                 entry_count: 1,
                 children: indexmap! {},
-                oid: "920512d27e4df0c79ca4a929bc5d4254b3d05c4c".into(),
+                tree_oid: "920512d27e4df0c79ca4a929bc5d4254b3d05c4c".into(),
             },
             "dir2".into() => BitTreeCache {
                 path: "dir2".into(),
@@ -84,13 +86,13 @@ fn test_tree_cache_find_valid_child() {
                         path: "nested".into(),
                         entry_count: 1,
                         children: indexmap! {},
-                        oid: "922a85d55bd55028593c9816724c874c5629b557".into(),
+                        tree_oid: "922a85d55bd55028593c9816724c874c5629b557".into(),
                     }
                 },
-                oid: "fa9b4c62cce3b8a2d60482d717026beb46b1245c".into(),
+                tree_oid: "fa9b4c62cce3b8a2d60482d717026beb46b1245c".into(),
             },
         },
-        oid: "0000000000000000000000000000000000000000".into(),
+        tree_oid: "0000000000000000000000000000000000000000".into(),
     };
     assert!(cache.find_valid_child("zs".into()).is_some());
 }

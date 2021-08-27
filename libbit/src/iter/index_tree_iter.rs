@@ -24,7 +24,7 @@ impl<'a> IndexTreeIter<'a> {
             .index
             .tree_cache()
             .and_then(|cache| cache.find_valid_child(path))
-            .map(|child| child.oid)
+            .map(|child| child.tree_oid)
             .unwrap_or(Oid::UNKNOWN);
         TreeEntry { mode: FileMode::TREE, path, oid }.into()
     }

@@ -13,7 +13,7 @@ pub struct BitTreeCache {
     /// relative path to parent
     pub path: BitPath,
     /// Oid of the corresponding tree object
-    pub oid: Oid,
+    pub tree_oid: Oid,
     // -1 means invalid
     // the number of entries in the index that is covered by the tree this entry represents
     // (i.e. the number of "files" under this tree)
@@ -33,7 +33,7 @@ impl Default for BitTreeCache {
     fn default() -> Self {
         Self {
             path: BitPath::EMPTY,
-            oid: Oid::UNKNOWN,
+            tree_oid: Oid::UNKNOWN,
             entry_count: -1,
             children: Default::default(),
         }
@@ -75,6 +75,9 @@ impl BitTreeCache {
 
     pub fn invalidate_path(&mut self, path: BitPath) {
         self.entry_count = -1;
+        // this isn't strictly necessary but it's easy to forget the `is_valid` check so this will make errors more obviously hopefully
+        self.tree_oid = Oid::UNKNOWN;
+
         // don't do this recursively as each path contains the full path, not just a component
         for path in path.cumulative_components() {
             if let Some(child) = self.find_child_mut(path) {
@@ -110,7 +113,7 @@ impl BitTreeCache {
 
     /// *NOTE* this method will not modify the tree_cache's path field, and so ensure the path is updated correctly
     fn update_internal<'rcx>(&mut self, repo: BitRepo<'rcx>, tree: &Tree<'rcx>) -> BitResult<()> {
-        self.oid = tree.oid();
+        self.tree_oid = tree.oid();
         // reset the `entry_count` and count again from zero
         self.entry_count = 0;
 
@@ -127,7 +130,7 @@ impl BitTreeCache {
                 FileMode::TREE => match self.children.get_mut(&entry.path) {
                     Some(child) => {
                         // if subtree changed or is invalid, recursively update, otherwise it is good as is
-                        if !child.is_valid() || child.oid != entry.oid {
+                        if !child.is_valid() || child.tree_oid != entry.oid {
                             let subtree = repo.read_obj_tree(entry.oid)?;
                             // we know the child's path is correct as we just looked it up in the map by path
                             child.update_internal(repo, &subtree)?;
@@ -138,7 +141,8 @@ impl BitTreeCache {
                                 repo,
                                 &repo.read_obj_tree(entry.oid)?,
                                 entry.path
-                            )?
+                            )?,
+                            "child was not updated in-place correctly, it should match a fresh read"
                         );
                         new_children.insert(entry.path, std::mem::take(child));
                     }
@@ -167,7 +171,7 @@ impl BitTreeCache {
 
     fn read_tree_internal(repo: BitRepo<'_>, tree: &Tree<'_>, path: BitPath) -> BitResult<Self> {
         let mut cache_tree = Self {
-            oid: tree.oid(),
+            tree_oid: tree.oid(),
             entry_count: 0,
             path,
             #[cfg(test)]
@@ -200,7 +204,7 @@ impl Serialize for BitTreeCache {
         writer.write_ascii_num(self.children.len(), 0x0a)?;
         // only write oid when entry_count is valid
         if self.entry_count >= 0 {
-            writer.write_oid(self.oid)?;
+            writer.write_oid(self.tree_oid)?;
         }
 
         for child in self.children.values() {
@@ -237,6 +241,6 @@ impl BitTreeCache {
             .into_iter()
             .map(|tree_cache| (tree_cache.path, tree_cache))
             .collect();
-        Ok(Self { path, entry_count, children, oid })
+        Ok(Self { path, entry_count, children, tree_oid: oid })
     }
 }

@@ -72,6 +72,7 @@ impl BitIndexInner {
         IndexTreeIter::new(self)
     }
 
+    #[inline]
     pub fn tree_cache(&self) -> Option<&BitTreeCache> {
         self.tree_cache.as_ref()
     }
