@@ -193,17 +193,17 @@ impl BitStatus {
         // print status summary
         // TODO this should only consider the unmerged entries
         if !self.unstaged.is_empty() && self.staged.is_empty() {
-            writeln!(f, "no changes added to commit (use `bit add`) to stage")?;
+            write!(f, "no changes added to commit (use `bit add`) to stage")?;
         } else if self.is_empty() {
             if self.is_initial() {
-                writeln!(f, "nothing to commit (create/copy files and use `bit add` to track)")?;
+                write!(f, "nothing to commit (create/copy files and use `bit add` to track)")?;
             } else if !self.unstaged.new.is_empty() {
-                writeln!(
+                write!(
                     f,
                     "nothing added to commit but untracked files present (use `git add` to track)"
                 )?;
             } else {
-                writeln!(f, "nothing to commit, working tree clean")?;
+                write!(f, "nothing to commit, working tree clean")?;
             }
         }
 

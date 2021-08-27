@@ -1,0 +1,1 @@
+- Display impls should generally not have a newline at the end. Instead, leave it to the caller.

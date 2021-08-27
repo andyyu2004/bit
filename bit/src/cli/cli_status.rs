@@ -13,6 +13,6 @@ impl Cmd for BitStatusCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
         let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
         let status = repo.status(pathspec)?;
-        Ok(print!("{}", status))
+        Ok(println!("{}", status))
     }
 }

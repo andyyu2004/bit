@@ -116,6 +116,7 @@ fn build_tree_internal(
                         .map(|cache| cache.is_valid() && cache.tree_oid == entry.oid)
                         .unwrap_or(false);
                     let oid = if tree_exists {
+                        // the tree already exists so we just step over the tree and takes it's oid
                         iter.over()?.unwrap().oid
                     } else {
                         iter.next()?;
