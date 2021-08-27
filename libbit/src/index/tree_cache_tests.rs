@@ -94,3 +94,46 @@ fn test_tree_cache_find_valid_child() {
     };
     assert!(cache.find_valid_child("zs".into()).is_some());
 }
+
+#[test]
+fn test_tree_cache_update() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let initial_tree = tree! {
+            foo {
+                a
+                bar {
+                    b
+                }
+            }
+            unchanged {
+                x {
+                   y {
+                       z
+                   }
+                }
+            }
+        };
+
+        let modified_tree = tree! {
+            foo {
+                a
+                baz {
+                    d
+                }
+            }
+            unchanged {
+                x {
+                   y {
+                       z
+                   }
+                }
+            }
+        };
+
+        let mut tree_cache = BitTreeCache::read_tree(repo, initial_tree)?;
+        tree_cache.update(repo, modified_tree)?;
+        // TODO some assertions
+        dbg!(&tree_cache);
+        Ok(())
+    })
+}

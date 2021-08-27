@@ -12,6 +12,8 @@ use std::io::{BufRead, Write};
 pub struct BitTreeCache {
     /// relative path to parent
     pub path: BitPath,
+    /// Oid of the corresponding tree object
+    pub oid: Oid,
     // -1 means invalid
     // the number of entries in the index that is covered by the tree this entry represents
     // (i.e. the number of "files" under this tree)
@@ -25,8 +27,6 @@ pub struct BitTreeCache {
     pub children: IndexMap<BitPath, BitTreeCache>,
     #[cfg(not(test))]
     pub children: rustc_hash::FxHashMap<BitPath, BitTreeCache>,
-    /// Oid of the corresponding tree object
-    pub oid: Oid,
 }
 
 impl Default for BitTreeCache {
@@ -84,11 +84,11 @@ impl BitTreeCache {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.entry_count < 0
+        self.entry_count >= 0
     }
 
     pub fn is_fully_valid(&self) -> bool {
-        if self.is_valid() {
+        if !self.is_valid() {
             false
         } else {
             self.children.values().all(|child| child.is_fully_valid())
@@ -106,9 +106,6 @@ impl BitTreeCache {
         assert_eq!(self.path, BitPath::EMPTY);
         // we know the path of the root tree_cache is already correct as it's always just BitPath::EMPTY
         self.update_internal(repo, &tree)
-
-        // *self = Self::read_tree(repo, treeish)?;
-        // Ok(())
     }
 
     /// *NOTE* this method will not modify the tree_cache's path field, and so ensure the path is updated correctly
@@ -123,21 +120,27 @@ impl BitTreeCache {
         let mut new_children = IndexMap::default();
         #[cfg(not(test))]
         let mut new_children = rustc_hash::FxHashMap::default();
-        // self.children.clear();
 
         for entry in &tree.entries {
             match entry.mode {
                 FileMode::REG | FileMode::EXEC | FileMode::LINK => self.entry_count += 1,
                 FileMode::TREE => match self.children.get_mut(&entry.path) {
                     Some(child) => {
-                        // subtree changed, recursively update, otherwise it is good as is
-                        // if child.oid != entry.oid {
-                        let subtree = repo.read_obj_tree(entry.oid)?;
-                        // we know the child's path is correct as we just looked it up in the map by path
-                        child.update_internal(repo, &subtree)?;
-                        // }
-                        // TODO clone can maybe be changed to mem::take?
-                        new_children.insert(entry.path, child.clone());
+                        // if subtree changed or is invalid, recursively update, otherwise it is good as is
+                        if !child.is_valid() || child.oid != entry.oid {
+                            let subtree = repo.read_obj_tree(entry.oid)?;
+                            // we know the child's path is correct as we just looked it up in the map by path
+                            child.update_internal(repo, &subtree)?;
+                        }
+                        debug_assert_eq!(
+                            child,
+                            &mut Self::read_tree_internal(
+                                repo,
+                                &repo.read_obj_tree(entry.oid)?,
+                                entry.path
+                            )?
+                        );
+                        new_children.insert(entry.path, std::mem::take(child));
                     }
                     // new tree added
                     None => {
