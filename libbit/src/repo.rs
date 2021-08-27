@@ -377,6 +377,7 @@ impl<'rcx> BitRepo<'rcx> {
 
     /// writes `obj` into the object store returning its full hash
     pub fn write_obj(self, obj: &dyn WritableObject) -> BitResult<Oid> {
+        // TODO cache this object as often a write is followed by an immediate read
         self.odb()?.write(obj)
     }
 

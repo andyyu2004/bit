@@ -1,14 +1,11 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::iter::BitEntry;
-use crate::obj::{BitObjType, BitObject, FileMode, Oid, Tree, Treeish};
+use crate::obj::{BitObject, FileMode, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 #[cfg(test)]
 use indexmap::IndexMap;
-#[cfg(not(test))]
-use rustc_hash::FxHashMap;
 use std::io::{BufRead, Write};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,7 +24,8 @@ pub struct BitTreeCache {
     #[cfg(test)]
     pub children: IndexMap<BitPath, BitTreeCache>,
     #[cfg(not(test))]
-    pub children: FxHashMap<BitPath, BitTreeCache>,
+    pub children: rustc_hash::FxHashMap<BitPath, BitTreeCache>,
+    /// Oid of the corresponding tree object
     pub oid: Oid,
 }
 
@@ -118,31 +116,44 @@ impl BitTreeCache {
         self.oid = tree.oid();
         // reset the `entry_count` and count again from zero
         self.entry_count = 0;
-        self.children.clear();
+
+        // Create a new set of children and steal existing children from the old cache_tree where possible.
+        // This is an easy (and efficient?) way to remove deleted entries from the cache
+        #[cfg(test)]
+        let mut new_children = IndexMap::default();
+        #[cfg(not(test))]
+        let mut new_children = rustc_hash::FxHashMap::default();
+        // self.children.clear();
+
         for entry in &tree.entries {
             match entry.mode {
                 FileMode::REG | FileMode::EXEC | FileMode::LINK => self.entry_count += 1,
                 FileMode::TREE => match self.children.get_mut(&entry.path) {
-                    // subtree exists and oid matches, nothing to do
-                    Some(child) if child.oid == entry.oid => {}
-                    // subtree changed, recursively update
                     Some(child) => {
+                        // subtree changed, recursively update, otherwise it is good as is
+                        // if child.oid != entry.oid {
                         let subtree = repo.read_obj_tree(entry.oid)?;
                         // we know the child's path is correct as we just looked it up in the map by path
                         child.update_internal(repo, &subtree)?;
+                        // }
+                        // TODO clone can maybe be changed to mem::take?
+                        new_children.insert(entry.path, child.clone());
                     }
                     // new tree added
                     None => {
                         let subtree = repo.read_obj_tree(entry.oid)?;
                         let child = Self::read_tree_internal(repo, &subtree, entry.path)?;
-                        self.entry_count += child.entry_count;
-                        self.children.insert(entry.path, child);
+                        new_children.insert(entry.path, child);
                     }
                 },
-                // TODO deal with removed entries
                 FileMode::GITLINK => todo!(),
             }
         }
+
+        // add all the subtree counts to `entry_count`
+        self.entry_count += new_children.values().map(|child| child.entry_count).sum::<isize>();
+        self.children = new_children;
+
         Ok(())
     }
 
@@ -159,7 +170,7 @@ impl BitTreeCache {
             #[cfg(test)]
             children: IndexMap::with_capacity(tree.entries.len() / 8),
             #[cfg(not(test))]
-            children: FxHashMap::default(),
+            children: rustc_hash::FxHashMap::default(),
         };
 
         for entry in &tree.entries {

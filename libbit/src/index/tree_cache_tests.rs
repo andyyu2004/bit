@@ -4,7 +4,6 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use indexmap::indexmap;
 use std::lazy::SyncLazy;
-use std::path::PathBuf;
 
 // this breaks if we chanhge const to static
 const CACHE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
