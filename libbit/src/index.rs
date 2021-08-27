@@ -81,9 +81,12 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(Self { repo, inner, mtime })
     }
 
-    fn tree_cache_read(&mut self, tree: Oid) -> BitResult<()> {
-        // TODO this is really slow and a definite bottleneck
-        self.tree_cache = Some(BitTreeCache::read_tree_cache(self.repo, tree)?);
+    fn update_cache_tree(&mut self, tree: Oid) -> BitResult<()> {
+        let repo = self.repo;
+        match self.tree_cache.as_mut() {
+            Some(tree_cache) => tree_cache.update(repo, tree)?,
+            None => self.tree_cache = Some(BitTreeCache::read_tree(repo, tree)?),
+        }
         Ok(())
     }
 
@@ -94,7 +97,7 @@ impl<'rcx> BitIndex<'rcx> {
         let diff = self.diff_tree(tree, Pathspec::MATCH_ALL)?;
         self.apply_diff(&diff)?;
 
-        self.tree_cache_read(tree)?;
+        self.update_cache_tree(tree)?;
 
         // index should now exactly match the tree
         debug_assert!(self.diff_tree(tree, Pathspec::MATCH_ALL)?.is_empty());
@@ -109,7 +112,7 @@ impl<'rcx> BitIndex<'rcx> {
 
         let tree_oid = self.index_tree_iter().build_tree(self.repo)?;
         // refresh the tree_cache using the tree we just built
-        self.tree_cache_read(tree_oid)?;
+        self.update_cache_tree(tree_oid)?;
         Ok(tree_oid)
     }
 

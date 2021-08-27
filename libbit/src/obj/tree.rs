@@ -24,7 +24,7 @@ pub trait Treeish<'rcx>: Sized {
     // override this default implementation if a more efficient one is available
     fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
         let tree_oid = self.treeish_oid(repo)?;
-        repo.read_obj(tree_oid).map(|obj| obj.into_tree())
+        repo.read_obj_tree(tree_oid)
     }
 }
 

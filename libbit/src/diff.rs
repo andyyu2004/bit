@@ -15,6 +15,14 @@ use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
+// consider changing the callback based api to something iterator based that returns something like the following enum
+// #[derive(Debug, PartialEq, Eq, Clone)]
+// pub enum EntryDiff<'a> {
+//     Deleted(&'a BitIndexEntry),
+//     Modified(&'a BitIndexEntry, &'a BitIndexEntry),
+//     Created(&'a BitIndexEntry),
+// }
+
 pub trait Differ {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()>;
     fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()>;

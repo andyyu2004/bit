@@ -2,7 +2,6 @@ use super::*;
 use crate::error::BitGenericError;
 use crate::path::BitPath;
 use fallible_iterator::FallibleIterator;
-use indexmap::indexmap;
 use itertools::Itertools;
 use quickcheck::Arbitrary;
 use rand::Rng;
@@ -430,7 +429,7 @@ fn parse_index_header() -> BitResult<()> {
 fn bit_index_build_tree_test() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
         let oid = repo.with_index_mut(|index| index.write_tree())?;
-        let tree = repo.read_obj(oid)?.into_tree();
+        let tree = repo.read_obj_tree(oid)?;
 
         let entries = tree.entries.iter().collect_vec();
         assert_eq!(entries[0].path, "dir");
@@ -444,7 +443,7 @@ fn bit_index_build_tree_test() -> BitResult<()> {
         assert_eq!(entries[4].path, "zs");
         assert_eq!(entries[4].mode, FileMode::TREE);
 
-        let dir2_tree = repo.read_obj(entries[1].oid)?.into_tree();
+        let dir2_tree = repo.read_obj_tree(entries[1].oid)?;
         let dir2_tree_entries = dir2_tree.entries.iter().collect_vec();
         assert_eq!(dir2_tree_entries[0].path, "dir2.txt");
         assert_eq!(dir2_tree_entries[1].path, "nested");

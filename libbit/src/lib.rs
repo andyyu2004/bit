@@ -33,6 +33,10 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+#[cfg(test)]
+#[macro_use]
+extern crate indexmap;
+
 #[macro_use]
 extern crate maplit;
 
@@ -50,7 +54,6 @@ extern crate anyhow;
 pub mod test_utils;
 mod cache;
 mod graph;
-mod merge;
 
 #[macro_use]
 extern crate log;
@@ -70,6 +73,7 @@ pub mod format;
 pub mod hash;
 pub mod index;
 pub mod iter;
+pub mod merge;
 pub mod obj;
 pub mod path;
 pub mod pathspec;

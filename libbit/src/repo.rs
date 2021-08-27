@@ -388,6 +388,10 @@ impl<'rcx> BitRepo<'rcx> {
         })
     }
 
+    pub fn read_obj_tree(self, id: impl Into<BitId>) -> BitResult<Tree<'rcx>> {
+        self.read_obj(id).map(|obj| obj.into_tree())
+    }
+
     pub fn expand_id(self, id: impl Into<BitId>) -> BitResult<Oid> {
         self.odb()?.expand_id(id.into())
     }

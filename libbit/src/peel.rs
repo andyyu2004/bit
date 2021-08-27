@@ -25,6 +25,6 @@ impl<'rcx> Peel<'rcx> for Commit<'rcx> {
 
     fn peel(&self, repo: BitRepo<'rcx>) -> BitResult<Self::Peeled> {
         debug_assert!(repo == self.owner());
-        Ok(self.owner().read_obj(self.tree)?.into_tree())
+        Ok(self.owner().read_obj_tree(self.tree)?)
     }
 }

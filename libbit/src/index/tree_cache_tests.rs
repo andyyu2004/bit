@@ -4,6 +4,7 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use indexmap::indexmap;
 use std::lazy::SyncLazy;
+use std::path::PathBuf;
 
 // this breaks if we chanhge const to static
 const CACHE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
@@ -33,7 +34,7 @@ const CACHE_TREE_DIR_BAR: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache
 fn test_read_tree_cache_from_tree() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         let head_tree = repo.head_tree()?;
-        let tree_cache = BitTreeCache::read_tree_cache(repo, head_tree)?;
+        let tree_cache = BitTreeCache::read_tree(repo, head_tree)?;
         assert_eq!(tree_cache, *CACHE_TREE);
         Ok(())
     })

@@ -123,6 +123,8 @@ impl<'rcx, W: Write> DiffStatFormatter<'rcx, W> {
         }
     }
 
+    // this api is a bit weird, why not just generate a diffstat struct from the workspace status
+    // could just do a `diffstat` method on workspace status and then the user can write as one wishes
     pub fn format_diffstat_into(
         repo: BitRepo<'rcx>,
         writer: W,
@@ -131,7 +133,7 @@ impl<'rcx, W: Write> DiffStatFormatter<'rcx, W> {
         let mut this = Self::new(repo, writer);
         status.apply_with(&mut this)?;
 
-        let lines = DiffStatLines {
+        let lines = DiffStat {
             lines: std::mem::take(&mut this.diffstat_lines),
             max_changes: this.max_changes,
             max_path_len: this.max_path_len,
@@ -152,7 +154,7 @@ impl<'rcx, W: Write> DiffStatFormatter<'rcx, W> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct DiffStatLines {
+pub struct DiffStat {
     lines: BTreeSet<DiffStatLine>,
     max_changes: usize,
     max_path_len: usize,
@@ -160,7 +162,7 @@ pub struct DiffStatLines {
     total_insertions: usize,
 }
 
-impl Display for DiffStatLines {
+impl Display for DiffStat {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let line_width =
             terminal_size::terminal_size().map(|width| width.0.0 as usize).unwrap_or(80);

@@ -162,6 +162,9 @@ fn test_null_merge() -> BitResult<()> {
     })
 }
 
+// A - B - C     - D
+//         ^       ^
+//       master    b
 #[test]
 fn test_ff_merge() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {

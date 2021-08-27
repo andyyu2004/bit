@@ -1,6 +1,7 @@
 use crate::error::BitResult;
 use crate::io::{BufReadExt, ReadExt, WriteExt};
-use crate::obj::{BitObjType, BitObject, Oid, Tree, Treeish};
+use crate::iter::BitEntry;
+use crate::obj::{BitObjType, BitObject, FileMode, Oid, Tree, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
@@ -18,8 +19,11 @@ pub struct BitTreeCache {
     // the number of entries in the index that is covered by the tree this entry represents
     // (i.e. the number of "files" under this tree)
     pub entry_count: isize,
-    // this datastructure preserves insertion order *provided there are no removals*
-    // don't think that the order of this actually matters, but it is useful for testing that deserialize and serialization are inverses
+    // Map from path component to the tree_cache representing that directory,
+    // the map's key should be the same as the child tree_cache's `path`
+    // This datastructure preserves insertion order *provided there are no removals*
+    // Don't think that the order of this actually matters, but it is useful for testing that deserialize and serialization are inverses
+    // so we are using an "ordered" map in debug
     #[cfg(test)]
     pub children: IndexMap<BitPath, BitTreeCache>,
     #[cfg(not(test))]
@@ -93,10 +97,56 @@ impl BitTreeCache {
         }
     }
 
-    pub fn read_tree_cache<'rcx>(
+    // Update the tree_cache to match `treeish`
+    // This should only be called on the root tree_cache
+    pub fn update<'rcx>(
+        &mut self,
         repo: BitRepo<'rcx>,
         treeish: impl Treeish<'rcx>,
-    ) -> BitResult<Self> {
+    ) -> BitResult<()> {
+        let tree = treeish.treeish(repo)?;
+        assert_eq!(self.path, BitPath::EMPTY);
+        // we know the path of the root tree_cache is already correct as it's always just BitPath::EMPTY
+        self.update_internal(repo, &tree)
+
+        // *self = Self::read_tree(repo, treeish)?;
+        // Ok(())
+    }
+
+    /// *NOTE* this method will not modify the tree_cache's path field, and so ensure the path is updated correctly
+    fn update_internal<'rcx>(&mut self, repo: BitRepo<'rcx>, tree: &Tree<'rcx>) -> BitResult<()> {
+        self.oid = tree.oid();
+        // reset the `entry_count` and count again from zero
+        self.entry_count = 0;
+        self.children.clear();
+        for entry in &tree.entries {
+            match entry.mode {
+                FileMode::REG | FileMode::EXEC | FileMode::LINK => self.entry_count += 1,
+                FileMode::TREE => match self.children.get_mut(&entry.path) {
+                    // subtree exists and oid matches, nothing to do
+                    Some(child) if child.oid == entry.oid => {}
+                    // subtree changed, recursively update
+                    Some(child) => {
+                        let subtree = repo.read_obj_tree(entry.oid)?;
+                        // we know the child's path is correct as we just looked it up in the map by path
+                        child.update_internal(repo, &subtree)?;
+                    }
+                    // new tree added
+                    None => {
+                        let subtree = repo.read_obj_tree(entry.oid)?;
+                        let child = Self::read_tree_internal(repo, &subtree, entry.path)?;
+                        self.entry_count += child.entry_count;
+                        self.children.insert(entry.path, child);
+                    }
+                },
+                // TODO deal with removed entries
+                FileMode::GITLINK => todo!(),
+            }
+        }
+        Ok(())
+    }
+
+    pub fn read_tree<'rcx>(repo: BitRepo<'rcx>, treeish: impl Treeish<'rcx>) -> BitResult<Self> {
         let tree = treeish.treeish(repo)?;
         Self::read_tree_internal(repo, &tree, BitPath::EMPTY)
     }
@@ -113,15 +163,15 @@ impl BitTreeCache {
         };
 
         for entry in &tree.entries {
-            match repo.read_obj_header(entry.oid)?.obj_type {
-                BitObjType::Blob => cache_tree.entry_count += 1,
-                BitObjType::Tree => {
-                    let subtree = repo.read_obj(entry.oid)?.into_tree();
+            match entry.mode {
+                FileMode::REG | FileMode::LINK | FileMode::EXEC => cache_tree.entry_count += 1,
+                FileMode::TREE => {
+                    let subtree = repo.read_obj_tree(entry.oid)?;
                     let child = Self::read_tree_internal(repo, &subtree, entry.path)?;
                     cache_tree.entry_count += child.entry_count;
                     cache_tree.children.insert(entry.path, child);
                 }
-                BitObjType::Commit | BitObjType::Tag => unreachable!(),
+                FileMode::GITLINK => todo!(),
             }
         }
 
@@ -134,6 +184,7 @@ impl Serialize for BitTreeCache {
         writer.write_null_terminated_path(self.path)?;
         writer.write_ascii_num(self.entry_count, 0x20)?;
         writer.write_ascii_num(self.children.len(), 0x0a)?;
+        // only write oid when entry_count is valid
         if self.entry_count >= 0 {
             writer.write_oid(self.oid)?;
         }
