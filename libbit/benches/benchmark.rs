@@ -20,7 +20,8 @@ macro_rules! test_files_dir {
 }
 
 pub fn bench_write_tree(c: &mut Criterion) {
-    let path = tempfile::tempdir().unwrap().into_path();
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path();
     BitRepo::init(&path).unwrap();
     std::fs::copy(test_files_dir!("lg2index"), path.join(".git/index")).unwrap();
     c.bench_function("index_write_tree", |b| {

@@ -3,12 +3,11 @@ mod index_inner;
 mod reuc;
 mod tree_cache;
 
-use fallible_iterator::FallibleIterator;
+pub use self::tree_cache::BitTreeCache;
 pub use index_entry::*;
 pub use index_inner::{BitIndexInner, Conflict, ConflictType, Conflicts};
 
 use self::reuc::BitReuc;
-use self::tree_cache::BitTreeCache;
 use crate::diff::*;
 use crate::error::BitResult;
 use crate::hash::OID_SIZE;
@@ -110,7 +109,7 @@ impl<'rcx> BitIndex<'rcx> {
             bail!("cannot write-tree an an index that is not fully merged");
         }
 
-        let tree_oid = self.index_tree_iter().build_tree(self.repo)?;
+        let tree_oid = self.index_tree_iter().build_tree(self.repo, self.tree_cache())?;
         // refresh the tree_cache using the tree we just built
         self.update_cache_tree(tree_oid)?;
         Ok(tree_oid)

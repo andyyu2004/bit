@@ -350,10 +350,14 @@ macro_rules! repos_dir {
         // as the tests are multithreaded
         // its also good to not have accidental mutations to the repository data
         let path = repos_dir!().join($path);
-        let tmpdir = tempfile::tempdir().expect("failed to get tempdir").into_path();
+        let tmpdir = tempfile::tempdir().expect("failed to get tempdir");
+
         fs_extra::dir::copy(path, &tmpdir, &fs_extra::dir::CopyOptions::default())
             .expect("repo copy failed");
-        tmpdir.join($path)
+        // TODO this doesn't cleanup after itself as we call intopath
+        // and if we don't call `into_path` then the repo will be removed before we even run the test
+        // but this pollutes tmp pretty quickly after many test runs
+        tmpdir.into_path().join($path)
     }};
 }
 

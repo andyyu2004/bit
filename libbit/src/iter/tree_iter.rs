@@ -1,4 +1,5 @@
 use super::*;
+use crate::index::BitTreeCache;
 use crate::obj::MutableTree;
 use std::iter::FromIterator;
 
@@ -73,13 +74,13 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
 
     /// creates a tree object from a tree_iterator
     /// the tree_iterator must be "fresh" and completely unconsumed
-    fn build_tree(&mut self, repo: BitRepo<'_>) -> BitResult<Oid>
+    fn build_tree(&mut self, repo: BitRepo<'_>, tree_cache: Option<&BitTreeCache>) -> BitResult<Oid>
     where
         Self: Sized,
     {
         // skip root entry
         let root = self.next()?.unwrap();
-        let oid = build_tree_internal(self, repo, BitPath::EMPTY)?;
+        let oid = build_tree_internal(repo, self, tree_cache, BitPath::EMPTY)?;
         debug_assert!(root.oid.is_unknown() || root.oid == oid);
         Ok(oid)
     }
@@ -96,26 +97,34 @@ impl<'a, I: BitTreeIterator> BitTreeIterator for &'a mut I {
 }
 
 fn build_tree_internal(
-    iter: &mut impl BitTreeIterator,
     repo: BitRepo<'_>,
+    iter: &mut impl BitTreeIterator,
+    tree_cache: Option<&BitTreeCache>,
     base_path: BitPath,
 ) -> BitResult<Oid> {
     let mut entries = vec![];
     loop {
         let entry = match iter.peek()? {
-            Some(entry) if entry.path.starts_with(base_path) => {
-                iter.next()?;
-                match entry.mode {
-                    FileMode::REG | FileMode::EXEC | FileMode::LINK =>
-                        TreeEntry { oid: entry.oid, mode: entry.mode, path: entry.path.file_name() },
-                    FileMode::TREE => TreeEntry {
-                        oid: build_tree_internal(iter, repo, entry.path)?,
-                        mode: FileMode::TREE,
-                        path: entry.path.file_name(),
-                    },
-                    FileMode::GITLINK => todo!(),
+            Some(entry) if entry.path.starts_with(base_path) => match entry.mode {
+                FileMode::REG | FileMode::EXEC | FileMode::LINK => {
+                    iter.next()?;
+                    TreeEntry { oid: entry.oid, mode: entry.mode, path: entry.path.file_name() }
                 }
-            }
+                FileMode::TREE => {
+                    let child = tree_cache.and_then(|cache| cache.find_valid_child(entry.path));
+                    let tree_exists = child
+                        .map(|cache| cache.is_valid() && cache.tree_oid == entry.oid)
+                        .unwrap_or(false);
+                    let oid = if tree_exists {
+                        iter.over()?.unwrap().oid
+                    } else {
+                        iter.next()?;
+                        build_tree_internal(repo, iter, tree_cache, entry.path)?
+                    };
+                    TreeEntry { oid, mode: FileMode::TREE, path: entry.path.file_name() }
+                }
+                FileMode::GITLINK => todo!(),
+            },
             _ => break,
         };
         entries.push(entry);
