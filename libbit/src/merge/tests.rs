@@ -69,9 +69,29 @@ fn test_best_common_ancestors() -> BitResult<()> {
 
         let a = commit_oids[&h];
         let b = commit_oids[&j];
-        dbg!(&commit_oids);
         let merge_base = repo.merge_base(a, b)?;
         assert_eq!(merge_base.oid(), commit_oids[&d]);
+
+        Ok(())
+    })
+}
+
+// a - c
+//   X
+// b - d
+#[test]
+fn test_criss_cross_merge_base() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let mut dag = DagBuilder::default();
+        let [a, b, c, d] = dag.mk_nodes();
+        dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
+
+        let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
+
+        let merge_bases = repo.merge_bases(commits[&c], commits[&d])?;
+        assert_eq!(merge_bases.len(), 2);
+        assert_eq!(merge_bases[0].oid(), commits[&a]);
+        assert_eq!(merge_bases[1].oid(), commits[&b]);
 
         Ok(())
     })

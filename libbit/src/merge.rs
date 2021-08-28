@@ -21,6 +21,10 @@ impl<'rcx> BitRepo<'rcx> {
         commit_a.find_merge_base(commit_b)
     }
 
+    pub fn merge_bases(self, a: Oid, b: Oid) -> BitResult<Vec<Commit<'rcx>>> {
+        a.peel(self)?.find_merge_bases(b.peel(self)?)
+    }
+
     pub fn merge_ref(self, their_head_ref: BitRef) -> BitResult<MergeKind> {
         MergeCtxt::new(self, their_head_ref)?.merge()
     }
@@ -236,7 +240,7 @@ impl Ord for Node<'_> {
 
 pub struct MergeBaseCtxt<'rcx> {
     repo: BitRepo<'rcx>,
-    candidates: Vec<Node<'rcx>>,
+    candidates: Vec<Commit<'rcx>>,
     pqueue: BinaryHeap<Node<'rcx>>,
     node_flags: FxHashMap<Oid, NodeFlags>,
     index: usize,
@@ -255,7 +259,7 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
         Node { index, commit }
     }
 
-    fn merge_bases_all(mut self, a: Commit<'rcx>, b: Commit<'rcx>) -> BitResult<Vec<Node<'rcx>>> {
+    fn merge_bases_all(mut self, a: Commit<'rcx>, b: Commit<'rcx>) -> BitResult<Vec<Commit<'rcx>>> {
         self.build_candidates(a, b)?;
         let node_flags = &self.node_flags;
         self.candidates.retain(|node| !node_flags[&node.oid()].contains(NodeFlags::STALE));
@@ -292,7 +296,7 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
                         "maybe need to add this to the condition above?"
                     );
                     flags.insert(NodeFlags::RESULT);
-                    self.candidates.push(node);
+                    self.candidates.push(node.commit);
                 }
                 // parent nodes of a result node are stale and we can rule them out of our candidate set
                 parent_flags.insert(NodeFlags::STALE);
@@ -310,7 +314,7 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
 }
 
 impl<'rcx> Commit<'rcx> {
-    fn merge_bases_all(self, other: Commit<'rcx>) -> BitResult<Vec<Node<'rcx>>> {
+    fn find_merge_bases(self, other: Commit<'rcx>) -> BitResult<Vec<Commit<'rcx>>> {
         MergeBaseCtxt {
             repo: self.owner(),
             candidates: Default::default(),
@@ -327,11 +331,10 @@ impl<'rcx> Commit<'rcx> {
     // I'm pretty sure this function will not work in all cases (i.e. return a non-optimal solution)
     // Not sure if those cases will come up realistically though, to investigate
     pub fn find_merge_base(self, other: Commit<'rcx>) -> BitResult<Commit<'rcx>> {
-        let merge_bases = self.merge_bases_all(other)?;
-        dbg!(&merge_bases);
+        let merge_bases = self.find_merge_bases(other)?;
         assert!(!merge_bases.is_empty(), "no merge bases found");
         assert!(merge_bases.len() < 2, "TODO multiple merge bases");
-        Ok(merge_bases[0].commit.clone())
+        Ok(merge_bases[0].clone())
     }
 }
 
