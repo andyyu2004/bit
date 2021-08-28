@@ -16,8 +16,6 @@ use std::path::{Component, Path, PathBuf};
 // otherwise just use [std::path::Path]
 #[derive(Eq, Clone, Copy)]
 pub struct BitPath {
-    // used for constant time hashing/equality
-    index: u32,
     // but we also store the path pointer inline rather than grabbing it from the interner
     // - firstly, this is for performance to avoid lookups and refcell etc
     // - secondly, it's much easier to debug when you can actually see the value of the path in the debugger
@@ -28,8 +26,8 @@ pub struct BitPath {
 }
 
 impl BitPath {
-    pub(crate) const fn new(index: u32, path: &'static OsStr) -> Self {
-        Self { index, path }
+    pub(crate) const fn new(path: &'static OsStr) -> Self {
+        Self { path }
     }
 
     pub fn is_empty(self) -> bool {
@@ -84,10 +82,12 @@ impl BitPath {
         with_path_interner(|interner| interner.intern_path(path))
     }
 
+    #[inline]
     pub fn as_str(self) -> &'static str {
         self.as_path().to_str().unwrap()
     }
 
+    #[inline]
     pub fn as_path(self) -> &'static Path {
         Path::new(self.path)
     }
@@ -127,13 +127,13 @@ impl BitPath {
 
 impl PartialEq for BitPath {
     fn eq(&self, other: &Self) -> bool {
-        self.index == other.index
+        self.path == other.path
     }
 }
 
 impl Hash for BitPath {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.index.hash(state)
+        self.path.hash(state)
     }
 }
 

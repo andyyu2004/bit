@@ -38,7 +38,7 @@ impl Interner {
                 .iter()
                 .copied()
                 .enumerate()
-                .map(|(i, os_str)| (os_str, BitPath::new(i as u32, os_str)))
+                .map(|(i, os_str)| (os_str, BitPath::new(os_str)))
                 .collect(),
             pathc: Cell::new(init.len() as u32),
             // paths: init.iter().copied().collect(),
@@ -61,26 +61,10 @@ impl Interner {
     }
 
     pub fn intern_path(&mut self, path: impl AsRef<OsStr>) -> BitPath {
-        let path = path.as_ref();
-        let hash = path.mk_fx_hash();
-        match self.map.raw_entry_mut().from_key_hashed_nocheck(hash, path) {
-            RawEntryMut::Occupied(entry) => *entry.get(),
-            RawEntryMut::Vacant(entry) => {
-                let ptr = self.arena.alloc_slice_copy(path.as_bytes());
-                // // SAFETY it is safe to cast to &'static as we will only access it while the arena contained in `self` is alive
-                let static_path = OsStr::from_bytes(unsafe { &*(ptr as *const [u8]) });
-                let next_idx = self.pathc.get();
-                self.pathc.set(next_idx + 1);
-                let bitpath = BitPath::new(next_idx, static_path);
-                debug_assert_eq!(
-                    static_path.mk_fx_hash(),
-                    hash,
-                    "hash of the interned path is different from the hash of the original path"
-                );
-                entry.insert_hashed_nocheck(hash, static_path, bitpath);
-                bitpath
-            }
-        }
+        let ptr = self.arena.alloc_slice_copy(path.as_ref().as_bytes());
+        // // SAFETY it is safe to cast to &'static as we will only access it while the arena contained in `self` is alive
+        let static_path = OsStr::from_bytes(unsafe { &*(ptr as *const [u8]) });
+        BitPath::new(static_path)
     }
 
     fn intern_components(&mut self, path: impl AsRef<Path>) -> &'static [BitPath] {
@@ -115,7 +99,7 @@ macro_rules! prefill {
     (@index $idx:expr) => {};
     (@index $idx:expr, $name:ident => $lit:literal) => {{
         impl BitPath {
-            pub const $name: Self = Self::new($idx, str_as_os_str($lit));
+            pub const $name: Self = Self::new(str_as_os_str($lit));
         }
     }};
     (@index $idx:expr, $name:ident => $lit:literal, $($tail:tt)*) => {{
@@ -123,7 +107,7 @@ macro_rules! prefill {
         // and put the BitPath impl in statement position
 
         impl BitPath {
-            pub const $name: Self = Self::new($idx, str_as_os_str($lit));
+            pub const $name: Self = Self::new(str_as_os_str($lit));
         }
 
         prefill!(@index 1u32 + $idx, $($tail)*)
