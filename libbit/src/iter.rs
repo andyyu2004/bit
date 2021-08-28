@@ -46,6 +46,10 @@ pub trait BitEntry {
         self.mode().is_blob()
     }
 
+    fn is_gitlink(&self) -> bool {
+        self.mode().is_gitlink()
+    }
+
     fn write(&self, repo: BitRepo<'_>) -> BitResult<Oid> {
         let oid = self.oid();
         if oid.is_known() {

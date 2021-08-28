@@ -128,6 +128,10 @@ impl FileMode {
         matches!(self, FileMode::LINK)
     }
 
+    pub fn is_gitlink(self) -> bool {
+        matches!(self, FileMode::GITLINK)
+    }
+
     pub fn is_file(self) -> bool {
         matches!(self, FileMode::EXEC | FileMode::REG)
     }

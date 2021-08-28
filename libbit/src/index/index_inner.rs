@@ -116,9 +116,10 @@ impl BitIndexInner {
     }
 
     pub fn std_iter(&self) -> IndexStdIterator {
-        // this is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
+        // This is pretty nasty, but I'm uncertain of a better way to dissociate the lifetime of
         // `self` from the returned iterator
-        self.entries.values().cloned().collect_vec().into_iter()
+        // Filtering out submodules
+        self.entries.values().filter(|entry| !entry.is_gitlink()).copied().collect_vec().into_iter()
     }
 
     pub fn iter(&self) -> IndexEntryIterator {
@@ -144,7 +145,7 @@ impl BitIndexInner {
         debug_assert!(entry_path.is_relative());
         // TODO revisit this for a more efficient implementation as this will iterate the entire index just to remove a single directory
 
-        // there is a bug in the implementation below where we try to use a range where not all relevant entries are removed
+        // there is a bug in the second (commented out) implementation below where we try to use a range where not all relevant entries are removed
         // probably a bug in the annoying path ordering or something
         // I've reproduced this bug in neovim and libgit2 by simply going something along the lines of
         // bit checkout @~100
