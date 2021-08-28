@@ -350,18 +350,38 @@ macro_rules! tests_dir {
 macro_rules! repos_dir {
     () => {{ tests_dir!("repos") }};
     ($path:expr) => {{
-        // we copy the entire repository to another location as otherwise we get race conditions
-        // as the tests are multithreaded
-        // its also good to not have accidental mutations to the repository data
+        struct DropPath(std::path::PathBuf);
+
+        impl AsRef<std::path::Path> for DropPath {
+            fn as_ref(&self) -> &std::path::Path {
+                &self
+            }
+        }
+
+        impl std::ops::Deref for DropPath {
+            type Target = std::path::Path;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl Drop for DropPath {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        // We copy the entire repository to another location as otherwise we get race conditions
+        // as the tests are multithreaded.
+        // Its also good to not have accidental mutations to the repository data
+        // The directory will be deleted after the test using `DropPath` above
         let path = repos_dir!().join($path);
         let tmpdir = tempfile::tempdir().expect("failed to get tempdir");
 
         fs_extra::dir::copy(path, &tmpdir, &fs_extra::dir::CopyOptions::default())
             .expect("repo copy failed");
-        // TODO this doesn't cleanup after itself as we call intopath
-        // and if we don't call `into_path` then the repo will be removed before we even run the test
-        // but this pollutes tmp pretty quickly after many test runs
-        tmpdir.into_path().join($path)
+        DropPath(tmpdir.into_path().join($path))
     }};
 }
 
