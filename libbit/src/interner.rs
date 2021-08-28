@@ -1,10 +1,8 @@
-use crate::hash::MakeHash;
 use crate::path::BitPath;
 use bumpalo::Bump as Arena;
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::cell::{Cell, RefCell};
-use std::collections::hash_map::RawEntryMut;
+use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -14,10 +12,8 @@ use std::path::Path;
 #[derive(Default)]
 pub(crate) struct Interner {
     arena: Arena,
-    map: FxHashMap<&'static OsStr, BitPath>,
     set: FxHashSet<&'static str>,
     // paths: Vec<&'static OsStr>,
-    pathc: Cell<u32>,
     components: FxHashMap<BitPath, &'static [BitPath]>,
 }
 
@@ -32,18 +28,8 @@ impl Intern for str {
 }
 
 impl Interner {
-    pub fn prefill(init: &[&'static OsStr]) -> Self {
-        Self {
-            map: init
-                .iter()
-                .copied()
-                .enumerate()
-                .map(|(i, os_str)| (os_str, BitPath::new(os_str)))
-                .collect(),
-            pathc: Cell::new(init.len() as u32),
-            // paths: init.iter().copied().collect(),
-            ..Default::default()
-        }
+    pub fn prefill(_init: &[&'static OsStr]) -> Self {
+        Self { ..Default::default() }
     }
 
     // this only exists due to some lifetime difficulties with the GitConfig parser

@@ -152,8 +152,7 @@ fn test_merge_conflict_types() -> BitResult<()> {
 #[test]
 fn test_null_merge() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        bit_branch!(repo: "b");
-        bit_checkout!(repo: "b");
+        bit_branch!(repo: -b "b");
         modify!(repo: "foo");
         bit_commit_all!(repo);
         let merge_kind = bit_merge!(repo: "master");
@@ -162,14 +161,10 @@ fn test_null_merge() -> BitResult<()> {
     })
 }
 
-// A - B - C     - D
-//         ^       ^
-//       master    b
 #[test]
 fn test_ff_merge() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        bit_branch!(repo: "b");
-        bit_checkout!(repo: "b");
+        bit_branch!(repo: -b "b");
         modify!(repo: "foo");
         bit_commit_all!(repo);
         bit_checkout!(repo: "master");

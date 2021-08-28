@@ -170,8 +170,9 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(self.tree_iter(oid))
     }
 
-    /// return's tree iterator for a tree with `oid`
-    /// it is valid to pass a commit oid which will resolve to the commits tree
+    /// Return's tree iterator for a tree with `oid`
+    /// It is valid to pass `Oid::UNKNOWN` which will represent an empty iterator
+    // We can't use an `impl Treeish` here as the above case will not work
     pub fn tree_iter(self, oid: Oid) -> TreeIter<'rcx> {
         TreeIter::new(self, oid)
     }

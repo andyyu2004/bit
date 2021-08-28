@@ -144,6 +144,10 @@ macro_rules! bit_checkout {
 }
 
 macro_rules! bit_branch {
+    ($repo:ident: -b $branch:literal) => {
+        $repo.bit_create_branch($branch, &rev!("HEAD"))?;
+        bit_checkout!($repo: $branch)
+    };
     ($repo:ident: $branch:literal) => {
         $repo.bit_create_branch($branch, &rev!("HEAD"))?
     };
