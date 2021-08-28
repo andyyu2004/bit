@@ -75,7 +75,8 @@ impl BitTreeCache {
 
     pub fn invalidate_path(&mut self, path: BitPath) {
         self.entry_count = -1;
-        // this isn't strictly necessary but it's easy to forget the `is_valid` check so this will make errors more obviously hopefully
+        // this isn't strictly necessary but it's easy to forget the `is_valid` check
+        // so this will make errors more obviously hopefully
         self.tree_oid = Oid::UNKNOWN;
 
         // don't do this recursively as each path contains the full path, not just a component

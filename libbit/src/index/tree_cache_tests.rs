@@ -6,7 +6,7 @@ use crate::repo::BitRepo;
 use indexmap::indexmap;
 use std::lazy::SyncLazy;
 
-// this breaks if we chanhge const to static
+// this breaks if we change const to static
 const CACHE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
     path: BitPath::EMPTY,
     entry_count: 5,
@@ -97,6 +97,67 @@ fn test_tree_cache_find_valid_child() {
     assert!(cache.find_valid_child("zs".into()).is_some());
 }
 
+const EXPECTED_POST_UPDATE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
+    path: BitPath::EMPTY,
+    tree_oid: "88512acb9a9a07ae8d7eb0128c28384840db6148".into(),
+    entry_count: 3,
+    children: indexmap! {
+        p!("foo") => BitTreeCache {
+            path: p!("foo"),
+            tree_oid: "bef764b817d90289a189126664cdad61a28b1fbb".into(),
+            entry_count: 2,
+            children: indexmap!{
+                p!("baz") => BitTreeCache {
+                    path: p!("baz"),
+                    tree_oid: "2a26db49a6962700da5bd4084ae0e5a22d6583ee".into(),
+                    entry_count: 1,
+                    children: indexmap!{},
+                },
+            },
+        },
+        p!("unchanged") => BitTreeCache {
+            path: p!("unchanged"),
+            tree_oid: "c0164c1f7de74195e6c5787976f97f1c2102d13d".into(),
+            entry_count: 1,
+            children: indexmap!{
+                p!("x") => BitTreeCache {
+                    path: p!("x"),
+                    tree_oid: "409cc707b732a2a5af3939d0eab200cbc93ed065".into(),
+                    entry_count: 1,
+                    children: indexmap! {
+                        p!("y") => BitTreeCache {
+                            path: p!("y"),
+                            tree_oid: "08c56681eceec443b14ad503fa7ebf1c46652c50".into(),
+                            entry_count: 1,
+                            children: indexmap!{},
+                        },
+                    },
+                },
+            },
+        },
+    },
+});
+
+// used for the following two tests
+// must be called from within a repo context
+fn mk_modified_tree() -> Oid {
+    tree! {
+        foo {
+            a
+            baz {
+                d
+            }
+        }
+        unchanged {
+            x {
+               y {
+                   z
+               }
+            }
+        }
+    }
+}
+
 #[test]
 fn test_tree_cache_update() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
@@ -116,13 +177,19 @@ fn test_tree_cache_update() -> BitResult<()> {
             }
         };
 
-        let modified_tree = tree! {
-            foo {
-                a
-                baz {
-                    d
-                }
-            }
+        let modified_tree = mk_modified_tree();
+        let mut tree_cache = BitTreeCache::read_tree(repo, initial_tree)?;
+        tree_cache.update(repo, modified_tree)?;
+
+        assert_eq!(tree_cache, *EXPECTED_POST_UPDATE_TREE);
+        Ok(())
+    })
+}
+
+#[test]
+fn test_tree_cache_update_with_invalidated_children() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        let initial_tree = tree! {
             unchanged {
                 x {
                    y {
@@ -132,10 +199,12 @@ fn test_tree_cache_update() -> BitResult<()> {
             }
         };
 
+        let modified_tree = mk_modified_tree();
+
         let mut tree_cache = BitTreeCache::read_tree(repo, initial_tree)?;
+        tree_cache.invalidate_path(p!("unchanged/x"));
         tree_cache.update(repo, modified_tree)?;
-        // TODO some assertions
-        dbg!(&tree_cache);
+        assert_eq!(tree_cache, *EXPECTED_POST_UPDATE_TREE);
         Ok(())
     })
 }
