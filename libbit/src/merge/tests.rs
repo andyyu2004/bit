@@ -69,6 +69,7 @@ fn test_best_common_ancestors() -> BitResult<()> {
 
         let a = commit_oids[&h];
         let b = commit_oids[&j];
+        dbg!(&commit_oids);
         let merge_base = repo.merge_base(a, b)?;
         assert_eq!(merge_base.oid(), commit_oids[&d]);
 
@@ -161,7 +162,7 @@ fn test_null_merge() -> BitResult<()> {
     })
 }
 
-#[test]
+#[test_env_log::test]
 fn test_ff_merge() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         bit_branch!(repo: -b "b");

@@ -5,8 +5,11 @@ use crate::obj::{BitObject, Commit, MutableBlob, Oid, TreeEntry};
 use crate::peel::Peel;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
-use crate::rev::{CommitNode, MergeFlags, RevWalk, Revspec};
+use crate::rev::Revspec;
 use crate::xdiff;
+use rustc_hash::FxHashMap;
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::io::Write;
 
 pub type ConflictStyle = diffy::ConflictStyle;
@@ -179,22 +182,143 @@ impl<'rcx> MergeCtxt<'rcx> {
     }
 }
 
+bitflags! {
+    #[derive(Default)]
+    pub struct NodeFlags: u8 {
+        const PARENT1 = 1 << 0;
+        const PARENT2 = 1 << 1;
+        const RESULT = 1 << 2;
+        const STALE = 1 << 3;
+    }
+}
+
+#[derive(Debug)]
+pub struct Node<'rcx> {
+    commit: Commit<'rcx>,
+    index: usize,
+}
+
+impl<'rcx> PartialOrd for Node<'rcx> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Node<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl<'rcx> std::ops::Deref for Node<'rcx> {
+    type Target = Commit<'rcx>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.commit
+    }
+}
+
+impl Eq for Node<'_> {
+}
+
+impl Ord for Node<'_> {
+    // we want this cmp to suit a maxheap
+    // so we want the most recent (largest timestamp) commit to be >= and the smallest index to be >=
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.commit
+            .committer
+            .time
+            .cmp(&other.commit.committer.time)
+            .then_with(|| other.index.cmp(&self.index))
+            .then_with(|| bug!("index should be unique"))
+    }
+}
+
+pub struct MergeBaseCtxt<'rcx> {
+    repo: BitRepo<'rcx>,
+    candidates: Vec<Node<'rcx>>,
+    pqueue: BinaryHeap<Node<'rcx>>,
+    node_flags: FxHashMap<Oid, NodeFlags>,
+    index: usize,
+}
+
+impl<'rcx> MergeBaseCtxt<'rcx> {
+    pub fn still_interesting(&self) -> bool {
+        // interesting if pqueue still contains any non-stale nodes
+        // otherwise, everything will be stale from here on so we can stop
+        self.pqueue.iter().any(|node| !self.node_flags[&node.oid()].contains(NodeFlags::STALE))
+    }
+
+    fn mk_node(&mut self, commit: Commit<'rcx>) -> Node<'rcx> {
+        let index = self.index;
+        self.index += 1;
+        Node { index, commit }
+    }
+
+    fn merge_bases_all(mut self, a: Commit<'rcx>, b: Commit<'rcx>) -> BitResult<Vec<Node<'rcx>>> {
+        self.build_candidates(a, b)?;
+        let node_flags = &self.node_flags;
+        self.candidates.retain(|node| !node_flags[&node.oid()].contains(NodeFlags::STALE));
+        // TODO I think it's possible for the candidate set at this point to still be incorrect (i.e. it include some non-BCA nodes)
+        // but haven't found the cases that cause this
+        Ok(self.candidates)
+    }
+
+    fn build_candidates(&mut self, a: Commit<'rcx>, b: Commit<'rcx>) -> BitResult<()> {
+        let mut push_init = |commit, flags| {
+            let node = self.mk_node(commit);
+            self.node_flags.entry(node.oid()).or_default().insert(flags);
+            self.pqueue.push(node);
+        };
+
+        push_init(a, NodeFlags::PARENT1);
+        push_init(b, NodeFlags::PARENT2);
+
+        while self.still_interesting() {
+            let node = match self.pqueue.pop() {
+                Some(node) => node,
+                None => break,
+            };
+
+            let flags = self.node_flags.get_mut(&node.oid()).unwrap();
+            let parents = node.commit.parents.clone();
+            // unset the result bit, as we don't want to propogate the result flag
+            let mut parent_flags = *flags & !NodeFlags::RESULT;
+
+            if flags.contains(NodeFlags::PARENT1 | NodeFlags::PARENT2) {
+                if !flags.contains(NodeFlags::RESULT) {
+                    assert!(
+                        !flags.contains(NodeFlags::STALE),
+                        "maybe need to add this to the condition above?"
+                    );
+                    flags.insert(NodeFlags::RESULT);
+                    self.candidates.push(node);
+                }
+                // parent nodes of a result node are stale and we can rule them out of our candidate set
+                parent_flags.insert(NodeFlags::STALE);
+            }
+
+            for &parent in &parents {
+                let parent = self.repo.read_obj_commit(parent)?;
+                self.node_flags.entry(parent.oid()).or_default().insert(parent_flags);
+                let parent_node = self.mk_node(parent);
+                self.pqueue.push(parent_node);
+            }
+        }
+        Ok(())
+    }
+}
+
 impl<'rcx> Commit<'rcx> {
-    fn merge_bases_all(self, other: Commit<'rcx>) -> impl BitIterator<CommitNode<'rcx>> {
-        let revwalk = RevWalk::new_for_merge(self, other);
-        let mut candidates = revwalk
-            .filter(|node| {
-                assert!(
-                    !node.pflags.contains(MergeFlags::STALE),
-                    "apparently this is possible?, if so we can just filter out the stale one's too"
-                );
-                Ok(node.pflags.contains(MergeFlags::RESULT))
-            })
-            .peekable();
-        // assert!(candidates <= 2, "don't think this is possible with only 3 way merges?");
-        assert!(!candidates.peek().unwrap().is_some(), "no merge base found");
-        candidates
-        // candidates.into()
+    fn merge_bases_all(self, other: Commit<'rcx>) -> BitResult<Vec<Node<'rcx>>> {
+        MergeBaseCtxt {
+            repo: self.owner(),
+            candidates: Default::default(),
+            node_flags: Default::default(),
+            pqueue: Default::default(),
+            index: Default::default(),
+        }
+        .merge_bases_all(self, other)
     }
 
     /// Returns lowest common ancestor found.
@@ -203,10 +327,11 @@ impl<'rcx> Commit<'rcx> {
     // I'm pretty sure this function will not work in all cases (i.e. return a non-optimal solution)
     // Not sure if those cases will come up realistically though, to investigate
     pub fn find_merge_base(self, other: Commit<'rcx>) -> BitResult<Commit<'rcx>> {
-        let mut merge_bases = self.merge_bases_all(other);
-        let merge_base: CommitNode<'rcx> = merge_bases.next()?.unwrap();
-        assert!(merge_bases.next()?.is_none(), "TODO multiple merge bases");
-        Ok(merge_base.commit)
+        let merge_bases = self.merge_bases_all(other)?;
+        dbg!(&merge_bases);
+        assert!(!merge_bases.is_empty(), "no merge bases found");
+        assert!(merge_bases.len() < 2, "TODO multiple merge bases");
+        Ok(merge_bases[0].commit.clone())
     }
 }
 

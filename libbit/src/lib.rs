@@ -41,6 +41,9 @@ extern crate indexmap;
 extern crate maplit;
 
 #[macro_use]
+extern crate bitflags;
+
+#[macro_use]
 extern crate num_derive;
 
 #[macro_use]
