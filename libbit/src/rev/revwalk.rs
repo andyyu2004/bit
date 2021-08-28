@@ -3,6 +3,7 @@ use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObject, Commit, Oid};
 use crate::peel::Peel;
 use crate::repo::BitRepo;
+use crate::signature::BitTime;
 use bitflags::bitflags;
 use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashMap;
@@ -14,16 +15,50 @@ use std::ops::Deref;
 #[derive(Debug, Clone)]
 pub struct RevWalk<'rcx> {
     repo: BitRepo<'rcx>,
-    // map of commit oid to their flags
-    // I suppose this field name should be doubly plural
-    flags: FxHashMap<Oid, CommitNodeFlags>,
-    pqueue: BinaryHeap<CommitNode<'rcx>>,
+    // determine's the order in which nodes will be yielded
+    // the node itself can be looked up inside the map using the oid field
+    nodes: FxHashMap<Oid, CommitNode<'rcx>>,
+    pqueue: BinaryHeap<CommitNodeOrdering>,
     index: usize,
 }
 
+// determines the ordering of a commit node, but is a separate entity from the node
+#[derive(Eq, Debug, Clone)]
+pub(crate) struct CommitNodeOrdering {
+    time: BitTime,
+    index: usize,
+    oid: Oid,
+}
+
+impl PartialEq for CommitNodeOrdering {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(&other) == Ordering::Equal
+    }
+}
+
+impl PartialOrd for CommitNodeOrdering {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CommitNodeOrdering {
+    // we want this cmp to suit a maxheap
+    // so we want the most recent (largest timestamp) commit to be >= and the smallest index to be >=
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.time
+            .cmp(&other.time)
+            .then_with(|| other.index.cmp(&self.index))
+            .then_with(|| bug!("index should be unique"))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-struct CommitNode<'rcx> {
-    commit: Commit<'rcx>,
+pub struct CommitNode<'rcx> {
+    pub commit: Commit<'rcx>,
+    // `p` literally just means propogate, don't know what else to call it
+    pub pflags: MergeFlags,
+    flags: CommitNodeFlags,
     // *NOTE* We are reasoning under the assumption that committer timestamps are *non-decreasing*
     // In the absolute worst case all timestamps will be equal but a child can never be committed before parent
     // which is obviously true but maybe wrong systems times can cause issues. In bit, the committin has a check against this,
@@ -65,20 +100,35 @@ struct CommitNode<'rcx> {
     // B     C
     // C     B
     // D     D
-    index: usize,
+    // index: usize,
+}
+
+impl<'rcx> CommitNode<'rcx> {
+    pub fn new(commit: Commit<'rcx>) -> Self {
+        Self::with_pflags(commit, MergeFlags::default())
+    }
+
+    pub fn with_pflags(commit: Commit<'rcx>, pflags: MergeFlags) -> Self {
+        Self { commit, pflags, flags: Default::default() }
+    }
+}
+
+bitflags! {
+    #[derive(Default)]
+    pub struct MergeFlags: u8 {
+        const PARENT1 = 1 << 0;
+        const PARENT2 = 1 << 1;
+        const RESULT = 1 << 2;
+        const STALE = 1 << 3;
+    }
 }
 
 bitflags! {
     #[derive(Default)]
     struct CommitNodeFlags: u8 {
-        const YIELDED = 1 << 1;
-        const ENQUEUED = 1 << 2;
-    }
-}
-
-impl<'rcx> PartialOrd for CommitNode<'rcx> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        const YIELDED = 1 << 0;
+        const ENQUEUED = 1 << 1;
+        const UNINTERESTING = 1 << 2;
     }
 }
 
@@ -95,18 +145,6 @@ impl<'rcx> Deref for CommitNode<'rcx> {
 impl Eq for CommitNode<'_> {
 }
 
-impl<'rcx> Ord for CommitNode<'rcx> {
-    // we want this cmp to suit a maxheap
-    // so we want the most recent (largest timestamp) commit to be >= and the smallest index to be >=
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.committer
-            .time
-            .cmp(&other.committer.time)
-            .then_with(|| other.index.cmp(&self.index))
-            .then_with(|| bug!())
-    }
-}
-
 impl<'rcx> Commit<'rcx> {
     pub fn revwalk(self) -> BitResult<RevWalk<'rcx>> {
         RevWalk::walk_commit(self)
@@ -120,16 +158,21 @@ impl<'rcx> BitRepo<'rcx> {
 }
 
 impl<'rcx> RevWalk<'rcx> {
-    pub fn new(roots: SmallVec<[Commit<'rcx>; 2]>) -> Self {
-        debug_assert!(!roots.is_empty());
-        let mut this = Self {
-            repo: roots[0].owner(),
-            flags: Default::default(),
-            pqueue: Default::default(),
-            index: 0,
-        };
+    fn make(repo: BitRepo<'rcx>) -> Self {
+        Self { repo, nodes: Default::default(), pqueue: Default::default(), index: 0 }
+    }
 
-        roots.into_iter().for_each(|commit| this.enqueue_commit(commit));
+    pub fn new_for_merge(a: Commit<'rcx>, b: Commit<'rcx>) -> Self {
+        let mut this = Self::make(a.owner());
+        this.enqueue_commit(a, MergeFlags::PARENT1);
+        this.enqueue_commit(b, MergeFlags::PARENT2);
+        this
+    }
+
+    pub fn new(roots: SmallVec<[Commit<'rcx>; 2]>) -> Self {
+        assert!(!roots.is_empty());
+        let mut this = Self::make(roots[0].owner());
+        roots.into_iter().for_each(|commit| this.enqueue_commit(commit, MergeFlags::default()));
         this
     }
 
@@ -139,18 +182,30 @@ impl<'rcx> RevWalk<'rcx> {
         index
     }
 
-    fn mk_node(&mut self, commit: Commit<'rcx>) -> CommitNode<'rcx> {
-        CommitNode { commit, index: self.next_index() }
+    fn dequeue_node(&mut self) -> Option<&mut CommitNode<'rcx>> {
+        if !self.still_interesting() {
+            return None;
+        }
+        // we don't actually remove the node from the nodes map as we use it check whether the commit has been seen or not
+        self.pqueue.pop().and_then(move |ordering| self.nodes.get_mut(&ordering.oid))
     }
 
-    pub fn enqueue_commit(&mut self, commit: Commit<'rcx>) {
-        let flags = self.flags.entry(commit.oid()).or_default();
-        if flags.intersects(CommitNodeFlags::ENQUEUED | CommitNodeFlags::YIELDED) {
+    fn enqueue_commit(&mut self, commit: Commit<'rcx>, pflags: MergeFlags) {
+        let node = self.nodes.entry(commit.oid()).or_insert_with(|| CommitNode::new(commit));
+        // propogate child pflags to the parent (important, even if node has already been seen)
+        node.pflags.insert(pflags);
+
+        if node.flags.intersects(CommitNodeFlags::ENQUEUED | CommitNodeFlags::YIELDED) {
             return;
         }
-        flags.insert(CommitNodeFlags::ENQUEUED);
-        let node = self.mk_node(commit);
-        self.pqueue.push(node)
+
+        node.flags.insert(CommitNodeFlags::ENQUEUED);
+        let ordering = CommitNodeOrdering {
+            time: node.committer.time,
+            oid: node.oid(),
+            index: self.next_index(),
+        };
+        self.pqueue.push(ordering)
     }
 
     pub fn walk_revspecs(repo: BitRepo<'rcx>, revspecs: &[&Revspec]) -> BitResult<Self> {
@@ -175,26 +230,41 @@ impl<'rcx> RevWalk<'rcx> {
         ensure!(!roots.is_empty());
         Ok(Self::new(roots))
     }
+
+    fn still_interesting(&self) -> bool {
+        // this function may need to be parameterised
+        // it's wasteful that we might check for non-stale entries when we're not even computing a mergebase
+        // in which case we know no entries are stale
+        self.pqueue.iter().any(|ord| !self.nodes[&ord.oid].pflags.contains(MergeFlags::STALE))
+    }
 }
 
 /// yields all commits reachable from the roots in reverse chronological order
 /// parents commits are guaranteed to be yielded only after *all* their children have been yielded
 impl<'rcx> FallibleIterator for RevWalk<'rcx> {
     type Error = BitGenericError;
-    type Item = Commit<'rcx>;
+    type Item = CommitNode<'rcx>;
 
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
-        let node = match self.pqueue.pop() {
+        let node = match self.dequeue_node() {
             Some(node) => node,
             None => return Ok(None),
         };
+        node.flags.insert(CommitNodeFlags::YIELDED);
+
+        let parent_pflags = if node.pflags.contains(MergeFlags::PARENT1 | MergeFlags::PARENT2) {
+            node.pflags.insert(MergeFlags::RESULT);
+            node.pflags | MergeFlags::STALE
+        } else {
+            node.pflags
+        };
+
+        let node = node.clone();
 
         for &parent in &node.parents {
-            self.enqueue_commit(self.repo.read_obj(parent)?.into_commit());
+            self.enqueue_commit(self.repo.read_obj_commit(parent)?, parent_pflags);
         }
 
-        self.flags.entry(node.oid()).or_default().insert(CommitNodeFlags::YIELDED);
-
-        Ok(Some(node.commit))
+        Ok(Some(node))
     }
 }

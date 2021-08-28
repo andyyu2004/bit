@@ -207,23 +207,6 @@ impl<'rcx> BitObjKind<'rcx> {
 }
 
 impl<'rcx> BitObjKind<'rcx> {
-    /// deserialize into a `BitObjKind` given an object type and "size"
-    /// (this is similar to [crate::serialize::DeserializeSized])
-    // pub fn deserialize_as(
-    //     contents: impl BufRead,
-    //     obj_ty: BitObjType,
-    //     size: u64,
-    // ) -> BitResult<Self> {
-    //     match obj_ty {
-    //         BitObjType::Commit => Commit::deserialize_sized(contents, size).map(Self::Commit),
-    //         BitObjType::Tree => Tree::deserialize_sized(contents, size).map(Self::Tree),
-    //         BitObjType::Blob => Blob::deserialize_sized(contents, size).map(Self::Blob),
-    //         BitObjType::Tag => Tag::deserialize(contents).map(Self::Tag),
-    //         BitObjType::OfsDelta => OfsDelta::deserialize_sized(contents, size).map(Self::OfsDelta),
-    //         BitObjType::RefDelta => RefDelta::deserialize_sized(contents, size).map(Self::RefDelta),
-    //     }
-    // }
-
     pub fn obj_type(&self) -> BitObjType {
         match self {
             BitObjKind::Blob(_) => BitObjType::Blob,

@@ -77,7 +77,7 @@ impl<'rcx> BitRepo<'rcx> {
                 obj_type
             );
 
-            let commit = self.read_obj(oid)?.into_commit();
+            let commit = self.read_obj_commit(oid)?;
             let parentc = commit.parents.len();
 
             if parentc == 0 {

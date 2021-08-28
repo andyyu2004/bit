@@ -1,14 +1,12 @@
 use crate::error::BitResult;
 use crate::index::{BitIndexEntry, MergeStage};
-use crate::iter::{BitEntry, BitTreeIterator};
+use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
 use crate::obj::{BitObject, Commit, MutableBlob, Oid, TreeEntry};
 use crate::peel::Peel;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
-use crate::rev::Revspec;
+use crate::rev::{CommitNode, MergeFlags, RevWalk, Revspec};
 use crate::xdiff;
-use fallible_iterator::FallibleIterator;
-use rustc_hash::FxHashSet;
 use std::io::Write;
 
 pub type ConflictStyle = diffy::ConflictStyle;
@@ -182,53 +180,33 @@ impl<'rcx> MergeCtxt<'rcx> {
 }
 
 impl<'rcx> Commit<'rcx> {
+    fn merge_bases_all(self, other: Commit<'rcx>) -> impl BitIterator<CommitNode<'rcx>> {
+        let revwalk = RevWalk::new_for_merge(self, other);
+        let mut candidates = revwalk
+            .filter(|node| {
+                assert!(
+                    !node.pflags.contains(MergeFlags::STALE),
+                    "apparently this is possible?, if so we can just filter out the stale one's too"
+                );
+                Ok(node.pflags.contains(MergeFlags::RESULT))
+            })
+            .peekable();
+        // assert!(candidates <= 2, "don't think this is possible with only 3 way merges?");
+        assert!(!candidates.peek().unwrap().is_some(), "no merge base found");
+        candidates
+        // candidates.into()
+    }
+
     /// Returns lowest common ancestor found.
     /// Only returns a single solution even when there may be multiple valid/optimal solutions.
     // TODO
     // I'm pretty sure this function will not work in all cases (i.e. return a non-optimal solution)
     // Not sure if those cases will come up realistically though, to investigate
     pub fn find_merge_base(self, other: Commit<'rcx>) -> BitResult<Commit<'rcx>> {
-        debug_assert_eq!(self.owner(), other.owner());
-
-        let mut iter_self = self.revwalk()?;
-        let mut iter_other = other.revwalk()?;
-
-        let mut xs = FxHashSet::default();
-        let mut ys = FxHashSet::default();
-
-        macro_rules! handle {
-            ($xs:expr, $ys:expr, $x:expr) => {{
-                if $ys.contains(&$x.oid()) {
-                    return Ok($x);
-                }
-                $xs.insert($x.oid());
-            }};
-        }
-
-        macro_rules! handle_x {
-            ($x:expr) => {
-                handle!(xs, ys, $x)
-            };
-        }
-
-        macro_rules! handle_y {
-            ($y:expr) => {
-                handle!(ys, xs, $y)
-            };
-        }
-
-        // keep track of nodes for each iterator and return when a "self node" is contained in "other nodes" or vice versa
-        loop {
-            match (iter_self.next()?, iter_other.next()?) {
-                (Some(x), Some(y)) => {
-                    handle_x!(x);
-                    handle_y!(y);
-                }
-                (Some(x), _) => handle_x!(x),
-                (_, Some(y)) => handle_y!(y),
-                (None, None) => panic!("no merge base found, two completely disjoint histories?"),
-            }
-        }
+        let mut merge_bases = self.merge_bases_all(other);
+        let merge_base: CommitNode<'rcx> = merge_bases.next()?.unwrap();
+        assert!(merge_bases.next()?.is_none(), "TODO multiple merge bases");
+        Ok(merge_base.commit)
     }
 }
 

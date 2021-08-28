@@ -309,11 +309,11 @@ impl<'rcx> BitRepo<'rcx> {
     /// gets the oid of the tree belonging to the HEAD commit
     /// returns Oid::Unknown if there is no HEAD commit
     pub fn head_tree(self) -> BitResult<Oid> {
-        let oid = match self.resolve_head()? {
+        match self.resolve_head()? {
             BitRef::Direct(oid) => oid,
             _ => return Ok(Oid::UNKNOWN),
-        };
-        Ok(self.read_obj(oid)?.into_commit().tree)
+        }
+        .treeish_oid(self)
     }
 
     /// returns the resolved reference of HEAD
@@ -391,6 +391,10 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn read_obj_tree(self, id: impl Into<BitId>) -> BitResult<Tree<'rcx>> {
         self.read_obj(id).map(|obj| obj.into_tree())
+    }
+
+    pub fn read_obj_commit(self, id: impl Into<BitId>) -> BitResult<Commit<'rcx>> {
+        self.read_obj(id).map(|obj| obj.into_commit())
     }
 
     pub fn expand_id(self, id: impl Into<BitId>) -> BitResult<Oid> {
