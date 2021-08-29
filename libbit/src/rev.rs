@@ -6,7 +6,7 @@ use crate::error::{BitGenericError, BitResult};
 use crate::obj::{BitObjType, Commit, Oid, PartialOid};
 use crate::peel::Peel;
 use crate::refs::{BitRef, BitRefDbBackend, SymbolicRef};
-use crate::repo::{BitRepo, Repo};
+use crate::repo::BitRepo;
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};

@@ -27,6 +27,6 @@ impl<'rcx> BitRepo<'rcx> {
             None => self.read_commit_msg(),
         }?;
 
-        self.mk_commit(tree, message, parents.into_iter().collect())
+        self.write_commit(tree, message, parents.into_iter().collect())
     }
 }

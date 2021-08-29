@@ -1,6 +1,6 @@
 use super::*;
 use crate::error::BitResult;
-use crate::repo::{BitRepo, Repo};
+use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use std::io::BufReader;

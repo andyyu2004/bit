@@ -2,9 +2,8 @@ use super::{BitObjCached, ImmutableBitObject, Tree, Treeish, WritableObject};
 use crate::error::{BitGenericError, BitResult};
 use crate::graph::{Dag, DagNode};
 use crate::obj::{BitObjType, BitObject, Oid};
-use crate::odb::BitObjDbBackend;
 use crate::peel::Peel;
-use crate::repo::{BitRepo, Repo};
+use crate::repo::BitRepo;
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
 use smallvec::SmallVec;
@@ -56,6 +55,20 @@ pub struct CommitMessage {
     pub message: String,
 }
 
+impl CommitMessage {
+    pub fn new_subject(subject: &str) -> Self {
+        Self::new_str(subject, "")
+    }
+
+    pub fn new_str(subject: &str, message: &str) -> Self {
+        Self::new(subject.to_owned(), message.to_owned())
+    }
+
+    pub fn new(subject: String, message: String) -> Self {
+        Self { subject, message }
+    }
+}
+
 impl FromStr for CommitMessage {
     type Err = BitGenericError;
 
@@ -66,7 +79,7 @@ impl FromStr for CommitMessage {
             (s, "")
         };
 
-        Ok(Self { subject: subject.to_owned(), message: message.to_owned() })
+        Ok(Self::new_str(subject, message))
     }
 }
 
@@ -124,13 +137,12 @@ impl MutableCommit {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    /// create and write commit to odb
-    pub fn mk_commit(
+    fn mk_commit(
         self,
         tree: Oid,
         message: CommitMessage,
         parents: CommitParents,
-    ) -> BitResult<Oid> {
+    ) -> BitResult<MutableCommit> {
         ensure!(self.read_obj_header(tree)?.obj_type == BitObjType::Tree);
         let author = self.user_signature()?;
         let committer = author.clone();
@@ -146,8 +158,30 @@ impl<'rcx> BitRepo<'rcx> {
             );
         }
 
-        let commit = MutableCommit::new(tree, parents, message, author, committer);
-        self.odb()?.write(&commit)
+        Ok(MutableCommit::new(tree, parents, message, author, committer))
+    }
+
+    /// create and write commit to odb
+    pub fn write_commit(
+        self,
+        tree: Oid,
+        message: CommitMessage,
+        parents: CommitParents,
+    ) -> BitResult<Oid> {
+        let commit = self.mk_commit(tree, message, parents)?;
+        self.write_obj(&commit)
+    }
+
+    pub fn virtual_write_commit(
+        self,
+        tree: Oid,
+        message: CommitMessage,
+        parents: CommitParents,
+    ) -> BitResult<&'rcx Commit<'rcx>> {
+        self.with_virtual_write(|| {
+            let oid = self.write_commit(tree, message, parents)?;
+            self.read_obj_commit(oid)
+        })
     }
 
     pub fn read_commit_msg(self) -> BitResult<CommitMessage> {

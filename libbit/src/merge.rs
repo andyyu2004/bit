@@ -1,7 +1,7 @@
 use crate::error::{BitError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, Conflicts, MergeStage};
 use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
-use crate::obj::{BitObject, Commit, MutableBlob, Oid, TreeEntry};
+use crate::obj::{BitObject, Commit, CommitMessage, MutableBlob, Oid, TreeEntry};
 use crate::peel::Peel;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
@@ -90,15 +90,21 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
 
     fn make_virtual_base(
         &mut self,
-        a: &'rcx Commit<'rcx>,
-        b: &'rcx Commit<'rcx>,
+        our_head: &'rcx Commit<'rcx>,
+        their_head: &'rcx Commit<'rcx>,
     ) -> BitResult<&'rcx Commit<'rcx>> {
-        let merge_base = self.merge_base_recursive(a, b)?;
-        self.merge_commits(merge_base, a, b)?;
+        let merge_base = self.merge_base_recursive(our_head, their_head)?;
+        self.merge_commits(merge_base, our_head, their_head)?;
 
         debug_assert!(!self.index.has_conflicts());
-        let merge_commit = self.index.virtual_write_tree()?;
-        self.repo.read_obj_commit(merge_commit)
+        let merged_tree = self.index.virtual_write_tree()?;
+        self.repo.virtual_write_commit(
+            merged_tree,
+            CommitMessage::new_subject("generated virtual merge commit"),
+            // ordering is significant here for `--first-parent`
+            // i.e. the first parent should always be our head
+            smallvec![our_head.oid(), their_head.oid()],
+        )
     }
 
     pub fn merge(&mut self) -> BitResult<MergeKind> {

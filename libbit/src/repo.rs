@@ -62,27 +62,6 @@ pub struct RepoCtxt<'rcx> {
     virtual_write: Cell<bool>,
 }
 
-pub trait Repo<'rcx> {
-    type Odb: BitObjDbBackend;
-    type RefDb: BitRefDbBackend<'rcx>;
-
-    fn odb(&self) -> BitResult<&Self::Odb>;
-    fn refdb(&self) -> BitResult<&Self::RefDb>;
-}
-
-impl<'rcx> Repo<'rcx> for BitRepo<'rcx> {
-    type Odb = BitObjDb;
-    type RefDb = BitRefDb<'rcx>;
-
-    fn odb(&self) -> BitResult<&Self::Odb> {
-        self.odb_cell.get_or_try_init(|| BitObjDb::new(self.bitdir.join(BIT_OBJECTS_DIR_PATH)))
-    }
-
-    fn refdb(&self) -> BitResult<&Self::RefDb> {
-        self.refdb_cell.get_or_try_init(|| Ok(BitRefDb::new(*self)))
-    }
-}
-
 impl<'rcx> RepoCtxt<'rcx> {
     fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> BitResult<Self> {
         let workdir = BitPath::intern(workdir);
@@ -239,6 +218,11 @@ impl<'rcx> BitRepo<'rcx> {
         let ctxt = RepoCtxt::find_inner(canonical_path.as_ref())?;
 
         tls::enter_repo(&ctxt, f)
+    }
+
+    #[inline]
+    pub fn refdb(&self) -> BitResult<&BitRefDb<'rcx>> {
+        self.refdb_cell.get_or_try_init(|| Ok(BitRefDb::new(*self)))
     }
 
     // this is necessary as a lifetime hint as otherwise usages of &self.arenas have lifetime
@@ -444,6 +428,12 @@ impl<'rcx> BitRepo<'rcx> {
         let ret = f();
         self.virtual_write.set(false);
         ret
+    }
+
+    // this method must be private to avoid people writing directly the odb directly bypassing the `virtual_write` checks
+    #[inline]
+    fn odb(&self) -> BitResult<&BitObjDb> {
+        self.odb_cell.get_or_try_init(|| BitObjDb::new(self.bitdir.join(BIT_OBJECTS_DIR_PATH)))
     }
 
     fn virtual_odb(self) -> &'rcx VirtualOdb<'rcx> {

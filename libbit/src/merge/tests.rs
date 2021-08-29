@@ -36,7 +36,7 @@ impl<'rcx> CommitGraphBuilder<'rcx> {
                 Some(tree) => tree,
                 None => self.repo.write_tree()?,
             };
-            let commit = self.repo.mk_commit(tree, message, parents)?;
+            let commit = self.repo.write_commit(tree, message, parents)?;
             commits.insert(node, commit);
             Ok(())
         })?;
@@ -104,32 +104,21 @@ fn test_criss_cross_merge_base() -> BitResult<()> {
 //   X
 // b - d
 #[test]
-fn test_criss_cross_merge() -> BitResult<()> {
+fn test_trivial_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        let tree_a = tree! {
-            foo < "foo"
-        };
-
-        let tree_b = tree! {
-            foo < "foo"
-        };
-
-        let tree_c = tree! {
-            foo < "foo"
-        };
-
-        let tree_d = tree! {
+        let tree = tree! {
             foo < "foo"
         };
 
         let mut dag = DagBuilder::default();
-        let [a, b, c, d] = dag.mk_nodes_with_trees([tree_a, tree_b, tree_c, tree_d]);
+        let [a, b, c, d] = dag.mk_nodes_with_trees([tree, tree, tree, tree]);
         dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
 
         let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
 
         bit_reset!(repo: --hard rev!(commits[&c]));
-        // bit_branch!(repo: "c" @ rev!(commits[&d]));
+        bit_branch!(repo: "d" @ rev!(commits[&d]));
+        bit_merge!(repo: "d");
 
         Ok(())
     })
