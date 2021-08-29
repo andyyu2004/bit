@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::peel::Peel;
-use crate::refs::{BitRef, RefUpdateCause, SymbolicRef};
+use crate::refs::{BitRef, SymbolicRef};
 use crate::repo::{BitRepo, RepoState};
 use crate::rev::Revspec;
 
@@ -51,13 +51,9 @@ impl<'rcx> BitRepo<'rcx> {
         // If we are current in detached head state, then we move HEAD to the target reference (either direct or indirect)
         // If we are on a branch, then we move that branch to the target oid directly (i.e. we don't want our branch to point at another branch)
         match self.read_head()? {
-            BitRef::Direct(..) =>
-                self.update_ref(SymbolicRef::HEAD, target, RefUpdateCause::Reset { target })?,
-            BitRef::Symbolic(current_branch) => self.update_ref(
-                current_branch,
-                target_commit_oid,
-                RefUpdateCause::Reset { target: target_commit_oid.into() },
-            )?,
+            BitRef::Direct(..) => self.update_ref_for_reset(SymbolicRef::HEAD, target)?,
+            BitRef::Symbolic(current_branch) =>
+                self.update_ref_for_reset(current_branch, target_commit_oid)?,
         };
 
         Ok(())

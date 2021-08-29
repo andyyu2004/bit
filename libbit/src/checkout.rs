@@ -7,7 +7,7 @@ use crate::iter::{BitEntry, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
-use crate::refs::{BitRef, RefUpdateCause};
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
 use std::ffi::OsStr;
@@ -48,11 +48,6 @@ impl<'rcx> BitRepo<'rcx> {
         );
 
         Ok(())
-    }
-
-    fn update_head_for_checkout(self, to: impl Into<BitRef>) -> BitResult<()> {
-        let to = to.into();
-        self.update_head(to, RefUpdateCause::Checkout { from: self.read_head()?, to })
     }
 
     /// Update working directory and index to match the tree referenced by `treeish`

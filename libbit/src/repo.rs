@@ -422,6 +422,20 @@ impl<'rcx> BitRepo<'rcx> {
         self.refdb()?.update(sym, to.into(), cause)
     }
 
+    pub(crate) fn update_ref_for_reset(
+        self,
+        sym: SymbolicRef,
+        target: impl Into<BitRef>,
+    ) -> BitResult<()> {
+        let target = target.into();
+        self.update_ref(sym, target, RefUpdateCause::Reset { target })
+    }
+
+    pub(crate) fn update_head_for_checkout(self, to: impl Into<BitRef>) -> BitResult<()> {
+        let to = to.into();
+        self.update_head(to, RefUpdateCause::Checkout { from: self.read_head()?, to })
+    }
+
     /// Enter a section where writes don't persist to disk but only to the cache.
     /// Useful for ephemeral writes (such as virtual merge bases).
     /// Be careful as all writes and reads within the closure will be issued to the virtual odb
