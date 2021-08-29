@@ -42,29 +42,29 @@ impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
 
 impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
-        let new_txt = new.read_to_string(self.repo)?;
-        let mut patch = xdiff::xdiff("", &new_txt);
+        let new_txt = new.read_to_bytes(self.repo)?;
+        let mut patch = xdiff::xdiff(&[], &new_txt);
 
-        let a = BitPath::A.join(new.path);
-        let b = BitPath::B.join(new.path);
+        let a: BitPath = BitPath::A.join(new.path);
+        let b: BitPath = BitPath::B.join(new.path);
         let writer = &mut self.writer;
         writeln!(writer, "diff --git {} {}", a, b)?;
         writeln!(writer, "new file mode {}", new.mode)?;
         writeln!(writer, "index {:#}..{:#}", Oid::UNKNOWN, new.oid)?;
 
-        patch.set_original(Cow::Borrowed("/dev/null"));
-        patch.set_modified(Cow::Borrowed(b.as_str()));
+        patch.set_original(Cow::Borrowed(b"/dev/null"));
+        patch.set_modified(Cow::Borrowed(b.as_bytes()));
         xdiff::format_patch_into(writer, &patch)?;
         Ok(())
     }
 
     fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
         debug_assert!(old.oid.is_known());
-        let old_txt = old.read_to_string(self.repo)?;
-        let new_txt = new.read_to_string(self.repo)?;
+        let old_txt = old.read_to_bytes(self.repo)?;
+        let new_txt = new.read_to_bytes(self.repo)?;
         let mut patch = xdiff::xdiff(&old_txt, &new_txt);
-        let a = BitPath::A.join(old.path);
-        let b = BitPath::B.join(new.path);
+        let a: BitPath = BitPath::A.join(old.path);
+        let b: BitPath = BitPath::B.join(new.path);
 
         let writer = &mut self.writer;
         writeln!(writer, "diff --git {} {}", a, b)?;
@@ -76,25 +76,25 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
         };
         // TODO what if the file has changed mode?
         writeln!(writer, "index {:#}..{:#} {}", old.oid, new_oid, new.mode)?;
-        patch.set_original(Cow::Borrowed(a.as_str()));
-        patch.set_modified(Cow::Borrowed(b.as_str()));
+        patch.set_original(Cow::Borrowed(a.as_bytes()));
+        patch.set_modified(Cow::Borrowed(b.as_bytes()));
         xdiff::format_patch_into(writer, &patch)?;
         Ok(())
     }
 
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
         debug_assert!(old.oid.is_known());
-        let old_txt = old.read_to_string(self.repo)?;
-        let mut patch = xdiff::xdiff(&old_txt, "");
+        let old_txt = old.read_to_bytes(self.repo)?;
+        let mut patch = xdiff::xdiff(&old_txt, &[]);
 
-        let a = BitPath::A.join(old.path);
-        let b = BitPath::B.join(old.path);
+        let a: BitPath = BitPath::A.join(old.path);
+        let b: BitPath = BitPath::B.join(old.path);
         let writer = &mut self.writer;
         writeln!(writer, "diff --git {} {}", a, b)?;
         writeln!(writer, "deleted file mode {}", old.mode)?;
         writeln!(writer, "index {:#}..{:#}", old.oid, Oid::UNKNOWN)?;
-        patch.set_original(Cow::Borrowed(a.as_str()));
-        patch.set_modified(Cow::Borrowed("/dev/null"));
+        patch.set_original(Cow::Borrowed(a.as_bytes()));
+        patch.set_modified(Cow::Borrowed(b"/dev/null"));
         xdiff::format_patch_into(writer, &patch)?;
         Ok(())
     }
@@ -229,18 +229,20 @@ impl DiffStatLine {
     }
 }
 
+// TODO handle binary files better
+// e.g. libbit/tests/repos/indextest/.bit/index | Bin 633 -> 652 bytes
 impl<'rcx, W: Write> Differ for DiffStatFormatter<'rcx, W> {
     fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
-        let new_txt = new.read_to_string(self.repo)?;
-        let patch = xdiff::xdiff("", &new_txt);
+        let new_txt = new.read_to_bytes(self.repo)?;
+        let patch = xdiff::xdiff(&[], &new_txt);
         let diff_stat_line = DiffStatLine::from_patch(new.path, &patch);
         self.add_line(diff_stat_line);
         Ok(())
     }
 
     fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
-        let old_txt = old.read_to_string(self.repo)?;
-        let new_txt = new.read_to_string(self.repo)?;
+        let old_txt = old.read_to_bytes(self.repo)?;
+        let new_txt = new.read_to_bytes(self.repo)?;
         let patch = xdiff::xdiff(&old_txt, &new_txt);
         let diff_stat_line = DiffStatLine::from_patch(old.path, &patch);
         self.add_line(diff_stat_line);
@@ -248,8 +250,8 @@ impl<'rcx, W: Write> Differ for DiffStatFormatter<'rcx, W> {
     }
 
     fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
-        let old_txt = old.read_to_string(self.repo)?;
-        let patch = xdiff::xdiff(&old_txt, "");
+        let old_txt = old.read_to_bytes(self.repo)?;
+        let patch = xdiff::xdiff(&old_txt, &[]);
         let diff_stat_line = DiffStatLine::from_patch(old.path, &patch);
         self.add_line(diff_stat_line);
         Ok(())

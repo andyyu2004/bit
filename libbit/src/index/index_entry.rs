@@ -227,9 +227,9 @@ impl BitIndexEntry {
         padding_size
     }
 
-    pub fn read_to_string(&self, repo: BitRepo<'_>) -> BitResult<String> {
+    pub fn read_to_bytes(&self, repo: BitRepo<'_>) -> BitResult<Vec<u8>> {
         let blob = self.read_to_blob(repo)?;
-        Ok(String::from_utf8(blob.into_bytes())?)
+        Ok(blob.into_bytes())
     }
 }
 

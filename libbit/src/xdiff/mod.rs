@@ -8,11 +8,11 @@ use std::ops::{Index, IndexMut};
 
 use crate::merge::ConflictStyle;
 
-pub type BitPatch<'a> = diffy::Patch<'a, str>;
+pub type BitPatch<'a> = diffy::Patch<'a, [u8]>;
 
 // TODO too lazy to implement all this rn so just using a library and see how it goes
-pub fn xdiff<'a>(original: &'a str, modified: &'a str) -> BitPatch<'a> {
-    diffy::create_patch(original, modified)
+pub fn xdiff<'a>(original: &'a [u8], modified: &'a [u8]) -> BitPatch<'a> {
+    diffy::create_patch_bytes(original, modified)
 }
 
 pub fn format_patch_into<W: Write>(writer: W, patch: &BitPatch<'_>) -> io::Result<()> {
