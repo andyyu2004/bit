@@ -79,9 +79,6 @@ fn test_best_common_ancestors() -> BitResult<()> {
     })
 }
 
-// a - c
-//   X
-// b - d
 #[test]
 fn test_criss_cross_merge_base() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {

@@ -446,6 +446,7 @@ impl<'rcx> BitRepo<'rcx> {
             self.virtual_odb().write(obj)
         } else {
             // TODO cache this object as a write is often followed by an immediate read
+            // is there even an easy way to cache this write without just deserializing it from scratch essentially?
             self.odb()?.write(obj)
         }
     }
@@ -455,7 +456,6 @@ impl<'rcx> BitRepo<'rcx> {
         if self.virtual_write.get() {
             Ok(self.virtual_odb().read(oid))
         } else {
-            // TODO cache this object as often a write is followed by an immediate read
             self.obj_cache.write().get_or_insert_with(oid, || {
                 let raw = self.odb()?.read_raw(BitId::Full(oid))?;
                 BitObjKind::from_raw(self, raw)

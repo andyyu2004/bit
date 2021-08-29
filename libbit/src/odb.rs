@@ -1,4 +1,4 @@
-use crate::error::{BitError, BitGenericError, BitResult, BitResultExt};
+use crate::error::{BitError, BitResult, BitResultExt};
 use crate::iter::DirIter;
 use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{self, *};
@@ -10,7 +10,6 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use parking_lot::RwLock;
-use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use smallvec::SmallVec;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
@@ -73,34 +72,6 @@ macro_rules! backend_method {
     };
 }
 
-// returns the first success or if everything failed, then one of the errors
-#[allow(unused)]
-macro_rules! backend_method_parallel_any {
-    ($f:ident: $arg_ty:ty => $ret_ty:ty) => {
-        fn $f(&self, arg: $arg_ty) -> BitResult<$ret_ty> {
-            let error = parking_lot::Mutex::new(None);
-            let output = self
-                .backends
-                .par_iter()
-                .filter_map(|backend| match backend.$f(arg) {
-                    Ok(raw) => Some(raw),
-                    Err(err) => {
-                        *error.lock() = Some(err);
-                        None
-                    }
-                })
-                .find_any(|_| true);
-
-            match output {
-                // if anything succeeded return that
-                Some(result) => Ok(result),
-                // otherwise there must have been an error we just arbitrarily return one of the errors
-                None => Err(error.into_inner().unwrap()),
-            }
-        }
-    };
-}
-
 impl BitObjDbBackend for BitObjDb {
     backend_method!(read_header: BitId => BitObjHeader);
 
@@ -110,16 +81,10 @@ impl BitObjDbBackend for BitObjDb {
     backend_method!(write: &dyn WritableObject => Oid);
 
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
-        self.backends
-            .par_iter()
-            .try_fold(Vec::new, |mut candidates, backend| {
-                candidates.extend(backend.prefix_candidates(prefix)?);
-                Ok::<_, BitGenericError>(candidates)
-            })
-            .try_reduce(Vec::new, |mut a, b| {
-                a.extend(b);
-                Ok(a)
-            })
+        self.backends.iter().try_fold(vec![], |mut acc, backend| {
+            acc.extend(backend.prefix_candidates(prefix)?);
+            Ok(acc)
+        })
     }
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
@@ -348,7 +313,7 @@ impl BitObjDbBackend for BitPackedObjDb {
         Ok(self
             .packs
             .write()
-            .par_iter_mut()
+            .iter_mut()
             .map(|pack| pack.prefix_matches(prefix))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
