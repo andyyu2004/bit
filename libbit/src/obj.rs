@@ -13,6 +13,7 @@ pub use tag::*;
 pub use tree::*;
 
 use crate::error::{BitGenericError, BitResult};
+use crate::hash;
 use crate::io::BufReadExt;
 use crate::repo::BitRepo;
 use crate::serialize::{DeserializeSized, Serialize};
@@ -63,6 +64,11 @@ pub struct BitRawObj {
 }
 
 impl BitRawObj {
+    pub fn from_stream(oid: Oid, mut stream: Box<dyn BufRead + Send>) -> BitResult<Self> {
+        let BitObjHeader { obj_type, size } = read_obj_header(&mut stream)?;
+        Ok(BitRawObj::new(oid, obj_type, size, Box::new(stream)))
+    }
+
     pub fn new(oid: Oid, obj_type: BitObjType, size: u64, stream: Box<dyn BufRead + Send>) -> Self {
         Self { stream, cached: BitObjCached { oid, size, obj_type } }
     }
@@ -295,6 +301,16 @@ pub trait WritableObject: Serialize + Send + Sync {
         write!(buf, "{}\0", bytes.len())?;
         buf.extend_from_slice(&bytes);
         Ok(buf)
+    }
+
+    fn hash_and_serialize(&self) -> BitResult<(Oid, Vec<u8>)> {
+        let bytes = self.serialize_with_headers()?;
+        let oid = hash::hash_bytes(&bytes);
+        Ok((oid, bytes))
+    }
+
+    fn hash(&self) -> BitResult<Oid> {
+        self.serialize_with_headers().map(hash::hash_bytes)
     }
 }
 

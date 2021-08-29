@@ -97,7 +97,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         self.merge_commits(merge_base, a, b)?;
 
         debug_assert!(!self.index.has_conflicts());
-        let merge_commit = self.index.write_tree()?;
+        let merge_commit = self.index.virtual_write_tree()?;
         self.repo.read_obj_commit(merge_commit)
     }
 

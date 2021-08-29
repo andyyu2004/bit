@@ -116,6 +116,10 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(tree_oid)
     }
 
+    pub(crate) fn virtual_write_tree(&mut self) -> BitResult<Oid> {
+        self.repo.with_virtual_write(|| self.write_tree())
+    }
+
     pub fn is_racy_entry(&self, worktree_entry: &BitIndexEntry) -> bool {
         // https://git-scm.com/docs/racy-git/en
         self.mtime.map(|mtime| mtime <= worktree_entry.mtime).unwrap_or(true)

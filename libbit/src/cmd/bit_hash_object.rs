@@ -1,5 +1,4 @@
 use crate::error::BitResult;
-use crate::hash;
 use crate::obj::{BitObjType, MutableBlob, Oid, WritableObject};
 use crate::repo::BitRepo;
 use std::fs::File;
@@ -33,6 +32,6 @@ impl<'rcx> BitRepo<'rcx> {
 
         let obj: &dyn WritableObject = obj.as_ref();
 
-        if opts.do_write { self.write_obj(obj) } else { hash::hash_obj(obj) }
+        if opts.do_write { self.write_obj(obj) } else { obj.hash() }
     }
 }

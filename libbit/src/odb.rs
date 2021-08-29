@@ -201,9 +201,8 @@ impl BitObjDbBackend for BitLooseObjDb {
     fn read_raw(&self, id: BitId) -> BitResult<BitRawObj> {
         trace!("BitLooseObjDb::read_odb_obj(id: {})", id);
         let oid = self.expand_id(id)?;
-        let mut stream = self.read_stream(oid)?;
-        let BitObjHeader { obj_type, size } = obj::read_obj_header(&mut stream)?;
-        Ok(BitRawObj::new(oid, obj_type, size, Box::new(stream)))
+        let stream = self.read_stream(oid)?;
+        BitRawObj::from_stream(oid, Box::new(stream))
     }
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
@@ -212,8 +211,7 @@ impl BitObjDbBackend for BitLooseObjDb {
     }
 
     fn write(&self, obj: &dyn WritableObject) -> BitResult<Oid> {
-        let bytes = obj.serialize_with_headers()?;
-        let oid = hash::hash_bytes(&bytes);
+        let (oid, bytes) = obj.hash_and_serialize()?;
         let path = self.obj_path(oid);
 
         if path.as_path().exists() {

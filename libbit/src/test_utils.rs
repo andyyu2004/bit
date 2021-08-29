@@ -316,7 +316,7 @@ macro_rules! hash_symlink {
         let path = readlink!($repo: $path);
         let bytes = path.to_str().unwrap().as_bytes();
         // needs the obj header which is why we wrap it in blob
-        crate::hash::hash_obj(&MutableBlob::new(bytes.to_vec()))?
+        MutableBlob::new(bytes.to_vec()).hash()?
     }};
 }
 

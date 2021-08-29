@@ -1,4 +1,4 @@
-use crate::cache::BitObjCache;
+use crate::cache::{BitObjCache, VirtualOdb};
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
@@ -8,10 +8,11 @@ use crate::path::{self, BitPath};
 use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, Refs, SymbolicRef};
 use crate::rev::Revspec;
 use crate::signature::BitSignature;
-use crate::{hash, tls};
+use crate::tls;
 use anyhow::Context;
 use parking_lot::RwLock;
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -57,6 +58,8 @@ pub struct RepoCtxt<'rcx> {
     odb_cell: SyncOnceCell<BitObjDb>,
     refdb_cell: SyncOnceCell<BitRefDb<'rcx>>,
     index_cell: SyncOnceCell<RwLock<BitIndex<'rcx>>>,
+    virtual_odb: SyncOnceCell<VirtualOdb<'rcx>>,
+    virtual_write: Cell<bool>,
 }
 
 pub trait Repo<'rcx> {
@@ -97,6 +100,8 @@ impl<'rcx> RepoCtxt<'rcx> {
             index_cell: Default::default(),
             obj_cache: Default::default(),
             refdb_cell: Default::default(),
+            virtual_odb: Default::default(),
+            virtual_write: Default::default(),
         };
 
         Ok(this)
@@ -244,6 +249,11 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
+    pub(crate) fn cache(self) -> &'rcx RwLock<BitObjCache<'rcx>> {
+        &self.rcx.obj_cache
+    }
+
+    #[inline]
     pub(crate) fn alloc_commit(self, commit: Commit<'rcx>) -> &'rcx Commit<'rcx> {
         self.arenas().commit_arena.alloc(commit)
     }
@@ -264,13 +274,14 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    fn index_ref(&self) -> BitResult<&RwLock<BitIndex<'rcx>>> {
-        self.index_cell
-            .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(*self)?)))
+    fn index_ref(self) -> BitResult<&'rcx RwLock<BitIndex<'rcx>>> {
+        self.rcx
+            .index_cell
+            .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(self)?)))
     }
 
     #[inline]
-    pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
         // don't have to error check here as the index only
         f(&*self.index_ref()?.read())
     }
@@ -411,18 +422,41 @@ impl<'rcx> BitRepo<'rcx> {
         self.refdb()?.update(sym, to.into(), cause)
     }
 
+    /// Enter a section where writes don't persist to disk but only to the cache.
+    /// Useful for ephemeral writes (such as virtual merge bases).
+    /// Be careful as all writes and reads within the closure will be issued to the virtual odb
+    pub(crate) fn with_virtual_write<R>(self, f: impl FnOnce() -> R) -> R {
+        self.virtual_write.set(true);
+        let ret = f();
+        self.virtual_write.set(false);
+        ret
+    }
+
+    fn virtual_odb(self) -> &'rcx VirtualOdb<'rcx> {
+        self.rcx.virtual_odb.get_or_init(|| VirtualOdb::new(self))
+    }
+
     /// writes `obj` into the object store returning its full hash
     pub fn write_obj(self, obj: &dyn WritableObject) -> BitResult<Oid> {
-        // TODO cache this object as often a write is followed by an immediate read
-        self.odb()?.write(obj)
+        if self.virtual_write.get() {
+            self.virtual_odb().write(obj)
+        } else {
+            // TODO cache this object as a write is often followed by an immediate read
+            self.odb()?.write(obj)
+        }
     }
 
     pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
         let oid = self.expand_id(id)?;
-        self.obj_cache.write().get_or_insert_with(oid, || {
-            let raw = self.odb()?.read_raw(BitId::Full(oid))?;
-            BitObjKind::from_raw(self, raw)
-        })
+        if self.virtual_write.get() {
+            Ok(self.virtual_odb().read(oid))
+        } else {
+            // TODO cache this object as often a write is followed by an immediate read
+            self.obj_cache.write().get_or_insert_with(oid, || {
+                let raw = self.odb()?.read_raw(BitId::Full(oid))?;
+                BitObjKind::from_raw(self, raw)
+            })
+        }
     }
 
     pub fn read_obj_tree(self, id: impl Into<BitId>) -> BitResult<&'rcx Tree<'rcx>> {
@@ -472,7 +506,7 @@ impl<'rcx> BitRepo<'rcx> {
 
     /// Get the blob at `path` on the worktree and return its hash
     pub(crate) fn hash_blob_from_worktree(self, path: BitPath) -> BitResult<Oid> {
-        self.read_blob_from_worktree(path).and_then(|blob| hash::hash_obj(&blob))
+        self.read_blob_from_worktree(path).and_then(|blob| blob.hash())
     }
 
     /// convert a relative path to be absolute based off the repository root
