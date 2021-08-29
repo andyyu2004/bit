@@ -13,7 +13,7 @@ pub trait Peel<'rcx> {
 // furthermore, we often want the tree oid given an commit_oid
 // however, this is sort of subtle/arbitrary and probably not great design
 impl<'rcx> Peel<'rcx> for Oid {
-    type Peeled = Commit<'rcx>;
+    type Peeled = &'rcx Commit<'rcx>;
 
     fn peel(&self, repo: BitRepo<'rcx>) -> BitResult<Self::Peeled> {
         repo.read_obj(*self)?.try_into_commit()
@@ -21,7 +21,7 @@ impl<'rcx> Peel<'rcx> for Oid {
 }
 
 impl<'rcx> Peel<'rcx> for Commit<'rcx> {
-    type Peeled = Tree<'rcx>;
+    type Peeled = &'rcx Tree<'rcx>;
 
     fn peel(&self, repo: BitRepo<'rcx>) -> BitResult<Self::Peeled> {
         debug_assert!(repo == self.owner());

@@ -183,25 +183,25 @@ pub struct BitObjHeader {
     pub size: u64,
 }
 
-#[derive(PartialEq, Debug, Clone, BitObject)]
+#[derive(PartialEq, Debug, Clone, BitObject, Copy)]
 pub enum BitObjKind<'rcx> {
-    Blob(Box<Blob<'rcx>>),
-    Commit(Box<Commit<'rcx>>),
-    Tree(Box<Tree<'rcx>>),
-    Tag(Box<Tag<'rcx>>),
+    Blob(&'rcx Blob<'rcx>),
+    Commit(&'rcx Commit<'rcx>),
+    Tree(&'rcx Tree<'rcx>),
+    Tag(&'rcx Tag<'rcx>),
 }
 
 impl<'rcx> BitObjKind<'rcx> {
-    pub fn into_tree(self) -> Tree<'rcx> {
+    pub fn into_tree(self) -> &'rcx Tree<'rcx> {
         match self {
-            Self::Tree(tree) => *tree,
+            Self::Tree(tree) => tree,
             // panicking instead of erroring as this should be called only with certainty
             _ => panic!("expected tree, found `{}`", self.obj_ty()),
         }
     }
 
     /// Returns `true` if the bit_obj_kind is [`Commit`].
-    pub fn is_commit(&self) -> bool {
+    pub fn is_commit(self) -> bool {
         matches!(self, Self::Commit(..))
     }
 }
@@ -216,32 +216,32 @@ impl<'rcx> BitObjKind<'rcx> {
         }
     }
 
-    pub fn try_into_commit(self) -> BitResult<Commit<'rcx>> {
+    pub fn try_into_commit(self) -> BitResult<&'rcx Commit<'rcx>> {
         match self {
-            Self::Commit(commit) => Ok(*commit),
+            Self::Commit(commit) => Ok(commit),
             _ => Err(anyhow!("expected commit found `{}`", self.obj_type())),
         }
     }
 
-    pub fn into_commit(self) -> Commit<'rcx> {
+    pub fn into_commit(self) -> &'rcx Commit<'rcx> {
         match self {
-            Self::Commit(commit) => *commit,
+            Self::Commit(commit) => commit,
             _ => panic!("expected commit"),
         }
     }
 
-    pub fn into_blob(self) -> Blob<'rcx> {
+    pub fn into_blob(self) -> &'rcx Blob<'rcx> {
         match self {
-            BitObjKind::Blob(blob) => *blob,
+            BitObjKind::Blob(blob) => blob,
             _ => panic!("expected blob"),
         }
     }
 
-    pub fn is_tree(&self) -> bool {
+    pub fn is_tree(self) -> bool {
         matches!(self, Self::Tree(..))
     }
 
-    pub fn is_treeish(&self) -> bool {
+    pub fn is_treeish(self) -> bool {
         matches!(self, Self::Tree(..) | Self::Commit(..))
     }
 
@@ -251,11 +251,15 @@ impl<'rcx> BitObjKind<'rcx> {
         reader: impl BufRead,
     ) -> BitResult<Self> {
         match cached.obj_type {
-            BitObjType::Commit =>
-                Commit::new(owner, cached, reader).map(Box::new).map(Self::Commit),
-            BitObjType::Tree => Tree::new(owner, cached, reader).map(Box::new).map(Self::Tree),
-            BitObjType::Blob => Blob::new(owner, cached, reader).map(Box::new).map(Self::Blob),
-            BitObjType::Tag => Tag::new(owner, cached, reader).map(Box::new).map(Self::Tag),
+            BitObjType::Commit => Commit::new(owner, cached, reader)
+                .map(|commit| owner.alloc_commit(commit))
+                .map(Self::Commit),
+            BitObjType::Tree =>
+                Tree::new(owner, cached, reader).map(|tree| owner.alloc_tree(tree)).map(Self::Tree),
+            BitObjType::Blob =>
+                Blob::new(owner, cached, reader).map(|blob| owner.alloc_blob(blob)).map(Self::Blob),
+            BitObjType::Tag =>
+                Tag::new(owner, cached, reader).map(|tag| owner.alloc_tag(tag)).map(Self::Tag),
         }
     }
 

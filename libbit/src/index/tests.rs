@@ -448,7 +448,7 @@ fn bit_index_build_tree_test() -> BitResult<()> {
         assert_eq!(dir2_tree_entries[0].path, "dir2.txt");
         assert_eq!(dir2_tree_entries[1].path, "nested");
 
-        let mut nested_tree = repo.read_obj(dir2_tree_entries[1].oid)?.into_tree().into_mutable();
+        let mut nested_tree = repo.read_obj_tree(dir2_tree_entries[1].oid)?.to_mutable();
         let coolfile_entry = nested_tree.entries.pop_first().unwrap();
         assert!(nested_tree.entries.is_empty());
         assert_eq!(coolfile_entry.path, "coolfile.txt");

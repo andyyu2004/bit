@@ -239,12 +239,12 @@ impl BitRef {
     pub const HEAD: Self = Self::Symbolic(SymbolicRef::HEAD);
     pub const MASTER: Self = Self::Symbolic(SymbolicRef::MASTER);
 
-    pub fn resolve_to_tree(self, repo: BitRepo<'_>) -> BitResult<Tree<'_>> {
+    pub fn resolve_to_tree(self, repo: BitRepo<'_>) -> BitResult<&Tree<'_>> {
         let oid = repo.fully_resolve_ref(self)?;
         match repo.read_obj(oid)? {
             BitObjKind::Blob(..) => bail!("blob type is not treeish"),
             BitObjKind::Commit(commit) => commit.tree.treeish(repo),
-            BitObjKind::Tree(tree) => Ok(*tree),
+            BitObjKind::Tree(tree) => Ok(tree),
             BitObjKind::Tag(..) => todo!(),
         }
     }

@@ -80,8 +80,8 @@ impl Display for CommitMessage {
     }
 }
 
-impl<'rcx> Treeish<'rcx> for Commit<'rcx> {
-    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
+impl<'rcx> Treeish<'rcx> for &'rcx Commit<'rcx> {
+    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<&'rcx Tree<'rcx>> {
         self.tree.treeish(repo)
     }
 
@@ -337,7 +337,7 @@ impl<'rcx> ImmutableBitObject<'rcx> for Commit<'rcx> {
 // trait needs some changes for commit to have a reasonable implementation
 impl<'rcx> Dag for Commit<'rcx> {
     type Node = Oid;
-    type NodeData = Self;
+    type NodeData = &'rcx Self;
     type Nodes = SmallVec<[Oid; 2]>;
 
     fn node_data(&self, oid: Oid) -> BitResult<Self::NodeData> {
@@ -349,7 +349,7 @@ impl<'rcx> Dag for Commit<'rcx> {
     }
 }
 
-impl<'rcx> DagNode<Commit<'rcx>> for Commit<'rcx> {
+impl<'rcx> DagNode<Commit<'rcx>> for &'rcx Commit<'rcx> {
     fn adjacent(&self) -> <Commit<'rcx> as Dag>::Nodes {
         self.parents.clone()
     }

@@ -140,7 +140,7 @@ impl BitTreeCache {
                             child,
                             &mut Self::read_tree_internal(
                                 repo,
-                                &repo.read_obj_tree(entry.oid)?,
+                                repo.read_obj_tree(entry.oid)?,
                                 entry.path
                             )?,
                             "child was not updated in-place correctly, it should match a fresh read"

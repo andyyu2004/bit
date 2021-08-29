@@ -49,7 +49,7 @@ impl<'rcx> BitRepo<'rcx> {
         self.resolve_rev_internal(rev.parse(self)?)
     }
 
-    pub fn resolve_rev_to_commit(self, rev: &Revspec) -> BitResult<Commit<'rcx>> {
+    pub fn resolve_rev_to_commit(self, rev: &Revspec) -> BitResult<&'rcx Commit<'rcx>> {
         self.fully_resolve_rev(rev)?.peel(self)
     }
 

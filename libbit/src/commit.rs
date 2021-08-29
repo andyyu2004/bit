@@ -65,7 +65,7 @@ pub struct CommitSummary<'rcx> {
     /// the symbolic reference that was moved by this commit
     pub sym: SymbolicRef,
     /// the newly created commit object
-    pub commit: Commit<'rcx>,
+    pub commit: &'rcx Commit<'rcx>,
     /// the difference between HEAD^ and HEAD
     pub status: WorkspaceStatus,
 }

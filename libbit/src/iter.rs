@@ -67,7 +67,7 @@ pub trait BitEntry {
         // if the oid is not known, then it's definitely on disk (as otherwise it would have a known `oid`)
         if oid.is_known() {
             match repo.read_obj(oid) {
-                Ok(obj) => return Ok(obj.into_blob().into_inner()),
+                Ok(obj) => return Ok(obj.into_blob().clone().into_inner()),
                 Err(err) => err.try_into_obj_not_found_err()?,
             };
         }

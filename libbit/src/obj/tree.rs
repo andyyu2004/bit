@@ -22,13 +22,13 @@ pub trait Treeish<'rcx>: Sized {
     fn treeish_oid(&self, repo: BitRepo<'rcx>) -> BitResult<Oid>;
 
     // override this default implementation if a more efficient one is available
-    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
+    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<&'rcx Tree<'rcx>> {
         let tree_oid = self.treeish_oid(repo)?;
         repo.read_obj_tree(tree_oid)
     }
 }
 
-impl<'rcx> Treeish<'rcx> for Tree<'rcx> {
+impl<'rcx> Treeish<'rcx> for &'rcx Tree<'rcx> {
     fn treeish(self, _repo: BitRepo<'rcx>) -> BitResult<Self> {
         Ok(self)
     }
@@ -45,10 +45,10 @@ impl<'rcx> Treeish<'rcx> for Oid {
 }
 
 impl<'rcx> Treeish<'rcx> for BitObjKind<'rcx> {
-    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<Tree<'rcx>> {
+    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<&'rcx Tree<'rcx>> {
         match self {
             BitObjKind::Commit(commit) => commit.peel(repo),
-            BitObjKind::Tree(tree) => Ok(*tree),
+            BitObjKind::Tree(tree) => Ok(tree),
             BitObjKind::Tag(..) => todo!(),
             BitObjKind::Blob(..) => bug!("blob is not treeish"),
         }
@@ -161,8 +161,8 @@ impl Tree<'_> {
     }
 
     #[cfg(test)]
-    pub fn into_mutable(self) -> MutableTree {
-        MutableTree::new(self.entries.into_iter().collect())
+    pub fn to_mutable(&self) -> MutableTree {
+        MutableTree::new(self.entries.iter().copied().collect())
     }
 }
 

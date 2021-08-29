@@ -19,6 +19,7 @@ use std::lazy::SyncOnceCell;
 use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use typed_arena::Arena as TypedArena;
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
 pub const BIT_HEAD_FILE_PATH: &str = "HEAD";
@@ -36,6 +37,14 @@ impl PartialEq for BitRepo<'_> {
     }
 }
 
+#[derive(Default)]
+pub struct Arenas<'rcx> {
+    commit_arena: TypedArena<Commit<'rcx>>,
+    tree_arena: TypedArena<Tree<'rcx>>,
+    blob_arena: TypedArena<Blob<'rcx>>,
+    tag_arena: TypedArena<Tag<'rcx>>,
+}
+
 pub struct RepoCtxt<'rcx> {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
@@ -43,8 +52,9 @@ pub struct RepoCtxt<'rcx> {
     pub bitdir: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
-    odb_cell: SyncOnceCell<BitObjDb>,
+    arenas: Arenas<'rcx>,
     obj_cache: RwLock<BitObjCache<'rcx>>,
+    odb_cell: SyncOnceCell<BitObjDb>,
     refdb_cell: SyncOnceCell<BitRefDb<'rcx>>,
     index_cell: SyncOnceCell<RwLock<BitIndex<'rcx>>>,
 }
@@ -82,6 +92,7 @@ impl<'rcx> RepoCtxt<'rcx> {
             workdir,
             bitdir,
             index_filepath,
+            arenas: Default::default(),
             odb_cell: Default::default(),
             index_cell: Default::default(),
             obj_cache: Default::default(),
@@ -225,12 +236,41 @@ impl<'rcx> BitRepo<'rcx> {
         tls::enter_repo(&ctxt, f)
     }
 
+    // this is necessary as a lifetime hint as otherwise usages of &self.arenas have lifetime
+    // tied to self rather than 'rcx
+    #[inline]
+    fn arenas(self) -> &'rcx Arenas<'rcx> {
+        &self.rcx.arenas
+    }
+
+    #[inline]
+    pub(crate) fn alloc_commit(self, commit: Commit<'rcx>) -> &'rcx Commit<'rcx> {
+        self.arenas().commit_arena.alloc(commit)
+    }
+
+    #[inline]
+    pub(crate) fn alloc_tree(self, tree: Tree<'rcx>) -> &'rcx Tree<'rcx> {
+        self.arenas().tree_arena.alloc(tree)
+    }
+
+    #[inline]
+    pub(crate) fn alloc_blob(self, blob: Blob<'rcx>) -> &'rcx Blob<'rcx> {
+        self.arenas().blob_arena.alloc(blob)
+    }
+
+    #[inline]
+    pub(crate) fn alloc_tag(self, tag: Tag<'rcx>) -> &'rcx Tag<'rcx> {
+        self.arenas().tag_arena.alloc(tag)
+    }
+
+    #[inline]
     fn index_ref(&self) -> BitResult<&RwLock<BitIndex<'rcx>>> {
         self.index_cell
             .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(*self)?)))
     }
 
-    pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
+    #[inline]
+    pub fn with_index<R>(&self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
         // don't have to error check here as the index only
         f(&*self.index_ref()?.read())
     }
@@ -389,11 +429,11 @@ impl<'rcx> BitRepo<'rcx> {
         })
     }
 
-    pub fn read_obj_tree(self, id: impl Into<BitId>) -> BitResult<Tree<'rcx>> {
+    pub fn read_obj_tree(self, id: impl Into<BitId>) -> BitResult<&'rcx Tree<'rcx>> {
         self.read_obj(id).map(|obj| obj.into_tree())
     }
 
-    pub fn read_obj_commit(self, id: impl Into<BitId>) -> BitResult<Commit<'rcx>> {
+    pub fn read_obj_commit(self, id: impl Into<BitId>) -> BitResult<&'rcx Commit<'rcx>> {
         self.read_obj(id).map(|obj| obj.into_commit())
     }
 

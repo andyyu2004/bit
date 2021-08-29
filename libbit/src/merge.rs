@@ -15,13 +15,13 @@ use std::io::Write;
 pub type ConflictStyle = diffy::ConflictStyle;
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<Commit<'rcx>> {
+    pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<&'rcx Commit<'rcx>> {
         let commit_a = a.peel(self)?;
         let commit_b = b.peel(self)?;
         commit_a.find_merge_base(commit_b)
     }
 
-    pub fn merge_bases(self, a: Oid, b: Oid) -> BitResult<Vec<Commit<'rcx>>> {
+    pub fn merge_bases(self, a: Oid, b: Oid) -> BitResult<Vec<&'rcx Commit<'rcx>>> {
         a.peel(self)?.find_merge_bases(b.peel(self)?)
     }
 
@@ -198,7 +198,7 @@ bitflags! {
 
 #[derive(Debug)]
 pub struct Node<'rcx> {
-    commit: Commit<'rcx>,
+    commit: &'rcx Commit<'rcx>,
     index: usize,
 }
 
@@ -240,7 +240,7 @@ impl Ord for Node<'_> {
 
 pub struct MergeBaseCtxt<'rcx> {
     repo: BitRepo<'rcx>,
-    candidates: Vec<Commit<'rcx>>,
+    candidates: Vec<&'rcx Commit<'rcx>>,
     pqueue: BinaryHeap<Node<'rcx>>,
     node_flags: FxHashMap<Oid, NodeFlags>,
     index: usize,
@@ -253,13 +253,17 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
         self.pqueue.iter().any(|node| !self.node_flags[&node.oid()].contains(NodeFlags::STALE))
     }
 
-    fn mk_node(&mut self, commit: Commit<'rcx>) -> Node<'rcx> {
+    fn mk_node(&mut self, commit: &'rcx Commit<'rcx>) -> Node<'rcx> {
         let index = self.index;
         self.index += 1;
         Node { index, commit }
     }
 
-    fn merge_bases_all(mut self, a: Commit<'rcx>, b: Commit<'rcx>) -> BitResult<Vec<Commit<'rcx>>> {
+    fn merge_bases_all(
+        mut self,
+        a: &'rcx Commit<'rcx>,
+        b: &'rcx Commit<'rcx>,
+    ) -> BitResult<Vec<&'rcx Commit<'rcx>>> {
         self.build_candidates(a, b)?;
         let node_flags = &self.node_flags;
         self.candidates.retain(|node| !node_flags[&node.oid()].contains(NodeFlags::STALE));
@@ -268,7 +272,7 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
         Ok(self.candidates)
     }
 
-    fn build_candidates(&mut self, a: Commit<'rcx>, b: Commit<'rcx>) -> BitResult<()> {
+    fn build_candidates(&mut self, a: &'rcx Commit<'rcx>, b: &'rcx Commit<'rcx>) -> BitResult<()> {
         let mut push_init = |commit, flags| {
             let node = self.mk_node(commit);
             self.node_flags.entry(node.oid()).or_default().insert(flags);
@@ -314,7 +318,10 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
 }
 
 impl<'rcx> Commit<'rcx> {
-    fn find_merge_bases(self, other: Commit<'rcx>) -> BitResult<Vec<Commit<'rcx>>> {
+    fn find_merge_bases(
+        &'rcx self,
+        other: &'rcx Commit<'rcx>,
+    ) -> BitResult<Vec<&'rcx Commit<'rcx>>> {
         MergeBaseCtxt {
             repo: self.owner(),
             candidates: Default::default(),
@@ -330,11 +337,11 @@ impl<'rcx> Commit<'rcx> {
     // TODO
     // I'm pretty sure this function will not work in all cases (i.e. return a non-optimal solution)
     // Not sure if those cases will come up realistically though, to investigate
-    pub fn find_merge_base(self, other: Commit<'rcx>) -> BitResult<Commit<'rcx>> {
+    pub fn find_merge_base(&'rcx self, other: &'rcx Commit<'rcx>) -> BitResult<&'rcx Commit<'rcx>> {
         let merge_bases = self.find_merge_bases(other)?;
         assert!(!merge_bases.is_empty(), "no merge bases found");
         assert!(merge_bases.len() < 2, "TODO multiple merge bases");
-        Ok(merge_bases[0].clone())
+        Ok(&merge_bases[0])
     }
 }
 

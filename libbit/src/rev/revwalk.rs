@@ -23,7 +23,7 @@ pub struct RevWalk<'rcx> {
 
 #[derive(Debug, Clone, PartialEq)]
 struct CommitNode<'rcx> {
-    commit: Commit<'rcx>,
+    commit: &'rcx Commit<'rcx>,
     // *NOTE* We are reasoning under the assumption that committer timestamps are *non-decreasing*
     // In the absolute worst case all timestamps will be equal but a child can never be committed before parent
     // which is obviously true but maybe wrong systems times can cause issues. In bit, the committin has a check against this,
@@ -108,7 +108,7 @@ impl<'rcx> Ord for CommitNode<'rcx> {
 }
 
 impl<'rcx> Commit<'rcx> {
-    pub fn revwalk(self) -> BitResult<RevWalk<'rcx>> {
+    pub fn revwalk(&'rcx self) -> BitResult<RevWalk<'rcx>> {
         RevWalk::walk_commit(self)
     }
 }
@@ -120,7 +120,7 @@ impl<'rcx> BitRepo<'rcx> {
 }
 
 impl<'rcx> RevWalk<'rcx> {
-    pub fn new(roots: SmallVec<[Commit<'rcx>; 2]>) -> Self {
+    pub fn new(roots: SmallVec<[&'rcx Commit<'rcx>; 2]>) -> Self {
         debug_assert!(!roots.is_empty());
         let mut this = Self {
             repo: roots[0].owner(),
@@ -139,11 +139,11 @@ impl<'rcx> RevWalk<'rcx> {
         index
     }
 
-    fn mk_node(&mut self, commit: Commit<'rcx>) -> CommitNode<'rcx> {
+    fn mk_node(&mut self, commit: &'rcx Commit<'rcx>) -> CommitNode<'rcx> {
         CommitNode { commit, index: self.next_index() }
     }
 
-    pub fn enqueue_commit(&mut self, commit: Commit<'rcx>) {
+    pub fn enqueue_commit(&mut self, commit: &'rcx Commit<'rcx>) {
         let flags = self.flags.entry(commit.oid()).or_default();
         if flags.intersects(CommitNodeFlags::ENQUEUED | CommitNodeFlags::YIELDED) {
             return;
@@ -166,11 +166,11 @@ impl<'rcx> RevWalk<'rcx> {
         Ok(Self::new(smallvec![root]))
     }
 
-    pub fn walk_commit(root: Commit<'rcx>) -> BitResult<Self> {
+    pub fn walk_commit(root: &'rcx Commit<'rcx>) -> BitResult<Self> {
         Self::walk_commits(std::iter::once(root))
     }
 
-    pub fn walk_commits(roots: impl IntoIterator<Item = Commit<'rcx>>) -> BitResult<Self> {
+    pub fn walk_commits(roots: impl IntoIterator<Item = &'rcx Commit<'rcx>>) -> BitResult<Self> {
         let roots = roots.into_iter().collect::<SmallVec<_>>();
         ensure!(!roots.is_empty());
         Ok(Self::new(roots))
@@ -181,7 +181,7 @@ impl<'rcx> RevWalk<'rcx> {
 /// parents commits are guaranteed to be yielded only after *all* their children have been yielded
 impl<'rcx> FallibleIterator for RevWalk<'rcx> {
     type Error = BitGenericError;
-    type Item = Commit<'rcx>;
+    type Item = &'rcx Commit<'rcx>;
 
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
         let node = match self.pqueue.pop() {

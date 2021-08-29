@@ -117,7 +117,7 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
             gpgsig: None,
             mergetag: None,
         };
-        assert_eq!(&commit, &*obj.into_commit());
+        assert_eq!(&commit, &**obj.into_commit());
         Ok(())
     })
 }
@@ -194,7 +194,7 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
             .collect(),
         );
 
-        assert_eq!(tree, obj.into_tree().into_mutable());
+        assert_eq!(tree, obj.into_tree().to_mutable());
         Ok(())
     })
 }
@@ -350,7 +350,7 @@ fn test_read_pack_deltified_oid2() -> BitResult<()> {
             .into_iter()
             .collect(),
         );
-        assert_eq!(tree, obj.into_tree().into_mutable());
+        assert_eq!(tree, obj.into_tree().to_mutable());
         Ok(())
     })
 }
