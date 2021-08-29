@@ -1,9 +1,7 @@
-use fallible_iterator::FallibleIterator;
-
+use super::DagBuilder;
 use crate::error::BitResult;
 use crate::graph::Dag;
-
-use super::DagBuilder;
+use fallible_iterator::FallibleIterator;
 
 ///
 ///  a   -      b

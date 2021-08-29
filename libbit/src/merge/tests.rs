@@ -1,5 +1,5 @@
 use crate::error::BitResult;
-use crate::graph::{Dag, DagBuilder, DagNode};
+use crate::graph::{Dag, DagBuilder, DagNode, Node};
 use crate::index::{Conflict, ConflictType};
 use crate::merge::MergeKind;
 use crate::obj::{BitObject, CommitMessage, Oid};
@@ -7,6 +7,7 @@ use crate::repo::BitRepo;
 use crate::test_utils::generate_random_string;
 use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashMap;
+
 struct CommitGraphBuilder<'rcx> {
     repo: BitRepo<'rcx>,
 }
@@ -18,14 +19,12 @@ impl<'rcx> CommitGraphBuilder<'rcx> {
 
     /// write all commits represented in `dag` to the repository
     /// returning the commits created in order of the dag nodes
-    pub fn apply<G: Dag>(self, dag: &G) -> BitResult<FxHashMap<G::Node, Oid>> {
-        let tree = self.repo.write_tree()?;
-
+    pub fn apply(self, dag: &DagBuilder) -> BitResult<FxHashMap<Node, Oid>> {
         // mapping from node to it's commit oid
-        let mut commits = FxHashMap::<G::Node, Oid>::default();
+        let mut commits = FxHashMap::<Node, Oid>::default();
 
         dag.reverse_topological()?.for_each(|node| {
-            let node_data = dag.node_data(node)?;
+            let node_data = dag.node_data(node);
             let parents = node_data.adjacent().into_iter().map(|parent| commits[&parent]).collect();
 
             let message = CommitMessage {
@@ -33,6 +32,10 @@ impl<'rcx> CommitGraphBuilder<'rcx> {
                 message: generate_random_string(0..100),
             };
 
+            let tree = match node_data.tree {
+                Some(tree) => tree,
+                None => self.repo.write_tree()?,
+            };
             let commit = self.repo.mk_commit(tree, message, parents)?;
             commits.insert(node, commit);
             Ok(())
@@ -69,7 +72,7 @@ fn test_best_common_ancestors() -> BitResult<()> {
 
         let a = commit_oids[&h];
         let b = commit_oids[&j];
-        let merge_base = repo.merge_base(a, b)?;
+        let merge_base = repo.merge_base(a, b)?.unwrap();
         assert_eq!(merge_base.oid(), commit_oids[&d]);
 
         Ok(())
@@ -81,6 +84,24 @@ fn test_best_common_ancestors() -> BitResult<()> {
 // b - d
 #[test]
 fn test_criss_cross_merge_base() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let mut dag = DagBuilder::default();
+        let [a, b, c, d] = dag.mk_nodes();
+        dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
+
+        let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
+
+        let merge_bases = repo.merge_bases(commits[&c], commits[&d])?;
+        assert_eq!(merge_bases.len(), 2);
+        assert_eq!(merge_bases[0].oid(), commits[&a]);
+        assert_eq!(merge_bases[1].oid(), commits[&b]);
+
+        Ok(())
+    })
+}
+
+#[test]
+fn test_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let mut dag = DagBuilder::default();
         let [a, b, c, d] = dag.mk_nodes();
@@ -175,7 +196,7 @@ fn test_null_merge() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test]
 fn test_ff_merge() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         bit_branch!(repo: -b "b");

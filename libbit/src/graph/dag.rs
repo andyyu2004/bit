@@ -5,6 +5,7 @@ mod topological;
 pub use topological::TopologicalSort;
 
 use crate::error::BitResult;
+use crate::obj::Oid;
 use arrayvec::ArrayVec;
 use indexed_vec::{newtype_index, Idx, IndexVec};
 
@@ -64,9 +65,16 @@ pub trait DagNode<G: Dag + ?Sized> {
 
 newtype_index!(Node);
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct NodeData {
-    parents: Vec<Node>,
+    pub parents: Vec<Node>,
+    pub tree: Option<Oid>,
+}
+
+impl NodeData {
+    pub fn new(tree: Option<Oid>) -> Self {
+        Self { tree, parents: Default::default() }
+    }
 }
 
 impl<'rcx> DagNode<DagBuilder> for NodeData {
@@ -109,12 +117,21 @@ impl<'rcx> DagBuilder {
         }
     }
 
-    pub fn mk_node(&mut self) -> Node {
-        self.nodes.push(NodeData::default())
+    pub fn mk_node(&mut self, tree: Option<Oid>) -> Node {
+        self.nodes.push(NodeData::new(tree))
     }
 
+    /// create nodes with an empty corresponding trees
     pub fn mk_nodes<const N: usize>(&mut self) -> [Node; N] {
-        (0..N).map(|_| self.mk_node()).collect::<ArrayVec<_, N>>().into_inner().unwrap()
+        (0..N).map(|_| self.mk_node(None)).collect::<ArrayVec<_, N>>().into_inner().unwrap()
+    }
+
+    pub fn mk_nodes_with_trees<const N: usize>(&mut self, trees: [Oid; N]) -> [Node; N] {
+        std::array::IntoIter::new(trees)
+            .map(|tree| self.mk_node(Some(tree)))
+            .collect::<ArrayVec<_, N>>()
+            .into_inner()
+            .unwrap()
     }
 }
 

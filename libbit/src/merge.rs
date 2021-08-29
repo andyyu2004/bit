@@ -16,7 +16,7 @@ use std::io::Write;
 pub type ConflictStyle = diffy::ConflictStyle;
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<&'rcx Commit<'rcx>> {
+    pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<Option<&'rcx Commit<'rcx>>> {
         let commit_a = a.peel(self)?;
         let commit_b = b.peel(self)?;
         commit_a.find_merge_base(commit_b)
@@ -78,15 +78,13 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         &mut self,
         a: &'rcx Commit<'rcx>,
         b: &'rcx Commit<'rcx>,
-    ) -> BitResult<&'rcx Commit<'rcx>> {
-        let mut merge_bases = a.find_merge_bases(b)?;
-        if merge_bases.len() == 1 {
-            Ok(merge_bases.pop().unwrap())
-        } else if merge_bases.len() == 2 {
-            self.make_virtual_base(merge_bases.pop().unwrap(), merge_bases.pop().unwrap())
-        } else {
-            assert!(!merge_bases.is_empty(), "empty merge bases should be an error");
-            todo!("more than 2 merge bases")
+    ) -> BitResult<Option<&'rcx Commit<'rcx>>> {
+        let merge_bases = a.find_merge_bases(b)?;
+        match &merge_bases[..] {
+            [] => Ok(None),
+            [merge_base] => Ok(Some(merge_base)),
+            [a, b] => Some(self.make_virtual_base(a, b)).transpose(),
+            _ => todo!("more than 2 merge bases"),
         }
     }
 
@@ -111,12 +109,14 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         let their_head_commit = their_head.peel(repo)?;
         let merge_base = self.merge_base_recursive(our_head_commit, their_head_commit)?;
 
-        if merge_base.oid() == self.their_head {
-            return Ok(MergeKind::Null);
-        }
+        if let Some(merge_base) = merge_base {
+            if merge_base.oid() == self.their_head {
+                return Ok(MergeKind::Null);
+            }
 
-        if merge_base.oid() == our_head {
-            return Ok(MergeKind::FastForward);
+            if merge_base.oid() == our_head {
+                return Ok(MergeKind::FastForward);
+            }
         }
 
         self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
@@ -126,13 +126,14 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
 
     fn merge_commits(
         &mut self,
-        merge_base: &'rcx Commit<'rcx>,
+        merge_base: Option<&'rcx Commit<'rcx>>,
         our_head_commit: &'rcx Commit<'rcx>,
         their_head_commit: &'rcx Commit<'rcx>,
     ) -> BitResult<()> {
         let repo = self.repo;
+        let merge_base_tree = merge_base.map(|c| c.tree_oid()).unwrap_or(Oid::UNKNOWN);
         self.merge_from_iterators(
-            repo.tree_iter(merge_base.tree_oid()).skip_trees(),
+            repo.tree_iter(merge_base_tree).skip_trees(),
             repo.tree_iter(our_head_commit.tree_oid()).skip_trees(),
             repo.tree_iter(their_head_commit.tree_oid()).skip_trees(),
         )
@@ -246,7 +247,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
 
 bitflags! {
     #[derive(Default)]
-    pub struct NodeFlags: u8 {
+    struct NodeFlags: u8 {
         const PARENT1 = 1 << 0;
         const PARENT2 = 1 << 1;
         const RESULT = 1 << 2;
@@ -255,24 +256,24 @@ bitflags! {
 }
 
 #[derive(Debug)]
-pub struct Node<'rcx> {
+struct CommitNode<'rcx> {
     commit: &'rcx Commit<'rcx>,
     index: usize,
 }
 
-impl<'rcx> PartialOrd for Node<'rcx> {
+impl<'rcx> PartialOrd for CommitNode<'rcx> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for Node<'_> {
+impl PartialEq for CommitNode<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other) == Ordering::Equal
     }
 }
 
-impl<'rcx> std::ops::Deref for Node<'rcx> {
+impl<'rcx> std::ops::Deref for CommitNode<'rcx> {
     type Target = Commit<'rcx>;
 
     fn deref(&self) -> &Self::Target {
@@ -280,10 +281,10 @@ impl<'rcx> std::ops::Deref for Node<'rcx> {
     }
 }
 
-impl Eq for Node<'_> {
+impl Eq for CommitNode<'_> {
 }
 
-impl Ord for Node<'_> {
+impl Ord for CommitNode<'_> {
     // we want this cmp to suit a maxheap
     // so we want the most recent (largest timestamp) commit to be >= and the smallest index to be >=
     fn cmp(&self, other: &Self) -> Ordering {
@@ -299,7 +300,7 @@ impl Ord for Node<'_> {
 pub struct MergeBaseCtxt<'rcx> {
     repo: BitRepo<'rcx>,
     candidates: Vec<&'rcx Commit<'rcx>>,
-    pqueue: BinaryHeap<Node<'rcx>>,
+    pqueue: BinaryHeap<CommitNode<'rcx>>,
     node_flags: FxHashMap<Oid, NodeFlags>,
     index: usize,
 }
@@ -311,10 +312,10 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
         self.pqueue.iter().any(|node| !self.node_flags[&node.oid()].contains(NodeFlags::STALE))
     }
 
-    fn mk_node(&mut self, commit: &'rcx Commit<'rcx>) -> Node<'rcx> {
+    fn mk_node(&mut self, commit: &'rcx Commit<'rcx>) -> CommitNode<'rcx> {
         let index = self.index;
         self.index += 1;
-        Node { index, commit }
+        CommitNode { index, commit }
     }
 
     fn merge_bases_all(
@@ -395,11 +396,17 @@ impl<'rcx> Commit<'rcx> {
     // TODO
     // I'm pretty sure this function will not work in all cases (i.e. return a non-optimal solution)
     // Not sure if those cases will come up realistically though, to investigate
-    pub fn find_merge_base(&'rcx self, other: &'rcx Commit<'rcx>) -> BitResult<&'rcx Commit<'rcx>> {
+    pub fn find_merge_base(
+        &'rcx self,
+        other: &'rcx Commit<'rcx>,
+    ) -> BitResult<Option<&'rcx Commit<'rcx>>> {
         let merge_bases = self.find_merge_bases(other)?;
-        assert!(!merge_bases.is_empty(), "no merge bases found");
-        assert!(merge_bases.len() < 2, "TODO multiple merge bases");
-        Ok(&merge_bases[0])
+        if merge_bases.is_empty() {
+            Ok(None)
+        } else {
+            assert!(merge_bases.len() < 2, "TODO multiple merge bases");
+            Ok(Some(merge_bases[0]))
+        }
     }
 }
 

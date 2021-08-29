@@ -5,7 +5,7 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn walk_iterators<'a, const N: usize>(
         self,
         iterators: [Box<dyn BitTreeIterator + 'a>; N],
-    ) -> WalkIterators<'a, N> {
+    ) -> impl BitIterator<[Option<BitIndexEntry>; N]> + 'a {
         WalkIterators::new(iterators)
     }
 }
