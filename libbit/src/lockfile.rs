@@ -243,7 +243,7 @@ impl<T: Serialize> Deref for Filelock<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        debug_assert!(!self.rolled_back.load(Ordering::Relaxed));
+        assert!(!self.rolled_back.load(Ordering::Relaxed));
         &self.data
     }
 }
@@ -255,7 +255,7 @@ impl<T: Serialize> DerefMut for Filelock<T> {
         // this is conservative in the sense it assumes chances are made if `inner` is borrowed mutably
         // furthermore, we cannot use interior mutability anywhere in `BitIndexInner`
         // also, all data in `BitIndex` must just be metadata that is not persisted otherwise that will be lost
-        debug_assert!(!self.rolled_back.load(Ordering::Relaxed));
+        assert!(!self.rolled_back.load(Ordering::Relaxed));
         self.dirty = true;
         &mut self.data
     }

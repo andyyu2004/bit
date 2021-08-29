@@ -1,3 +1,4 @@
+use crate::merge::MergeConflict;
 use crate::obj::{BitId, Oid, PartialOid};
 use crate::refs::SymbolicRef;
 use crate::status::BitStatus;
@@ -16,6 +17,7 @@ pub enum BitError {
     ObjectNotFoundInPackIndex(Oid, u64),
     AmbiguousPrefix(PartialOid, Vec<Oid>),
     NonExistentSymRef(SymbolicRef),
+    MergeConflict(MergeConflict),
     PackBackendWrite,
 }
 
@@ -25,6 +27,7 @@ pub trait BitErrorExt {
     fn try_into_nonexistent_symref_err(self) -> BitResult<SymbolicRef>;
     fn try_into_bit_error(self) -> BitResult<BitError>;
     fn try_into_status_error(self) -> BitResult<BitStatus>;
+    fn try_into_merge_conflict(self) -> BitResult<MergeConflict>;
 }
 
 impl BitErrorExt for BitGenericError {
@@ -34,6 +37,13 @@ impl BitErrorExt for BitGenericError {
     fn try_into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)> {
         match self.try_into_bit_error()? {
             BitError::ObjectNotFoundInPackIndex(oid, idx) => Ok((oid, idx)),
+            err => Err(anyhow!(err)),
+        }
+    }
+
+    fn try_into_merge_conflict(self) -> BitResult<MergeConflict> {
+        match self.try_into_bit_error()? {
+            BitError::MergeConflict(merge_conflict) => Ok(merge_conflict),
             err => Err(anyhow!(err)),
         }
     }
@@ -103,6 +113,7 @@ impl BitResultExt for BitGenericError {
                 err,
                 BitError::ObjectNotFound(..)
                     | BitError::ObjectNotFoundInPackIndex(..)
+                    | BitError::MergeConflict(..)
                     | BitError::PackBackendWrite
             ),
             None => true,
@@ -131,6 +142,7 @@ impl Display for BitError {
             }
             BitError::NonExistentSymRef(sym) =>
                 write!(f, "failed to resolve symbolic reference `{}`", sym),
+            BitError::MergeConflict(merge_conflict) => write!(f, "{}", merge_conflict),
             BitError::PackBackendWrite | BitError::ObjectNotFoundInPackIndex(..) =>
                 bug!("not a user facing error"),
         }

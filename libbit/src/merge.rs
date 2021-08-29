@@ -1,5 +1,5 @@
-use crate::error::BitResult;
-use crate::index::{BitIndexEntry, MergeStage};
+use crate::error::{BitError, BitResult};
+use crate::index::{BitIndex, BitIndexEntry, Conflicts, MergeStage};
 use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
 use crate::obj::{BitObject, Commit, MutableBlob, Oid, TreeEntry};
 use crate::peel::Peel;
@@ -10,6 +10,7 @@ use crate::xdiff;
 use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::fmt::{self, Display, Formatter};
 use std::io::Write;
 
 pub type ConflictStyle = diffy::ConflictStyle;
@@ -26,7 +27,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn merge_ref(self, their_head_ref: BitRef) -> BitResult<MergeKind> {
-        MergeCtxt::new(self, their_head_ref)?.merge()
+        self.with_index_mut(|index| MergeCtxt::new(index, their_head_ref)?.merge())
     }
 
     pub fn merge(self, their_head: &Revspec) -> BitResult<MergeKind> {
@@ -34,9 +35,21 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct MergeConflict {
+    pub conflicts: Conflicts,
+}
+
+impl Display for MergeConflict {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
-struct MergeCtxt<'rcx> {
+struct MergeCtxt<'a, 'rcx> {
     repo: BitRepo<'rcx>,
+    index: &'a mut BitIndex<'rcx>,
     // description of `their_head`
     their_head_desc: String,
     their_head_ref: BitRef,
@@ -53,11 +66,41 @@ pub enum MergeKind {
 #[derive(Debug, PartialEq)]
 pub struct MergeSummary {}
 
-impl<'rcx> MergeCtxt<'rcx> {
-    fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef) -> BitResult<Self> {
+impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
+    fn new(index: &'a mut BitIndex<'rcx>, their_head_ref: BitRef) -> BitResult<Self> {
+        let repo = index.repo;
         let their_head = repo.fully_resolve_ref(their_head_ref)?;
         let their_head_desc = their_head_ref.short(repo);
-        Ok(Self { repo, their_head_ref, their_head, their_head_desc })
+        Ok(Self { repo, index, their_head_ref, their_head, their_head_desc })
+    }
+
+    fn merge_base_recursive(
+        &mut self,
+        a: &'rcx Commit<'rcx>,
+        b: &'rcx Commit<'rcx>,
+    ) -> BitResult<&'rcx Commit<'rcx>> {
+        let mut merge_bases = a.find_merge_bases(b)?;
+        if merge_bases.len() == 1 {
+            Ok(merge_bases.pop().unwrap())
+        } else if merge_bases.len() == 2 {
+            self.make_virtual_base(merge_bases.pop().unwrap(), merge_bases.pop().unwrap())
+        } else {
+            assert!(!merge_bases.is_empty(), "empty merge bases should be an error");
+            todo!("more than 2 merge bases")
+        }
+    }
+
+    fn make_virtual_base(
+        &mut self,
+        a: &'rcx Commit<'rcx>,
+        b: &'rcx Commit<'rcx>,
+    ) -> BitResult<&'rcx Commit<'rcx>> {
+        let merge_base = self.merge_base_recursive(a, b)?;
+        self.merge_commits(merge_base, a, b)?;
+
+        debug_assert!(!self.index.has_conflicts());
+        let merge_commit = self.index.write_tree()?;
+        self.repo.read_obj_commit(merge_commit)
     }
 
     pub fn merge(&mut self) -> BitResult<MergeKind> {
@@ -66,7 +109,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         let our_head = repo.fully_resolve_head()?;
         let our_head_commit = our_head.peel(repo)?;
         let their_head_commit = their_head.peel(repo)?;
-        let merge_base = our_head_commit.find_merge_base(their_head_commit)?;
+        let merge_base = self.merge_base_recursive(our_head_commit, their_head_commit)?;
 
         if merge_base.oid() == self.their_head {
             return Ok(MergeKind::Null);
@@ -76,25 +119,41 @@ impl<'rcx> MergeCtxt<'rcx> {
             return Ok(MergeKind::FastForward);
         }
 
-        let summary = self.merge_from_iterators(
-            repo.tree_iter(merge_base.oid()).skip_trees(),
-            repo.tree_iter(our_head).skip_trees(),
-            repo.tree_iter(their_head).skip_trees(),
-        )?;
+        self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
 
-        Ok(MergeKind::Merge(summary))
+        Ok(MergeKind::Merge(MergeSummary {}))
     }
 
-    pub fn merge_from_iterators(
+    fn merge_commits(
+        &mut self,
+        merge_base: &'rcx Commit<'rcx>,
+        our_head_commit: &'rcx Commit<'rcx>,
+        their_head_commit: &'rcx Commit<'rcx>,
+    ) -> BitResult<()> {
+        let repo = self.repo;
+        self.merge_from_iterators(
+            repo.tree_iter(merge_base.tree_oid()).skip_trees(),
+            repo.tree_iter(our_head_commit.tree_oid()).skip_trees(),
+            repo.tree_iter(their_head_commit.tree_oid()).skip_trees(),
+        )
+    }
+
+    /// 3-way merge the iterators and write the changes to the index
+    fn merge_from_iterators(
         &mut self,
         base_iter: impl BitTreeIterator,
         a_iter: impl BitTreeIterator,
         b_iter: impl BitTreeIterator,
-    ) -> BitResult<MergeSummary> {
+    ) -> BitResult<()> {
         let repo = self.repo;
         let walk = repo.walk_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
         walk.for_each(|[base, a, b]| self.merge_entries(base, a, b))?;
-        Ok(MergeSummary {})
+
+        if self.index.has_conflicts() {
+            bail!(BitError::MergeConflict(MergeConflict { conflicts: self.index.conflicts() }))
+        }
+
+        Ok(())
     }
 
     fn merge_entries(
@@ -112,77 +171,76 @@ impl<'rcx> MergeCtxt<'rcx> {
         );
 
         let repo = self.repo;
-        repo.with_index_mut(|index| {
-            let mut three_way_merge =
-                |base: Option<BitIndexEntry>, y: BitIndexEntry, z: BitIndexEntry| {
-                    debug_assert_eq!(y.path, z.path);
-                    let path = y.path;
 
-                    let base_bytes = match base {
-                        Some(b) => b.read_to_blob(repo)?.into_bytes(),
-                        None => vec![],
-                    };
+        let mut three_way_merge =
+            |base: Option<BitIndexEntry>, y: BitIndexEntry, z: BitIndexEntry| {
+                debug_assert_eq!(y.path, z.path);
+                let path = y.path;
 
-                    if y.mode != z.mode {
-                        todo!("mode conflict");
-                    }
-
-                    match xdiff::merge(
-                        repo.config().conflictStyle()?,
-                        "HEAD",
-                        &self.their_head_desc,
-                        &base_bytes,
-                        &y.read_to_blob(repo)?,
-                        &z.read_to_blob(repo)?,
-                    ) {
-                        Ok(merged) => {
-                            let oid = repo.write_obj(&MutableBlob::new(merged))?;
-                            index.add_entry(TreeEntry { oid, path: y.path, mode: y.mode }.into())
-                        }
-                        Err(conflicted) => {
-                            // write the conflicted file to disk
-                            let full_path = repo.normalize_path(path.as_path())?;
-
-                            if let Some(b) = base {
-                                index.add_conflicted_entry(b, MergeStage::Base)?;
-                            }
-                            index.add_conflicted_entry(y, MergeStage::Left)?;
-                            index.add_conflicted_entry(z, MergeStage::Right)?;
-
-                            std::fs::File::create(full_path)?.write_all(&conflicted)?;
-                            Ok(())
-                        }
-                    }
+                let base_bytes = match base {
+                    Some(b) => b.read_to_blob(repo)?.into_bytes(),
+                    None => vec![],
                 };
 
-            match (base, a, b) {
-                (None, None, None) => unreachable!(),
-                // present in ancestor but removed in both newer commits so just remove it
-                (Some(b), None, None) => {
-                    index.remove_entry(b.key());
-                    Ok(())
+                if y.mode != z.mode {
+                    todo!("mode conflict");
                 }
-                // y/z is a new file that is not present in the other two
-                (None, Some(entry), None) | (None, None, Some(entry)) => index.add_entry(entry),
-                // unchanged in relative to the base in one, but removed in the other
-                (Some(b), Some(x), None) | (Some(b), None, Some(x)) if b.oid == x.oid => {
-                    index.remove_entry(x.key());
-                    Ok(())
+
+                match xdiff::merge(
+                    repo.config().conflictStyle()?,
+                    "HEAD",
+                    &self.their_head_desc,
+                    &base_bytes,
+                    &y.read_to_blob(repo)?,
+                    &z.read_to_blob(repo)?,
+                ) {
+                    Ok(merged) => {
+                        let oid = repo.write_obj(&MutableBlob::new(merged))?;
+                        self.index.add_entry(TreeEntry { oid, path: y.path, mode: y.mode }.into())
+                    }
+                    Err(conflicted) => {
+                        // write the conflicted file to disk
+                        let full_path = repo.normalize_path(path.as_path())?;
+
+                        if let Some(b) = base {
+                            self.index.add_conflicted_entry(b, MergeStage::Base)?;
+                        }
+                        self.index.add_conflicted_entry(y, MergeStage::Left)?;
+                        self.index.add_conflicted_entry(z, MergeStage::Right)?;
+
+                        std::fs::File::create(full_path)?.write_all(&conflicted)?;
+                        Ok(())
+                    }
                 }
-                // modify/delete conflict
-                (Some(b), Some(y), None) => {
-                    index.add_conflicted_entry(b, MergeStage::Base)?;
-                    index.add_conflicted_entry(y, MergeStage::Left)
-                }
-                (Some(b), None, Some(z)) => {
-                    index.add_conflicted_entry(b, MergeStage::Base)?;
-                    index.add_conflicted_entry(z, MergeStage::Right)
-                }
-                // merge
-                (None, Some(y), Some(z)) => three_way_merge(None, y, z),
-                (Some(b), Some(y), Some(z)) => three_way_merge(Some(b), y, z),
+            };
+
+        match (base, a, b) {
+            (None, None, None) => unreachable!(),
+            // present in ancestor but removed in both newer commits so just remove it
+            (Some(b), None, None) => {
+                self.index.remove_entry(b.key());
+                Ok(())
             }
-        })
+            // y/z is a new file that is not present in the other two
+            (None, Some(entry), None) | (None, None, Some(entry)) => self.index.add_entry(entry),
+            // unchanged in relative to the base in one, but removed in the other
+            (Some(b), Some(x), None) | (Some(b), None, Some(x)) if b.oid == x.oid => {
+                self.index.remove_entry(x.key());
+                Ok(())
+            }
+            // modify/delete conflict
+            (Some(b), Some(y), None) => {
+                self.index.add_conflicted_entry(b, MergeStage::Base)?;
+                self.index.add_conflicted_entry(y, MergeStage::Left)
+            }
+            (Some(b), None, Some(z)) => {
+                self.index.add_conflicted_entry(b, MergeStage::Base)?;
+                self.index.add_conflicted_entry(z, MergeStage::Right)
+            }
+            // merge
+            (None, Some(y), Some(z)) => three_way_merge(None, y, z),
+            (Some(b), Some(y), Some(z)) => three_way_merge(Some(b), y, z),
+        }
     }
 }
 

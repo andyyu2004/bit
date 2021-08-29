@@ -1,5 +1,5 @@
 use crate::cache::BitObjCache;
-use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult};
+use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
 use crate::obj::*;
@@ -284,7 +284,11 @@ impl<'rcx> BitRepo<'rcx> {
         match f(index) {
             Ok(r) => Ok(r),
             Err(err) => {
-                index.rollback();
+                // This is definitely pretty dodgy and subtle way to handle rolling back.
+                // It's currently here to guard against the MergeConflict error from rolling back the index
+                if err.is_fatal() {
+                    index.rollback();
+                }
                 Err(err)
             }
         }
@@ -336,14 +340,6 @@ impl<'rcx> BitRepo<'rcx> {
             println!("initialized empty bit repository in `{}`", repo.workdir.display());
             Ok(())
         })
-    }
-
-    /// todo only works with full hash
-    pub fn get_full_object_hash(self, id: BitId) -> BitResult<Oid> {
-        match id {
-            BitId::Full(hash) => Ok(hash),
-            BitId::Partial(_partial) => todo!(),
-        }
     }
 
     /// gets the oid of the tree belonging to the HEAD commit
@@ -463,7 +459,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// Read the file at `path` on the worktree into a mutable blob object
-    pub fn read_blob_from_worktree(self, path: impl AsRef<Path>) -> BitResult<MutableBlob> {
+    pub(crate) fn read_blob_from_worktree(self, path: impl AsRef<Path>) -> BitResult<MutableBlob> {
         let path = self.normalize_path(path.as_ref())?;
         let bytes = if path.symlink_metadata()?.file_type().is_symlink() {
             // we literally hash the contents of the symlink without following
@@ -475,20 +471,20 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// Get the blob at `path` on the worktree and return its hash
-    pub fn hash_blob_from_worktree(self, path: BitPath) -> BitResult<Oid> {
+    pub(crate) fn hash_blob_from_worktree(self, path: BitPath) -> BitResult<Oid> {
         self.read_blob_from_worktree(path).and_then(|blob| hash::hash_obj(&blob))
     }
 
     /// convert a relative path to be absolute based off the repository root
     /// use [`Self::normalize_path`] if you expect the path to exist
-    pub fn to_absolute_path(self, path: impl AsRef<Path>) -> BitPath {
+    pub(crate) fn to_absolute_path(self, path: impl AsRef<Path>) -> BitPath {
         self.workdir.join(path)
     }
 
     /// converts relative_paths to absolute paths
     /// checks absolute paths exist and have a base relative to the bit directory
     // can't figure out how to make this take an impl AsRef<Path> and make lifetimes work out
-    pub fn normalize_path<'p>(self, path: &Path) -> BitResult<Cow<'_, Path>> {
+    pub(crate) fn normalize_path<'p>(self, path: &Path) -> BitResult<Cow<'_, Path>> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());

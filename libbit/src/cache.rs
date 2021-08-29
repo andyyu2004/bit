@@ -9,10 +9,6 @@ pub struct BitObjCache<'rcx> {
 }
 
 impl<'rcx> BitObjCache<'rcx> {
-    pub(crate) fn new() -> Self {
-        Self { objects: Default::default() }
-    }
-
     pub(crate) fn get_or_insert_with(
         &mut self,
         oid: Oid,

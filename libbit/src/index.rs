@@ -103,7 +103,8 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(())
     }
 
-    /// Builds a tree object from the current index entries and writes it and all subtrees to disk
+    /// Builds a tree object from the current index entries and writes it and all subtrees
+    /// to disk returning the oid of the root tree.
     pub fn write_tree(&mut self) -> BitResult<Oid> {
         if self.has_conflicts() {
             bail!("cannot write-tree an an index that is not fully merged");

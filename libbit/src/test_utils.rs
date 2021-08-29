@@ -178,7 +178,15 @@ macro_rules! bit_commit_all {
 macro_rules! bit_merge {
     ($repo:ident: $rev:expr) => {{
         let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
-        $repo.merge(&revision)?
+        $repo.merge(&revision).unwrap()
+    }};
+}
+
+macro_rules! bit_merge_expect_conflicts {
+    ($repo:ident: $rev:expr) => {{
+        use crate::error::*;
+        let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
+        $repo.merge(&revision).unwrap_err().try_into_merge_conflict().unwrap()
     }};
 }
 

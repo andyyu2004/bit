@@ -118,19 +118,16 @@ fn test_simple_merge() -> BitResult<()> {
         bit_commit_all!(repo);
 
         assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/b"));
-        bit_merge!(repo: "a");
 
-        repo.with_index(|index| {
-            assert!(index.has_conflicts());
-            let conflicts = index.conflicts();
-            assert_eq!(conflicts.len(), 1);
-            let conflict = &conflicts[0];
-            assert_eq!(
-                conflict,
-                &Conflict { path: p!("conflicted"), conflict_type: ConflictType::BothAdded }
-            );
-            Ok(())
-        })
+        let merge_conflict = bit_merge_expect_conflicts!(repo: "a");
+        let conflicts = merge_conflict.conflicts;
+        assert_eq!(conflicts.len(), 1);
+        let conflict = &conflicts[0];
+        assert_eq!(
+            conflict,
+            &Conflict { path: p!("conflicted"), conflict_type: ConflictType::BothAdded }
+        );
+        Ok(())
     })
 }
 
@@ -152,21 +149,17 @@ fn test_merge_conflict_types() -> BitResult<()> {
         rm!(repo: "bar");
         bit_commit_all!(repo);
 
-        bit_merge!(repo: "master");
-
-        repo.with_index(|index| {
-            assert!(index.has_conflicts());
-            let conflicts = index.conflicts();
-            assert_eq!(
-                conflicts,
-                vec![
-                    Conflict { path: p!("bar"), conflict_type: ConflictType::DeleteModify },
-                    Conflict { path: p!("dir/baz"), conflict_type: ConflictType::BothModified },
-                    Conflict { path: p!("foo"), conflict_type: ConflictType::ModifyDelete }
-                ]
-            );
-            Ok(())
-        })
+        let merge_conflict = bit_merge_expect_conflicts!(repo: "master");
+        let conflicts = merge_conflict.conflicts;
+        assert_eq!(
+            conflicts,
+            vec![
+                Conflict { path: p!("bar"), conflict_type: ConflictType::DeleteModify },
+                Conflict { path: p!("dir/baz"), conflict_type: ConflictType::BothModified },
+                Conflict { path: p!("foo"), conflict_type: ConflictType::ModifyDelete }
+            ]
+        );
+        Ok(())
     })
 }
 
