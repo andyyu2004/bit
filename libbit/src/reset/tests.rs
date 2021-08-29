@@ -51,3 +51,19 @@ fn test_reset_from_detached_head_to_branch() -> BitResult<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_simple_hard_reset() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "new-file");
+        bit_commit_all!(repo);
+        bit_branch!(repo: "some-branch");
+
+        bit_reset!(repo: --hard rev!("HEAD^"));
+        assert!(!exists!(repo: "new-file"));
+
+        bit_reset!(repo: --hard "some-branch");
+        assert!(exists!(repo: "new-file"));
+        Ok(())
+    })
+}

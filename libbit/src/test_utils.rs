@@ -122,6 +122,12 @@ macro_rules! check_next {
     };
 }
 
+macro_rules! exists {
+    ($repo:ident: $path:literal) => {
+        $repo.workdir.join($path).exists()
+    };
+}
+
 macro_rules! test_serde {
     ($item:ident) => {{
         let mut buf = vec![];
@@ -147,6 +153,9 @@ macro_rules! bit_branch {
     ($repo:ident: -b $branch:literal) => {
         $repo.bit_create_branch($branch, &rev!("HEAD"))?;
         bit_checkout!($repo: $branch)
+    };
+    ($repo:ident: $branch:literal @ $rev:expr) => {
+        $repo.bit_create_branch($branch, &$rev)?
     };
     ($repo:ident: $branch:literal) => {
         $repo.bit_create_branch($branch, &rev!("HEAD"))?
@@ -417,10 +426,15 @@ macro_rules! HEAD {
 
 #[macro_export]
 macro_rules! rev {
-    ($rev:expr) => {{
+    ($rev:literal) => {{
         #[allow(unused_imports)]
         use std::str::FromStr;
         $crate::rev::Revspec::from_str($rev)?
+    }};
+    ($rev:expr) => {{
+        #[allow(unused_imports)]
+        use std::str::FromStr;
+        $crate::rev::Revspec::from_str(&$rev.to_string())?
     }};
 }
 

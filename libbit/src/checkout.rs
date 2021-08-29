@@ -1,8 +1,11 @@
+use anyhow::Context;
+
 use crate::diff::{TreeDiffBuilder, TreeDiffer, TreeEntriesConsumer};
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
+use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::refs::{BitRef, RefUpdateCause};
 use crate::repo::BitRepo;
@@ -27,10 +30,9 @@ impl<'rcx> BitRepo<'rcx> {
         assert_ne!(reference, BitRef::HEAD);
 
         let status = self.status(Pathspec::MATCH_ALL)?;
+
         // only allow checkout on fully clean states for now
-        if !status.is_empty() {
-            bail!("cannot checkout: unclean state")
-        }
+        ensure!(status.is_empty(), "cannot checkout: unclean state");
 
         let commit_oid = self.fully_resolve_ref(reference)?;
         self.checkout_tree(commit_oid)?;
@@ -102,7 +104,8 @@ impl<'rcx> BitIndex<'rcx> {
                     .create_new(true)
                     .read(false)
                     .write(true)
-                    .open(&path)?;
+                    .open(&path)
+                    .with_context(|| anyhow!("failed to create file in migration create"))?;
                 file.write_all(&blob)?;
                 file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
             }
@@ -151,6 +154,11 @@ impl TreeDiffer for MigrationDiffer {
     fn created_tree(&mut self, entries_consumer: TreeEntriesConsumer<'_>) -> BitResult<()> {
         let mut entries = vec![];
         let tree_entry = entries_consumer.collect_over_all(&mut entries)?;
+        debug_assert_ne!(
+            tree_entry.path,
+            BitPath::EMPTY,
+            "should not be creating a root directory, probably occurred to an iterator not yielding a root"
+        );
         self.migration.mkdirs.push(tree_entry.into());
 
         for entry in entries {

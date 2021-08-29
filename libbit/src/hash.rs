@@ -1,5 +1,5 @@
-use crate::error::{BitGenericError, BitResult};
-use crate::obj::{Oid, WritableObject};
+use crate::error::BitGenericError;
+use crate::obj::Oid;
 use rustc_hash::FxHasher;
 use rustc_hex::{FromHex, ToHex};
 use sha1::digest::Output;

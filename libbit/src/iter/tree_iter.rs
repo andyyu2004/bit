@@ -171,7 +171,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// Return's tree iterator for a tree (or treeish object) with oid = `oid`
-    /// It is valid to pass `Oid::UNKNOWN` which will represent an empty iterator
+    /// It is valid to pass `Oid::UNKNOWN` which will represent an empty iterator which only yields the root
     // We can't use an `impl Treeish` here as the above case will not work
     pub fn tree_iter(self, oid: Oid) -> TreeIter<'rcx> {
         TreeIter::new(self, oid)
@@ -191,55 +191,12 @@ pub struct TreeIter<'rcx> {
 impl<'rcx> TreeIter<'rcx> {
     pub fn new(repo: BitRepo<'rcx>, oid: Oid) -> Self {
         debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_treeish());
-        // if the `oid` is unknown then we just want an empty iterator
-        let entry_stack = if oid.is_known() {
-            vec![(BitPath::EMPTY, TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE })]
-        } else {
-            vec![]
-        };
+        let entry_stack =
+            vec![(BitPath::EMPTY, TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE })];
         Self { repo, previous_len: 0, entry_stack }
     }
 }
 
-impl<'rcx> FallibleIterator for TreeIter<'rcx> {
-    type Error = BitGenericError;
-    type Item = BitIndexEntry;
-
-    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        loop {
-            match self.entry_stack.pop() {
-                Some((base, mut entry)) => match entry.mode {
-                    FileMode::TREE => {
-                        let tree = entry.oid.treeish(self.repo)?;
-                        let path = base.join(entry.path);
-                        trace!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
-
-                        self.previous_len = self.entry_stack.len();
-                        self.entry_stack.extend(
-                            tree.entries
-                                .iter()
-                                .copied()
-                                .rev()
-                                // TODO we have to filter out here for now otherwise peek may blow up
-                                .filter(|entry| entry.mode != FileMode::GITLINK)
-                                .map(|entry| (path, entry)),
-                        );
-
-                        return Ok(Some(TreeEntry { path, ..entry }.into()));
-                    }
-                    FileMode::REG | FileMode::LINK | FileMode::EXEC => {
-                        trace!("TreeIter::next: entry: {:?}", entry);
-                        entry.path = base.join(entry.path);
-                        return Ok(Some(entry.into()));
-                    }
-                    // ignore submodules for now
-                    FileMode::GITLINK => continue,
-                },
-                None => return Ok(None),
-            }
-        }
-    }
-}
 impl<'rcx> BitTreeIterator for TreeIter<'rcx> {
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
         match self.next()? {
@@ -263,5 +220,54 @@ impl<'rcx> BitTreeIterator for TreeIter<'rcx> {
             entry.path = base.join(entry.path);
             entry.into()
         }))
+    }
+}
+
+impl<'rcx> FallibleIterator for TreeIter<'rcx> {
+    type Error = BitGenericError;
+    type Item = BitIndexEntry;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        loop {
+            match self.entry_stack.pop() {
+                Some((base, mut entry)) => match entry.mode {
+                    FileMode::TREE => {
+                        // special case for when the initial `oid` is unknown then we just want an iterator that yields only the root
+                        if entry.oid.is_unknown() {
+                            debug_assert!(self.entry_stack.is_empty());
+                            debug_assert_eq!(entry.path, BitPath::EMPTY);
+                            entry.oid = Oid::EMPTY_TREE;
+                            return Ok(Some(entry.into()));
+                        }
+
+                        let tree = entry.oid.treeish(self.repo)?;
+                        let path = base.join(entry.path);
+                        trace!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
+
+                        self.previous_len = self.entry_stack.len();
+                        self.entry_stack.extend(
+                            tree.entries
+                                .iter()
+                                .copied()
+                                .rev()
+                                // TODO we have to filter out here for now otherwise peek may blow up
+                                .filter(|entry| entry.mode != FileMode::GITLINK)
+                                .map(|entry| (path, entry)),
+                        );
+
+                        return Ok(Some(TreeEntry { path, ..entry }.into()));
+                    }
+                    FileMode::REG | FileMode::LINK | FileMode::EXEC => {
+                        trace!("TreeIter::next: entry: {:?}", entry);
+                        debug_assert!(entry.oid.is_known());
+                        entry.path = base.join(entry.path);
+                        return Ok(Some(entry.into()));
+                    }
+                    // ignore submodules for now
+                    FileMode::GITLINK => continue,
+                },
+                None => return Ok(None),
+            }
+        }
     }
 }

@@ -166,7 +166,7 @@ impl Tree<'_> {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Default)]
 pub struct MutableTree {
     pub entries: BTreeSet<TreeEntry>,
 }
@@ -180,12 +180,6 @@ impl FromIterator<TreeEntry> for MutableTree {
 impl MutableTree {
     pub fn new(entries: BTreeSet<TreeEntry>) -> Self {
         Self { entries }
-    }
-}
-
-impl Default for MutableTree {
-    fn default() -> Self {
-        Self::new(Default::default())
     }
 }
 

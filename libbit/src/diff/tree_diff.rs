@@ -103,9 +103,14 @@ where
         trace!("TreeDifferGeneric::on_match(path: {})", new.path());
         // One of the oid's may be unknown due to being either a pseudotree (index_tree_iter)
         // or just a tree (worktree_tree_iter)
-        debug_assert!(old.oid().is_known() || new.oid().is_known());
+        // There is also the case where there are two root entries both with unknown oids which is ok
+        debug_assert!(
+            old.oid().is_known()
+                || new.oid().is_known()
+                || old.path == BitPath::EMPTY && new.path == BitPath::EMPTY
+        );
         match (old.mode(), new.mode()) {
-            (FileMode::TREE, FileMode::TREE) if old == new => {
+            (FileMode::TREE, FileMode::TREE) if old.oid().is_known() && old == new => {
                 // if hashes match and both are directories we can step over them
                 self.old_iter.over()?;
                 self.new_iter.over()?;

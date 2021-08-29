@@ -1,5 +1,4 @@
 use crate::error::{BitError, BitGenericError, BitResult, BitResultExt};
-use crate::hash;
 use crate::iter::DirIter;
 use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{self, *};

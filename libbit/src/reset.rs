@@ -33,6 +33,20 @@ impl<'rcx> BitRepo<'rcx> {
         let target_commit = target_commit_oid.peel(self)?;
         let tree = target_commit.tree_oid();
 
+        // Important to call `checkout_tree` before HEAD is updated as it internally read's the current head.
+        // This should probably change once checkout_tree takes some options which should explicitly include the baseline tree
+        // Also, do the `checkout` before the index `read_tree` as `checkout` will touch the index too,
+        // but we want to `read_tree` to have the final say on the state of the index.
+        if kind > ResetKind::Mixed {
+            // force checkout the tree, `checkout_tree` is always a force checkout for now
+            self.checkout_tree(tree)?;
+        }
+
+        if kind > ResetKind::Soft {
+            // make index match the target commit's tree
+            self.with_index_mut(|index| index.read_tree(tree))?;
+        }
+
         // Move the current branch to the target
         // If we are current in detached head state, then we move HEAD to the target reference (either direct or indirect)
         // If we are on a branch, then we move that branch to the target oid directly (i.e. we don't want our branch to point at another branch)
@@ -45,18 +59,6 @@ impl<'rcx> BitRepo<'rcx> {
                 RefUpdateCause::Reset { target: target_commit_oid.into() },
             )?,
         };
-
-        // doing the `checkout` before the index `read_tree` as `checkout` will touch the index too,
-        // but we want to `read_tree` to have the final say on the state of the index
-        if kind > ResetKind::Mixed {
-            // force checkout the tree, `checkout_tree` is always a force checkout for now
-            self.checkout_tree(tree)?;
-        }
-
-        if kind > ResetKind::Soft {
-            // make index match the target commit's tree
-            self.with_index_mut(|index| index.read_tree(tree))?;
-        }
 
         Ok(())
     }

@@ -100,19 +100,36 @@ fn test_criss_cross_merge_base() -> BitResult<()> {
     })
 }
 
+// a - c
+//   X
+// b - d
 #[test]
 fn test_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
+        let tree_a = tree! {
+            foo < "foo"
+        };
+
+        let tree_b = tree! {
+            foo < "foo"
+        };
+
+        let tree_c = tree! {
+            foo < "foo"
+        };
+
+        let tree_d = tree! {
+            foo < "foo"
+        };
+
         let mut dag = DagBuilder::default();
-        let [a, b, c, d] = dag.mk_nodes();
+        let [a, b, c, d] = dag.mk_nodes_with_trees([tree_a, tree_b, tree_c, tree_d]);
         dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
 
         let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
 
-        let merge_bases = repo.merge_bases(commits[&c], commits[&d])?;
-        assert_eq!(merge_bases.len(), 2);
-        assert_eq!(merge_bases[0].oid(), commits[&a]);
-        assert_eq!(merge_bases[1].oid(), commits[&b]);
+        bit_reset!(repo: --hard rev!(commits[&c]));
+        // bit_branch!(repo: "c" @ rev!(commits[&d]));
 
         Ok(())
     })
