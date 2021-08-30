@@ -18,8 +18,8 @@ impl Cmd for BitMergeCliOpts {
             //  foo | 0
             //  1 file changed, 0 insertions(+), 0 deletions(-)
             //  create mode 100644 foo
-            MergeKind::FastForward => println!("idk some ff message"),
             MergeKind::Null => println!("already up to date"),
+            MergeKind::FastForward { to } => println!("idk some ff message `{}`", to),
             MergeKind::Merge(_) => todo!(),
         }
         Ok(())

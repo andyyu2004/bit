@@ -79,6 +79,9 @@ fn test_best_common_ancestors() -> BitResult<()> {
     })
 }
 
+// a - c
+//   X
+// b - d
 #[test]
 fn test_criss_cross_merge_base() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
@@ -97,9 +100,6 @@ fn test_criss_cross_merge_base() -> BitResult<()> {
     })
 }
 
-// a - c
-//   X
-// b - d
 #[test]
 fn test_trivial_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
@@ -115,6 +115,46 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
 
         bit_reset!(repo: --hard rev!(commits[&c]));
         bit_branch!(repo: "d" @ rev!(commits[&d]));
+        bit_merge!(repo: "d");
+
+        Ok(())
+    })
+}
+
+// TODO test behaviour when a and b have conflicts, probably introduce a parent commit for them too
+#[test_env_log::test]
+fn test_nontrivial_criss_cross_merge() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let tree_a = tree! {
+            foo < "foo\nafter"
+        };
+
+        let tree_b = tree! {
+            foo < "before\nfoo"
+        };
+
+        // a `merge` b
+        // before
+        // foo
+        // after
+
+        let tree_c = tree! {
+            foo < "removed before\nfoo\nafter"
+        };
+
+        let tree_d = tree! {
+            foo < "before\nfoo\nremoved after"
+        };
+
+        let mut dag = DagBuilder::default();
+        let [a, b, c, d] = dag.mk_nodes_with_trees([tree_a, tree_b, tree_c, tree_d]);
+        dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
+
+        let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
+
+        bit_reset!(repo: --hard rev!(commits[&c]));
+        bit_branch!(repo: "d" @ rev!(commits[&d]));
+
         bit_merge!(repo: "d");
 
         Ok(())
@@ -200,14 +240,19 @@ fn test_null_merge() -> BitResult<()> {
 }
 
 #[test]
-fn test_ff_merge() -> BitResult<()> {
+fn test_fast_forward_merge() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         bit_branch!(repo: -b "b");
         modify!(repo: "foo");
         bit_commit_all!(repo);
         bit_checkout!(repo: "master");
         let merge_kind = bit_merge!(repo: "b");
-        assert_eq!(merge_kind, MergeKind::FastForward);
+        assert_eq!(merge_kind, MergeKind::FastForward { to: symbolic_ref!("refs/heads/b") });
+
+        // HEAD should not have moved
+        assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/master"));
+        // But `master` itself should now point to the same commit as `b`
+        assert_eq!(repo.fully_resolve_ref("master")?, repo.fully_resolve_ref("b")?);
         Ok(())
     })
 }

@@ -1,9 +1,11 @@
 use crate::error::BitResult;
 use crate::obj::{BitObjKind, BitObject, FileMode, Oid, TreeEntry};
 use crate::path::BitPath;
+use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use rand::Rng;
 use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
 
 #[derive(Debug, PartialEq)]
 pub enum DebugTreeEntry {
@@ -51,6 +53,12 @@ impl Display for DebugTree {
             write!(f, "{}", entry)?;
         }
         Ok(())
+    }
+}
+
+impl<'a> From<&'a str> for BitRef {
+    fn from(s: &'a str) -> Self {
+        Self::from_str(s).unwrap()
     }
 }
 
@@ -254,28 +262,6 @@ macro_rules! symlink {
 macro_rules! random {
     () => {
         crate::test_utils::generate_sane_string_with_newlines(50..1000)
-    };
-}
-
-macro_rules! enable_log {
-    () => {
-        env_logger::builder().parse_env("BIT_LOG").init();
-    };
-}
-
-macro_rules! stat {
-    ($repo:ident: $path:literal) => {
-        #[allow(unused_imports)]
-        use std::os::unix::fs::*;
-        let metadata = std::fs::symlink_metadata($repo.workdir.join($path))?;
-        eprintln!(
-            "ctime {}:{}; mtime: {} {}; size: {}",
-            metadata.ctime(),
-            metadata.ctime_nsec(),
-            metadata.mtime(),
-            metadata.mtime_nsec() as u32,
-            metadata.size()
-        );
     };
 }
 

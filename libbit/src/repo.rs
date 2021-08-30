@@ -2,6 +2,7 @@ use crate::cache::{BitObjCache, VirtualOdb};
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
+use crate::merge::MergeKind;
 use crate::obj::*;
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
@@ -406,13 +407,27 @@ impl<'rcx> BitRepo<'rcx> {
         self.refdb()?.update(sym, to.into(), cause)
     }
 
-    pub(crate) fn update_ref_for_reset(
-        self,
-        sym: SymbolicRef,
-        target: impl Into<BitRef>,
-    ) -> BitResult<()> {
+    // Update the "current branch" to point at `target`.
+    // If currently in detached head state, then HEAD will be updated.
+    // Otherwise, the branch pointed to by HEAD will be updated.
+    pub fn update_current_ref(self, target: Oid, cause: RefUpdateCause) -> BitResult<()> {
+        // does not handle multiple level symrefs but unsure when they arise
+        match self.read_head()? {
+            BitRef::Direct(..) => self.update_ref(SymbolicRef::HEAD, target, cause),
+            BitRef::Symbolic(current_branch) => self.update_ref(current_branch, target, cause),
+        }
+    }
+
+    pub(crate) fn update_current_ref_for_reset(self, target: impl Into<BitRef>) -> BitResult<()> {
         let target = target.into();
-        self.update_ref(sym, target, RefUpdateCause::Reset { target })
+        let oid = self.fully_resolve_ref(target)?;
+        self.update_current_ref(oid, RefUpdateCause::Reset { target })
+    }
+
+    pub(crate) fn update_current_ref_for_ff_merge(self, to: impl Into<BitRef>) -> BitResult<()> {
+        let to = to.into();
+        let oid = self.fully_resolve_ref(to)?;
+        self.update_current_ref(oid, RefUpdateCause::Merge { kind: MergeKind::FastForward { to } })
     }
 
     pub(crate) fn update_head_for_checkout(self, to: impl Into<BitRef>) -> BitResult<()> {

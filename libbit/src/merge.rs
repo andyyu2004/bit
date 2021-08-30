@@ -41,8 +41,8 @@ pub struct MergeConflict {
 }
 
 impl Display for MergeConflict {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, "merge conflicts TODO formatting {:?}", self.conflicts)
     }
 }
 
@@ -56,14 +56,14 @@ struct MergeCtxt<'a, 'rcx> {
     their_head: Oid,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MergeKind {
-    FastForward,
     Null,
+    FastForward { to: BitRef },
     Merge(MergeSummary),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MergeSummary {}
 
 impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
@@ -76,10 +76,11 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
 
     fn merge_base_recursive(
         &mut self,
-        a: &'rcx Commit<'rcx>,
-        b: &'rcx Commit<'rcx>,
+        our_head: &'rcx Commit<'rcx>,
+        their_head: &'rcx Commit<'rcx>,
     ) -> BitResult<Option<&'rcx Commit<'rcx>>> {
-        let merge_bases = a.find_merge_bases(b)?;
+        debug!("MergeCtxt::merge_base_recursive({}, {})", our_head.oid(), their_head.oid());
+        let merge_bases = our_head.find_merge_bases(their_head)?;
         match &merge_bases[..] {
             [] => Ok(None),
             [merge_base] => Ok(Some(merge_base)),
@@ -93,21 +94,30 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         our_head: &'rcx Commit<'rcx>,
         their_head: &'rcx Commit<'rcx>,
     ) -> BitResult<&'rcx Commit<'rcx>> {
+        debug!("MergeCtxt::make_virtual_base({}, {})", our_head.oid(), their_head.oid());
         let merge_base = self.merge_base_recursive(our_head, their_head)?;
         self.merge_commits(merge_base, our_head, their_head)?;
 
         debug_assert!(!self.index.has_conflicts());
         let merged_tree = self.index.virtual_write_tree()?;
-        self.repo.virtual_write_commit(
+        let merge_commit = self.repo.virtual_write_commit(
             merged_tree,
             CommitMessage::new_subject("generated virtual merge commit"),
             // ordering is significant here for `--first-parent`
             // i.e. the first parent should always be our head
             smallvec![our_head.oid(), their_head.oid()],
-        )
+        )?;
+
+        #[cfg(test)]
+        trace!(
+            "MergeCtxt::make_virtual_base(..) :: merged_commit_tree = {:?}",
+            self.repo.debug_tree(merge_commit.tree_oid())
+        );
+        Ok(merge_commit)
     }
 
     pub fn merge(&mut self) -> BitResult<MergeKind> {
+        debug!("MergeCtxt::merge()");
         let repo = self.repo;
         let their_head = self.their_head;
         let our_head = repo.fully_resolve_head()?;
@@ -121,11 +131,16 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
             }
 
             if merge_base.oid() == our_head {
-                return Ok(MergeKind::FastForward);
+                repo.update_current_ref_for_ff_merge(self.their_head_ref)?;
+                return Ok(MergeKind::FastForward { to: self.their_head_ref });
             }
         }
 
         self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
+
+        if self.index.has_conflicts() {
+            bail!(BitError::MergeConflict(MergeConflict { conflicts: self.index.conflicts() }))
+        }
 
         Ok(MergeKind::Merge(MergeSummary {}))
     }
@@ -155,10 +170,6 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         let repo = self.repo;
         let walk = repo.walk_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
         walk.for_each(|[base, a, b]| self.merge_entries(base, a, b))?;
-
-        if self.index.has_conflicts() {
-            bail!(BitError::MergeConflict(MergeConflict { conflicts: self.index.conflicts() }))
-        }
 
         Ok(())
     }

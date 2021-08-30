@@ -47,15 +47,7 @@ impl<'rcx> BitRepo<'rcx> {
             self.with_index_mut(|index| index.read_tree(tree))?;
         }
 
-        // Move the current branch to the target
-        // If we are current in detached head state, then we move HEAD to the target reference (either direct or indirect)
-        // If we are on a branch, then we move that branch to the target oid directly (i.e. we don't want our branch to point at another branch)
-        match self.read_head()? {
-            BitRef::Direct(..) => self.update_ref_for_reset(SymbolicRef::HEAD, target)?,
-            BitRef::Symbolic(current_branch) =>
-                self.update_ref_for_reset(current_branch, target_commit_oid)?,
-        };
-
+        self.update_current_ref_for_reset(target_commit_oid)?;
         Ok(())
     }
 }
