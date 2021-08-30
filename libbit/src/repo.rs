@@ -2,7 +2,7 @@ use crate::cache::{BitObjCache, VirtualOdb};
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
-use crate::merge::MergeKind;
+use crate::merge::MergeStrategy;
 use crate::obj::*;
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
@@ -47,6 +47,9 @@ pub struct Arenas<'rcx> {
     tag_arena: TypedArena<Tag<'rcx>>,
 }
 
+/// The context backing `BitRepo`
+/// Most of the fields are using threadsafe wrappers due to experimentation with
+/// multithreading but the results were not great so they are not in use currently.
 pub struct RepoCtxt<'rcx> {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
@@ -273,10 +276,12 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn with_index_mut<R>(
         self,
-        f: impl FnOnce(&mut BitIndex<'_>) -> BitResult<R>,
+        f: impl FnOnce(&mut BitIndex<'rcx>) -> BitResult<R>,
     ) -> BitResult<R> {
         let index_ref = self.index_ref()?;
-        let index = &mut *index_ref.write();
+        let index = &mut *index_ref
+            .try_write()
+            .expect("don't expect concurrent writes, probably tried to grab it reentrantly");
         match f(index) {
             Ok(r) => Ok(r),
             Err(err) => {
@@ -427,7 +432,19 @@ impl<'rcx> BitRepo<'rcx> {
     pub(crate) fn update_current_ref_for_ff_merge(self, to: impl Into<BitRef>) -> BitResult<()> {
         let to = to.into();
         let oid = self.fully_resolve_ref(to)?;
-        self.update_current_ref(oid, RefUpdateCause::Merge { kind: MergeKind::FastForward { to } })
+        self.update_current_ref(
+            oid,
+            RefUpdateCause::Merge { to, strategy: MergeStrategy::FastForward },
+        )
+    }
+
+    pub(crate) fn update_current_ref_for_merge(self, to: impl Into<BitRef>) -> BitResult<()> {
+        let to = to.into();
+        let oid = self.fully_resolve_ref(to)?;
+        self.update_current_ref(
+            oid,
+            RefUpdateCause::Merge { to, strategy: MergeStrategy::Recursive },
+        )
     }
 
     pub(crate) fn update_head_for_checkout(self, to: impl Into<BitRef>) -> BitResult<()> {

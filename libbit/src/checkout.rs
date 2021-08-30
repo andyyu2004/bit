@@ -3,7 +3,7 @@ use anyhow::Context;
 use crate::diff::{TreeDiffBuilder, TreeDiffer, TreeEntriesConsumer};
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
-use crate::iter::{BitEntry, BitTreeIterator};
+use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
@@ -19,12 +19,12 @@ impl<'rcx> BitRepo<'rcx> {
     /// checkout the branch/commit specified by the revision
     /// - updates the worktree to match the tree represented by the tree of the commit
     /// - moves HEAD to point at the branch/commit
-    pub fn checkout(self, rev: &Revspec) -> BitResult<()> {
+    pub fn checkout_revision(self, rev: &Revspec) -> BitResult<()> {
         let reference = self.resolve_rev(rev)?;
-        self.checkout_reference(reference)
+        self.checkout(reference)
     }
 
-    pub fn checkout_reference(self, reference: impl Into<BitRef>) -> BitResult<()> {
+    pub fn checkout(self, reference: impl Into<BitRef>) -> BitResult<()> {
         let reference: BitRef = reference.into();
         // doesn't make sense to move HEAD -> HEAD
         assert_ne!(reference, BitRef::HEAD);
@@ -50,25 +50,29 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(())
     }
 
-    /// Update working directory and index to match the tree referenced by `treeish`
-    // there are currently no safety checks here! (i.e. it does a force checkout)
     pub fn checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
-        let target_tree = treeish.treeish_oid(self)?;
-        let baseline = self.head_tree_iter()?;
-        let target = self.tree_iter(target_tree);
-        // TODO take current workdir into account (and weaken the assertions in checkout that require a clean status)
-        // let workdir = self.worktree_iter()?;
-        let migration = Migration::generate(baseline, target)?;
-        self.with_index_mut(|index| {
-            index.apply_migration(&migration)?;
-            debug_assert!(index.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
-            debug_assert!(index.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
-            Ok(())
-        })
+        self.with_index_mut(|index| index.checkout_tree(treeish))
     }
 }
 
 impl<'rcx> BitIndex<'rcx> {
+    /// Update working directory and index to match the tree referenced by `treeish`.
+    // NOTE
+    // - There are currently no safety checks here! (i.e. it does a force checkout)
+    // - Don't update HEAD before calling this as this does a diff relative to the current HEAD (for now)
+    pub fn checkout_tree(&mut self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
+        let repo = self.repo;
+        let target_tree = treeish.treeish_oid(repo)?;
+        let baseline = repo.head_tree_iter()?;
+        let target = repo.tree_iter(target_tree);
+        let workdir = self.worktree_iter()?;
+        let migration = Migration::generate(baseline, target, workdir)?;
+        self.apply_migration(&migration)?;
+        debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
+        debug_assert!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
+        Ok(())
+    }
+
     fn apply_migration(&mut self, migration: &Migration) -> BitResult<()> {
         let repo = self.repo;
         for rmrf in &migration.rmrfs {
@@ -127,6 +131,7 @@ impl Migration {
     pub fn generate(
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
+        _workdir: impl BitEntryIterator,
     ) -> BitResult<Self> {
         MigrationDiffer::default().build_diff(baseline, target)
     }

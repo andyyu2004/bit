@@ -153,7 +153,7 @@ macro_rules! bit_commit {
 macro_rules! bit_checkout {
     ($repo:ident: $rev:literal) => {{
         let revision = $rev.parse::<$crate::rev::Revspec>()?;
-        $repo.checkout(&revision)?;
+        $repo.checkout_revision(&revision)?;
     }};
 }
 

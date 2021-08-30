@@ -11,6 +11,6 @@ pub struct BitCheckoutCliOpts {
 
 impl Cmd for BitCheckoutCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
-        repo.checkout(&self.revision)
+        repo.checkout_revision(&self.revision)
     }
 }

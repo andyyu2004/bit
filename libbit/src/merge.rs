@@ -26,12 +26,18 @@ impl<'rcx> BitRepo<'rcx> {
         a.peel(self)?.find_merge_bases(b.peel(self)?)
     }
 
-    pub fn merge_ref(self, their_head_ref: BitRef) -> BitResult<MergeKind> {
-        self.with_index_mut(|index| MergeCtxt::new(index, their_head_ref)?.merge())
+    pub fn merge_ref(self, their_head_ref: BitRef) -> BitResult<MergeResults> {
+        self.with_index_mut(|index| index.merge(their_head_ref))
     }
 
-    pub fn merge(self, their_head: &Revspec) -> BitResult<MergeKind> {
+    pub fn merge(self, their_head: &Revspec) -> BitResult<MergeResults> {
         self.merge_ref(self.resolve_rev(their_head)?)
+    }
+}
+
+impl<'rcx> BitIndex<'rcx> {
+    pub fn merge(&mut self, their_head_ref: BitRef) -> BitResult<MergeResults> {
+        MergeCtxt::new(self, their_head_ref)?.merge()
     }
 }
 
@@ -56,8 +62,14 @@ struct MergeCtxt<'a, 'rcx> {
     their_head: Oid,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum MergeStrategy {
+    FastForward,
+    Recursive,
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum MergeKind {
+pub enum MergeResults {
     Null,
     FastForward { to: BitRef },
     Merge(MergeSummary),
@@ -103,8 +115,6 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         let merge_commit = self.repo.virtual_write_commit(
             merged_tree,
             CommitMessage::new_subject("generated virtual merge commit"),
-            // ordering is significant here for `--first-parent`
-            // i.e. the first parent should always be our head
             smallvec![our_head.oid(), their_head.oid()],
         )?;
 
@@ -116,7 +126,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         Ok(merge_commit)
     }
 
-    pub fn merge(&mut self) -> BitResult<MergeKind> {
+    pub fn merge(&mut self) -> BitResult<MergeResults> {
         debug!("MergeCtxt::merge()");
         let repo = self.repo;
         let their_head = self.their_head;
@@ -127,12 +137,13 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
 
         if let Some(merge_base) = merge_base {
             if merge_base.oid() == self.their_head {
-                return Ok(MergeKind::Null);
+                return Ok(MergeResults::Null);
             }
 
             if merge_base.oid() == our_head {
+                self.index.checkout_tree(their_head_commit)?;
                 repo.update_current_ref_for_ff_merge(self.their_head_ref)?;
-                return Ok(MergeKind::FastForward { to: self.their_head_ref });
+                return Ok(MergeResults::FastForward { to: self.their_head_ref });
             }
         }
 
@@ -142,7 +153,19 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
             bail!(BitError::MergeConflict(MergeConflict { conflicts: self.index.conflicts() }))
         }
 
-        Ok(MergeKind::Merge(MergeSummary {}))
+        let merged_tree = self.index.write_tree()?;
+        let merge_commit = self.repo.write_commit(
+            merged_tree,
+            CommitMessage::new_subject("todo ask user for commit message"),
+            // ordering is significant here for `--first-parent`
+            // i.e. the first parent should always be our head
+            smallvec![our_head, their_head],
+        )?;
+
+        self.index.checkout_tree(merge_commit)?;
+        repo.update_current_ref_for_merge(their_head)?;
+
+        Ok(MergeResults::Merge(MergeSummary {}))
     }
 
     fn merge_commits(

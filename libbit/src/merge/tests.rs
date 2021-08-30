@@ -1,7 +1,7 @@
 use crate::error::BitResult;
 use crate::graph::{Dag, DagBuilder, DagNode, Node};
 use crate::index::{Conflict, ConflictType};
-use crate::merge::MergeKind;
+use crate::merge::MergeResults;
 use crate::obj::{BitObject, CommitMessage, Oid};
 use crate::repo::BitRepo;
 use crate::test_utils::generate_random_string;
@@ -100,7 +100,7 @@ fn test_criss_cross_merge_base() -> BitResult<()> {
     })
 }
 
-#[test]
+#[test_env_log::test]
 fn test_trivial_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let tree = tree! {
@@ -116,15 +116,25 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
         bit_reset!(repo: --hard rev!(commits[&c]));
         bit_branch!(repo: "d" @ rev!(commits[&d]));
         bit_merge!(repo: "d");
+        dbg!(bit_status!(repo));
+        assert!(bit_status!(repo).is_empty());
 
         Ok(())
     })
 }
 
+//    a  -  c
+//  /
+// O    X
+//  \
+//   b  -  d
 // TODO test behaviour when a and b have conflicts, probably introduce a parent commit for them too
 #[test_env_log::test]
 fn test_nontrivial_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
+        let tree_o = tree! {
+            foo < "foo"
+        };
         let tree_a = tree! {
             foo < "foo\nafter"
         };
@@ -147,8 +157,8 @@ fn test_nontrivial_criss_cross_merge() -> BitResult<()> {
         };
 
         let mut dag = DagBuilder::default();
-        let [a, b, c, d] = dag.mk_nodes_with_trees([tree_a, tree_b, tree_c, tree_d]);
-        dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
+        let [o, a, b, c, d] = dag.mk_nodes_with_trees([tree_o, tree_a, tree_b, tree_c, tree_d]);
+        dag.add_parents([(a, o), (b, o), (c, a), (c, b), (d, a), (d, b)]);
 
         let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
 
@@ -234,7 +244,7 @@ fn test_null_merge() -> BitResult<()> {
         modify!(repo: "foo");
         bit_commit_all!(repo);
         let merge_kind = bit_merge!(repo: "master");
-        assert_eq!(merge_kind, MergeKind::Null);
+        assert_eq!(merge_kind, MergeResults::Null);
         Ok(())
     })
 }
@@ -247,7 +257,7 @@ fn test_fast_forward_merge() -> BitResult<()> {
         bit_commit_all!(repo);
         bit_checkout!(repo: "master");
         let merge_kind = bit_merge!(repo: "b");
-        assert_eq!(merge_kind, MergeKind::FastForward { to: symbolic_ref!("refs/heads/b") });
+        assert_eq!(merge_kind, MergeResults::FastForward { to: symbolic_ref!("refs/heads/b") });
 
         // HEAD should not have moved
         assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/master"));

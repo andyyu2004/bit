@@ -31,7 +31,7 @@ impl Cmd for BitSwitchCliOpts {
             // switch is currently a limited form of checkout where only branches are allowed (can't checkout commits)
             repo.resolve_rev_to_branch(&self.revision)?
         };
-        repo.checkout_reference(target)
+        repo.checkout(target)
     }
 }
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
-use libbit::merge::MergeKind;
+use libbit::merge::MergeResults;
 use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
 
@@ -18,9 +18,9 @@ impl Cmd for BitMergeCliOpts {
             //  foo | 0
             //  1 file changed, 0 insertions(+), 0 deletions(-)
             //  create mode 100644 foo
-            MergeKind::Null => println!("already up to date"),
-            MergeKind::FastForward { to } => println!("idk some ff message `{}`", to),
-            MergeKind::Merge(_) => todo!(),
+            MergeResults::Null => println!("already up to date"),
+            MergeResults::FastForward { to } => println!("idk some ff message `{}`", to),
+            MergeResults::Merge(_) => todo!(),
         }
         Ok(())
     }

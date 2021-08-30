@@ -1,7 +1,7 @@
 use super::{BitRef, BitReflog, SymbolicRef};
 use crate::error::{BitError, BitErrorExt, BitResult};
 use crate::lockfile::{Filelock, Lockfile, LockfileFlags};
-use crate::merge::MergeKind;
+use crate::merge::MergeStrategy;
 use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -250,7 +250,7 @@ pub enum RefUpdateCause {
     Commit { subject: String, kind: RefUpdateCommitKind },
     Checkout { from: BitRef, to: BitRef },
     Reset { target: BitRef },
-    Merge { kind: MergeKind },
+    Merge { to: BitRef, strategy: MergeStrategy },
 }
 
 impl Display for RefUpdateCause {
@@ -265,10 +265,9 @@ impl Display for RefUpdateCause {
             RefUpdateCause::Checkout { from, to } =>
                 write!(f, "checkout: moving from `{}` to `{}`", from, to),
             RefUpdateCause::Reset { target } => write!(f, "reset: moving to `{}`", target),
-            RefUpdateCause::Merge { kind } => match kind {
-                MergeKind::Null => unreachable!(),
-                MergeKind::FastForward { to } => write!(f, "merge `{}`: fast-forward", to),
-                MergeKind::Merge(_) => todo!(),
+            RefUpdateCause::Merge { to, strategy } => match strategy {
+                MergeStrategy::FastForward => write!(f, "merge `{}`: fast-forward", to),
+                MergeStrategy::Recursive => write!(f, "merge `{}`, recursive", to),
             },
         }
     }
