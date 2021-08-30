@@ -65,8 +65,8 @@ impl<'rcx> BitIndex<'rcx> {
         let target_tree = treeish.treeish_oid(repo)?;
         let baseline = repo.head_tree_iter()?;
         let target = repo.tree_iter(target_tree);
-        let workdir = self.worktree_iter()?;
-        let migration = Migration::generate(baseline, target, workdir)?;
+        let _workdir = self.worktree_iter()?;
+        let migration = Migration::generate(baseline, target)?;
         self.apply_migration(&migration)?;
         debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
         debug_assert!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
@@ -131,7 +131,7 @@ impl Migration {
     pub fn generate(
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
-        _workdir: impl BitEntryIterator,
+        // _workdir: impl BitEntryIterator,
     ) -> BitResult<Self> {
         MigrationDiffer::default().build_diff(baseline, target)
     }

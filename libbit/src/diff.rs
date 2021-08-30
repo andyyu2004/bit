@@ -15,6 +15,15 @@ use fallible_iterator::{Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
+impl<'rcx> BitRepo<'rcx> {
+    pub fn diff_tree_to_tree_v2(self, a: Oid, b: Oid) -> BitResult<WorkspaceStatus> {
+        let a = self.tree_iter(a);
+        let b = self.tree_iter(b);
+        todo!()
+        // TreeStatusDiffer::default().build_diff(self.tree_iter(a), self.tree_iter(b))
+    }
+}
+
 // consider changing the callback based api to something iterator based that returns something like the following enum
 // #[derive(Debug, PartialEq, Eq, Clone)]
 // pub enum EntryDiff<'a> {
