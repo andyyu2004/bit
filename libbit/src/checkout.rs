@@ -3,7 +3,7 @@ use anyhow::Context;
 use crate::diff::{TreeDiffBuilder, TreeDiffer, TreeEntriesConsumer};
 use crate::error::BitResult;
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
-use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
+use crate::iter::{BitEntry, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;

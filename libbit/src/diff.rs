@@ -1,7 +1,7 @@
 mod tree_diff;
 pub use tree_diff::*;
 
-use crate::error::BitResult;
+use crate::error::{BitGenericError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::{Oid, Treeish};
@@ -11,106 +11,72 @@ use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
 use crate::time::Timespec;
-use fallible_iterator::{Fuse, Peekable};
+use fallible_iterator::{FallibleIterator, Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-impl<'rcx> BitRepo<'rcx> {
-    pub fn diff_tree_to_tree_v2(self, a: Oid, b: Oid) -> BitResult<WorkspaceStatus> {
-        let a = self.tree_iter(a);
-        let b = self.tree_iter(b);
-        todo!()
-        // TreeStatusDiffer::default().build_diff(self.tree_iter(a), self.tree_iter(b))
-    }
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum DiffEntry {
+    Deleted(BitIndexEntry),
+    Modified(BitIndexEntry, BitIndexEntry),
+    Created(BitIndexEntry),
 }
 
-// consider changing the callback based api to something iterator based that returns something like the following enum
-// #[derive(Debug, PartialEq, Eq, Clone)]
-// pub enum EntryDiff<'a> {
-//     Deleted(&'a BitIndexEntry),
-//     Modified(&'a BitIndexEntry, &'a BitIndexEntry),
-//     Created(&'a BitIndexEntry),
-// }
-
-pub trait Differ {
-    fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()>;
-    fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()>;
-    fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()>;
-}
-
-pub trait IndexDiffer<'rcx>: Differ {
-    fn index_mut(&mut self) -> &mut BitIndex<'rcx>;
-}
-
-pub trait DiffBuilder<'rcx>: IndexDiffer<'rcx> {
-    /// the type of the resulting diff (returned by `Self::build_diff`)
-    type Diff;
-    fn build_diff(self) -> BitResult<Self::Diff>;
-}
-
-// TODO this is actually now specific to worktree index diffs
-pub struct DiffDriver<'d, 'rcx, D, I, J>
+pub struct DiffIter<'a, 'rcx, I, J>
 where
-    D: IndexDiffer<'rcx>,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
-    differ: &'d mut D,
+    index: &'a mut BitIndex<'rcx>,
     old_iter: Peekable<Fuse<I>>,
     new_iter: Peekable<Fuse<J>>,
-    pd: std::marker::PhantomData<&'rcx ()>,
 }
 
-#[derive(Debug)]
-enum Changed {
-    Yes,
-    No,
-    Maybe,
-}
-
-impl<'d, 'rcx, D, I, J> DiffDriver<'d, 'rcx, D, I, J>
+impl<'a, 'rcx, I, J> FallibleIterator for DiffIter<'a, 'rcx, I, J>
 where
-    D: IndexDiffer<'rcx>,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
-    fn new(differ: &'d mut D, old_iter: I, new_iter: J) -> Self {
-        Self {
-            old_iter: old_iter.fuse().peekable(),
-            new_iter: new_iter.fuse().peekable(),
-            differ,
-            pd: std::marker::PhantomData,
-        }
-    }
+    type Error = BitGenericError;
+    type Item = DiffEntry;
 
-    pub fn run_diff(&mut self) -> BitResult<()> {
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
         macro_rules! on_created {
             ($new:expr) => {{
-                self.differ.on_created($new)?;
+                let new = *$new;
                 self.new_iter.next()?;
+                return Ok(Some(DiffEntry::Created(new)));
             }};
         }
 
         macro_rules! on_deleted {
             ($old:expr) => {{
-                self.differ.on_deleted($old)?;
+                let old = *$old;
                 self.old_iter.next()?;
+                return Ok(Some(DiffEntry::Deleted(old)));
             }};
         }
 
         macro_rules! on_modified {
             ($old:expr => $new:expr) => {{
-                if self.differ.index_mut().has_changes($old, $new)? {
-                    self.differ.on_modified($old, $new)?;
+                // it's written in this rather convoluted way to avoid
+                // copying the index entry when unnecessary
+                if self.index.has_changes($old, $new)? {
+                    let old = *$old;
+                    let new = *$new;
+                    self.old_iter.next()?;
+                    self.new_iter.next()?;
+                    return Ok(Some(DiffEntry::Modified(old, new)));
+                } else {
+                    self.old_iter.next()?;
+                    self.new_iter.next()?;
                 }
-                self.old_iter.next()?;
-                self.new_iter.next()?;
             }};
         }
 
         loop {
             match (self.old_iter.peek()?, self.new_iter.peek()?) {
-                (None, None) => break,
+                (None, None) => return Ok(None),
                 (None, Some(new)) => on_created!(new),
                 (Some(old), None) => on_deleted!(old),
                 (Some(old), Some(new)) => {
@@ -124,12 +90,57 @@ where
                 }
             };
         }
+    }
+}
 
-        Ok(())
+pub trait Differ {
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()>;
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()>;
+}
+
+pub struct IndexWorktreeDiffDriver<'d, 'rcx, D, I, J>
+where
+    D: Differ,
+    I: BitEntryIterator,
+    J: BitEntryIterator,
+{
+    differ: &'d mut D,
+    index: &'d mut BitIndex<'rcx>,
+    old_iter: Peekable<Fuse<I>>,
+    new_iter: Peekable<Fuse<J>>,
+}
+
+#[derive(Debug)]
+enum Changed {
+    Yes,
+    No,
+    Maybe,
+}
+
+impl<'d, 'rcx, D, I, J> IndexWorktreeDiffDriver<'d, 'rcx, D, I, J>
+where
+    D: Differ,
+    I: BitEntryIterator,
+    J: BitEntryIterator,
+{
+    fn new(differ: &'d mut D, index: &'d mut BitIndex<'rcx>, old_iter: I, new_iter: J) -> Self {
+        Self {
+            differ,
+            index,
+            old_iter: old_iter.fuse().peekable(),
+            new_iter: new_iter.fuse().peekable(),
+        }
     }
 
-    pub fn run(differ: &'d mut D, old_iter: I, new_iter: J) -> BitResult<()> {
-        Self::new(differ, old_iter, new_iter).run_diff()
+    pub fn run_diff(mut self) -> BitResult<()> {
+        let differ = &mut self.differ;
+        DiffIter { index: &mut self.index, old_iter: self.old_iter, new_iter: self.new_iter }
+            .for_each(|diff_entry| match diff_entry {
+                DiffEntry::Deleted(old) => differ.on_deleted(old),
+                DiffEntry::Modified(old, new) => differ.on_modified(old, new),
+                DiffEntry::Created(new) => differ.on_created(new),
+            })
     }
 }
 
@@ -166,7 +177,7 @@ impl<'rcx> BitRepo<'rcx> {
         self.with_index(|index| {
             let tree_iter = pathspec.match_tree_iter(self.tree_iter(tree));
             let worktree_iter = pathspec.match_tree_iter(index.worktree_tree_iter()?);
-            TreeStatusDiffer::default().build_diff(tree_iter, worktree_iter)
+            self.diff_iterators(tree_iter, worktree_iter)
         })
     }
 
@@ -183,17 +194,34 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn diff_tree_to_tree(self, a: Oid, b: Oid) -> BitResult<WorkspaceStatus> {
-        TreeStatusDiffer::default().build_diff(self.tree_iter(a), self.tree_iter(b))
+        self.diff_iterators(self.tree_iter(a), self.tree_iter(b))
+    }
+
+    pub fn diff_iterators(
+        self,
+        a: impl BitTreeIterator,
+        b: impl BitTreeIterator,
+    ) -> BitResult<WorkspaceStatus> {
+        TreeStatusDiffer::default().build_diff(a, b)
     }
 }
 
 impl<'rcx> BitIndex<'rcx> {
     pub fn diff_worktree(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        IndexWorktreeDiffer::new(self, pathspec).build_diff()
+        IndexWorktreeDiffer::new(pathspec).build_diff(self)
     }
 
     pub fn diff_tree(&self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        let tree_iter = pathspec.match_tree_iter(self.repo.tree_iter(tree));
+        let tree_iter = self.repo.tree_iter(tree);
+        self.diff_iterator(tree_iter, pathspec)
+    }
+
+    pub fn diff_iterator(
+        &self,
+        tree_iter: impl BitTreeIterator,
+        pathspec: Pathspec,
+    ) -> BitResult<WorkspaceStatus> {
+        let tree_iter = pathspec.match_tree_iter(tree_iter);
         let index_iter = pathspec.match_tree_iter(self.index_tree_iter());
         TreeStatusDiffer::default().build_diff(tree_iter, index_iter)
     }
@@ -230,65 +258,54 @@ pub trait Diff {
 
 impl Diff for WorkspaceStatus {
     fn apply_with<D: Differ>(&self, differ: &mut D) -> BitResult<()> {
-        for deleted in self.deleted.iter() {
+        for &deleted in self.deleted.iter() {
             differ.on_deleted(deleted)?;
         }
-        for (old, new) in self.modified.iter() {
+        for &(old, new) in self.modified.iter() {
             differ.on_modified(old, new)?;
         }
-        for new in self.new.iter() {
+        for &new in self.new.iter() {
             differ.on_created(new)?;
         }
         Ok(())
     }
 }
 
-pub(crate) struct IndexWorktreeDiffer<'a, 'rcx> {
-    index: &'a mut BitIndex<'rcx>,
+pub(crate) struct IndexWorktreeDiffer {
     pathspec: Pathspec,
     status: WorkspaceStatus,
     // directories that only contain untracked files
     _untracked_dirs: HashSet<BitPath>,
 }
 
-impl<'a, 'rcx> IndexWorktreeDiffer<'a, 'rcx> {
-    pub fn new(index: &'a mut BitIndex<'rcx>, pathspec: Pathspec) -> Self {
-        Self { index, pathspec, status: Default::default(), _untracked_dirs: Default::default() }
+impl IndexWorktreeDiffer {
+    pub fn new(pathspec: Pathspec) -> Self {
+        Self { pathspec, status: Default::default(), _untracked_dirs: Default::default() }
     }
-}
 
-impl<'a, 'rcx> DiffBuilder<'rcx> for IndexWorktreeDiffer<'a, 'rcx> {
-    type Diff = WorkspaceStatus;
-
-    fn build_diff(mut self) -> BitResult<WorkspaceStatus> {
-        let index_iter = self.pathspec.match_index(self.index)?;
-        let worktree_iter = self.pathspec.match_worktree(self.index)?;
-        DiffDriver::run(&mut self, index_iter, worktree_iter)?;
+    fn build_diff(mut self, index: &mut BitIndex<'_>) -> BitResult<WorkspaceStatus> {
+        let index_iter = self.pathspec.match_index(index)?;
+        let worktree_iter = self.pathspec.match_worktree(index)?;
+        IndexWorktreeDiffDriver::new(&mut self, index, index_iter, worktree_iter).run_diff()?;
         Ok(self.status)
     }
 }
 
-impl<'a, 'rcx> Differ for IndexWorktreeDiffer<'a, 'rcx> {
-    fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
-        self.status.new.push(*new);
+impl Differ for IndexWorktreeDiffer {
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+        self.status.new.push(new);
         Ok(())
     }
 
-    fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         debug_assert_eq!(old.path, new.path);
-        self.status.modified.push((*old, *new));
+        self.status.modified.push((old, new));
         Ok(())
     }
 
-    fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
-        self.status.deleted.push(*old);
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
+        self.status.deleted.push(old);
         Ok(())
-    }
-}
-
-impl<'a, 'rcx> IndexDiffer<'rcx> for IndexWorktreeDiffer<'a, 'rcx> {
-    fn index_mut(&mut self) -> &mut BitIndex<'rcx> {
-        self.index
     }
 }
 
@@ -308,12 +325,9 @@ impl<'rcx> BitIndex<'rcx> {
             Changed::Yes => Ok(true),
             Changed::No => Ok(false),
             Changed::Maybe => {
-                // this section should only be hit if `old` is an index entry
-                // there are currently only two types of diffs, index-worktree and head-index,
-                // where the left side is `old` and the right is `new`
-                // so the `old` parameter is either a head entry or an index entry
-                // A tree_entry should never reach this section as it should always have a known hash
-                // (from the TreeEntry). To assert this we just check the ctime to be zero
+                // This section should only be hit if `old` is an index entry
+                // A "tree_entry" should never reach this section as it should always have a known hash.
+                // To assert this we just check the ctime to be zero.
                 // (as this is the default value given when a tree entry is converted to an index entry and would not be possible otherwise)
                 debug_assert!(old.ctime != Timespec::ZERO);
 

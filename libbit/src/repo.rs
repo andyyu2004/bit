@@ -262,7 +262,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    fn index_ref(self) -> BitResult<&'rcx RwLock<BitIndex<'rcx>>> {
+    fn index(self) -> BitResult<&'rcx RwLock<BitIndex<'rcx>>> {
         self.rcx
             .index_cell
             .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(self)?)))
@@ -271,14 +271,14 @@ impl<'rcx> BitRepo<'rcx> {
     #[inline]
     pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
         // don't have to error check here as the index only
-        f(&*self.index_ref()?.read())
+        f(&*self.index()?.read())
     }
 
     pub fn with_index_mut<R>(
         self,
         f: impl FnOnce(&mut BitIndex<'rcx>) -> BitResult<R>,
     ) -> BitResult<R> {
-        let index_ref = self.index_ref()?;
+        let index_ref = self.index()?;
         let index = &mut *index_ref
             .try_write()
             .expect("don't expect concurrent writes, probably tried to grab it reentrantly");

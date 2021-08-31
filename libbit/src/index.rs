@@ -168,15 +168,15 @@ impl<'rcx> BitIndex<'rcx> {
         }
 
         impl<'a, 'rcx> Differ for IndexApplier<'a, 'rcx> {
-            fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
-                self.index.add_entry(*new)
+            fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
+                self.index.add_entry(new)
             }
 
-            fn on_modified(&mut self, _old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
-                self.index.add_entry(*new)
+            fn on_modified(&mut self, _old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
+                self.index.add_entry(new)
             }
 
-            fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+            fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
                 self.index.remove_entry(old.key());
                 Ok(())
             }
