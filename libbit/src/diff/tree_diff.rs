@@ -55,8 +55,7 @@ impl<'a> TreeDiffEntry<'a> {
         match self {
             TreeDiffEntry::DeletedBlob(old) => *old,
             TreeDiffEntry::CreatedBlob(new) => *new,
-            // I think it makes more sense to use old here?
-            TreeDiffEntry::ModifiedBlob(old, _) => *old,
+            TreeDiffEntry::ModifiedBlob(_, new) => *new,
             TreeDiffEntry::DeletedTree(old) => old.peek(),
             TreeDiffEntry::CreatedTree(new) => new.peek(),
             TreeDiffEntry::UnmodifiedBlob(entry) => *entry,
@@ -68,8 +67,10 @@ impl<'a> TreeDiffEntry<'a> {
         match self {
             TreeDiffEntry::DeletedBlob(old) => old.into(),
             TreeDiffEntry::CreatedBlob(new) => new.into(),
-            // I think it makes more sense to use old here?
-            TreeDiffEntry::ModifiedBlob(old, _) => old.into(),
+            // We return the `new` entry as the representive entry.
+            // This is required for correctness in checkout as it uses
+            // the entry returned by this function to determine what content to checkout.
+            TreeDiffEntry::ModifiedBlob(_, new) => new.into(),
             TreeDiffEntry::DeletedTree(old) => old.peek().into(),
             TreeDiffEntry::CreatedTree(new) => new.peek().into(),
             TreeDiffEntry::UnmodifiedBlob(entry) => entry.into(),

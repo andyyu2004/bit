@@ -108,9 +108,10 @@ impl<'rcx> BitIndex<'rcx> {
         let target = repo.tree_iter(target_tree);
         let worktree = self.worktree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
+        dbg!(&migration);
         self.apply_migration(&migration)?;
         debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
-        debug_assert!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
+        debug_assert!(dbg!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?).is_empty());
         Ok(())
     }
 
@@ -320,13 +321,16 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     // change is only applied to index if forced
                     cond!(self.opts.is_force() => Update : None)
                 } else {
+                    // case 14: B1 B1 B1 | unmodified file
                     CheckoutAction::None
                 },
             TreeDiffEntry::DeletedTree(..) => todo!(),
             TreeDiffEntry::CreatedTree(..) => todo!(),
         };
         debug_assert_eq!(diff_entry.path_mode(), worktree_entry.path_mode());
-        Ok((worktree_entry.into(), action))
+        // it's important to return `diff_entry` as worktree_entry won't have the oid accessible
+        // which is necessary when applying the migration in a force checkout
+        Ok((diff_entry.tree_entry(), action))
     }
 
     fn action_no_worktree(
