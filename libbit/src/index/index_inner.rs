@@ -126,9 +126,9 @@ impl BitIndexInner {
         fallible_iterator::convert(self.std_iter().map(Ok))
     }
 
-    /// find entry by path
-    pub fn find_entry(&self, path: BitPath, stage: MergeStage) -> Option<BitIndexEntry> {
-        self.entries.get(&(path, stage)).copied()
+    /// Find entry by path and stage
+    pub fn find_entry(&self, key: (BitPath, MergeStage)) -> Option<&BitIndexEntry> {
+        self.entries.get(&key)
     }
 
     /// removes collisions where there was originally a file but was replaced by a directory

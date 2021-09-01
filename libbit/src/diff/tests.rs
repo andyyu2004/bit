@@ -1,8 +1,10 @@
+use crate::diff::{DiffOptFlags, DiffOpts};
 use crate::error::BitResult;
 use crate::obj::FileMode;
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
+use fallible_iterator::lending::FallibleLendingIterator;
 
 #[test]
 fn test_diff_two_same_trees() -> BitResult<()> {
@@ -147,6 +149,45 @@ fn test_tree_diff_replace_file_with_dir() -> BitResult<()> {
         assert_eq!(diff.new.len(), 2);
         assert_eq!(diff.new[0].path, "foo/a");
         assert_eq!(diff.new[1].path, "foo/b");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_tree_diff_include_unmodified() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let a = tree! {
+            a
+            b < "changed"
+            dir {
+                c
+            }
+        };
+
+        let b = tree! {
+            a
+            b
+            dir {
+                c
+            }
+            k < "also changed"
+        };
+
+        let mut iter = repo.tree_diff_iter_with_opts(
+            repo.tree_iter(a),
+            repo.tree_iter(b),
+            DiffOpts::with_flags(DiffOptFlags::INCLUDE_UNMODIFIED),
+        );
+
+        check_next!(iter.next() => "a":FileMode::REG);
+        check_next!(iter.next() => "b":FileMode::REG);
+        check_next!(iter.next() => "dir/c":FileMode::REG);
+        check_next!(iter.next() => "k":FileMode::REG);
+
+        let mut iter = repo.tree_diff_iter(repo.tree_iter(a), repo.tree_iter(b));
+        check_next!(iter.next() => "b":FileMode::REG);
+        check_next!(iter.next() => "k":FileMode::REG);
+
         Ok(())
     })
 }

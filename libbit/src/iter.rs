@@ -18,23 +18,30 @@ use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
 use rustc_hash::FxHashSet;
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::path::Path;
 use walkdir::WalkDir;
+
+pub type PathMode = (BitPath, FileMode);
 
 pub trait BitEntry {
     fn oid(&self) -> Oid;
     fn path(&self) -> BitPath;
     fn mode(&self) -> FileMode;
 
-    // comparison function for differs
-    // cares about paths first, then modes second
-    // otherwise they are considered equal
-    fn entry_cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn path_mode(&self) -> PathMode {
+        (self.path(), self.mode())
+    }
+
+    /// Comparison function for differs
+    /// Cares about paths first, then modes second, otherwise they are considered equal.
+    // This is not an `Ord` impl as it doesn't satisfy the `Ord` invariant `a.cmp(b) == Ordering::Equal <=> a == b`
+    fn entry_cmp(&self, other: &Self) -> Ordering {
         self.path().cmp(&other.path()).then_with(|| self.mode().cmp(&other.mode()))
     }
 
-    fn entry_partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn entry_partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.entry_cmp(other))
     }
 

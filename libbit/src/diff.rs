@@ -22,7 +22,7 @@ pub enum DiffEntry {
     Created(BitIndexEntry),
 }
 
-pub struct DiffIter<'a, 'rcx, I, J>
+pub struct IndexWorktreeDiffIter<'a, 'rcx, I, J>
 where
     I: BitEntryIterator,
     J: BitEntryIterator,
@@ -32,7 +32,7 @@ where
     new_iter: Peekable<Fuse<J>>,
 }
 
-impl<'a, 'rcx, I, J> FallibleIterator for DiffIter<'a, 'rcx, I, J>
+impl<'a, 'rcx, I, J> FallibleIterator for IndexWorktreeDiffIter<'a, 'rcx, I, J>
 where
     I: BitEntryIterator,
     J: BitEntryIterator,
@@ -135,12 +135,16 @@ where
 
     pub fn run_diff(mut self) -> BitResult<()> {
         let differ = &mut self.differ;
-        DiffIter { index: &mut self.index, old_iter: self.old_iter, new_iter: self.new_iter }
-            .for_each(|diff_entry| match diff_entry {
-                DiffEntry::Deleted(old) => differ.on_deleted(old),
-                DiffEntry::Modified(old, new) => differ.on_modified(old, new),
-                DiffEntry::Created(new) => differ.on_created(new),
-            })
+        IndexWorktreeDiffIter {
+            index: &mut self.index,
+            old_iter: self.old_iter,
+            new_iter: self.new_iter,
+        }
+        .for_each(|diff_entry| match diff_entry {
+            DiffEntry::Deleted(old) => differ.on_deleted(old),
+            DiffEntry::Modified(old, new) => differ.on_modified(old, new),
+            DiffEntry::Created(new) => differ.on_created(new),
+        })
     }
 }
 
@@ -197,12 +201,46 @@ impl<'rcx> BitRepo<'rcx> {
         self.diff_iterators(self.tree_iter(a), self.tree_iter(b))
     }
 
+    pub fn diff_tree_to_tree_with_opts(
+        self,
+        a: Oid,
+        b: Oid,
+        opts: DiffOpts,
+    ) -> BitResult<WorkspaceStatus> {
+        self.diff_iterators_with_opts(self.tree_iter(a), self.tree_iter(b), opts)
+    }
+
+    pub fn tree_diff_iter<I: BitTreeIterator, J: BitTreeIterator>(
+        self,
+        a: I,
+        b: J,
+    ) -> TreeDiffIter<I, J> {
+        self.tree_diff_iter_with_opts(a, b, Default::default())
+    }
+
+    pub fn tree_diff_iter_with_opts<I, J>(self, a: I, b: J, opts: DiffOpts) -> TreeDiffIter<I, J>
+    where
+        I: BitTreeIterator,
+        J: BitTreeIterator,
+    {
+        TreeDiffIter::new(a, b, opts)
+    }
+
+    pub fn diff_iterators_with_opts(
+        self,
+        a: impl BitTreeIterator,
+        b: impl BitTreeIterator,
+        opts: DiffOpts,
+    ) -> BitResult<WorkspaceStatus> {
+        TreeStatusDiffer::default().build_diff(a, b, opts)
+    }
+
     pub fn diff_iterators(
         self,
         a: impl BitTreeIterator,
         b: impl BitTreeIterator,
     ) -> BitResult<WorkspaceStatus> {
-        TreeStatusDiffer::default().build_diff(a, b)
+        self.diff_iterators_with_opts(a, b, DiffOpts::default())
     }
 }
 
@@ -223,7 +261,7 @@ impl<'rcx> BitIndex<'rcx> {
     ) -> BitResult<WorkspaceStatus> {
         let tree_iter = pathspec.match_tree_iter(tree_iter);
         let index_iter = pathspec.match_tree_iter(self.index_tree_iter());
-        TreeStatusDiffer::default().build_diff(tree_iter, index_iter)
+        self.repo.diff_iterators(tree_iter, index_iter)
     }
 
     pub fn diff_head(&self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
@@ -310,18 +348,32 @@ impl Differ for IndexWorktreeDiffer {
 }
 
 impl<'rcx> BitIndex<'rcx> {
+    pub fn is_worktree_entry_modified(
+        &mut self,
+        worktree_entry: &BitIndexEntry,
+    ) -> BitResult<bool> {
+        match self.find_entry(worktree_entry.key()) {
+            Some(&index_entry) => self.has_changes(&index_entry, worktree_entry),
+            None => Ok(true),
+        }
+    }
+
     //? maybe the parameters to this function need to be less general
     //? and rather than be `old` and `new` needs to be `index_entry` and `worktree_entry
     /// determine's whether `new` is *definitely* different from `old`
     // (preferably without comparing hashes)
-    pub fn has_changes(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<bool> {
-        trace!("BitIndex::has_changes({} -> {})?", old.path, new.path);
+    fn has_changes(
+        &mut self,
+        index_entry: &BitIndexEntry,
+        worktree_entry: &BitIndexEntry,
+    ) -> BitResult<bool> {
+        trace!("BitIndex::has_changes({} -> {})?", index_entry.path, worktree_entry.path);
         // should only be comparing the same file
-        debug_assert_eq!(old.path, new.path);
+        debug_assert_eq!(index_entry.path, worktree_entry.path);
         // the "old" entry should always have a calculated hash
-        debug_assert!(old.oid.is_known());
+        debug_assert!(index_entry.oid.is_known());
 
-        match self.has_changes_inner(old, new)? {
+        match self.has_changes_inner(index_entry, worktree_entry)? {
             Changed::Yes => Ok(true),
             Changed::No => Ok(false),
             Changed::Maybe => {
@@ -329,73 +381,73 @@ impl<'rcx> BitIndex<'rcx> {
                 // A "tree_entry" should never reach this section as it should always have a known hash.
                 // To assert this we just check the ctime to be zero.
                 // (as this is the default value given when a tree entry is converted to an index entry and would not be possible otherwise)
-                debug_assert!(old.ctime != Timespec::ZERO);
+                debug_assert!(index_entry.ctime != Timespec::ZERO);
 
                 // file may have changed, but we are not certain, so check the hash
-                let mut new_hash = new.oid;
+                let mut new_hash = worktree_entry.oid;
                 if new_hash.is_unknown() {
-                    new_hash = self.repo.hash_blob_from_worktree(new.path)?;
+                    new_hash = self.repo.hash_blob_from_worktree(worktree_entry.path)?;
                 }
 
-                let changed = old.oid != new_hash;
+                let changed = index_entry.oid != new_hash;
                 if !changed {
                     // update index entries so we don't hit this slow path again
                     // we just replace the old entry with the new one to do the update
                     // TODO add test for this
-                    debug_assert_eq!(old.key(), new.key());
-                    self.add_entry(*new)?;
+                    debug_assert_eq!(index_entry.key(), worktree_entry.key());
+                    self.add_entry(*worktree_entry)?;
                 }
                 Ok(changed)
             }
         }
     }
 
-    /// determines whether two index_entries are definitely different
-    /// `new` should be the "old" entry, and `other` should be the "new" one
-    fn has_changes_inner(&self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<Changed> {
+    fn has_changes_inner(&self, idxe: &BitIndexEntry, wte: &BitIndexEntry) -> BitResult<Changed> {
         //? check assume_unchanged and skip_worktree here?
 
         // we must check the hash before anything else in case the entry is generated from a `TreeEntry`
         // where most of the fields are zeroed but the hash is known
         // these checks confirm whether entries have definitely NOT changed
-        if old.oid == new.oid {
-            debug!("{} unchanged: hashes match {} {}", old.path, old.oid, new.oid);
+        if idxe.oid == wte.oid {
+            debug!("{} unchanged: hashes match {} {}", idxe.path, idxe.oid, wte.oid);
             return Ok(Changed::No);
-        } else if new.oid.is_known() {
+        } else if wte.oid.is_known() {
             // asserted old.hash.is_known() in outer function
-            debug!("{} changed: two known hashes don't match {} {}", old.path, old.oid, new.oid);
+            debug!("{} changed: two known hashes don't match {} {}", idxe.path, idxe.oid, wte.oid);
             return Ok(Changed::Yes);
         }
 
-        if old.mtime == new.mtime {
-            if self.is_racy_entry(old) {
+        if idxe.mtime == wte.mtime {
+            if self.is_racy_entry(idxe) {
                 // don't return immediately, check other stats too to see if we can detect a change
-                debug!("racy entry {}", new.path);
+                debug!("racy entry {}", wte.path);
             } else {
-                debug!("{} unchanged: non-racy mtime match {} {}", old.path, old.mtime, new.mtime);
+                debug!(
+                    "{} unchanged: non-racy mtime match {} {}",
+                    idxe.path, idxe.mtime, wte.mtime
+                );
                 return Ok(Changed::No);
             }
         }
 
         // these checks confirm if the entry definitely have changed
         // could probably add in a few of the other fields but not that important?
-
-        if old.filesize != new.filesize {
-            debug!("{} changed: filesize {} -> {}", old.path, old.filesize, new.filesize);
+        if idxe.filesize != wte.filesize {
+            debug!("{} changed: filesize {} -> {}", idxe.path, idxe.filesize, wte.filesize);
             return Ok(Changed::Yes);
         }
 
-        if old.inode != new.inode {
-            debug!("{} changed: inode {} -> {}", old.path, old.inode, new.inode);
+        if idxe.inode != wte.inode {
+            debug!("{} changed: inode {} -> {}", idxe.path, idxe.inode, wte.inode);
             return Ok(Changed::Yes);
         }
 
-        if self.repo.config().filemode()? && old.mode != new.mode {
-            debug!("{} changed: filemode {} -> {}", old.path, old.mode, new.mode);
+        if self.repo.config().filemode()? && idxe.mode != wte.mode {
+            debug!("{} changed: filemode {} -> {}", idxe.path, idxe.mode, wte.mode);
             return Ok(Changed::Yes);
         }
 
-        debug!("{} uncertain if changed", old.path);
+        debug!("{} uncertain if changed", idxe.path);
 
         Ok(Changed::Maybe)
     }

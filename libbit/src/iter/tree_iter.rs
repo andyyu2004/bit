@@ -1,4 +1,5 @@
 use super::*;
+use crate::diff::TreeEntriesConsumer;
 use crate::index::BitTreeCache;
 use crate::obj::MutableTree;
 use std::iter::FromIterator;
@@ -35,6 +36,13 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
         Self: Sized,
     {
         self.filter(|entry| Ok(!entry.is_tree()))
+    }
+
+    fn as_consumer(&mut self) -> TreeEntriesConsumer<'_>
+    where
+        Self: Sized,
+    {
+        TreeEntriesConsumer::new(self)
     }
 
     // TODO these names all suck

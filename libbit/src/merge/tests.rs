@@ -1,3 +1,4 @@
+use crate::checkout::CheckoutOpts;
 use crate::error::BitResult;
 use crate::graph::{Dag, DagBuilder, DagNode, Node};
 use crate::index::{Conflict, ConflictType};

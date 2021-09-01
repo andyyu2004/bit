@@ -33,63 +33,63 @@ impl PartialEq<TestMigration> for Migration {
     }
 }
 
-#[test]
-fn test_migration_gen_on_sample_repo() -> BitResult<()> {
-    BitRepo::with_sample_repo(|repo| {
-        let old_tree_oid = repo.fully_resolve_rev(&rev!("HEAD^"))?.peel(repo)?.tree;
-        let old_iter = repo.tree_iter(old_tree_oid);
-        let new_iter = repo.head_tree_iter()?;
-        let migration = Migration::generate(old_iter, new_iter)?;
+// #[test]
+// fn test_migration_gen_on_sample_repo() -> BitResult<()> {
+//     BitRepo::with_sample_repo(|repo| {
+//         let old_tree_oid = repo.fully_resolve_rev(&rev!("HEAD^"))?.peel(repo)?.tree;
+//         let old_iter = repo.tree_iter(old_tree_oid);
+//         let new_iter = repo.head_tree_iter()?;
+//         let migration = Migration::generate(old_iter, new_iter)?;
 
-        let expected = TestMigration {
-            rmrfs: vec![],
-            rms: vec![],
-            mkdirs: vec!["dir", "dir/bar"],
-            creates: vec!["dir/bar.l", "dir/bar/qux", "dir/baz", "dir/link"],
-        };
+//         let expected = TestMigration {
+//             rmrfs: vec![],
+//             rms: vec![],
+//             mkdirs: vec!["dir", "dir/bar"],
+//             creates: vec!["dir/bar.l", "dir/bar/qux", "dir/baz", "dir/link"],
+//         };
 
-        assert_eq!(migration, expected);
+//         assert_eq!(migration, expected);
 
-        Ok(())
-    })
-}
+//         Ok(())
+//     })
+// }
 
-#[test]
-fn test_simple_migration_gen() -> BitResult<()> {
-    BitRepo::with_empty_repo(|repo| {
-        let a = tree! {
-            foo
-            bar {
-                baz
-            }
-            qux {
-                quxx
-            }
-        };
+// #[test]
+// fn test_simple_migration_gen() -> BitResult<()> {
+//     BitRepo::with_empty_repo(|repo| {
+//         let a = tree! {
+//             foo
+//             bar {
+//                 baz
+//             }
+//             qux {
+//                 quxx
+//             }
+//         };
 
-        let b = tree! {
-           bar {
-               baz {
-                   c {
-                       d
-                   }
-               }
-           }
-           boo
-        };
+//         let b = tree! {
+//            bar {
+//                baz {
+//                    c {
+//                        d
+//                    }
+//                }
+//            }
+//            boo
+//         };
 
-        let old_iter = repo.tree_iter(a);
-        let new_iter = repo.tree_iter(b);
+//         let old_iter = repo.tree_iter(a);
+//         let new_iter = repo.tree_iter(b);
 
-        let migration = Migration::generate(old_iter, new_iter)?;
-        let expected = TestMigration {
-            rmrfs: vec!["qux"],
-            rms: vec!["bar/baz", "foo"],
-            mkdirs: vec!["bar/baz", "bar/baz/c"],
-            creates: vec!["bar/baz/c/d", "boo"],
-        };
+//         let migration = Migration::generate(old_iter, new_iter)?;
+//         let expected = TestMigration {
+//             rmrfs: vec!["qux"],
+//             rms: vec!["bar/baz", "foo"],
+//             mkdirs: vec!["bar/baz", "bar/baz/c"],
+//             creates: vec!["bar/baz/c/d", "boo"],
+//         };
 
-        assert_eq!(migration, expected);
-        Ok(())
-    })
-}
+//         assert_eq!(migration, expected);
+//         Ok(())
+//     })
+// }

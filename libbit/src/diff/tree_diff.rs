@@ -1,20 +1,97 @@
 use super::*;
 use crate::error::BitGenericError;
-use crate::obj::FileMode;
-use fallible_iterator::lending::FallibleLendingIterator;
+use crate::obj::{FileMode, TreeEntry};
+use fallible_iterator::FallibleLendingIterator;
+use std::cell::RefCell;
+
+#[derive(Debug, Default)]
+pub struct DiffOpts {
+    pub flags: DiffOptFlags,
+}
+
+impl DiffOpts {
+    pub fn with_flags(flags: DiffOptFlags) -> Self {
+        Self { flags }
+    }
+
+    pub fn include_unmodified(&self) -> bool {
+        self.flags.contains(DiffOptFlags::INCLUDE_UNMODIFIED)
+    }
+}
+
+bitflags! {
+    #[derive(Default)]
+    pub struct DiffOptFlags: u8 {
+        /// Yield all unmodified blobs (but not trees)
+        const INCLUDE_UNMODIFIED = 1 << 0;
+    }
+}
 
 pub enum TreeDiffEntry<'a> {
     DeletedBlob(BitIndexEntry),
     CreatedBlob(BitIndexEntry),
     ModifiedBlob(BitIndexEntry, BitIndexEntry),
+    UnmodifiedBlob(BitIndexEntry),
     DeletedTree(TreeEntriesConsumer<'a>),
     CreatedTree(TreeEntriesConsumer<'a>),
+}
+
+impl BitEntry for TreeDiffEntry<'_> {
+    fn oid(&self) -> Oid {
+        self.tree_entry().oid
+    }
+
+    fn path(&self) -> BitPath {
+        self.tree_entry().path
+    }
+
+    fn mode(&self) -> FileMode {
+        self.tree_entry().mode
+    }
+}
+
+impl<'a> TreeDiffEntry<'a> {
+    pub fn index_entry(&self) -> BitIndexEntry {
+        match self {
+            TreeDiffEntry::DeletedBlob(old) => *old,
+            TreeDiffEntry::CreatedBlob(new) => *new,
+            // I think it makes more sense to use old here?
+            TreeDiffEntry::ModifiedBlob(old, _) => *old,
+            TreeDiffEntry::DeletedTree(old) => old.peek(),
+            TreeDiffEntry::CreatedTree(new) => new.peek(),
+            TreeDiffEntry::UnmodifiedBlob(entry) => *entry,
+        }
+    }
+
+    // This does less copying than `index_entry`
+    pub fn tree_entry(&self) -> TreeEntry {
+        match self {
+            TreeDiffEntry::DeletedBlob(old) => old.into(),
+            TreeDiffEntry::CreatedBlob(new) => new.into(),
+            // I think it makes more sense to use old here?
+            TreeDiffEntry::ModifiedBlob(old, _) => old.into(),
+            TreeDiffEntry::DeletedTree(old) => old.peek().into(),
+            TreeDiffEntry::CreatedTree(new) => new.peek().into(),
+            TreeDiffEntry::UnmodifiedBlob(entry) => entry.into(),
+        }
+    }
 }
 
 pub struct TreeDiffIter<I, J> {
     old_iter: I,
     new_iter: J,
+    opts: DiffOpts,
 }
+
+impl<I, J> TreeDiffIter<I, J> {
+    pub fn new(old_iter: I, new_iter: J, opts: DiffOpts) -> Self {
+        Self { old_iter, new_iter, opts }
+    }
+}
+
+#[rustfmt::skip]
+pub trait TreeDiffIterator<'a> =
+    FallibleLendingIterator<Item<'a> = TreeDiffEntry<'a>, Error = BitGenericError>;
 
 impl<I, J> FallibleLendingIterator for TreeDiffIter<I, J>
 where
@@ -48,9 +125,15 @@ where
                             (FileMode::TREE, FileMode::TREE)
                                 if old.oid().is_known() && old == new =>
                             {
-                                // if hashes match and both are directories we can step over them
-                                self.old_iter.over()?;
-                                self.new_iter.over()?;
+                                // If hashes match and both are directories we can step over them
+                                // (unless we want to include unmodified, in which case we step inside)
+                                if self.opts.include_unmodified() {
+                                    self.old_iter.next()?;
+                                    self.new_iter.next()?;
+                                } else {
+                                    self.old_iter.over()?;
+                                    self.new_iter.over()?;
+                                }
                             }
                             (FileMode::TREE, FileMode::TREE) => {
                                 // two trees with non matching oids, then step inside for both
@@ -60,14 +143,17 @@ where
                             _ if old.is_file() && new.is_file() && old.oid() == new.oid() => {
                                 // matching files
                                 debug_assert!(old.oid().is_known() && new.oid().is_known());
-                                self.old_iter.next()?;
+                                let entry = self.old_iter.next()?.unwrap();
                                 self.new_iter.next()?;
+                                if self.opts.include_unmodified() {
+                                    return Ok(Some(TreeDiffEntry::UnmodifiedBlob(entry)));
+                                }
                             }
                             _ => {
                                 debug_assert!(
                                     old.is_file() && new.is_file(),
                                     "A tree vs nontree should not call `on_match`, check the ordering function.
-                                    If two entries have the same path then files should come before directories (as per `diff_cmp`).
+                                    If two entries have the same path then files should come before directories (as per `entry_cmp`).
                                     We do not currently detect type changes, and instead treat this as an add/remove pair"
                                     );
                                 debug_assert!(
@@ -102,7 +188,7 @@ where
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<Option<TreeDiffEntry<'_>>> {
         trace!("TreeDifferGeneric::on_created(new: {})", new.path());
         if new.is_tree() {
-            Ok(Some(TreeDiffEntry::CreatedTree(TreeEntriesConsumer::new(&mut self.new_iter))))
+            Ok(Some(TreeDiffEntry::CreatedTree(self.new_iter.as_consumer())))
         } else {
             self.new_iter.next()?;
             Ok(Some(TreeDiffEntry::CreatedBlob(new)))
@@ -112,7 +198,7 @@ where
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<Option<TreeDiffEntry<'_>>> {
         trace!("TreeDifferGeneric::on_deleted(old: {})", old.path());
         if old.is_tree() {
-            Ok(Some(TreeDiffEntry::DeletedTree(TreeEntriesConsumer::new(&mut self.old_iter))))
+            Ok(Some(TreeDiffEntry::DeletedTree(self.old_iter.as_consumer())))
         } else {
             self.old_iter.next()?;
             Ok(Some(TreeDiffEntry::DeletedBlob(old)))
@@ -126,8 +212,9 @@ pub trait TreeDiffBuilder: TreeDiffer + Sized {
         mut self,
         old_iter: impl BitTreeIterator,
         new_iter: impl BitTreeIterator,
+        opts: DiffOpts,
     ) -> BitResult<Self::Output> {
-        self.run_diff(old_iter, new_iter)?;
+        self.run_diff(old_iter, new_iter, opts)?;
         Ok(self.get_output())
     }
 
@@ -161,13 +248,16 @@ pub trait TreeDiffer {
         &mut self,
         old_iter: impl BitTreeIterator,
         new_iter: impl BitTreeIterator,
+        opts: DiffOpts,
     ) -> BitResult<()> {
-        TreeDiffIter { old_iter, new_iter }.for_each(|diff_entry| match diff_entry {
+        TreeDiffIter { old_iter, new_iter, opts }.for_each(|diff_entry| match diff_entry {
             TreeDiffEntry::DeletedBlob(old) => self.deleted_blob(old),
             TreeDiffEntry::CreatedBlob(new) => self.created_blob(new),
             TreeDiffEntry::ModifiedBlob(old, new) => self.modified_blob(old, new),
             TreeDiffEntry::DeletedTree(old_entries) => self.deleted_tree(old_entries),
             TreeDiffEntry::CreatedTree(new_entries) => self.created_tree(new_entries),
+            TreeDiffEntry::UnmodifiedBlob(..) =>
+                panic!("including unmodified files when calculating a diff"),
         })
     }
 
@@ -181,29 +271,37 @@ pub trait TreeDiffer {
 /// The consumer can either choose to just step over the tree or step over the tree and collect all its subentries
 #[must_use = "The tree iterator will not advance until one of the available methods have been called"]
 pub struct TreeEntriesConsumer<'a> {
-    iter: &'a mut dyn BitTreeIterator,
+    iter: RefCell<&'a mut dyn BitTreeIterator>,
 }
 
 impl<'a> TreeEntriesConsumer<'a> {
-    fn new(iter: &'a mut dyn BitTreeIterator) -> Self {
-        Self { iter }
+    pub(crate) fn new(iter: &'a mut dyn BitTreeIterator) -> Self {
+        Self { iter: RefCell::new(iter) }
+    }
+
+    pub fn peek(&self) -> BitIndexEntry {
+        self.iter.borrow_mut().peek().expect("peek shouldn't fail on a second call surely").unwrap()
     }
 
     /// step over the tree and return the entry of the tree itself
     pub fn step_over(self) -> BitResult<BitIndexEntry> {
-        Ok(self.iter.over()?.expect("there is definitely something as we peeked this entry"))
+        Ok(self
+            .iter
+            .into_inner()
+            .over()?
+            .expect("there is definitely something as we peeked this entry"))
     }
 
     /// appends all the non-tree subentries of the tree to `container`
     pub fn collect_over_all(self, container: &mut Vec<BitIndexEntry>) -> BitResult<BitIndexEntry> {
-        self.iter.collect_over_tree_all(container)
+        self.iter.into_inner().collect_over_tree_all(container)
     }
 
     pub fn collect_over_files(
         self,
         container: &mut Vec<BitIndexEntry>,
     ) -> BitResult<BitIndexEntry> {
-        self.iter.collect_over_tree_files(container)
+        self.iter.into_inner().collect_over_tree_files(container)
     }
 }
 

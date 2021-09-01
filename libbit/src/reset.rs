@@ -1,3 +1,4 @@
+use crate::checkout::CheckoutOpts;
 use crate::error::BitResult;
 use crate::index::BitIndex;
 use crate::peel::Peel;
@@ -46,8 +47,8 @@ impl<'rcx> BitIndex<'rcx> {
         // but we want to `read_tree` to have the final say on the state of the index.
         // in fact, checkout_tree should imply read_tree. Checkout needs some work :)
         if kind > ResetKind::Mixed {
-            // force checkout the tree, `checkout_tree` is always a force checkout for now
-            self.checkout_tree(tree)?;
+            // force checkout the tree
+            self.checkout_tree_with_opts(tree, CheckoutOpts::forced())?;
         }
 
         if kind > ResetKind::Soft {

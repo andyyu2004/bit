@@ -6,7 +6,7 @@ use crate::repo::BitRepo;
 #[test]
 fn test_simple_checkout_rm_rf() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        repo.checkout_revision(&rev!("HEAD^"))?;
+        bit_checkout!(repo: "HEAD^");
 
         assert!(repo.read_head()?.is_direct());
 
@@ -21,7 +21,7 @@ fn test_simple_checkout_rm_rf() -> BitResult<()> {
 fn test_checkout_remote_branch_leads_to_detached_head() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         repo.create_branch(symbolic!("refs/remotes/origin/master"), HEAD!())?;
-        repo.checkout_revision(&rev!("origin/master"))?;
+        bit_checkout!(repo: "origin/master");
         assert!(repo.is_head_detached()?);
         Ok(())
     })
@@ -31,18 +31,18 @@ fn test_checkout_remote_branch_leads_to_detached_head() -> BitResult<()> {
 fn test_checkout_moves_head_to_branch_not_commit() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         // HEAD should resolve to a branch
-        repo.checkout_revision(&rev!("HEAD"))?;
+        bit_checkout!(repo: "HEAD");
         assert!(repo.read_head()?.is_symbolic());
 
         // however, HEAD^ resolves to a commit and so should move head to be direct (detached head)
-        repo.checkout_revision(&rev!("HEAD^"))?;
+        bit_checkout!(repo: "HEAD^");
         assert!(repo.is_head_detached()?);
         assert_eq!(
             repo.read_head()?,
             BitRef::Direct("6b5041d58b7ac78bad7be3b727ba605a82a94b25".into())
         );
 
-        repo.checkout_revision(&rev!("master"))?;
+        bit_checkout!(repo: "master");
         let head = repo.read_head()?;
         assert!(head.is_symbolic());
         // the symbolic reference should be expanded
