@@ -1,5 +1,6 @@
 use super::*;
 use crate::error::BitGenericError;
+use crate::iter::BitIterator;
 use crate::obj::{FileMode, TreeEntry};
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
@@ -51,7 +52,7 @@ impl BitEntry for TreeDiffEntry<'_> {
 }
 
 impl<'a> TreeDiffEntry<'a> {
-    pub fn index_entry(&self) -> BitIndexEntry {
+    pub(crate) fn index_entry(&self) -> BitIndexEntry {
         match self {
             TreeDiffEntry::DeletedBlob(old) => *old,
             TreeDiffEntry::CreatedBlob(new) => *new,
@@ -63,7 +64,7 @@ impl<'a> TreeDiffEntry<'a> {
     }
 
     // This does less copying than `index_entry`
-    pub fn tree_entry(&self) -> TreeEntry {
+    pub(crate) fn tree_entry(&self) -> TreeEntry {
         match self {
             TreeDiffEntry::DeletedBlob(old) => old.into(),
             TreeDiffEntry::CreatedBlob(new) => new.into(),
@@ -272,6 +273,7 @@ pub trait TreeDiffer {
 /// The consumer can either choose to just step over the tree or step over the tree and collect all its subentries
 #[must_use = "The tree iterator will not advance until one of the available methods have been called"]
 pub struct TreeEntriesConsumer<'a> {
+    // refcell is here mostly so `peek` doesn't require a mutable reference
     iter: RefCell<&'a mut dyn BitTreeIterator>,
 }
 
@@ -280,11 +282,12 @@ impl<'a> TreeEntriesConsumer<'a> {
         Self { iter: RefCell::new(iter) }
     }
 
+    /// Peek the tree entry
     pub fn peek(&self) -> BitIndexEntry {
         self.iter.borrow_mut().peek().expect("peek shouldn't fail on a second call surely").unwrap()
     }
 
-    /// step over the tree and return the entry of the tree itself
+    /// Step over the tree and return the entry of the tree itself
     pub fn step_over(self) -> BitResult<BitIndexEntry> {
         Ok(self
             .iter
@@ -303,6 +306,19 @@ impl<'a> TreeEntriesConsumer<'a> {
         container: &mut Vec<BitIndexEntry>,
     ) -> BitResult<BitIndexEntry> {
         self.iter.into_inner().collect_over_tree_files(container)
+    }
+
+    pub fn iter_files(self) -> impl BitIterator<BitIndexEntry> + 'a {
+        self.iter.into_inner().collect_over_tree_files_iter()
+    }
+
+    /// Returns an iterator that yields the root of the subtree and all its subentries
+    pub fn iter(self) -> impl BitIterator<BitIndexEntry> + 'a {
+        self.iter.into_inner().collect_over_tree_iter()
+    }
+
+    pub fn collect(self) -> BitResult<Vec<BitIndexEntry>> {
+        self.iter.into_inner().collect_over_tree_iter().collect()
     }
 }
 

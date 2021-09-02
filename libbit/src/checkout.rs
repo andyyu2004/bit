@@ -27,8 +27,12 @@ impl CheckoutOpts {
         Self { strategy: CheckoutStrategy::Force, ..Default::default() }
     }
 
-    pub fn is_force(&self) -> bool {
+    fn is_forced(&self) -> bool {
         self.strategy == CheckoutStrategy::Force
+    }
+
+    fn is_safe(&self) -> bool {
+        self.strategy == CheckoutStrategy::Safe
     }
 }
 
@@ -90,6 +94,10 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
         self.checkout_tree_with_opts(treeish, CheckoutOpts::default())
     }
+
+    pub fn force_checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
+        self.checkout_tree_with_opts(treeish, CheckoutOpts::forced())
+    }
 }
 
 impl<'rcx> BitIndex<'rcx> {
@@ -104,14 +112,17 @@ impl<'rcx> BitIndex<'rcx> {
     ) -> BitResult<()> {
         let repo = self.repo;
         let target_tree = treeish.treeish_oid(repo)?;
+        #[cfg(debug_assertions)]
+        let is_forced = opts.is_forced();
         let baseline = repo.head_tree_iter()?;
         let target = repo.tree_iter(target_tree);
         let worktree = self.worktree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
-        dbg!(&migration);
         self.apply_migration(&migration)?;
-        debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
-        debug_assert!(dbg!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?).is_empty());
+
+        // if forced, then the worktree and index should match exactly
+        debug_assert!(!is_forced || self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
+        debug_assert!(!is_forced || self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
         Ok(())
     }
 
@@ -190,14 +201,6 @@ impl Migration {
         CheckoutCtxt::new(index, opts).generate(baseline, target, worktree)
     }
 }
-#[derive(Debug)]
-enum CheckoutAction {
-    None,
-    Create,
-    Update,
-    Delete,
-    Conflict,
-}
 
 pub struct CheckoutCtxt<'a, 'rcx> {
     repo: BitRepo<'rcx>,
@@ -206,9 +209,15 @@ pub struct CheckoutCtxt<'a, 'rcx> {
     opts: CheckoutOpts,
 }
 
+// yep, really writing a macro for an if expression?
 macro_rules! cond {
-    ($pred:expr => $then:ident : $otherwise:ident) => {
-        if $pred { CheckoutAction::$then } else { CheckoutAction::$otherwise }
+    ($pred:expr => $then:expr; $otherwise:expr) => {
+        if $pred { $then } else { $otherwise }
+    };
+    ($pred:expr => $then:expr) => {
+        if $pred {
+            $then
+        }
     };
 }
 
@@ -230,126 +239,140 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         let opts = DiffOpts::with_flags(DiffOptFlags::INCLUDE_UNMODIFIED);
         let diff_iter = self.repo.tree_diff_iter_with_opts(baseline, target, opts);
 
-        // The list of actions to apply and the path to apply it to
-        let mut actions: Vec<(TreeEntry, CheckoutAction)> = vec![];
         diff_iter.for_each(|diff_entry| {
             // matchup the worktree iterator with the diff iterator by comparing order of entries
-            let action = match worktree_iter.peek()? {
+            match worktree_iter.peek()? {
                 Some(worktree_entry) => match worktree_entry.entry_cmp(&diff_entry.index_entry()) {
                     // worktree behind diffs, process worktree_entry alone
                     Ordering::Less => {
-                        let action = self.action_worktree_only(worktree_entry)?;
+                        self.worktree_only(worktree_entry)?;
                         worktree_iter.next()?;
-                        action
+                        Ok(())
                     }
                     // worktree even with diffs, process diff_entry and worktree_entry together
                     Ordering::Equal => {
-                        let action = self.action_with_worktree(diff_entry, worktree_entry)?;
+                        self.with_worktree(diff_entry, worktree_entry)?;
                         worktree_iter.next()?;
-                        action
+                        Ok(())
                     }
                     // worktree ahead of diffs, process only diff_entry
-                    Ordering::Greater => self.action_no_worktree(diff_entry)?,
+                    Ordering::Greater => self.no_worktree(diff_entry),
                 },
                 // again, worktree ahead of diffs
-                None => self.action_no_worktree(diff_entry)?,
-            };
-            Ok(actions.push(action))
+                None => self.no_worktree(diff_entry),
+            }
         })?;
 
         // consume the remaining worktree entries
-        worktree_iter.for_each(|worktree_entry| {
-            let action = self.action_worktree_only(&worktree_entry)?;
-            Ok(actions.push(action))
-        })?;
-
-        for (entry, action) in actions {
-            match action {
-                CheckoutAction::None => {}
-                CheckoutAction::Create => self.migration.creates.push(entry),
-                CheckoutAction::Delete => self.migration.rms.push(entry),
-                CheckoutAction::Update => {
-                    self.migration.rms.push(entry);
-                    self.migration.creates.push(entry);
-                }
-                CheckoutAction::Conflict => todo!(),
-            }
-        }
+        worktree_iter.for_each(|worktree_entry| self.worktree_only(&worktree_entry))?;
 
         Ok(self.migration)
     }
 
-    fn action_worktree_only(
-        &mut self,
-        worktree_entry: &BitIndexEntry,
-    ) -> BitResult<(TreeEntry, CheckoutAction)> {
-        Ok((worktree_entry.into(), CheckoutAction::None))
+    fn worktree_only(&mut self, _worktree_entry: &BitIndexEntry) -> BitResult<()> {
+        Ok(())
     }
 
-    fn action_with_worktree(
+    fn with_worktree(
         &mut self,
         diff_entry: TreeDiffEntry<'_>,
         worktree_entry: &BitIndexEntry,
-    ) -> BitResult<(TreeEntry, CheckoutAction)> {
-        let action = match diff_entry {
+    ) -> BitResult<()> {
+        match diff_entry {
             // case 9/10: B1 x B1|B2
-            TreeDiffEntry::DeletedBlob(..) =>
+            TreeDiffEntry::DeletedBlob(entry) =>
                 if self.index.is_worktree_entry_modified(worktree_entry)? {
                     // case 10: B1 x B2 | delete of modified blob (forceable)
-                    cond!(self.opts.is_force() => Delete : Conflict)
+                    cond!(self.opts.is_forced() => self.delete(entry); self.conflict(entry))
                 } else {
                     // case 9: B1 x B1 | delete blob (safe)
-                    CheckoutAction::Delete
+                    self.delete(entry);
                 },
 
             // case 3/4/6
             // TODO case 6 (if ignored)
-            TreeDiffEntry::CreatedBlob(..) => cond!(self.opts.is_force() => Update : Conflict),
+            TreeDiffEntry::CreatedBlob(entry) =>
+                cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
             // case 16/17/18: B1 B2 (B1|B2|B3)
-            TreeDiffEntry::ModifiedBlob(..) =>
+            TreeDiffEntry::ModifiedBlob(_, entry) =>
                 if self.index.is_worktree_entry_modified(worktree_entry)? {
                     // case 17/18: B1 B2 (B2|B3)
-                    cond!(self.opts.is_force() => Update : Conflict)
+                    cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
                 } else {
                     // case 16: B1 B2 B1 | update unmodified blob
-                    CheckoutAction::Update
+                    self.update(entry);
                 },
             // case 14/15: B1 B1 B1/B2
-            TreeDiffEntry::UnmodifiedBlob(..) =>
+            TreeDiffEntry::UnmodifiedBlob(entry) =>
                 if self.index.is_worktree_entry_modified(worktree_entry)? {
                     // case 15: B1 B1 B2 | locally modified file (dirty)
                     // change is only applied to index if forced
-                    cond!(self.opts.is_force() => Update : None)
+                    cond!(self.opts.is_forced() => self.update(entry))
                 } else {
                     // case 14: B1 B1 B1 | unmodified file
-                    CheckoutAction::None
+                    ()
                 },
             TreeDiffEntry::DeletedTree(..) => todo!(),
             TreeDiffEntry::CreatedTree(..) => todo!(),
         };
-        debug_assert_eq!(diff_entry.path_mode(), worktree_entry.path_mode());
-        // it's important to return `diff_entry` as worktree_entry won't have the oid accessible
-        // which is necessary when applying the migration in a force checkout
-        Ok((diff_entry.tree_entry(), action))
+        Ok(())
     }
 
-    fn action_no_worktree(
-        &mut self,
-        diff_entry: TreeDiffEntry<'_>,
-    ) -> BitResult<(TreeEntry, CheckoutAction)> {
-        let action = match diff_entry {
+    fn no_worktree(&mut self, diff_entry: TreeDiffEntry<'_>) -> BitResult<()> {
+        match diff_entry {
             // case 8: B1 x x | delete blob (safe + missing)
-            TreeDiffEntry::DeletedBlob(..) => CheckoutAction::Delete,
+            // TODO our current implementation of delete won't work
+            // as during safe checkout we will try to delete a file that doesn't even exist
+            TreeDiffEntry::DeletedBlob(entry) => cond!(self.opts.is_safe() => self.delete(entry)),
             // case 2: x B1 x | create blob (safe)
-            TreeDiffEntry::CreatedBlob(..) => CheckoutAction::Create,
+            TreeDiffEntry::CreatedBlob(entry) => cond!(self.opts.is_safe() => self.create(entry)),
             // case 13: B1 B2 x | modify/delete conflict
-            TreeDiffEntry::ModifiedBlob(..) => CheckoutAction::Conflict,
+            TreeDiffEntry::ModifiedBlob(_, entry) => self.conflict(entry),
             // case 12: B1 B1 x | locally deleted blob (safe + missing)
-            TreeDiffEntry::UnmodifiedBlob(..) => CheckoutAction::Delete,
-            TreeDiffEntry::DeletedTree(..) => todo!(),
-            TreeDiffEntry::CreatedTree(..) => todo!(),
+            TreeDiffEntry::UnmodifiedBlob(blob) => self.delete(blob),
+            // case 25: T1 x x | independently deleted tree (safe + missing)
+            TreeDiffEntry::DeletedTree(entries) =>
+                cond!(self.opts.is_safe() => self.delete_tree(entries.step_over()?)),
+            TreeDiffEntry::CreatedTree(entries) => {
+                // first, create the root of the subtree
+                // then take all entries within the subtree and create them appropriately
+                entries.iter().for_each(|entry: BitIndexEntry| {
+                    match entry.mode() {
+                        FileMode::REG | FileMode::EXEC | FileMode::LINK => self.create(entry),
+                        FileMode::TREE => self.create_tree(entry),
+                        FileMode::GITLINK => todo!(),
+                    };
+                    Ok(())
+                })?;
+            }
         };
-        Ok((diff_entry.tree_entry(), action))
+        Ok(())
+    }
+
+    fn update(&mut self, entry: impl Into<TreeEntry>) {
+        let entry = entry.into();
+        self.migration.rms.push(entry);
+        self.migration.creates.push(entry);
+    }
+
+    fn conflict(&mut self, entry: impl Into<TreeEntry>) {
+        todo!("conflict")
+    }
+
+    fn create(&mut self, entry: impl Into<TreeEntry>) {
+        self.migration.creates.push(entry.into());
+    }
+
+    fn create_tree(&mut self, entry: impl Into<TreeEntry>) {
+        self.migration.mkdirs.push(entry.into())
+    }
+
+    fn delete_tree(&mut self, entry: impl Into<TreeEntry>) {
+        self.migration.rmrfs.push(entry.into())
+    }
+
+    fn delete(&mut self, entry: impl Into<TreeEntry>) {
+        self.migration.rms.push(entry.into())
     }
 }
 
