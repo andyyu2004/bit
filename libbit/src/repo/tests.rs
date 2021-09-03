@@ -1,6 +1,5 @@
 use super::*;
 use crate::cmd::BitHashObjectOpts;
-use crate::obj;
 
 impl<'rcx> BitRepo<'rcx> {
     /// be careful when deleting `rm foo` as the symlink points at it
@@ -120,7 +119,7 @@ fn prop_bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<
         let hash = repo.hash_object(BitHashObjectOpts {
             path: file_path,
             do_write: true,
-            objtype: obj::BitObjType::Blob,
+            objtype: BitObjType::Blob,
         })?;
 
         assert!(

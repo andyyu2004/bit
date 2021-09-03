@@ -12,6 +12,7 @@ pub type BitGenericError = anyhow::Error;
 // usually we can just use anyhow for errors, but sometimes its nice to have a "rust" representation we can test or match against
 // consider not even using an enum and just have top level structs as this is resulting in extra unnecessary indirection
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum BitError {
     ObjectNotFound(BitId),
     /// object `{0}` not found in pack index but could be inserted at `{1}`
@@ -147,8 +148,9 @@ impl Display for BitError {
             BitError::MergeConflict(merge_conflict) => write!(f, "{}", merge_conflict),
             BitError::PackBackendWrite | BitError::ObjectNotFoundInPackIndex(..) =>
                 bug!("not a user facing error"),
-            BitError::CheckoutConflict(_) => {
-                todo!()
+            BitError::CheckoutConflict(conflicts) => {
+                // TODO
+                writeln!(f, "some checkout conflicts: {:?}", conflicts)
             }
         }
     }
