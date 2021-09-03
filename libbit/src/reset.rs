@@ -39,7 +39,7 @@ impl<'rcx> BitIndex<'rcx> {
 
         let target_commit_oid = repo.fully_resolve_ref(target)?;
         let target_commit = target_commit_oid.peel(repo)?;
-        let tree = target_commit.tree_oid();
+        let target_tree = target_commit.tree_oid();
 
         // Important to call `checkout_tree` before HEAD is updated as it internally read's the current head.
         // This should probably change once checkout_tree takes some options which should explicitly include the baseline tree
@@ -48,12 +48,12 @@ impl<'rcx> BitIndex<'rcx> {
         // in fact, checkout_tree should imply read_tree. Checkout needs some work :)
         if kind > ResetKind::Mixed {
             // force checkout the tree
-            self.checkout_tree_with_opts(tree, CheckoutOpts::forced())?;
+            self.force_checkout_tree(target_tree)?;
         }
 
         if kind > ResetKind::Soft {
             // make index match the target commit's tree
-            self.read_tree(tree)?;
+            self.read_tree(target_tree)?;
         }
 
         repo.update_current_ref_for_reset(target_commit_oid)?;

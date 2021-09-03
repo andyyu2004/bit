@@ -1,4 +1,3 @@
-use crate::checkout::CheckoutOpts;
 use crate::error::BitResult;
 use crate::graph::{Dag, DagBuilder, DagNode, Node};
 use crate::index::{Conflict, ConflictType};
@@ -179,7 +178,7 @@ fn test_simple_merge() -> BitResult<()> {
         bit_branch!(repo: "b");
 
         bit_checkout!(repo: "a");
-        repo.force_checkout_tree(tree! {
+        repo.checkout_tree(tree! {
             sameaddition < "foo"
             conflicted < "hello from a"
         })?;

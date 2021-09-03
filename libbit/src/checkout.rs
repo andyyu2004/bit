@@ -28,17 +28,21 @@ impl CheckoutOpts {
     }
 
     fn is_forced(&self) -> bool {
-        self.strategy == CheckoutStrategy::Force
+        self.strategy >= CheckoutStrategy::Force
     }
 
     fn is_safe(&self) -> bool {
-        self.strategy == CheckoutStrategy::Safe
+        self.strategy >= CheckoutStrategy::Safe
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+// Each strategy level implies the level above
+// i.e. Force => Safe
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CheckoutStrategy {
+    None,
     Safe,
+    // Forced checkout will result in the index and working tree exactly matching the target tree
     Force,
 }
 
@@ -118,12 +122,19 @@ impl<'rcx> BitIndex<'rcx> {
         let target = repo.tree_iter(target_tree);
         let worktree = self.worktree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
+        dbg!(&migration);
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index should match exactly
-        debug_assert!(!is_forced || self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
-        debug_assert!(!is_forced || self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
+        if is_forced {
+            debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
+            debug_assert!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
+        }
         Ok(())
+    }
+
+    pub fn force_checkout_tree(&mut self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
+        self.checkout_tree_with_opts(treeish, CheckoutOpts::forced())
     }
 
     fn generate_migration(
