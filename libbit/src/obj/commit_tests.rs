@@ -34,6 +34,9 @@ impl Arbitrary for CommitMessage {
 // it's a bit awkward to do the other way as the Arby impl for CommitMessage generates some invalid commits such as a subject that starts with \n\n
 #[quickcheck]
 fn test_parse_and_display_commit_message_quickcheck(s: String) -> BitResult<()> {
+    if s.trim_start().is_empty() {
+        return Ok(());
+    }
     let msg = CommitMessage::from_str(&s)?;
     let t = msg.to_string();
     assert_eq!(s, t);
@@ -55,7 +58,9 @@ fn test_parse_commit_message_with_trailing_newline_in_message() {
 #[test]
 fn test_parse_and_display_commit_message() -> BitResult<()> {
     for _ in 0..100 {
-        let s = generate_sane_string_with_newlines(1..100);
+        let mut s = generate_sane_string_with_newlines(2..100);
+        // just to avoid an empty subject
+        s.insert(0, 'a');
         let msg = CommitMessage::from_str(&s)?;
         let t = msg.to_string();
         assert_eq!(s, t);

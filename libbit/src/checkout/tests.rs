@@ -178,11 +178,16 @@ fn test_checkout_add_tree_with_blob_conflict() -> BitResult<()> {
             foo < "default foo contents"
             new {
                 bar
+                nested {
+                    c
+                    d
+                    e
+                }
             }
         };
 
         touch!(repo: "new");
-        // bit_checkout!(repo: &rev!(target))?;
+        bit_checkout!(repo: &rev!(target))?;
 
         Ok(())
     })

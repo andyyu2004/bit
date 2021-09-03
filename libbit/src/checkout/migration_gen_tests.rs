@@ -18,8 +18,8 @@ impl From<Migration> for TestMigration {
     fn from(migration: Migration) -> Self {
         assert!(migration.mkdirs.iter().all(|entry| entry.is_tree()));
         assert!(migration.rmrfs.iter().all(|entry| entry.is_tree()));
-        assert!(migration.rms.iter().all(|entry| entry.is_file()));
-        assert!(migration.creates.iter().all(|entry| entry.is_file()));
+        assert!(migration.rms.iter().all(|entry| entry.is_blob()));
+        assert!(migration.creates.iter().all(|entry| entry.is_blob()));
 
         let rmrfs = migration.rmrfs.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
         let rms = migration.rms.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();

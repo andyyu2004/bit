@@ -35,10 +35,9 @@ pub trait BitEntry {
     }
 
     /// Comparison function for differs
-    /// Cares about paths first, then modes second, otherwise they are considered equal.
     // This is not an `Ord` impl as it doesn't satisfy the `Ord` invariant `a.cmp(b) == Ordering::Equal <=> a == b`
     fn entry_cmp(&self, other: &Self) -> Ordering {
-        self.path().cmp(&other.path()).then_with(|| self.mode().cmp(&other.mode()))
+        self.path().cmp(&other.path())
     }
 
     fn entry_partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -49,7 +48,7 @@ pub trait BitEntry {
         self.mode().is_tree()
     }
 
-    fn is_file(&self) -> bool {
+    fn is_blob(&self) -> bool {
         self.mode().is_blob()
     }
 
@@ -115,7 +114,7 @@ impl<'rcx> FallibleIterator for TreeEntryIter<'rcx> {
         // entry iterators only yield non-tree entries
         loop {
             match self.tree_iter.next()? {
-                Some(entry) if entry.is_file() => return Ok(Some(entry)),
+                Some(entry) if entry.is_blob() => return Ok(Some(entry)),
                 None => return Ok(None),
                 _ => continue,
             }

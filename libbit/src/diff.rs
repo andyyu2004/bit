@@ -214,16 +214,21 @@ impl<'rcx> BitRepo<'rcx> {
         self,
         a: I,
         b: J,
-    ) -> TreeDiffIter<I, J> {
+    ) -> TreeDiffIter<'rcx, I, J> {
         self.tree_diff_iter_with_opts(a, b, Default::default())
     }
 
-    pub fn tree_diff_iter_with_opts<I, J>(self, a: I, b: J, opts: DiffOpts) -> TreeDiffIter<I, J>
+    pub fn tree_diff_iter_with_opts<I, J>(
+        self,
+        a: I,
+        b: J,
+        opts: DiffOpts,
+    ) -> TreeDiffIter<'rcx, I, J>
     where
         I: BitTreeIterator,
         J: BitTreeIterator,
     {
-        TreeDiffIter::new(a, b, opts)
+        TreeDiffIter::new(self, a, b, opts)
     }
 
     pub fn diff_iterators_with_opts(
@@ -232,7 +237,7 @@ impl<'rcx> BitRepo<'rcx> {
         b: impl BitTreeIterator,
         opts: DiffOpts,
     ) -> BitResult<WorkspaceStatus> {
-        TreeStatusDiffer::default().build_diff(a, b, opts)
+        TreeStatusDiffer::default().build_diff(self, a, b, opts)
     }
 
     pub fn diff_iterators(

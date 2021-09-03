@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::BitGenericError;
 use crate::iter::BitIterator;
-use crate::obj::{FileMode, TreeEntry};
+use crate::obj::FileMode;
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
 
@@ -35,19 +35,21 @@ pub enum TreeDiffEntry<'a> {
     UnmodifiedBlob(BitIndexEntry),
     DeletedTree(TreeEntriesConsumer<'a>),
     CreatedTree(TreeEntriesConsumer<'a>),
+    BlobToTree(BitIndexEntry, TreeEntriesConsumer<'a>),
+    TreeToBlob(TreeEntriesConsumer<'a>, BitIndexEntry),
 }
 
 impl BitEntry for TreeDiffEntry<'_> {
     fn oid(&self) -> Oid {
-        self.tree_entry().oid
+        self.index_entry().oid
     }
 
     fn path(&self) -> BitPath {
-        self.tree_entry().path
+        self.index_entry().path
     }
 
     fn mode(&self) -> FileMode {
-        self.tree_entry().mode
+        self.index_entry().mode
     }
 }
 
@@ -60,34 +62,22 @@ impl<'a> TreeDiffEntry<'a> {
             TreeDiffEntry::DeletedTree(old) => old.peek(),
             TreeDiffEntry::CreatedTree(new) => new.peek(),
             TreeDiffEntry::UnmodifiedBlob(entry) => *entry,
-        }
-    }
-
-    // This does less copying than `index_entry`
-    pub(crate) fn tree_entry(&self) -> TreeEntry {
-        match self {
-            TreeDiffEntry::DeletedBlob(old) => old.into(),
-            TreeDiffEntry::CreatedBlob(new) => new.into(),
-            // We return the `new` entry as the representive entry.
-            // This is required for correctness in checkout as it uses
-            // the entry returned by this function to determine what content to checkout.
-            TreeDiffEntry::ModifiedBlob(_, new) => new.into(),
-            TreeDiffEntry::DeletedTree(old) => old.peek().into(),
-            TreeDiffEntry::CreatedTree(new) => new.peek().into(),
-            TreeDiffEntry::UnmodifiedBlob(entry) => entry.into(),
+            TreeDiffEntry::BlobToTree(_, new) => new.peek(),
+            TreeDiffEntry::TreeToBlob(_, new) => *new,
         }
     }
 }
 
-pub struct TreeDiffIter<I, J> {
+pub struct TreeDiffIter<'rcx, I, J> {
+    repo: BitRepo<'rcx>,
     old_iter: I,
     new_iter: J,
     opts: DiffOpts,
 }
 
-impl<I, J> TreeDiffIter<I, J> {
-    pub fn new(old_iter: I, new_iter: J, opts: DiffOpts) -> Self {
-        Self { old_iter, new_iter, opts }
+impl<'rcx, I, J> TreeDiffIter<'rcx, I, J> {
+    pub fn new(repo: BitRepo<'rcx>, old_iter: I, new_iter: J, opts: DiffOpts) -> Self {
+        Self { repo, old_iter, new_iter, opts }
     }
 }
 
@@ -95,7 +85,7 @@ impl<I, J> TreeDiffIter<I, J> {
 pub trait TreeDiffIterator<'a> =
     FallibleLendingIterator<Item<'a> = TreeDiffEntry<'a>, Error = BitGenericError>;
 
-impl<I, J> FallibleLendingIterator for TreeDiffIter<I, J>
+impl<I, J> FallibleLendingIterator for TreeDiffIter<'_, I, J>
 where
     I: BitTreeIterator,
     J: BitTreeIterator,
@@ -124,6 +114,7 @@ where
                                 || old.path == BitPath::EMPTY && new.path == BitPath::EMPTY
                         );
                         match (old.mode(), new.mode()) {
+                            (FileMode::GITLINK, _) | (_, FileMode::GITLINK) => todo!("submodules"),
                             (FileMode::TREE, FileMode::TREE)
                                 if old.oid().is_known() && old == new =>
                             {
@@ -142,7 +133,28 @@ where
                                 self.old_iter.next()?;
                                 self.new_iter.next()?;
                             }
-                            _ if old.is_file() && new.is_file() && old.oid() == new.oid() => {
+                            (FileMode::TREE, _) => {
+                                debug_assert!(new.is_blob());
+                                self.new_iter.next()?;
+                                return Ok(Some(TreeDiffEntry::TreeToBlob(
+                                    self.old_iter.as_consumer(),
+                                    new,
+                                )));
+                            }
+                            (_, FileMode::TREE) => {
+                                debug_assert!(old.is_blob());
+                                self.old_iter.next()?;
+                                return Ok(Some(TreeDiffEntry::BlobToTree(
+                                    old,
+                                    self.new_iter.as_consumer(),
+                                )));
+                            }
+                            _ if old.is_blob()
+                                && new.is_blob()
+                                && old.oid() == new.oid()
+                                && (!self.repo.config().filemode()?
+                                    || old.mode() == new.mode()) =>
+                            {
                                 // matching files
                                 debug_assert!(old.oid().is_known() && new.oid().is_known());
                                 let entry = self.old_iter.next()?.unwrap();
@@ -152,22 +164,19 @@ where
                                 }
                             }
                             _ => {
-                                debug_assert!(
-                                    old.is_file() && new.is_file(),
-                                    "A tree vs nontree should not call `on_match`, check the ordering function.
-                                    If two entries have the same path then files should come before directories (as per `entry_cmp`).
-                                    We do not currently detect type changes, and instead treat this as an add/remove pair"
-                                    );
+                                debug_assert!(old.is_blob() && new.is_blob());
                                 debug_assert!(
                                     old.oid().is_known() && new.oid().is_known(),
                                     "all non-tree entries should have known oids"
                                 );
                                 // non-matching files
                                 trace!(
-                                    "TreeDifferGeneric::on_matched modified `{}`, {} -> {}",
+                                    "TreeDifferGeneric::on_matched modified `{}`, {}({}) -> {}({}",
                                     old.path,
                                     old.oid,
-                                    new.oid
+                                    old.mode,
+                                    new.oid,
+                                    new.mode
                                 );
                                 self.old_iter.next()?;
                                 self.new_iter.next()?;
@@ -182,7 +191,7 @@ where
     }
 }
 
-impl<I, J> TreeDiffIter<I, J>
+impl<I, J> TreeDiffIter<'_, I, J>
 where
     I: BitTreeIterator,
     J: BitTreeIterator,
@@ -212,11 +221,12 @@ pub trait TreeDiffBuilder: TreeDiffer + Sized {
     type Output;
     fn build_diff(
         mut self,
+        repo: BitRepo<'_>,
         old_iter: impl BitTreeIterator,
         new_iter: impl BitTreeIterator,
         opts: DiffOpts,
     ) -> BitResult<Self::Output> {
-        self.run_diff(old_iter, new_iter, opts)?;
+        self.run_diff(repo, old_iter, new_iter, opts)?;
         Ok(self.get_output())
     }
 
@@ -243,23 +253,34 @@ impl<'a, D: TreeDiffer + ?Sized> TreeDiffer for &'a mut D {
     fn modified_blob(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         (**self).modified_blob(old, new)
     }
+
+    fn tree_to_blob(&mut self, old: TreeEntriesConsumer<'_>, new: BitIndexEntry) -> BitResult<()> {
+        (**self).tree_to_blob(old, new)
+    }
+
+    fn blob_to_tree(&mut self, old: BitIndexEntry, new: TreeEntriesConsumer<'_>) -> BitResult<()> {
+        (**self).blob_to_tree(old, new)
+    }
 }
 
 pub trait TreeDiffer {
     fn run_diff(
         &mut self,
+        repo: BitRepo<'_>,
         old_iter: impl BitTreeIterator,
         new_iter: impl BitTreeIterator,
         opts: DiffOpts,
     ) -> BitResult<()> {
-        TreeDiffIter { old_iter, new_iter, opts }.for_each(|diff_entry| match diff_entry {
+        TreeDiffIter { repo, old_iter, new_iter, opts }.for_each(|diff_entry| match diff_entry {
             TreeDiffEntry::DeletedBlob(old) => self.deleted_blob(old),
             TreeDiffEntry::CreatedBlob(new) => self.created_blob(new),
             TreeDiffEntry::ModifiedBlob(old, new) => self.modified_blob(old, new),
             TreeDiffEntry::DeletedTree(old_entries) => self.deleted_tree(old_entries),
             TreeDiffEntry::CreatedTree(new_entries) => self.created_tree(new_entries),
+            TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
+            TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
             TreeDiffEntry::UnmodifiedBlob(..) =>
-                panic!("including unmodified files when calculating a diff"),
+                panic!("included unmodified files when calculating a diff?"),
         })
     }
 
@@ -268,6 +289,8 @@ pub trait TreeDiffer {
     fn deleted_tree(&mut self, old_entries: TreeEntriesConsumer<'_>) -> BitResult<()>;
     fn deleted_blob(&mut self, old: BitIndexEntry) -> BitResult<()>;
     fn modified_blob(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()>;
+    fn tree_to_blob(&mut self, old: TreeEntriesConsumer<'_>, new: BitIndexEntry) -> BitResult<()>;
+    fn blob_to_tree(&mut self, old: BitIndexEntry, new: TreeEntriesConsumer<'_>) -> BitResult<()>;
 }
 
 /// The consumer can either choose to just step over the tree or step over the tree and collect all its subentries
@@ -358,5 +381,26 @@ impl TreeDiffer for TreeStatusDiffer {
 
     fn modified_blob(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         Ok(self.status.modified.push((old, new)))
+    }
+
+    fn tree_to_blob(&mut self, old: TreeEntriesConsumer<'_>, new: BitIndexEntry) -> BitResult<()> {
+        old.iter_files().for_each(|deleted| {
+            self.status.deleted.push(deleted);
+            Ok(())
+        })?;
+        self.status.new.push(new);
+        Ok(())
+    }
+
+    fn blob_to_tree(
+        &mut self,
+        old: BitIndexEntry,
+        new_tree: TreeEntriesConsumer<'_>,
+    ) -> BitResult<()> {
+        self.status.deleted.push(old);
+        new_tree.iter_files().for_each(|new| {
+            self.status.new.push(new);
+            Ok(())
+        })
     }
 }

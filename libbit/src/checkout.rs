@@ -156,7 +156,8 @@ impl<'rcx> BitIndex<'rcx> {
         }
 
         for mkdir in &migration.mkdirs {
-            std::fs::create_dir(repo.to_absolute_path(&mkdir.path))?;
+            std::fs::create_dir(repo.to_absolute_path(&mkdir.path))
+                .with_context(|| anyhow!("failed to create directory in `apply_migration`"))?;
         }
 
         for create in &migration.creates {
@@ -174,7 +175,7 @@ impl<'rcx> BitIndex<'rcx> {
                     .read(false)
                     .write(true)
                     .open(&path)
-                    .with_context(|| anyhow!("failed to create file in migration create"))?;
+                    .with_context(|| anyhow!("failed to create file in `apply_migration`"))?;
                 file.write_all(&blob)?;
                 file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
             }
@@ -341,6 +342,8 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 },
             TreeDiffEntry::DeletedTree(..) => todo!(),
             TreeDiffEntry::CreatedTree(..) => todo!(),
+            TreeDiffEntry::BlobToTree(_, _) => todo!(),
+            TreeDiffEntry::TreeToBlob(_, _) => todo!(),
         };
         Ok(())
     }
@@ -354,23 +357,22 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 2: x B1 x | create blob (safe)
             TreeDiffEntry::CreatedBlob(entry) => cond!(self.opts.is_safe() => self.create(entry)),
             // case 13: B1 B2 x | modify/delete conflict
+            // TODO what if forced?
             TreeDiffEntry::ModifiedBlob(_, entry) => self.conflict(entry),
             // case 12: B1 B1 x | locally deleted blob (safe + missing)
+            // TODO what if forced?
             TreeDiffEntry::UnmodifiedBlob(blob) => self.delete(blob),
             // case 25: T1 x x | independently deleted tree (safe + missing)
-            TreeDiffEntry::DeletedTree(entries) =>
-                cond!(self.opts.is_safe() => self.delete_tree(entries.step_over()?)),
-            TreeDiffEntry::CreatedTree(entries) => {
-                // first, create the root of the subtree
-                // then take all entries within the subtree and create them appropriately
-                entries.iter().for_each(|entry: BitIndexEntry| {
-                    match entry.mode() {
-                        FileMode::REG | FileMode::EXEC | FileMode::LINK => self.create(entry),
-                        FileMode::TREE => self.create_tree(entry),
-                        FileMode::GITLINK => todo!(),
-                    };
-                    Ok(())
-                })?;
+            TreeDiffEntry::DeletedTree(tree) =>
+                cond!(self.opts.is_safe() => self.delete_tree(tree)?),
+            TreeDiffEntry::CreatedTree(entries) => self.create_tree(entries)?,
+            TreeDiffEntry::BlobToTree(blob, tree) => {
+                self.delete(blob);
+                self.create_tree(tree)?;
+            }
+            TreeDiffEntry::TreeToBlob(tree, blob) => {
+                self.delete_tree(tree)?;
+                self.create(blob);
             }
         };
         Ok(())
@@ -378,7 +380,11 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
 
     fn update(&mut self, entry: impl Into<TreeEntry>) {
         let entry = entry.into();
-        self.migration.rms.push(entry);
+        match entry.mode {
+            FileMode::REG | FileMode::EXEC | FileMode::LINK => self.migration.rms.push(entry),
+            FileMode::TREE => self.migration.rmrfs.push(entry),
+            FileMode::GITLINK => todo!(),
+        }
         self.migration.creates.push(entry);
     }
 
@@ -390,71 +396,31 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         self.migration.creates.push(entry.into());
     }
 
-    fn create_tree(&mut self, entry: impl Into<TreeEntry>) {
-        self.migration.mkdirs.push(entry.into())
+    fn mkdir(&mut self, entry: impl Into<TreeEntry>) {
+        self.migration.mkdirs.push(entry.into());
     }
 
-    fn delete_tree(&mut self, entry: impl Into<TreeEntry>) {
-        self.migration.rmrfs.push(entry.into())
+    // First, create the root of the subtree
+    // then take all entries within the subtree and create them appropriately
+    // `entries` currently includes the root of the tree
+    fn create_tree(&mut self, tree: TreeEntriesConsumer<'_>) -> BitResult<()> {
+        tree.iter().for_each(|entry: BitIndexEntry| {
+            match entry.mode() {
+                FileMode::REG | FileMode::EXEC | FileMode::LINK => self.create(entry),
+                FileMode::TREE => self.mkdir(entry),
+                FileMode::GITLINK => todo!(),
+            };
+            Ok(())
+        })
+    }
+
+    fn delete_tree(&mut self, tree: TreeEntriesConsumer<'_>) -> BitResult<()> {
+        self.migration.rmrfs.push(tree.step_over()?.into());
+        Ok(())
     }
 
     fn delete(&mut self, entry: impl Into<TreeEntry>) {
         self.migration.rms.push(entry.into())
-    }
-}
-
-#[derive(Default, Debug)]
-struct MigrationDiffer {
-    migration: Migration,
-}
-
-impl TreeDiffBuilder for MigrationDiffer {
-    type Output = Migration;
-
-    fn get_output(self) -> Self::Output {
-        self.migration
-    }
-}
-
-impl TreeDiffer for MigrationDiffer {
-    fn created_tree(&mut self, entries_consumer: TreeEntriesConsumer<'_>) -> BitResult<()> {
-        let mut entries = vec![];
-        let tree_entry = entries_consumer.collect_over_all(&mut entries)?;
-        debug_assert_ne!(
-            tree_entry.path,
-            BitPath::EMPTY,
-            "should not be creating a root directory, probably occurred to an iterator not yielding a root"
-        );
-        self.migration.mkdirs.push(tree_entry.into());
-
-        for entry in entries {
-            match entry.mode {
-                FileMode::REG | FileMode::EXEC | FileMode::LINK =>
-                    self.migration.creates.push(entry.into()),
-                FileMode::TREE => self.migration.mkdirs.push(entry.into()),
-                FileMode::GITLINK => todo!(),
-            }
-        }
-        Ok(())
-    }
-
-    fn created_blob(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        Ok(self.migration.creates.push(new.into()))
-    }
-
-    fn deleted_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()> {
-        let entry = entries.step_over()?;
-        Ok(self.migration.rmrfs.push(entry.into()))
-    }
-
-    fn deleted_blob(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        Ok(self.migration.rms.push(old.into()))
-    }
-
-    fn modified_blob(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        // we could generate a patch and use that, but is that really faster than just removing the old and recreating the new?
-        self.deleted_blob(old)?;
-        self.created_blob(new)
     }
 }
 

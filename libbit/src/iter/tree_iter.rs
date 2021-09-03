@@ -50,7 +50,7 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
         &mut self,
         container: &mut Vec<BitIndexEntry>,
     ) -> BitResult<Self::Item> {
-        self.collect_over_tree_filtered(|entry| entry.is_file(), container)
+        self.collect_over_tree_filtered(|entry| entry.is_blob(), container)
     }
 
     fn collect_over_tree_all(
@@ -108,7 +108,7 @@ impl<'a> dyn BitTreeIterator + 'a {
     pub(crate) fn collect_over_tree_files_iter(
         &'a mut self,
     ) -> impl BitIterator<BitIndexEntry> + 'a {
-        self.collect_over_tree_iter().filter(|entry| Ok(entry.is_file()))
+        self.collect_over_tree_iter().filter(|entry: &BitIndexEntry| Ok(entry.is_blob()))
     }
 }
 
