@@ -42,7 +42,7 @@ fn test_simple_soft_reset() -> BitResult<()> {
 fn test_reset_from_detached_head() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         // move to detached head state
-        bit_checkout!(repo: "HEAD^");
+        bit_checkout!(repo: "HEAD^")?;
         assert!(repo.is_head_detached()?);
         // resetting onto a branch should remain in detached HEAD
         bit_reset!(repo: "master");

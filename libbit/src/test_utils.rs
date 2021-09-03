@@ -153,22 +153,20 @@ macro_rules! bit_commit {
 macro_rules! bit_checkout {
     ($repo:ident: --force $rev:literal) => {{
         let revision = $rev.parse::<$crate::rev::Revspec>()?;
-        $repo.checkout_revision(&revision, $crate::checkout::CheckoutOpts::forced())?;
+        $repo.checkout_revision(&revision, $crate::checkout::CheckoutOpts::forced())
     }};
     ($repo:ident: $rev:literal) => {{
         let revision = $rev.parse::<$crate::rev::Revspec>()?;
-        $repo.checkout_revision(&revision, Default::default())?;
+        $repo.checkout_revision(&revision, Default::default())
     }};
-    ($repo:ident: $rev:expr) => {{
-        $repo.checkout_revision($rev, Default::default())?;
-    }};
+    ($repo:ident: $rev:expr) => {{ $repo.checkout_revision($rev, Default::default()) }};
 }
 
 macro_rules! bit_branch {
-    ($repo:ident: -b $branch:literal) => {
+    ($repo:ident: -b $branch:literal) => {{
         $repo.bit_create_branch($branch, &rev!("HEAD"))?;
-        bit_checkout!($repo: $branch)
-    };
+        bit_checkout!($repo: $branch)?
+    }};
     ($repo:ident: $branch:literal @ $rev:expr) => {
         $repo.bit_create_branch($branch, &$rev)?
     };
@@ -560,6 +558,15 @@ macro_rules! tree {
         let tree = tree_obj! { $($entries)* };
         $crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap()
     }};
+}
+
+/// create a parentless commit with the given tree
+macro_rules! commit {
+    ( $($tt:tt)* ) => {{
+       let tree = tree! { $($tt)* };
+       let msg = $crate::obj::CommitMessage::new_subject("generated commit from macro")?;
+       $crate::tls::with_repo(|repo| repo.write_commit(tree, msg, smallvec![]))?
+    }}
 }
 
 #[test]

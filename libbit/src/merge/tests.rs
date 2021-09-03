@@ -177,14 +177,14 @@ fn test_simple_merge() -> BitResult<()> {
         bit_branch!(repo: "a");
         bit_branch!(repo: "b");
 
-        bit_checkout!(repo: "a");
+        bit_checkout!(repo: "a")?;
         repo.checkout_tree(tree! {
             sameaddition < "foo"
             conflicted < "hello from a"
         })?;
         bit_commit_all!(repo);
 
-        // bit_checkout!(repo: "b");
+        // bit_checkout!(repo: "b")?;
         // repo.checkout_tree(tree! {
         //     sameaddition < "foo"
         //     conflicted < "hello from b"
@@ -217,7 +217,7 @@ fn test_merge_conflict_types() -> BitResult<()> {
         bit_commit_all!(repo);
 
         // on `alternative`
-        bit_checkout!(repo: "alternative");
+        bit_checkout!(repo: "alternative")?;
         modify!(repo: "foo");
         modify!(repo: "dir/baz");
         rm!(repo: "bar");
@@ -255,7 +255,7 @@ fn test_fast_forward_merge() -> BitResult<()> {
         bit_branch!(repo: -b "b");
         modify!(repo: "foo");
         bit_commit_all!(repo);
-        bit_checkout!(repo: "master");
+        bit_checkout!(repo: "master")?;
         let merge_kind = bit_merge!(repo: "b");
         assert_eq!(merge_kind, MergeResults::FastForward { to: symbolic_ref!("refs/heads/b") });
 

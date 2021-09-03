@@ -116,7 +116,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         let merged_tree = self.index.virtual_write_tree()?;
         let merge_commit = self.repo.virtual_write_commit(
             merged_tree,
-            CommitMessage::new_subject("generated virtual merge commit"),
+            CommitMessage::new_subject("generated virtual merge commit")?,
             smallvec![our_head.oid(), their_head.oid()],
         )?;
 
@@ -158,7 +158,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         let merged_tree = self.index.write_tree()?;
         let merge_commit = self.repo.write_commit(
             merged_tree,
-            CommitMessage::new_subject("todo ask user for commit message"),
+            CommitMessage::new_subject("todo ask user for commit message")?,
             // ordering is significant here for `--first-parent`
             // i.e. the first parent should always be our head
             smallvec![our_head, their_head],

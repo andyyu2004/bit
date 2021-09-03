@@ -7,7 +7,7 @@ fn test_commit_in_detached_head_state() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let revision = rev!("HEAD^");
         let oid = repo.fully_resolve_rev(&revision)?;
-        bit_checkout!(repo: &revision);
+        bit_checkout!(repo: &revision)?;
 
         touch!(repo: "newfile");
         modify!(repo: "bar");

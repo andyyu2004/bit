@@ -31,6 +31,7 @@ pub trait BitErrorExt {
     fn try_into_bit_error(self) -> BitResult<BitError>;
     fn try_into_status_error(self) -> BitResult<BitStatus>;
     fn try_into_merge_conflict(self) -> BitResult<MergeConflict>;
+    fn try_into_checkout_conflict(self) -> BitResult<CheckoutConflicts>;
 }
 
 impl BitErrorExt for BitGenericError {
@@ -40,6 +41,13 @@ impl BitErrorExt for BitGenericError {
     fn try_into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)> {
         match self.try_into_bit_error()? {
             BitError::ObjectNotFoundInPackIndex(oid, idx) => Ok((oid, idx)),
+            err => Err(anyhow!(err)),
+        }
+    }
+
+    fn try_into_checkout_conflict(self) -> BitResult<CheckoutConflicts> {
+        match self.try_into_bit_error()? {
+            BitError::CheckoutConflict(checkout_conflict) => Ok(checkout_conflict),
             err => Err(anyhow!(err)),
         }
     }
