@@ -1,3 +1,4 @@
+use crate::checkout::CheckoutConflicts;
 use crate::merge::MergeConflict;
 use crate::obj::{BitId, Oid, PartialOid};
 use crate::refs::SymbolicRef;
@@ -10,7 +11,7 @@ pub type BitGenericError = anyhow::Error;
 
 // usually we can just use anyhow for errors, but sometimes its nice to have a "rust" representation we can test or match against
 // consider not even using an enum and just have top level structs as this is resulting in extra unnecessary indirection
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum BitError {
     ObjectNotFound(BitId),
     /// object `{0}` not found in pack index but could be inserted at `{1}`
@@ -18,6 +19,7 @@ pub enum BitError {
     AmbiguousPrefix(PartialOid, Vec<Oid>),
     NonExistentSymRef(SymbolicRef),
     MergeConflict(MergeConflict),
+    CheckoutConflict(CheckoutConflicts),
     PackBackendWrite,
 }
 
@@ -145,6 +147,9 @@ impl Display for BitError {
             BitError::MergeConflict(merge_conflict) => write!(f, "{}", merge_conflict),
             BitError::PackBackendWrite | BitError::ObjectNotFoundInPackIndex(..) =>
                 bug!("not a user facing error"),
+            BitError::CheckoutConflict(_) => {
+                todo!()
+            }
         }
     }
 }

@@ -42,7 +42,8 @@ impl<'rcx> BitIndex<'rcx> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct MergeConflict {
     pub conflicts: Conflicts,
 }

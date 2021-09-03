@@ -1,5 +1,4 @@
 use crate::checkout::Migration;
-use crate::error::BitResult;
 use crate::iter::BitEntry;
 use crate::peel::Peel;
 use crate::repo::BitRepo;

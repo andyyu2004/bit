@@ -151,6 +151,10 @@ macro_rules! bit_commit {
 }
 
 macro_rules! bit_checkout {
+    ($repo:ident: --force $rev:literal) => {{
+        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+        $repo.checkout_revision(&revision, $crate::checkout::CheckoutOpts::forced())?;
+    }};
     ($repo:ident: $rev:literal) => {{
         let revision = $rev.parse::<$crate::rev::Revspec>()?;
         $repo.checkout_revision(&revision, Default::default())?;
@@ -249,6 +253,10 @@ macro_rules! gitignore {
 }
 
 macro_rules! touch {
+    ($repo:ident: $path:literal < $contents:expr) => {
+        std::fs::File::create($repo.workdir.join($path))?;
+        modify!($repo: $path < $contents)
+    };
     ($repo:ident: $path:expr) => {
         std::fs::File::create($repo.workdir.join($path))?
     };

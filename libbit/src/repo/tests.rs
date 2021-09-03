@@ -26,6 +26,14 @@ impl<'rcx> BitRepo<'rcx> {
         })
     }
 
+    pub fn with_minimal_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
+        Self::with_empty_repo(|repo| {
+            touch!(repo: "foo" < "default foo contents");
+            bit_commit_all!(repo);
+            f(repo)
+        })
+    }
+
     // same repo as above but without the symlink issue
     pub fn with_sample_repo_no_sym<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {

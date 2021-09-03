@@ -1,4 +1,3 @@
-use crate::checkout::CheckoutOpts;
 use crate::error::BitResult;
 use crate::index::BitIndex;
 use crate::peel::Peel;

@@ -1,5 +1,5 @@
 use crate::diff::*;
-use crate::error::BitResult;
+use crate::error::{BitError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
@@ -66,11 +66,6 @@ impl<'rcx> BitRepo<'rcx> {
         // doesn't make sense to move HEAD -> HEAD
         assert_ne!(reference, BitRef::HEAD);
 
-        let status = self.status(Pathspec::MATCH_ALL)?;
-
-        // only allow checkout on fully clean states for now
-        ensure!(status.is_empty(), "cannot checkout: unclean state");
-
         let commit_oid = self.fully_resolve_ref(reference)?;
         self.checkout_tree_with_opts(commit_oid, opts)?;
 
@@ -78,11 +73,6 @@ impl<'rcx> BitRepo<'rcx> {
         // as we should not be allowed to modify remote branches locally
         let new_head = if reference.is_remote() { commit_oid.into() } else { reference };
         self.update_head_for_checkout(new_head)?;
-
-        debug_assert!(
-            self.status(Pathspec::MATCH_ALL)?.is_empty(),
-            "the working tree and index should exactly match"
-        );
 
         Ok(())
     }
@@ -122,7 +112,6 @@ impl<'rcx> BitIndex<'rcx> {
         let target = repo.tree_iter(target_tree);
         let worktree = self.worktree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
-        dbg!(&migration);
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index should match exactly
@@ -155,7 +144,14 @@ impl<'rcx> BitIndex<'rcx> {
         }
 
         for rm in &migration.rms {
-            std::fs::remove_file(repo.to_absolute_path(&rm.path))?;
+            let path = repo.to_absolute_path(&rm.path);
+            std::fs::remove_file(path)?;
+            // if we remove a file and that results in the directory being empty
+            // we can just remove the directory too
+            let parent = path.parent().expect("a file must have a parent");
+            if parent.read_dir()?.next().is_none() {
+                std::fs::remove_dir(parent)?;
+            }
             self.remove_entry((rm.path, MergeStage::None));
         }
 
@@ -213,14 +209,28 @@ impl Migration {
     }
 }
 
+#[derive(Debug, Default)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct CheckoutConflicts {
+    worktree: Vec<TreeEntry>,
+}
+
+impl CheckoutConflicts {
+    pub fn is_empty(&self) -> bool {
+        self.worktree.is_empty()
+    }
+}
+
 pub struct CheckoutCtxt<'a, 'rcx> {
     repo: BitRepo<'rcx>,
     index: &'a mut BitIndex<'rcx>,
     migration: Migration,
     opts: CheckoutOpts,
+    conflicts: CheckoutConflicts,
 }
 
 // yep, really writing a macro for an if expression?
+// helps keep the condition on one line
 macro_rules! cond {
     ($pred:expr => $then:expr; $otherwise:expr) => {
         if $pred { $then } else { $otherwise }
@@ -235,7 +245,7 @@ macro_rules! cond {
 impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
     pub fn new(index: &'a mut BitIndex<'rcx>, opts: CheckoutOpts) -> Self {
         let repo = index.repo;
-        Self { index, repo, opts, migration: Migration::default() }
+        Self { index, repo, opts, migration: Default::default(), conflicts: Default::default() }
     }
 
     // Refer to https://github.com/libgit2/libgit2/blob/main/docs/checkout-internals.md
@@ -274,13 +284,19 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             }
         })?;
 
-        // consume the remaining worktree entries
+        // consume the remaining unmatched worktree entries
         worktree_iter.for_each(|worktree_entry| self.worktree_only(&worktree_entry))?;
 
-        Ok(self.migration)
+        if self.conflicts.is_empty() {
+            Ok(self.migration)
+        } else {
+            bail!(BitError::CheckoutConflict(self.conflicts))
+        }
     }
 
-    fn worktree_only(&mut self, _worktree_entry: &BitIndexEntry) -> BitResult<()> {
+    fn worktree_only(&mut self, worktree_entry: &BitIndexEntry) -> BitResult<()> {
+        // TODO consider .gitignore rules
+        cond!(self.opts.is_forced() => self.delete(worktree_entry));
         Ok(())
     }
 
@@ -367,7 +383,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
     }
 
     fn conflict(&mut self, entry: impl Into<TreeEntry>) {
-        todo!("conflict")
+        self.conflicts.worktree.push(entry.into());
     }
 
     fn create(&mut self, entry: impl Into<TreeEntry>) {

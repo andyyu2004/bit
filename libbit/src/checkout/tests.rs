@@ -51,3 +51,49 @@ fn test_checkout_moves_head_to_branch_not_commit() -> BitResult<()> {
         Ok(())
     })
 }
+
+// case 1
+#[test]
+fn test_safe_checkout_keeps_untracked() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "untracked");
+        mkdir!(repo: "new-dir");
+        touch!(repo: "new-dir/bar");
+        bit_checkout!(repo: "master");
+        assert!(exists!(repo: "untracked"));
+        assert!(exists!(repo: "new-dir/bar"));
+        Ok(())
+    })
+}
+
+// case 2
+#[test]
+fn test_force_checkout_removes_untracked() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "untracked");
+        mkdir!(repo: "new-dir");
+        touch!(repo: "new-dir/bar");
+        bit_checkout!(repo: --force "master");
+        assert!(!exists!(repo: "untracked"));
+        assert!(!exists!(repo: "new-dir"));
+        assert!(!exists!(repo: "new-dir/bar"));
+        Ok(())
+    })
+}
+
+// case 3
+#[test]
+fn test_safe_checkout_of_independentally_added_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        // essentially emulating an addition in the target by removing the file and committing
+        // and then trying to go back
+        rm!(repo: "foo");
+        bit_commit_all!(repo);
+        assert!(!exists!(repo: "foo"));
+
+        // then we create a matching file in the worktree
+        touch!(repo: "foo"< "default foo contents");
+        bit_checkout!(repo: "HEAD^");
+        Ok(())
+    })
+}
