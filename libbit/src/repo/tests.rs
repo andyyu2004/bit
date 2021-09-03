@@ -124,7 +124,7 @@ fn prop_bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<
 
         assert!(
             repo.relative_paths(&["objects", &hex::encode(&hash[0..1]), &hex::encode(&hash[1..])])
-                .exists()
+                .try_exists()?
         );
 
         // this doesn't call `bit_cat_file` directly but this function is

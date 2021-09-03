@@ -4,6 +4,7 @@ use crate::iter::BitIterator;
 use crate::obj::FileMode;
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
+use std::fmt::{self, Formatter};
 
 #[derive(Debug, Default)]
 pub struct DiffOpts {
@@ -298,6 +299,12 @@ pub trait TreeDiffer {
 pub struct TreeEntriesConsumer<'a> {
     // refcell is here mostly so `peek` doesn't require a mutable reference
     iter: RefCell<&'a mut dyn BitTreeIterator>,
+}
+
+impl std::fmt::Debug for TreeEntriesConsumer<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.peek())
+    }
 }
 
 impl<'a> TreeEntriesConsumer<'a> {

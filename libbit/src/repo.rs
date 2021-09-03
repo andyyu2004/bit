@@ -91,13 +91,13 @@ impl<'rcx> RepoCtxt<'rcx> {
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {
-        if path.join(".git").exists() {
+        if path.join(".git").try_exists()? {
             return Self::load(path);
         }
 
         // also recognize `.bit` folder as its convenient for having bit repos under tests/repos
         // it is for testing and debugging purposes only
-        if path.join(".bit").exists() {
+        if path.join(".bit").try_exists()? {
             return Self::load_with_bitdir(path, ".bit");
         }
 
@@ -113,7 +113,7 @@ impl<'rcx> RepoCtxt<'rcx> {
             .canonicalize()
             .with_context(|| anyhow!("failed to load bit in non-existent directory"))?;
         let bitdir = worktree.join(bitdir);
-        debug_assert!(bitdir.exists());
+        debug_assert!(bitdir.try_exists()?);
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
 
         let rcx = RepoCtxt::new(worktree, bitdir, config_filepath)?;
@@ -307,7 +307,7 @@ impl<'rcx> BitRepo<'rcx> {
         // although, bit will recognize a `.bit` folder if explicitly renamed
         let bitdir = workdir.join(".git");
 
-        if bitdir.exists() {
+        if bitdir.try_exists()? {
             // reinitializing doesn't really do anything currently
             println!("reinitialized existing bit repository in `{}`", workdir.display());
             return Ok(());

@@ -3,7 +3,6 @@ use crate::error::{BitError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
-use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
@@ -145,7 +144,9 @@ impl<'rcx> BitIndex<'rcx> {
 
         for rm in &migration.rms {
             let path = repo.to_absolute_path(&rm.path);
-            std::fs::remove_file(path)?;
+            if path.try_exists()? {
+                std::fs::remove_file(path)?;
+            }
             // if we remove a file and that results in the directory being empty
             // we can just remove the directory too
             let parent = path.parent().expect("a file must have a parent");
@@ -217,6 +218,10 @@ pub struct CheckoutConflicts {
 }
 
 impl CheckoutConflicts {
+    pub fn len(&self) -> usize {
+        self.worktree.len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.worktree.is_empty()
     }
@@ -338,12 +343,20 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     cond!(self.opts.is_forced() => self.update(entry))
                 } else {
                     // case 14: B1 B1 B1 | unmodified file
-                    ()
                 },
             TreeDiffEntry::DeletedTree(..) => todo!(),
-            TreeDiffEntry::CreatedTree(..) => todo!(),
-            TreeDiffEntry::BlobToTree(_, _) => todo!(),
-            TreeDiffEntry::TreeToBlob(_, _) => todo!(),
+            // case 6: x T1 B1/Bi | add tree with blob conflict (forceable)
+            // TODO ignored case
+            TreeDiffEntry::CreatedTree(tree) =>
+                if self.opts.is_forced() {
+                    // replace worktree blob with target tree
+                    self.delete(worktree_entry);
+                    self.create_tree(tree)?;
+                } else {
+                    self.conflict(tree.step_over()?)
+                },
+            TreeDiffEntry::BlobToTree(..) => todo!(),
+            TreeDiffEntry::TreeToBlob(..) => todo!(),
         };
         Ok(())
     }

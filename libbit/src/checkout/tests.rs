@@ -170,9 +170,9 @@ fn test_checkout_add_tree() -> BitResult<()> {
     })
 }
 
-// case 6
+// case 6 (safe)
 #[test]
-fn test_checkout_add_tree_with_blob_conflict() -> BitResult<()> {
+fn test_safe_checkout_add_tree_with_blob_conflict() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let target = tree! {
             foo < "default foo contents"
@@ -187,8 +187,47 @@ fn test_checkout_add_tree_with_blob_conflict() -> BitResult<()> {
         };
 
         touch!(repo: "new");
-        bit_checkout!(repo: &rev!(target))?;
+        let conflicts =
+            bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        assert_eq!(conflicts.len(), 1);
+        Ok(())
+    })
+}
 
+// case 6 (forced)
+#[test]
+fn test_forced_checkout_add_tree_with_blob_conflict() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = tree! {
+            foo < "default foo contents"
+            new {
+                bar {
+                    nested {
+                        c
+                        d
+                        e
+                    }
+                    z
+                }
+            }
+        };
+
+        touch!(repo: "new");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert!(exists!(repo: "new/bar/z"));
+        assert!(exists!(repo: "new/bar/nested/d"));
+        Ok(())
+    })
+}
+
+// case 8
+#[test]
+fn test_checkout_independently_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let empty_tree = tree! {};
+        rm!(repo: "foo");
+        bit_checkout!(repo: &rev!(empty_tree))?;
+        assert!(!exists!(repo: "foo"));
         Ok(())
     })
 }

@@ -132,7 +132,7 @@ macro_rules! check_next {
 
 macro_rules! exists {
     ($repo:ident: $path:literal) => {
-        $repo.workdir.join($path).exists()
+        $repo.workdir.join($path).try_exists()?
     };
 }
 
@@ -155,11 +155,16 @@ macro_rules! bit_checkout {
         let revision = $rev.parse::<$crate::rev::Revspec>()?;
         $repo.checkout_revision(&revision, $crate::checkout::CheckoutOpts::forced())
     }};
+    ($repo:ident: --force $rev:expr) => {
+        $repo.checkout_revision(&$rev, $crate::checkout::CheckoutOpts::forced())
+    };
     ($repo:ident: $rev:literal) => {{
         let revision = $rev.parse::<$crate::rev::Revspec>()?;
         $repo.checkout_revision(&revision, Default::default())
     }};
-    ($repo:ident: $rev:expr) => {{ $repo.checkout_revision($rev, Default::default()) }};
+    ($repo:ident: $rev:expr) => {
+        $repo.checkout_revision($rev, Default::default())
+    };
 }
 
 macro_rules! bit_branch {
@@ -322,12 +327,6 @@ macro_rules! hash_symlink {
         // needs the obj header which is why we wrap it in blob
         MutableBlob::new(bytes.to_vec()).hash()?
     }};
-}
-
-macro_rules! hash_file {
-    ($repo:ident: $path:expr) => {
-        hash_blob!(cat!($repo: $path).as_bytes())
-    };
 }
 
 macro_rules! cat {

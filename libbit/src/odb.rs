@@ -152,7 +152,11 @@ impl BitLooseObjDb {
     fn locate_obj(&self, id: impl Into<BitId>) -> BitResult<PathBuf> {
         let oid = self.expand_id(id.into())?;
         let path = self.obj_path(oid);
-        if path.exists() { Ok(path) } else { Err(anyhow!(BitError::ObjectNotFound(oid.into()))) }
+        if path.try_exists()? {
+            Ok(path)
+        } else {
+            Err(anyhow!(BitError::ObjectNotFound(oid.into())))
+        }
     }
 
     fn read_stream(&self, id: impl Into<BitId>) -> BitResult<impl BufRead> {
@@ -178,7 +182,7 @@ impl BitObjDbBackend for BitLooseObjDb {
         let (oid, bytes) = obj.hash_and_serialize()?;
         let path = self.obj_path(oid);
 
-        if path.as_path().exists() {
+        if path.as_path().try_exists()? {
             #[cfg(debug_assertions)]
             {
                 let mut buf = vec![];
@@ -205,7 +209,7 @@ impl BitObjDbBackend for BitLooseObjDb {
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
         let (dir, file_prefix) = prefix.split();
         let full_dir = self.objects_path.as_path().join(dir);
-        if !full_dir.exists() {
+        if !full_dir.try_exists()? {
             return Ok(vec![]);
         }
 
@@ -241,7 +245,7 @@ impl BitPackedObjDb {
         let pack_dir = objects_path.join("pack");
         let packs = Default::default();
 
-        if !pack_dir.exists() {
+        if !pack_dir.try_exists()? {
             return Ok(Self { packs });
         }
 
@@ -254,7 +258,7 @@ impl BitPackedObjDb {
 
             let idx = pack_path.with_extension("idx");
             ensure!(
-                idx.exists(),
+                idx.try_exists()?,
                 "packfile `{}` is missing a corresponding index file",
                 pack_path.display()
             );

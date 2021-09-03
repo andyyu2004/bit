@@ -194,7 +194,7 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     }
 
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool> {
-        Ok(self.join(sym.path).exists())
+        Ok(self.join(sym.path).try_exists()?)
     }
 
     // read_reflog is probably not a great method to have
@@ -228,7 +228,7 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
 
         for prefix in PREFIXES {
             let path = prefix.join(sym.path);
-            if self.join(path).exists() {
+            if self.join(path).try_exists()? {
                 return SymbolicRef::new_valid(path);
             }
         }

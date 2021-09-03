@@ -1,5 +1,6 @@
 #![deny(rust_2018_idioms)]
 #![feature(result_copied)]
+#![feature(path_try_exists)]
 #![feature(generic_associated_types)]
 #![feature(btree_drain_filter)]
 #![feature(iter_intersperse)]

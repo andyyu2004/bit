@@ -54,7 +54,7 @@ impl Lockfile {
     fn open(path: impl AsRef<Path>, flags: LockfileFlags) -> BitResult<Self> {
         let path = path.as_ref();
         assert!(
-            !path.exists() || path.is_file(),
+            !path.try_exists()? || path.is_file(),
             "cannot create lock on symlinks or directories `{}`",
             path.display()
         );
@@ -76,7 +76,7 @@ impl Lockfile {
                 },
             )?;
 
-        let file = path.exists().then(|| File::open(path)).transpose()?;
+        let file = path.try_exists()?.then(|| File::open(path)).transpose()?;
 
         Ok(Self {
             file,
@@ -151,7 +151,7 @@ impl Lockfile {
         let set_readonly = self.flags.contains(LockfileFlags::SET_READONLY);
         // we only do this branch if we expect it to be readonly
         // if its when this flag is false then that is unexpected and we should get an error
-        if set_readonly && self.path.exists() {
+        if set_readonly && self.path.try_exists()? {
             let mut permissions = self.path.metadata()?.permissions();
             permissions.set_readonly(false);
             std::fs::set_permissions(&self.path, permissions)?;
