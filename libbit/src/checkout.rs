@@ -114,6 +114,7 @@ impl<'rcx> BitIndex<'rcx> {
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index should match exactly
+        #[cfg(debug_assertions)]
         if is_forced {
             debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
             debug_assert!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());

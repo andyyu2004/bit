@@ -517,6 +517,15 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(())
     }
 
+    pub fn ensure_obj_is_commit(self, id: impl Into<BitId>) -> BitResult<()> {
+        let id = id.into();
+        let oid = self.expand_id(id)?;
+        self.ensure_obj_exists(oid)?;
+        let obj_type = self.read_obj_header(oid)?.obj_type;
+        ensure!(obj_type == BitObjType::Commit, BitError::ExpectedCommit(oid, obj_type));
+        Ok(())
+    }
+
     #[must_use = "this call has no side effects (you may want to use `ensure_obj_exists` instead)"]
     // note, the above annotation doesn't really do anything as "question marking" the return value counts as a use so...
     // but nevertheless, its non-useless docs as I've made the mistake already
