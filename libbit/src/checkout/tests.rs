@@ -3,6 +3,8 @@ use crate::obj::FileMode;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 
+// TODO all cases where workdir has a Tree are unimplemented/untested
+
 #[test]
 fn test_simple_checkout_rm_rf() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
@@ -481,6 +483,21 @@ fn test_forced_checkout_blob_to_tree_with_locally_modified_blob() -> BitResult<(
         };
         bit_checkout!(repo: --force &rev!(target))?;
         assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+// case 25
+#[test]
+fn test_checkout_independentally_deleted_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        let target = commit! {
+            foo
+            bar
+        };
+        rmdir!(repo: "dir");
+        bit_checkout!(repo: &rev!(target))?;
+        assert!(!exists!(repo: "dir"));
         Ok(())
     })
 }

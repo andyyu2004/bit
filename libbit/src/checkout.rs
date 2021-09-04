@@ -139,14 +139,17 @@ impl<'rcx> BitIndex<'rcx> {
     fn apply_migration(&mut self, migration: &Migration) -> BitResult<()> {
         let repo = self.repo;
         for rmrf in &migration.rmrfs {
-            std::fs::remove_dir_all(repo.to_absolute_path(&rmrf.path))?;
+            let path = repo.to_absolute_path(&rmrf.path);
+            if path.try_exists()? {
+                std::fs::remove_dir_all(&path)?;
+            }
             self.remove_directory(&rmrf.path)?;
         }
 
         for rm in &migration.rms {
             let path = repo.to_absolute_path(&rm.path);
             if path.try_exists()? {
-                std::fs::remove_file(path)
+                std::fs::remove_file(&path)
                     .with_context(|| anyhow!("failed to remove file in `apply_migration`"))?;
 
                 // if we remove a file and that results in the directory being empty
