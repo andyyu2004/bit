@@ -146,13 +146,15 @@ impl<'rcx> BitIndex<'rcx> {
         for rm in &migration.rms {
             let path = repo.to_absolute_path(&rm.path);
             if path.try_exists()? {
-                std::fs::remove_file(path)?;
-            }
-            // if we remove a file and that results in the directory being empty
-            // we can just remove the directory too
-            let parent = path.parent().expect("a file must have a parent");
-            if parent.read_dir()?.next().is_none() {
-                std::fs::remove_dir(parent)?;
+                std::fs::remove_file(path)
+                    .with_context(|| anyhow!("failed to remove file in `apply_migration`"))?;
+
+                // if we remove a file and that results in the directory being empty
+                // we can just remove the directory too
+                let parent = path.parent().expect("a file must have a parent");
+                if parent.read_dir()?.next().is_none() {
+                    std::fs::remove_dir(parent)?;
+                }
             }
             self.remove_entry((rm.path, MergeStage::None));
         }
@@ -371,11 +373,11 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 2: x B1 x | create blob (safe)
             TreeDiffEntry::CreatedBlob(entry) => cond!(self.opts.is_safe() => self.create(entry)),
             // case 13: B1 B2 x | modify/delete conflict
-            // TODO what if forced?
-            TreeDiffEntry::ModifiedBlob(_, entry) => self.conflict(entry),
+            TreeDiffEntry::ModifiedBlob(_, entry) =>
+                cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
             // case 12: B1 B1 x | locally deleted blob (safe + missing)
-            // TODO what if forced?
-            TreeDiffEntry::UnmodifiedBlob(blob) => self.delete(blob),
+            TreeDiffEntry::UnmodifiedBlob(blob) =>
+                cond!(self.opts.is_forced() => self.create(blob)),
             // case 25: T1 x x | independently deleted tree (safe + missing)
             TreeDiffEntry::DeletedTree(tree) =>
                 cond!(self.opts.is_safe() => self.delete_tree(tree)?),

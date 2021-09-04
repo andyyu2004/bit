@@ -230,11 +230,92 @@ fn test_checkout_independently_deleted_blob() -> BitResult<()> {
         Ok(())
     })
 }
+
 // case 9
 #[test]
 fn test_checkout_delete_blob() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         bit_checkout!(repo: &rev!(commit! {}))?;
+        assert!(!exists!(repo: "foo"));
+        Ok(())
+    })
+}
+
+// case 10 (safe)
+#[test]
+fn test_safe_checkout_delete_of_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        modify!(repo: "foo");
+        let conflicts =
+            bit_checkout!(repo: &rev!(commit! {})).unwrap_err().try_into_checkout_conflict()?;
+        assert_eq!(conflicts.len(), 1);
+        Ok(())
+    })
+}
+
+// case 10 (forced)
+#[test]
+fn test_force_checkout_delete_of_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        modify!(repo: "foo");
+        bit_checkout!(repo: --force &rev!(commit! {}))?;
+        assert!(!exists!(repo: "foo"));
+        Ok(())
+    })
+}
+
+// case 12 (safe)
+#[test]
+fn test_safe_checkout_locally_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        rm!(repo: "foo");
+        bit_checkout!(repo: "master")?;
+        // will leave the file as deleted
+        assert!(!exists!(repo: "foo"));
+        Ok(())
+    })
+}
+
+// case 12 (forced)
+#[test]
+fn test_force_checkout_locally_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        rm!(repo: "foo");
+        bit_checkout!(repo: --force "master")?;
+        // will recreate the locally deleted blob
+        assert_eq!(cat!(repo: "foo"), "default foo contents");
+        Ok(())
+    })
+}
+
+// case 13 (safe)
+// libgit2 table seems wrong in this case, says SAFE+MISSING?
+// but in code
+// `*action = CHECKOUT_ACTION_IF(RECREATE_MISSING, UPDATE_BLOB, CONFLICT);`
+#[test]
+fn test_safe_checkout_update_to_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+           foo < "updated content"
+        };
+        rm!(repo: "foo");
+        let conflicts =
+            bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        assert_eq!(conflicts.len(), 1);
+        Ok(())
+    })
+}
+
+// case 13 (forced)
+#[test]
+fn test_force_checkout_update_to_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+           foo < "target content"
+        };
+        rm!(repo: "foo");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "foo"), "target content");
         Ok(())
     })
 }
