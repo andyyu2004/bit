@@ -315,7 +315,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         worktree_entry: &BitIndexEntry,
     ) -> BitResult<()> {
         match diff_entry {
-            // case 9/10: B1 x B1|B2
+            // case 9/case 10: B1 x B1|B2
             TreeDiffEntry::DeletedBlob(entry) =>
                 if self.index.is_worktree_entry_modified(worktree_entry)? {
                     // case 10: B1 x B2 | delete of modified blob (forceable)
@@ -332,7 +332,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 16/17/18: B1 B2 (B1|B2|B3)
             TreeDiffEntry::ModifiedBlob(_, entry) =>
                 if self.index.is_worktree_entry_modified(worktree_entry)? {
-                    // case 17/18: B1 B2 (B2|B3)
+                    // case 17/case 18: B1 B2 (B2|B3)
                     cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
                 } else {
                     // case 16: B1 B2 B1 | update unmodified blob
@@ -358,7 +358,15 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 } else {
                     self.conflict(tree.step_over()?)
                 },
-            TreeDiffEntry::BlobToTree(..) => todo!(),
+            // case 22/case 23: B1 T1 B1/B2
+            TreeDiffEntry::BlobToTree(blob, tree) =>
+                if self.index.is_worktree_entry_modified(worktree_entry)? {
+                    // case 22
+                    cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree)?; self.conflict(worktree_entry))
+                } else {
+                    //case 23
+                    self.blob_to_tree(blob, tree)?
+                },
             TreeDiffEntry::TreeToBlob(..) => todo!(),
         };
         Ok(())
@@ -382,14 +390,8 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             TreeDiffEntry::DeletedTree(tree) =>
                 cond!(self.opts.is_safe() => self.delete_tree(tree)?),
             TreeDiffEntry::CreatedTree(entries) => self.create_tree(entries)?,
-            TreeDiffEntry::BlobToTree(blob, tree) => {
-                self.delete(blob);
-                self.create_tree(tree)?;
-            }
-            TreeDiffEntry::TreeToBlob(tree, blob) => {
-                self.delete_tree(tree)?;
-                self.create(blob);
-            }
+            TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree)?,
+            TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob)?,
         };
         Ok(())
     }
@@ -428,6 +430,25 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             };
             Ok(())
         })
+    }
+
+    fn tree_to_blob(
+        &mut self,
+        tree: TreeEntriesConsumer<'_>,
+        blob: impl Into<TreeEntry>,
+    ) -> BitResult<()> {
+        self.delete_tree(tree)?;
+        self.create(blob);
+        Ok(())
+    }
+
+    fn blob_to_tree(
+        &mut self,
+        blob: impl Into<TreeEntry>,
+        tree: TreeEntriesConsumer<'_>,
+    ) -> BitResult<()> {
+        self.delete(blob);
+        self.create_tree(tree)
     }
 
     fn delete_tree(&mut self, tree: TreeEntriesConsumer<'_>) -> BitResult<()> {

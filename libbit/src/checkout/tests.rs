@@ -320,6 +320,18 @@ fn test_force_checkout_update_to_deleted_blob() -> BitResult<()> {
     })
 }
 
+// case 14
+#[test]
+fn test_checkout_unmodified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        bit_checkout!(repo: "master")?;
+        assert_eq!(cat!(repo: "foo"), "default foo contents");
+        bit_checkout!(repo: --force "master")?;
+        assert_eq!(cat!(repo: "foo"), "default foo contents");
+        Ok(())
+    })
+}
+
 // case 15
 #[test]
 fn test_safe_checkout_locally_modified_blob() -> BitResult<()> {
@@ -340,6 +352,135 @@ fn test_force_checkout_locally_modified_blob() -> BitResult<()> {
         bit_checkout!(repo: --force "master")?;
         // force checkout should reset the working directory
         assert_eq!(cat!(repo: "foo"), "default foo contents");
+        Ok(())
+    })
+}
+
+// case 16
+#[test]
+fn test_checkout_update_unmodified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo < "target content"
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        assert_eq!(cat!(repo: "foo"), "target content");
+        Ok(())
+    })
+}
+
+// case 17 (safe)
+#[test]
+fn test_safe_checkout_independently_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo < "new content"
+        };
+        modify!(repo: "foo" < "new content");
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 17 (forced)
+#[test]
+fn test_force_checkout_independently_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo < "new content"
+        };
+        modify!(repo: "foo" < "new content");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "foo"), "new content");
+        Ok(())
+    })
+}
+
+// case 18 (safe)
+#[test]
+fn test_safe_checkout_update_to_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo < "new content"
+        };
+        modify!(repo: "foo" < "differing new content");
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 18 (forced)
+#[test]
+fn test_forced_checkout_update_to_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo < "new content"
+        };
+        modify!(repo: "foo" < "differing new content");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "foo"), "new content");
+        Ok(())
+    })
+}
+
+// case 21
+#[test]
+fn test_checkout_add_tree_with_locally_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        rm!(repo: "foo");
+        let target = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+// case 22
+#[test]
+fn test_checkout_blob_to_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+// case 23 (safe)
+#[test]
+fn test_safe_checkout_blob_to_tree_with_locally_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        modify!(repo: "foo");
+        let target = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 23 (forced)
+#[test]
+fn test_forced_checkout_blob_to_tree_with_locally_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        modify!(repo: "foo");
+        let target = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
         Ok(())
     })
 }
