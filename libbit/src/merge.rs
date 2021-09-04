@@ -164,7 +164,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
             smallvec![our_head, their_head],
         )?;
 
-        self.index.checkout_tree_with_opts(merge_commit, CheckoutOpts::default())?;
+        self.index.force_checkout_tree(merge_commit)?;
         repo.update_current_ref_for_merge(their_head)?;
 
         Ok(MergeResults::Merge(MergeSummary {}))

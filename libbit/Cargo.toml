@@ -48,6 +48,7 @@ indexmap = "1.6.2"
 indexed_vec =  "1"
 jwalk = "0.6"
 flate2 = { version = "1.0.20", features = ["zlib-ng-compat"], default-features = false }
+# flate2 = { version = "1.0.20" }
 fallible-iterator = { git = "https://github.com/andyyu2004/rust-fallible-iterator" }
 diffy = { git = "https://github.com/andyyu2004/diffy" }
 

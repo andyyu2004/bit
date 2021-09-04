@@ -25,7 +25,7 @@ use std::io::{BufRead, BufReader, Cursor, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub struct BitPackObjRaw {
     pub obj_type: BitObjType,
     pub bytes: Vec<u8>,

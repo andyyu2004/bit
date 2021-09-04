@@ -55,6 +55,7 @@ impl Debug for BitPackObjRawKind {
 pub struct Pack {
     pack_reader: PackfileReader<BufferedFileStream>,
     idx_reader: PackIndexReader<BufferedFileStream>,
+    pack_obj_cache: FxHashMap<u64, BitPackObjRaw>,
 }
 
 impl Pack {
@@ -67,7 +68,7 @@ impl Pack {
             .map(BufReader::new)
             .map_err(Into::into)
             .and_then(PackIndexReader::new)?;
-        Ok(Self { pack_reader, idx_reader })
+        Ok(Self { pack_reader, idx_reader, pack_obj_cache: Default::default() })
     }
 
     #[inline]
@@ -143,8 +144,15 @@ impl Pack {
     /// returns fully expanded raw object at offset
     pub fn read_obj_raw_at(&mut self, offset: u64) -> BitResult<BitPackObjRaw> {
         trace!("read_obj_raw_at(offset: {})", offset);
-        let raw = self.pack_reader().read_obj_from_offset_raw(offset)?;
-        self.expand_raw_obj(raw, offset)
+        match self.pack_obj_cache.get(&offset) {
+            Some(raw) => Ok(raw.clone()),
+            None => {
+                let raw = self.pack_reader().read_obj_from_offset_raw(offset)?;
+                let expanded = self.expand_raw_obj(raw, offset)?;
+                self.pack_obj_cache.insert(offset, expanded.clone());
+                Ok(expanded)
+            }
+        }
     }
 
     /// returns fully expanded raw object with oid

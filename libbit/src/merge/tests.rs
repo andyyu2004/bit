@@ -100,11 +100,11 @@ fn test_criss_cross_merge_base() -> BitResult<()> {
     })
 }
 
-// #[test_env_log::test]
+#[test_env_log::test]
 fn test_trivial_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let tree = tree! {
-            foo < "foo"
+            foo < "foo contents"
         };
 
         let mut dag = DagBuilder::default();
@@ -114,6 +114,7 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
         let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
 
         bit_reset!(repo: --hard rev!(commits[&c]));
+        assert_eq!(cat!(repo: "foo"), "foo contents");
         bit_branch!(repo: "d" @ rev!(commits[&d]));
         bit_merge!(repo: "d");
         dbg!(bit_status!(repo));
@@ -184,23 +185,23 @@ fn test_simple_merge() -> BitResult<()> {
         })?;
         bit_commit_all!(repo);
 
-        // bit_checkout!(repo: "b")?;
-        // repo.checkout_tree(tree! {
-        //     sameaddition < "foo"
-        //     conflicted < "hello from b"
-        // })?;
-        // bit_commit_all!(repo);
+        bit_checkout!(repo: "b")?;
+        repo.checkout_tree(tree! {
+            sameaddition < "foo"
+            conflicted < "hello from b"
+        })?;
+        bit_commit_all!(repo);
 
-        // assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/b"));
+        assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/b"));
 
-        // let merge_conflict = bit_merge_expect_conflicts!(repo: "a");
-        // let conflicts = merge_conflict.conflicts;
-        // assert_eq!(conflicts.len(), 1);
-        // let conflict = &conflicts[0];
-        // assert_eq!(
-        //     conflict,
-        //     &Conflict { path: p!("conflicted"), conflict_type: ConflictType::BothAdded }
-        // );
+        let merge_conflict = bit_merge_expect_conflicts!(repo: "a");
+        let conflicts = merge_conflict.conflicts;
+        assert_eq!(conflicts.len(), 1);
+        let conflict = &conflicts[0];
+        assert_eq!(
+            conflict,
+            &Conflict { path: p!("conflicted"), conflict_type: ConflictType::BothAdded }
+        );
         Ok(())
     })
 }

@@ -82,7 +82,7 @@ pub(crate) trait ReadExt: Read {
                 let byte = self.read_u8()? as u64;
                 n |= (byte & 0x7f) << shift;
                 shift += 7;
-                if byte < 0x80 {
+                if byte & 0x80 == 0 {
                     break;
                 }
             }
