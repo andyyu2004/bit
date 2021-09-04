@@ -149,6 +149,7 @@ impl FallibleIterator for DirIter {
 // Intended to be used as a building block for higher level worktree iterators
 struct WorktreeRawIter<'rcx> {
     repo: BitRepo<'rcx>,
+    // this is significantly faster than using bitpath as key for some reason
     tracked: FxHashSet<&'static OsStr>,
     // TODO ignoring all nonroot ignores for now
     // not sure what the correct collection for this is? some kind of tree where gitignores know their "parent" gitignore?

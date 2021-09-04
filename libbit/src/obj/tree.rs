@@ -144,14 +144,12 @@ impl<'rcx> ImmutableBitObject<'rcx> for Tree<'rcx> {
     }
 }
 impl Tree<'_> {
-    pub const EMPTY_SIZE: u64 = 0;
-
     fn read_entries(r: impl BufRead, size: u64) -> BitResult<Vec<TreeEntry>>
     where
         Self: Sized,
     {
         let mut r = r.take(size);
-        let mut entries = vec![];
+        let mut entries = Vec::with_capacity(size as usize / 40);
         while !r.is_at_eof()? {
             let entry = TreeEntry::deserialize(&mut r)?;
             entries.push(entry);

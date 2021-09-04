@@ -18,6 +18,7 @@ pub type BufferedFileStream = std::io::BufReader<File>;
 
 // all big-endian
 pub(crate) trait ReadExt: Read {
+    #[inline]
     fn read_u8(&mut self) -> io::Result<u8> {
         let mut i = 0u8;
         self.read_exact(&mut std::slice::from_mut(&mut i))?;
@@ -39,11 +40,13 @@ pub(crate) trait ReadExt: Read {
         Ok(offset)
     }
 
+    #[inline]
     /// alias for `read_le_varint` with a more intuitive name
     fn read_size(&mut self) -> io::Result<u64> {
         self.read_le_varint()
     }
 
+    #[inline]
     // variable length little-endian integer encoding
     // read next byte if MSB is 1
     // referred to as "size encoding" in git docs
@@ -111,36 +114,42 @@ pub(crate) trait ReadExt: Read {
         Ok(value)
     }
 
+    #[inline]
     fn read_u16(&mut self) -> io::Result<u16> {
         let mut buf = [0u8; 2];
         self.read_exact(&mut buf)?;
         Ok(u16::from_be_bytes(buf))
     }
 
+    #[inline]
     fn read_u32(&mut self) -> io::Result<u32> {
         let mut buf = [0u8; 4];
         self.read_exact(&mut buf)?;
         Ok(u32::from_be_bytes(buf))
     }
 
+    #[inline]
     fn read_timespec(&mut self) -> io::Result<Timespec> {
         let sec = self.read_u32()?;
         let nano = self.read_u32()?;
         Ok(Timespec::new(sec, nano))
     }
 
+    #[inline]
     fn read_u64(&mut self) -> io::Result<u64> {
         let mut buf = [0u8; 8];
         self.read_exact(&mut buf)?;
         Ok(u64::from_be_bytes(buf))
     }
 
+    #[inline]
     fn read_oid(&mut self) -> io::Result<Oid> {
         let mut buf = [0u8; 20];
         self.read_exact(&mut buf)?;
         Ok(Oid::new(buf))
     }
 
+    #[inline]
     // named str to not clash with the existing method
     fn read_to_str(&mut self) -> io::Result<String> {
         let mut buf = String::new();
@@ -148,6 +157,7 @@ pub(crate) trait ReadExt: Read {
         Ok(buf)
     }
 
+    #[inline]
     fn read_to_vec(&mut self) -> io::Result<Vec<u8>> {
         let mut buf = vec![];
         self.read_to_end(&mut buf)?;

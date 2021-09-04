@@ -2,6 +2,7 @@ use crate::error::BitResult;
 use crate::interner::with_path_interner;
 use crate::io::ReadExt;
 use crate::serialize::Deserialize;
+use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
@@ -54,6 +55,7 @@ impl BitPath {
         Self::intern(self.as_path().file_name().unwrap_or_else(|| OsStr::new("")))
     }
 
+    #[inline]
     pub fn join(self, path: impl AsRef<Path>) -> Self {
         Self::intern(self.as_path().join(path))
     }
@@ -69,6 +71,7 @@ impl BitPath {
         }
     }
 
+    #[inline]
     pub fn intern_str(s: impl AsRef<str>) -> Self {
         // this must be outside the `interner` closure as the `as_ref` impl may use the interner
         // leading to refcell panics
@@ -78,6 +81,7 @@ impl BitPath {
         with_path_interner(|interner| interner.intern_path(s))
     }
 
+    #[inline]
     pub fn intern(path: impl AsRef<OsStr>) -> Self {
         with_path_interner(|interner| interner.intern_path(path))
     }
@@ -122,6 +126,12 @@ impl BitPath {
     /// returns first component of the path
     pub fn root_component(self) -> &'static Path {
         self.as_path().iter().next().unwrap().as_ref()
+    }
+}
+
+impl Borrow<Path> for BitPath {
+    fn borrow(&self) -> &Path {
+        self.as_path()
     }
 }
 

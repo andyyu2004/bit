@@ -6,7 +6,7 @@ fn test_empty_tree_iter_yields_root_only() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let mut iter = repo.tree_iter(Oid::UNKNOWN);
         let root = iter.next()?.unwrap();
-        assert_eq!(root.oid, Oid::EMPTY_TREE);
+        assert_eq!(root.oid, Oid::UNKNOWN);
         assert_eq!(root.mode, FileMode::TREE);
         assert_eq!(root.path, BitPath::EMPTY);
         assert!(iter.next()?.is_none());

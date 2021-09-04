@@ -93,9 +93,8 @@ impl<'rcx> BitRepo<'rcx> {
 }
 
 impl<'rcx> BitIndex<'rcx> {
-    /// Update working directory and index to match the tree referenced by `treeish`.
-    // NOTE
-    // - There are currently no safety checks here! (i.e. it does a force checkout)
+    /// Update working directory and index to match the tree referenced by `treeish`, accounting for changes in the working tree.
+    // IMPORTANT
     // - Don't update HEAD before calling this as this does a diff relative to the current HEAD (for now)
     pub fn checkout_tree_with_opts(
         &mut self,

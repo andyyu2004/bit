@@ -228,18 +228,19 @@ impl<'rcx> BitRepo<'rcx> {
 #[derive(Debug)]
 pub struct TreeIter<'rcx> {
     repo: BitRepo<'rcx>,
-    // tuple of basepath (the current path up to but not including the path of the entry) and the entry itself
-    entry_stack: Vec<(BitPath, TreeEntry)>,
-    /// the number of entries in the stack before the most recent directory was pushed
-    /// this is used for stepping over
+    /// The current stack of entries.
+    /// Each entry should be modified to have the full path (relative to the repo root)
+    /// not just relative to its parent.
+    entry_stack: Vec<TreeEntry>,
+    /// The number of entries in the stack before the most recent directory was pushed.f
+    /// This is used for stepping over
     previous_len: usize,
 }
 
 impl<'rcx> TreeIter<'rcx> {
     pub fn new(repo: BitRepo<'rcx>, oid: Oid) -> Self {
         debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_treeish());
-        let entry_stack =
-            vec![(BitPath::EMPTY, TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE })];
+        let entry_stack = vec![TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE }];
         Self { repo, previous_len: 0, entry_stack }
     }
 }
@@ -263,10 +264,7 @@ impl<'rcx> BitTreeIterator for TreeIter<'rcx> {
     }
 
     fn peek(&mut self) -> BitResult<Option<Self::Item>> {
-        Ok(self.entry_stack.last().map(|(base, mut entry)| {
-            entry.path = base.join(entry.path);
-            entry.into()
-        }))
+        Ok(self.entry_stack.last().map(|&entry| entry.into()))
     }
 }
 
@@ -277,19 +275,17 @@ impl<'rcx> FallibleIterator for TreeIter<'rcx> {
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
         loop {
             match self.entry_stack.pop() {
-                Some((base, mut entry)) => match entry.mode {
+                Some(entry) => match entry.mode {
                     FileMode::TREE => {
                         // special case for when the initial `oid` is unknown then we just want an iterator that yields only the root
                         if entry.oid.is_unknown() {
                             debug_assert!(self.entry_stack.is_empty());
                             debug_assert_eq!(entry.path, BitPath::EMPTY);
-                            entry.oid = Oid::EMPTY_TREE;
                             return Ok(Some(entry.into()));
                         }
 
                         let tree = entry.oid.treeish(self.repo)?;
-                        let path = base.join(entry.path);
-                        trace!("TreeIter::next: read directory `{:?}` `{}`", path, entry.oid);
+                        trace!("TreeIter::next: read directory `{:?}` `{}`", entry.path, entry.oid);
 
                         self.previous_len = self.entry_stack.len();
                         self.entry_stack.extend(
@@ -299,15 +295,18 @@ impl<'rcx> FallibleIterator for TreeIter<'rcx> {
                                 .rev()
                                 // TODO we have to filter out here for now otherwise peek may blow up
                                 .filter(|entry| entry.mode != FileMode::GITLINK)
-                                .map(|entry| (path, entry)),
+                                .map(|mut next_entry| {
+                                    // convert the `relative_to_parent` path to a `relative_to_repo_root` path
+                                    next_entry.path = entry.path.join(next_entry.path);
+                                    next_entry
+                                }),
                         );
 
-                        return Ok(Some(TreeEntry { path, ..entry }.into()));
+                        return Ok(Some(entry.into()));
                     }
                     FileMode::REG | FileMode::LINK | FileMode::EXEC => {
                         trace!("TreeIter::next: entry: {:?}", entry);
                         debug_assert!(entry.oid.is_known());
-                        entry.path = base.join(entry.path);
                         return Ok(Some(entry.into()));
                     }
                     // ignore submodules for now
