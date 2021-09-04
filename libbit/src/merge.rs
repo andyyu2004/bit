@@ -1,3 +1,4 @@
+use crate::checkout::CheckoutOpts;
 use crate::error::{BitError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, Conflicts, MergeStage};
 use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
@@ -41,7 +42,8 @@ impl<'rcx> BitIndex<'rcx> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct MergeConflict {
     pub conflicts: Conflicts,
 }
@@ -114,7 +116,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         let merged_tree = self.index.virtual_write_tree()?;
         let merge_commit = self.repo.virtual_write_commit(
             merged_tree,
-            CommitMessage::new_subject("generated virtual merge commit"),
+            CommitMessage::new_subject("generated virtual merge commit")?,
             smallvec![our_head.oid(), their_head.oid()],
         )?;
 
@@ -141,7 +143,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
             }
 
             if merge_base.oid() == our_head {
-                self.index.checkout_tree(their_head_commit)?;
+                self.index.checkout_tree_with_opts(their_head_commit, CheckoutOpts::default())?;
                 repo.update_current_ref_for_ff_merge(self.their_head_ref)?;
                 return Ok(MergeResults::FastForward { to: self.their_head_ref });
             }
@@ -156,13 +158,13 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         let merged_tree = self.index.write_tree()?;
         let merge_commit = self.repo.write_commit(
             merged_tree,
-            CommitMessage::new_subject("todo ask user for commit message"),
+            CommitMessage::new_subject("todo ask user for commit message")?,
             // ordering is significant here for `--first-parent`
             // i.e. the first parent should always be our head
             smallvec![our_head, their_head],
         )?;
 
-        self.index.checkout_tree(merge_commit)?;
+        self.index.checkout_tree_with_opts(merge_commit, CheckoutOpts::default())?;
         repo.update_current_ref_for_merge(their_head)?;
 
         Ok(MergeResults::Merge(MergeSummary {}))
@@ -191,7 +193,8 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
         b_iter: impl BitTreeIterator,
     ) -> BitResult<()> {
         let repo = self.repo;
-        let walk = repo.walk_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
+        let walk =
+            repo.walk_tree_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
         walk.for_each(|[base, a, b]| self.merge_entries(base, a, b))?;
 
         Ok(())

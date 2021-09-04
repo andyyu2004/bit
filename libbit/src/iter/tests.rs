@@ -128,7 +128,7 @@ fn test_walk_three_iterators() -> BitResult<()> {
             }
         };
 
-        let mut iter = repo.walk_iterators([
+        let mut iter = repo.walk_tree_iterators([
             Box::new(repo.tree_iter(tree_a)),
             Box::new(repo.tree_iter(tree_b)),
             Box::new(repo.tree_iter(tree_c)),
@@ -184,7 +184,7 @@ fn test_walk_three_iterators_steps_over_same_tree() -> BitResult<()> {
             z
         };
 
-        let mut iter = repo.walk_iterators([
+        let mut iter = repo.walk_tree_iterators([
             Box::new(repo.tree_iter(tree_a)),
             Box::new(repo.tree_iter(tree_b)),
             Box::new(repo.tree_iter(tree_c)),

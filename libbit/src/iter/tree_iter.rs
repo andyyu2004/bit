@@ -1,4 +1,5 @@
 use super::*;
+use crate::diff::TreeEntriesConsumer;
 use crate::index::BitTreeCache;
 use crate::obj::MutableTree;
 use std::iter::FromIterator;
@@ -37,12 +38,19 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
         self.filter(|entry| Ok(!entry.is_tree()))
     }
 
+    fn as_consumer(&mut self) -> TreeEntriesConsumer<'_>
+    where
+        Self: Sized,
+    {
+        TreeEntriesConsumer::new(self)
+    }
+
     // TODO these names all suck
     fn collect_over_tree_files(
         &mut self,
         container: &mut Vec<BitIndexEntry>,
     ) -> BitResult<Self::Item> {
-        self.collect_over_tree_filtered(|entry| entry.is_file(), container)
+        self.collect_over_tree_filtered(|entry| entry.is_blob(), container)
     }
 
     fn collect_over_tree_all(
@@ -83,6 +91,24 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
         let oid = build_tree_internal(repo, self, tree_cache, BitPath::EMPTY)?;
         debug_assert!(root.oid.is_unknown() || root.oid == oid);
         Ok(oid)
+    }
+}
+
+impl<'a> dyn BitTreeIterator + 'a {
+    #[doc(hidden)]
+    /// Create an iterator that yields all files within the current subtree
+    // Only for use from tree_entries consumer
+    pub(crate) fn collect_over_tree_iter(&'a mut self) -> impl BitIterator<BitIndexEntry> + 'a {
+        let entry =
+            self.peek().expect("should have been successfully peeked before calling this").unwrap();
+        assert_eq!(entry.mode(), FileMode::TREE);
+        CollectTree { iter: self, tree_entry: TreeEntry::from(entry) }
+    }
+
+    pub(crate) fn collect_over_tree_files_iter(
+        &'a mut self,
+    ) -> impl BitIterator<BitIndexEntry> + 'a {
+        self.collect_over_tree_iter().filter(|entry: &BitIndexEntry| Ok(entry.is_blob()))
     }
 }
 
@@ -134,6 +160,27 @@ fn build_tree_internal(
     debug_assert!(entries.is_sorted());
     let tree = MutableTree::from_iter(entries);
     repo.write_obj(&tree)
+}
+
+#[must_use]
+pub struct CollectTree<'a> {
+    tree_entry: TreeEntry,
+    iter: &'a mut dyn BitTreeIterator,
+}
+
+impl FallibleIterator for CollectTree<'_> {
+    type Error = BitGenericError;
+    type Item = BitIndexEntry;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        let tree_entry_path = self.tree_entry.path;
+        if self.iter.peek()?.map(|next| next.path().starts_with(tree_entry_path)).unwrap_or(false) {
+            let entry = self.iter.next()?.unwrap();
+            Ok(Some(entry))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 impl<I, F> BitTreeIterator for fallible_iterator::Filter<I, F>

@@ -41,7 +41,7 @@ impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
 }
 
 impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
-    fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         let new_txt = new.read_to_bytes(self.repo)?;
         let mut patch = xdiff::xdiff(&[], &new_txt);
 
@@ -58,7 +58,7 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
         Ok(())
     }
 
-    fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         debug_assert!(old.oid.is_known());
         let old_txt = old.read_to_bytes(self.repo)?;
         let new_txt = new.read_to_bytes(self.repo)?;
@@ -82,7 +82,7 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
         Ok(())
     }
 
-    fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
         debug_assert!(old.oid.is_known());
         let old_txt = old.read_to_bytes(self.repo)?;
         let mut patch = xdiff::xdiff(&old_txt, &[]);
@@ -232,7 +232,7 @@ impl DiffStatLine {
 // TODO handle binary files better
 // e.g. libbit/tests/repos/indextest/.bit/index | Bin 633 -> 652 bytes
 impl<'rcx, W: Write> Differ for DiffStatFormatter<'rcx, W> {
-    fn on_created(&mut self, new: &BitIndexEntry) -> BitResult<()> {
+    fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         let new_txt = new.read_to_bytes(self.repo)?;
         let patch = xdiff::xdiff(&[], &new_txt);
         let diff_stat_line = DiffStatLine::from_patch(new.path, &patch);
@@ -240,7 +240,7 @@ impl<'rcx, W: Write> Differ for DiffStatFormatter<'rcx, W> {
         Ok(())
     }
 
-    fn on_modified(&mut self, old: &BitIndexEntry, new: &BitIndexEntry) -> BitResult<()> {
+    fn on_modified(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
         let old_txt = old.read_to_bytes(self.repo)?;
         let new_txt = new.read_to_bytes(self.repo)?;
         let patch = xdiff::xdiff(&old_txt, &new_txt);
@@ -249,7 +249,7 @@ impl<'rcx, W: Write> Differ for DiffStatFormatter<'rcx, W> {
         Ok(())
     }
 
-    fn on_deleted(&mut self, old: &BitIndexEntry) -> BitResult<()> {
+    fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()> {
         let old_txt = old.read_to_bytes(self.repo)?;
         let patch = xdiff::xdiff(&old_txt, &[]);
         let diff_stat_line = DiffStatLine::from_patch(old.path, &patch);

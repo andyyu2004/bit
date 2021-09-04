@@ -16,9 +16,9 @@
         }
       },
       // "sourceLanguages": ["rust"],
-      // "cwd": "${workspaceFolder}/examples/test3",
-      "cwd": "/home/andyyu/dev/random",
-      "args": ["switch", "-c", "a"]
+      "cwd": "${workspaceFolder}/bit/tests/repos/foo",
+      // "cwd": "/home/andyyu/dev/random",
+      "args": ["cat-file", "-p", "bc01ca0"]
     }
     // {
     //   "type": "lldb",

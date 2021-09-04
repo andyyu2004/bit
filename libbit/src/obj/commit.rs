@@ -56,16 +56,17 @@ pub struct CommitMessage {
 }
 
 impl CommitMessage {
-    pub fn new_subject(subject: &str) -> Self {
+    pub fn new_subject(subject: &str) -> BitResult<Self> {
         Self::new_str(subject, "")
     }
 
-    pub fn new_str(subject: &str, message: &str) -> Self {
+    pub fn new_str(subject: &str, message: &str) -> BitResult<Self> {
         Self::new(subject.to_owned(), message.to_owned())
     }
 
-    pub fn new(subject: String, message: String) -> Self {
-        Self { subject, message }
+    pub fn new(subject: String, message: String) -> BitResult<Self> {
+        ensure!(!subject.is_empty());
+        Ok(Self { subject, message })
     }
 }
 
@@ -79,7 +80,7 @@ impl FromStr for CommitMessage {
             (s, "")
         };
 
-        Ok(Self::new_str(subject, message))
+        Self::new_str(subject, message)
     }
 }
 

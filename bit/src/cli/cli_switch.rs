@@ -1,5 +1,6 @@
 use super::Cmd;
 use clap::Clap;
+use libbit::checkout::CheckoutOpts;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
@@ -31,7 +32,7 @@ impl Cmd for BitSwitchCliOpts {
             // switch is currently a limited form of checkout where only branches are allowed (can't checkout commits)
             repo.resolve_rev_to_branch(&self.revision)?
         };
-        repo.checkout(target)
+        repo.checkout(target, CheckoutOpts::default())
     }
 }
 #[cfg(test)]

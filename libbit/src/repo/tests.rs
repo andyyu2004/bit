@@ -1,6 +1,5 @@
 use super::*;
 use crate::cmd::BitHashObjectOpts;
-use crate::obj;
 
 impl<'rcx> BitRepo<'rcx> {
     /// be careful when deleting `rm foo` as the symlink points at it
@@ -21,6 +20,14 @@ impl<'rcx> BitRepo<'rcx> {
             touch!(repo: "dir/bar/qux");
             symlink!(repo: "bar" <- "dir/link");
 
+            bit_commit_all!(repo);
+            f(repo)
+        })
+    }
+
+    pub fn with_minimal_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
+        Self::with_empty_repo(|repo| {
+            touch!(repo: "foo" < "default foo contents");
             bit_commit_all!(repo);
             f(repo)
         })
@@ -112,12 +119,12 @@ fn prop_bit_hash_object_cat_file_are_inverses_blob(bytes: Vec<u8>) -> BitResult<
         let hash = repo.hash_object(BitHashObjectOpts {
             path: file_path,
             do_write: true,
-            objtype: obj::BitObjType::Blob,
+            objtype: BitObjType::Blob,
         })?;
 
         assert!(
             repo.relative_paths(&["objects", &hex::encode(&hash[0..1]), &hex::encode(&hash[1..])])
-                .exists()
+                .try_exists()?
         );
 
         // this doesn't call `bit_cat_file` directly but this function is

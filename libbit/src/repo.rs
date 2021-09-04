@@ -91,13 +91,13 @@ impl<'rcx> RepoCtxt<'rcx> {
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {
-        if path.join(".git").exists() {
+        if path.join(".git").try_exists()? {
             return Self::load(path);
         }
 
         // also recognize `.bit` folder as its convenient for having bit repos under tests/repos
         // it is for testing and debugging purposes only
-        if path.join(".bit").exists() {
+        if path.join(".bit").try_exists()? {
             return Self::load_with_bitdir(path, ".bit");
         }
 
@@ -113,7 +113,7 @@ impl<'rcx> RepoCtxt<'rcx> {
             .canonicalize()
             .with_context(|| anyhow!("failed to load bit in non-existent directory"))?;
         let bitdir = worktree.join(bitdir);
-        debug_assert!(bitdir.exists());
+        debug_assert!(bitdir.try_exists()?);
         let config_filepath = bitdir.join(BIT_CONFIG_FILE_PATH);
 
         let rcx = RepoCtxt::new(worktree, bitdir, config_filepath)?;
@@ -262,7 +262,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    fn index_ref(self) -> BitResult<&'rcx RwLock<BitIndex<'rcx>>> {
+    fn index(self) -> BitResult<&'rcx RwLock<BitIndex<'rcx>>> {
         self.rcx
             .index_cell
             .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(self)?)))
@@ -271,14 +271,14 @@ impl<'rcx> BitRepo<'rcx> {
     #[inline]
     pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
         // don't have to error check here as the index only
-        f(&*self.index_ref()?.read())
+        f(&*self.index()?.read())
     }
 
     pub fn with_index_mut<R>(
         self,
         f: impl FnOnce(&mut BitIndex<'rcx>) -> BitResult<R>,
     ) -> BitResult<R> {
-        let index_ref = self.index_ref()?;
+        let index_ref = self.index()?;
         let index = &mut *index_ref
             .try_write()
             .expect("don't expect concurrent writes, probably tried to grab it reentrantly");
@@ -307,7 +307,7 @@ impl<'rcx> BitRepo<'rcx> {
         // although, bit will recognize a `.bit` folder if explicitly renamed
         let bitdir = workdir.join(".git");
 
-        if bitdir.exists() {
+        if bitdir.try_exists()? {
             // reinitializing doesn't really do anything currently
             println!("reinitialized existing bit repository in `{}`", workdir.display());
             return Ok(());
@@ -514,6 +514,15 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn ensure_obj_exists(self, id: impl Into<BitId>) -> BitResult<()> {
         let id = id.into();
         ensure!(self.odb()?.exists(id)?, BitError::ObjectNotFound(id));
+        Ok(())
+    }
+
+    pub fn ensure_obj_is_commit(self, id: impl Into<BitId>) -> BitResult<()> {
+        let id = id.into();
+        let oid = self.expand_id(id)?;
+        self.ensure_obj_exists(oid)?;
+        let obj_type = self.read_obj_header(oid)?.obj_type;
+        ensure!(obj_type == BitObjType::Commit, BitError::ExpectedCommit(oid, obj_type));
         Ok(())
     }
 

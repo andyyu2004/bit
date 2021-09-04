@@ -325,7 +325,7 @@ fn add_file_to_index() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let filepath = repo.workdir.join("a");
         File::create(&filepath)?;
-        assert!(filepath.exists());
+        assert!(filepath.try_exists()?);
         assert!(filepath.is_file());
         repo.index_add("a")?;
         repo.with_index(|_| Ok(()))

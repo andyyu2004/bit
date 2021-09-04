@@ -3,7 +3,7 @@ mod revwalk;
 pub use revwalk::*;
 
 use crate::error::{BitGenericError, BitResult};
-use crate::obj::{BitObjType, Commit, Oid, PartialOid};
+use crate::obj::{Commit, Oid, PartialOid};
 use crate::peel::Peel;
 use crate::refs::{BitRef, BitRefDbBackend, SymbolicRef};
 use crate::repo::BitRepo;
@@ -33,7 +33,17 @@ pub enum ParsedRevspec {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    /// resolve a revision to a commit oid
+    // A hack to make this work for `bit cat-file` without weakening the checks for refs to be pointer to commits in `refdb`
+    pub fn fully_resolve_rev_to_any(self, rev: &Revspec) -> BitResult<Oid> {
+        if let &ParsedRevspec::Ref(BitRef::Direct(oid)) = rev.parse(self)? {
+            self.ensure_obj_exists(oid)?;
+            Ok(oid)
+        } else {
+            self.fully_resolve_rev(rev)
+        }
+    }
+
+    /// Resolve a revision to an oid
     pub fn fully_resolve_rev(self, rev: &Revspec) -> BitResult<Oid> {
         let reference = self.resolve_rev(rev)?;
         self.fully_resolve_ref(reference)
@@ -67,15 +77,6 @@ impl<'rcx> BitRepo<'rcx> {
             if n == 0 {
                 return Ok(BitRef::Direct(oid));
             }
-
-            let obj_type = self.read_obj_header(oid)?.obj_type;
-            ensure_eq!(
-                obj_type,
-                BitObjType::Commit,
-                "object `{}` is a {}, not a commit",
-                oid,
-                obj_type
-            );
 
             let commit = self.read_obj_commit(oid)?;
             let parentc = commit.parents.len();

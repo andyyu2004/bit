@@ -1,4 +1,4 @@
-use crate::checkout::Migration;
+use crate::checkout::{CheckoutOpts, Migration};
 use crate::error::BitResult;
 use crate::iter::BitEntry;
 use crate::peel::Peel;
@@ -6,7 +6,7 @@ use crate::repo::BitRepo;
 
 // basically a simpler migration by holding strings (paths) instead of tree entries
 // and is much easier to write up as a test case for equality
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct TestMigration {
     rmrfs: Vec<&'static str>,
     rms: Vec<&'static str>,
@@ -14,22 +14,19 @@ struct TestMigration {
     creates: Vec<&'static str>,
 }
 
-impl PartialEq<TestMigration> for Migration {
-    fn eq(&self, other: &TestMigration) -> bool {
-        assert!(self.mkdirs.iter().all(|entry| entry.is_tree()));
-        assert!(self.rmrfs.iter().all(|entry| entry.is_tree()));
-        assert!(self.rms.iter().all(|entry| entry.is_file()));
-        assert!(self.creates.iter().all(|entry| entry.is_file()));
+impl From<Migration> for TestMigration {
+    fn from(migration: Migration) -> Self {
+        assert!(migration.mkdirs.iter().all(|entry| entry.is_tree()));
+        assert!(migration.rmrfs.iter().all(|entry| entry.is_tree()));
+        assert!(migration.rms.iter().all(|entry| entry.is_blob()));
+        assert!(migration.creates.iter().all(|entry| entry.is_blob()));
 
-        let rmrfs = self.rmrfs.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
-        let rms = self.rms.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
-        let mkdirs = self.mkdirs.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
-        let creates = self.creates.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
+        let rmrfs = migration.rmrfs.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
+        let rms = migration.rms.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
+        let mkdirs = migration.mkdirs.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
+        let creates = migration.creates.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
 
-        rmrfs == other.rmrfs
-            && rms == other.rms
-            && mkdirs == other.mkdirs
-            && creates == other.creates
+        Self { rmrfs, rms, mkdirs, creates }
     }
 }
 
@@ -39,18 +36,23 @@ fn test_migration_gen_on_sample_repo() -> BitResult<()> {
         let old_tree_oid = repo.fully_resolve_rev(&rev!("HEAD^"))?.peel(repo)?.tree;
         let old_iter = repo.tree_iter(old_tree_oid);
         let new_iter = repo.head_tree_iter()?;
-        let migration = Migration::generate(old_iter, new_iter)?;
 
-        let expected = TestMigration {
-            rmrfs: vec![],
-            rms: vec![],
-            mkdirs: vec!["dir", "dir/bar"],
-            creates: vec!["dir/bar.l", "dir/bar/qux", "dir/baz", "dir/link"],
-        };
+        repo.with_index_mut(|index| {
+            let worktree = index.worktree_iter()?;
 
-        assert_eq!(migration, expected);
+            let expected = TestMigration {
+                rmrfs: vec![],
+                rms: vec![],
+                mkdirs: vec!["dir", "dir/bar"],
+                creates: vec!["dir/bar.l", "dir/bar/qux", "dir/baz", "dir/link"],
+            };
 
-        Ok(())
+            let safe_migration =
+                Migration::generate(index, old_iter, new_iter, worktree, CheckoutOpts::default())?;
+            assert_eq!(TestMigration::from(safe_migration), expected);
+
+            Ok(())
+        })
     })
 }
 
@@ -81,15 +83,19 @@ fn test_simple_migration_gen() -> BitResult<()> {
         let old_iter = repo.tree_iter(a);
         let new_iter = repo.tree_iter(b);
 
-        let migration = Migration::generate(old_iter, new_iter)?;
-        let expected = TestMigration {
-            rmrfs: vec!["qux"],
-            rms: vec!["bar/baz", "foo"],
-            mkdirs: vec!["bar/baz", "bar/baz/c"],
-            creates: vec!["bar/baz/c/d", "boo"],
-        };
+        repo.with_index_mut(|index| {
+            let worktree = index.worktree_iter()?;
+            let expected = TestMigration {
+                rmrfs: vec!["qux"],
+                rms: vec!["bar/baz", "foo"],
+                mkdirs: vec!["bar/baz", "bar/baz/c"],
+                creates: vec!["bar/baz/c/d", "boo"],
+            };
 
-        assert_eq!(migration, expected);
-        Ok(())
+            let migration =
+                Migration::generate(index, old_iter, new_iter, worktree, CheckoutOpts::default())?;
+            assert_eq!(TestMigration::from(migration), expected);
+            Ok(())
+        })
     })
 }

@@ -132,7 +132,7 @@ macro_rules! check_next {
 
 macro_rules! exists {
     ($repo:ident: $path:literal) => {
-        $repo.workdir.join($path).exists()
+        $repo.workdir.join($path).try_exists()?
     };
 }
 
@@ -151,17 +151,27 @@ macro_rules! bit_commit {
 }
 
 macro_rules! bit_checkout {
+    ($repo:ident: --force $rev:literal) => {{
+        let revision = $rev.parse::<$crate::rev::Revspec>()?;
+        $repo.checkout_revision(&revision, $crate::checkout::CheckoutOpts::forced())
+    }};
+    ($repo:ident: --force $rev:expr) => {
+        $repo.checkout_revision(&$rev, $crate::checkout::CheckoutOpts::forced())
+    };
     ($repo:ident: $rev:literal) => {{
         let revision = $rev.parse::<$crate::rev::Revspec>()?;
-        $repo.checkout_revision(&revision)?;
+        $repo.checkout_revision(&revision, Default::default())
     }};
+    ($repo:ident: $rev:expr) => {
+        $repo.checkout_revision($rev, Default::default())
+    };
 }
 
 macro_rules! bit_branch {
-    ($repo:ident: -b $branch:literal) => {
+    ($repo:ident: -b $branch:literal) => {{
         $repo.bit_create_branch($branch, &rev!("HEAD"))?;
-        bit_checkout!($repo: $branch)
-    };
+        bit_checkout!($repo: $branch)?
+    }};
     ($repo:ident: $branch:literal @ $rev:expr) => {
         $repo.bit_create_branch($branch, &$rev)?
     };
@@ -246,6 +256,10 @@ macro_rules! gitignore {
 }
 
 macro_rules! touch {
+    ($repo:ident: $path:literal < $contents:expr) => {
+        std::fs::File::create($repo.workdir.join($path))?;
+        modify!($repo: $path < $contents)
+    };
     ($repo:ident: $path:expr) => {
         std::fs::File::create($repo.workdir.join($path))?
     };
@@ -313,12 +327,6 @@ macro_rules! hash_symlink {
         // needs the obj header which is why we wrap it in blob
         MutableBlob::new(bytes.to_vec()).hash()?
     }};
-}
-
-macro_rules! hash_file {
-    ($repo:ident: $path:expr) => {
-        hash_blob!(cat!($repo: $path).as_bytes())
-    };
 }
 
 macro_rules! cat {
@@ -549,6 +557,15 @@ macro_rules! tree {
         let tree = tree_obj! { $($entries)* };
         $crate::tls::with_repo(|repo| repo.write_obj(&tree)).unwrap()
     }};
+}
+
+/// create a parentless commit with the given tree
+macro_rules! commit {
+    ( $($tt:tt)* ) => {{
+       let tree = tree! { $($tt)* };
+       let msg = $crate::obj::CommitMessage::new_subject("generated commit from macro")?;
+       $crate::tls::with_repo(|repo| repo.write_commit(tree, msg, smallvec![]))?
+    }}
 }
 
 #[test]

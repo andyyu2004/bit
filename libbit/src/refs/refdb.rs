@@ -73,7 +73,7 @@ pub trait BitRefDbBackend<'rcx> {
     fn validate(&self, reference: BitRef) -> BitResult<BitRef> {
         match reference {
             BitRef::Direct(oid) => {
-                self.repo().ensure_obj_exists(oid)?;
+                self.repo().ensure_obj_is_commit(oid)?;
                 Ok(reference)
             }
             BitRef::Symbolic(sym) => self.expand_symref(sym).map(BitRef::Symbolic),
@@ -84,10 +84,7 @@ pub trait BitRefDbBackend<'rcx> {
     /// e.g. HEAD -> refs/heads/master
     fn partially_resolve(&self, reference: BitRef) -> BitResult<BitRef> {
         match reference {
-            BitRef::Direct(oid) => {
-                self.repo().ensure_obj_exists(oid)?;
-                Ok(BitRef::Direct(oid))
-            }
+            BitRef::Direct(..) => self.validate(reference),
             BitRef::Symbolic(sym) => {
                 let reference = self.read(sym)?;
                 debug!("BitRef::resolve: resolved ref `{:?}` to `{:?}`", sym, reference);
@@ -194,7 +191,7 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
     }
 
     fn exists(&self, sym: SymbolicRef) -> BitResult<bool> {
-        Ok(self.join(sym.path).exists())
+        Ok(self.join(sym.path).try_exists()?)
     }
 
     // read_reflog is probably not a great method to have
@@ -228,7 +225,7 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
 
         for prefix in PREFIXES {
             let path = prefix.join(sym.path);
-            if self.join(path).exists() {
+            if self.join(path).try_exists()? {
                 return SymbolicRef::new_valid(path);
             }
         }

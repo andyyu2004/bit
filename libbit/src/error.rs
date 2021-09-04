@@ -1,5 +1,6 @@
+use crate::checkout::CheckoutConflicts;
 use crate::merge::MergeConflict;
-use crate::obj::{BitId, Oid, PartialOid};
+use crate::obj::{BitId, BitObjType, Oid, PartialOid};
 use crate::refs::SymbolicRef;
 use crate::status::BitStatus;
 use owo_colors::OwoColorize;
@@ -10,7 +11,8 @@ pub type BitGenericError = anyhow::Error;
 
 // usually we can just use anyhow for errors, but sometimes its nice to have a "rust" representation we can test or match against
 // consider not even using an enum and just have top level structs as this is resulting in extra unnecessary indirection
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum BitError {
     ObjectNotFound(BitId),
     /// object `{0}` not found in pack index but could be inserted at `{1}`
@@ -18,6 +20,8 @@ pub enum BitError {
     AmbiguousPrefix(PartialOid, Vec<Oid>),
     NonExistentSymRef(SymbolicRef),
     MergeConflict(MergeConflict),
+    CheckoutConflict(CheckoutConflicts),
+    ExpectedCommit(Oid, BitObjType),
     PackBackendWrite,
 }
 
@@ -27,7 +31,9 @@ pub trait BitErrorExt {
     fn try_into_nonexistent_symref_err(self) -> BitResult<SymbolicRef>;
     fn try_into_bit_error(self) -> BitResult<BitError>;
     fn try_into_status_error(self) -> BitResult<BitStatus>;
+    fn try_into_expected_commit_error(self) -> BitResult<(Oid, BitObjType)>;
     fn try_into_merge_conflict(self) -> BitResult<MergeConflict>;
+    fn try_into_checkout_conflict(self) -> BitResult<CheckoutConflicts>;
 }
 
 impl BitErrorExt for BitGenericError {
@@ -37,6 +43,13 @@ impl BitErrorExt for BitGenericError {
     fn try_into_obj_not_found_in_pack_index_err(self) -> BitResult<(Oid, u64)> {
         match self.try_into_bit_error()? {
             BitError::ObjectNotFoundInPackIndex(oid, idx) => Ok((oid, idx)),
+            err => Err(anyhow!(err)),
+        }
+    }
+
+    fn try_into_checkout_conflict(self) -> BitResult<CheckoutConflicts> {
+        match self.try_into_bit_error()? {
+            BitError::CheckoutConflict(checkout_conflict) => Ok(checkout_conflict),
             err => Err(anyhow!(err)),
         }
     }
@@ -69,6 +82,13 @@ impl BitErrorExt for BitGenericError {
     fn try_into_obj_not_found_err(self) -> BitResult<BitId> {
         match self.try_into_bit_error()? {
             BitError::ObjectNotFound(id) => Ok(id),
+            err => Err(anyhow!(err)),
+        }
+    }
+
+    fn try_into_expected_commit_error(self) -> BitResult<(Oid, BitObjType)> {
+        match self.try_into_bit_error()? {
+            BitError::ExpectedCommit(oid, obj_type) => Ok((oid, obj_type)),
             err => Err(anyhow!(err)),
         }
     }
@@ -145,6 +165,12 @@ impl Display for BitError {
             BitError::MergeConflict(merge_conflict) => write!(f, "{}", merge_conflict),
             BitError::PackBackendWrite | BitError::ObjectNotFoundInPackIndex(..) =>
                 bug!("not a user facing error"),
+            BitError::CheckoutConflict(conflicts) => {
+                // TODO
+                writeln!(f, "some checkout conflicts: {:?}", conflicts)
+            }
+            BitError::ExpectedCommit(oid, obj_type) =>
+                writeln!(f, "`{}` is a {}, expected commit", oid, obj_type),
         }
     }
 }

@@ -74,7 +74,7 @@ fn with_config<R>(
     f: impl for<'a> FnOnce(&mut BitConfig<'a>) -> BitResult<R>,
 ) -> BitResult<R> {
     let path = path.as_ref().to_path_buf();
-    if !path.exists() {
+    if !path.try_exists()? {
         File::create(&path)?;
     }
     let s = std::fs::read_to_string(&path)?;

@@ -18,23 +18,29 @@ use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
 use rustc_hash::FxHashSet;
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::path::Path;
 use walkdir::WalkDir;
+
+pub type PathMode = (BitPath, FileMode);
 
 pub trait BitEntry {
     fn oid(&self) -> Oid;
     fn path(&self) -> BitPath;
     fn mode(&self) -> FileMode;
 
-    // comparison function for differs
-    // cares about paths first, then modes second
-    // otherwise they are considered equal
-    fn entry_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.path().cmp(&other.path()).then_with(|| self.mode().cmp(&other.mode()))
+    fn path_mode(&self) -> PathMode {
+        (self.path(), self.mode())
     }
 
-    fn entry_partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    /// Comparison function for differs
+    // This is not an `Ord` impl as it doesn't satisfy the `Ord` invariant `a.cmp(b) == Ordering::Equal <=> a == b`
+    fn entry_cmp(&self, other: &Self) -> Ordering {
+        self.path().cmp(&other.path())
+    }
+
+    fn entry_partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.entry_cmp(other))
     }
 
@@ -42,7 +48,7 @@ pub trait BitEntry {
         self.mode().is_tree()
     }
 
-    fn is_file(&self) -> bool {
+    fn is_blob(&self) -> bool {
         self.mode().is_blob()
     }
 
@@ -108,7 +114,7 @@ impl<'rcx> FallibleIterator for TreeEntryIter<'rcx> {
         // entry iterators only yield non-tree entries
         loop {
             match self.tree_iter.next()? {
-                Some(entry) if entry.is_file() => return Ok(Some(entry)),
+                Some(entry) if entry.is_blob() => return Ok(Some(entry)),
                 None => return Ok(None),
                 _ => continue,
             }

@@ -21,17 +21,17 @@ pub enum BitCatFileOperation {
 impl<'rcx> BitRepo<'rcx> {
     pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<()> {
         trace!("bit_cat_file {:?}", opts);
-        let id = self.fully_resolve_rev(&opts.rev)?;
+        let oid = self.fully_resolve_rev_to_any(&opts.rev)?;
         match opts.op {
             // TODO not really a correct implementation currently
             // just prints it in an alternate format
-            BitCatFileOperation::PrintAsType(_ty) => println!("{:#}", self.read_obj(id)?),
-            BitCatFileOperation::PrettyPrint => println!("{}", self.read_obj(id)?),
-            BitCatFileOperation::ShowType => println!("{}", self.read_obj_header(id)?.obj_type),
-            BitCatFileOperation::ShowSize => println!("{}", self.read_obj_header(id)?.size),
+            BitCatFileOperation::PrintAsType(_ty) => println!("{:#}", self.read_obj(oid)?),
+            BitCatFileOperation::PrettyPrint => println!("{}", self.read_obj(oid)?),
+            BitCatFileOperation::ShowType => println!("{}", self.read_obj_header(oid)?.obj_type),
+            BitCatFileOperation::ShowSize => println!("{}", self.read_obj_header(oid)?.size),
             // just try to read the file and if it suceeds then its fine
             BitCatFileOperation::Exit => {
-                self.read_obj(id)?;
+                self.read_obj(oid)?;
             }
         }
         Ok(())
