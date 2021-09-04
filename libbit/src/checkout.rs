@@ -3,7 +3,6 @@ use crate::error::{BitError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
-use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
@@ -116,6 +115,7 @@ impl<'rcx> BitIndex<'rcx> {
         // if forced, then the worktree and index should match exactly
         #[cfg(debug_assertions)]
         if is_forced {
+            use crate::pathspec::Pathspec;
             debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
             debug_assert!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
         }
