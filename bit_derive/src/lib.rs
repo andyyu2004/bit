@@ -27,7 +27,7 @@ pub fn derive_bit_object(item: proc_macro::TokenStream) -> proc_macro::TokenStre
             });
 
             quote! {
-                impl #impl_generics crate::obj::BitObject<'rcx> for #name #ty_generics #where_clause {
+                impl #impl_generics libbit::obj::BitObject<'rcx> for #name #ty_generics #where_clause {
                     fn owner(&self) -> BitRepo<'rcx> {
                         match self {
                             #(#owner_arms)*
@@ -58,7 +58,7 @@ pub fn derive_bit_quickcheck(item: proc_macro::TokenStream) -> proc_macro::Token
     let generics = add_trait_bounds(input.generics);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let arbitrary = generate_fields(&input.data);
+    let arbitrary = generate_arbitrary_fields(&input.data);
 
     let expanded = quote! {
         // The generated impl.
@@ -72,7 +72,41 @@ pub fn derive_bit_quickcheck(item: proc_macro::TokenStream) -> proc_macro::Token
     proc_macro::TokenStream::from(expanded)
 }
 
-fn generate_fields(data: &Data) -> TokenStream {
+#[proc_macro_derive(Merge)]
+pub fn derive_merge(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(item as DeriveInput);
+    let name = input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let fields = match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => {
+                let recurse = fields.named.iter().map(|f| {
+                    let name = &f.ident;
+                    quote! {
+                        self.#name.merge(other.#name)
+                    }
+                });
+                quote! {
+                    #(#recurse; )*
+                }
+            }
+            _ => unimplemented!(),
+        },
+        _ => unimplemented!(),
+    };
+
+    let expanded = quote! {
+        impl #impl_generics libbit::config::Merge for #name #ty_generics #where_clause {
+            fn merge(&mut self, other: Self) {
+                #fields
+            }
+        }
+    };
+
+    proc_macro::TokenStream::from(expanded)
+}
+
+fn generate_arbitrary_fields(data: &Data) -> TokenStream {
     match data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {

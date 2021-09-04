@@ -80,12 +80,11 @@ fn repo_checks_repo_for_version_zero() {
 fn repo_init_creates_correct_initial_local_config() -> BitResult<()> {
     let basedir = tempfile::tempdir()?;
     BitRepo::init_load(&basedir, |repo| {
-        repo.with_local_config(|config| {
-            assert_eq!(config.repositoryformatversion()?.unwrap(), 0);
-            assert_eq!(config.bare()?.unwrap(), false);
-            assert_eq!(config.filemode()?, true);
-            Ok(())
-        })
+        let config = repo.config();
+        assert_eq!(config.repositoryformatversion().unwrap(), 0);
+        assert_eq!(config.bare().unwrap(), false);
+        assert_eq!(config.filemode(), true);
+        Ok(())
     })
 }
 

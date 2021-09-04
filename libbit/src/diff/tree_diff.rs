@@ -153,8 +153,7 @@ where
                             _ if old.is_blob()
                                 && new.is_blob()
                                 && old.oid() == new.oid()
-                                && (!self.repo.config().filemode()?
-                                    || old.mode() == new.mode()) =>
+                                && (!self.repo.config().filemode() || old.mode() == new.mode()) =>
                             {
                                 // matching files
                                 debug_assert!(old.oid().is_known() && new.oid().is_known());

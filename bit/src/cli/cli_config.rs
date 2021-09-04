@@ -1,6 +1,5 @@
 use clap::lazy_static::lazy_static;
 use clap::Clap;
-use libbit::config::BitConfigScope;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 use regex::Regex;
@@ -31,9 +30,8 @@ pub struct BitConfigCliOpts {
 impl BitConfigCliOpts {
     pub fn execute(&self, repo: BitRepo<'_>) -> BitResult<()> {
         // if its not global we assume its local even if self.local is not explicitly set
-        let scope = if self.global { BitConfigScope::Global } else { BitConfigScope::Local };
         let (section, key) = self.name.split_once(".").unwrap();
-        repo.with_config(scope, |config| {
+        repo.with_raw_local_config(|config| {
             match &self.value {
                 Some(value) => config.set(section, key, value),
                 // git just prints nothing if `section.value` does not exist

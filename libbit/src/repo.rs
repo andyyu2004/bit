@@ -1,4 +1,5 @@
 use crate::cache::{BitObjCache, VirtualOdb};
+use crate::config::BitConfig;
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
@@ -55,6 +56,7 @@ pub struct RepoCtxt<'rcx> {
     // shared (immutable) access to this struct
     pub workdir: BitPath,
     pub bitdir: BitPath,
+    config: BitConfig,
     config_filepath: BitPath,
     index_filepath: BitPath,
     arenas: Arenas<'rcx>,
@@ -71,6 +73,7 @@ impl<'rcx> RepoCtxt<'rcx> {
         let workdir = BitPath::intern(workdir);
         let bitdir = BitPath::intern(bitdir);
         let config_filepath = BitPath::intern(config_filepath);
+        let config = BitConfig::init(config_filepath)?;
         let index_filepath = bitdir.join(BIT_INDEX_FILE_PATH);
 
         let this = Self {
@@ -78,6 +81,7 @@ impl<'rcx> RepoCtxt<'rcx> {
             workdir,
             bitdir,
             index_filepath,
+            config,
             arenas: Default::default(),
             odb_cell: Default::default(),
             index_cell: Default::default(),
@@ -88,6 +92,11 @@ impl<'rcx> RepoCtxt<'rcx> {
         };
 
         Ok(this)
+    }
+
+    #[inline]
+    pub fn config(&self) -> &BitConfig {
+        &self.config
     }
 
     fn find_inner(path: &Path) -> BitResult<Self> {
@@ -120,7 +129,7 @@ impl<'rcx> RepoCtxt<'rcx> {
 
         let version = rcx
             .config()
-            .repositoryformatversion()?
+            .repositoryformatversion()
             .expect("`repositoryformatversion` missing in configuration");
 
         ensure!(
@@ -331,11 +340,11 @@ impl<'rcx> BitRepo<'rcx> {
             let mut head = repo.mk_bitfile("HEAD")?;
             writeln!(head, "ref: refs/heads/master")?;
 
-            repo.with_local_config(|config| {
+            File::create(repo.config_path())?;
+            repo.with_raw_local_config(|config| {
                 config.set("core", "repositoryformatversion", 0)?;
                 config.set("core", "bare", false)?;
-                config.set("core", "filemode", true)?;
-                Ok(())
+                config.set("core", "filemode", true)
             })?;
 
             println!("initialized empty bit repository in `{}`", repo.workdir.display());

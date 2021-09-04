@@ -1,110 +1,146 @@
-//! this does deviate a bit from the actual git config format
-//! certain things will need to be rewritten to be valid toml
-
-// yes this file is pretty disgusting, but its only config right? :)
-// I can't actually remember why its written the way it is, could consider a rewrite if something
-// major requires changing
-
 use crate::error::BitResult;
 use crate::interner::Intern;
 use crate::merge::ConflictStyle;
-use crate::repo::RepoCtxt;
+use crate::path::BitPath;
+use crate::repo::BitRepo;
 use git_config::file::GitConfig;
 use git_config::values::{Boolean, Integer};
-use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-lazy_static! {
-    static ref GLOBAL_PATH: PathBuf = dirs::home_dir().unwrap().join(".gitconfig");
+#[derive(Debug, Merge, Default)]
+pub struct BitConfig {
+    pub(crate) core: CoreConfig,
+    pub(crate) user: UserConfig,
+    pub(crate) merge: MergeConfig,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum BitConfigScope {
-    Global,
-    Local,
+/// Defines a left biased merge operation
+pub trait Merge {
+    fn merge(&mut self, other: Self);
 }
 
-pub struct BitConfig<'c> {
-    inner: GitConfig<'c>,
-    scope: BitConfigScope,
-    path: PathBuf,
-}
-
-// this struct provides convenient access to each setting
-// e.g. to access filemode, we can just write repo.config().filemode()
-// its nicer to use than the with_config api
-pub struct Config<'a, 'rcx> {
-    repo: &'a RepoCtxt<'rcx>,
-}
-
-impl<'rcx> RepoCtxt<'rcx> {
-    // this is only here to namespace all the configuration to not be directly under repo
-    // although I do wonder if this is actually more annoying than helpful
-    pub fn config<'a>(&'a self) -> Config<'a, 'rcx> {
-        Config { repo: self }
-    }
-
-    pub fn with_config<R>(
-        &self,
-        scope: BitConfigScope,
-        f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>,
-    ) -> BitResult<R> {
-        match scope {
-            BitConfigScope::Global => BitConfig::with_global_config(f),
-            BitConfigScope::Local => self.with_local_config(f),
+impl<T> Merge for Option<T> {
+    fn merge(&mut self, other: Self) {
+        if let None = self {
+            *self = other
         }
     }
+}
 
-    pub fn with_local_config<R>(
-        &self,
-        f: impl for<'c> FnOnce(&mut BitConfig<'c>) -> BitResult<R>,
-    ) -> BitResult<R> {
-        BitConfig::with_local(self.config_path(), f)
+impl BitConfig {
+    fn open(path: BitPath) -> BitResult<Self> {
+        Self::from_gitconfig(&RawConfig::open(path)?)
+    }
+
+    fn from_gitconfig(config: &RawConfig<'_>) -> BitResult<Self> {
+        Ok(Self {
+            core: CoreConfig::from_config(config)?,
+            user: UserConfig::from_config(config)?,
+            merge: MergeConfig::from_config(config)?,
+        })
+    }
+
+    /// Creates a merged configuration from the following sources (in order of increasing precedence):
+    /// (NOT system atm /etc/gitconfig)
+    /// - config dir (~/.config/git/config)
+    /// - home directory (~/.gitconfig)
+    /// - local config
+    pub fn init(local_path: BitPath) -> BitResult<Self> {
+        // start with the highest precedence config as `merge` is left-biased
+        let mut config_paths = vec![local_path];
+
+        if let Some(config_dir) = dirs::config_dir() {
+            config_paths.push(BitPath::intern(config_dir.join("git/config")));
+        }
+
+        if let Some(home) = dirs::home_dir() {
+            config_paths.push(BitPath::intern(home.join(".gitconfig")));
+        }
+
+        let mut config = BitConfig::default();
+        for path in config_paths.into_iter().filter(|path| path.exists()) {
+            config.merge(BitConfig::open(path)?);
+        }
+        Ok(config)
     }
 }
 
-fn with_config<R>(
-    scope: BitConfigScope,
-    path: impl AsRef<Path>,
-    f: impl for<'a> FnOnce(&mut BitConfig<'a>) -> BitResult<R>,
-) -> BitResult<R> {
-    let path = path.as_ref().to_path_buf();
-    if !path.try_exists()? {
-        File::create(&path)?;
-    }
-    let s = std::fs::read_to_string(&path)?;
-    let inner = GitConfig::try_from(s.as_str())
-        .unwrap_or_else(|err| panic!("failed to parse bitconfig `{}`: {}", path.display(), err));
-
-    let mut config = BitConfig { inner, path, scope };
-    let ret = f(&mut config)?;
-    Ok(ret)
+#[derive(Debug, Merge, Default)]
+pub struct MergeConfig {
+    conflict_style: Option<ConflictStyle>,
 }
 
-impl<'c> BitConfig<'c> {
-    /// write the configuration to disk
-    fn write(&self) -> BitResult<()> {
-        let inner = &self.inner;
-        let bytes: Vec<u8> = inner.into();
-        let mut file = File::with_options().write(true).open(&self.path)?;
-        file.write_all(&bytes)?;
+impl MergeConfig {
+    fn from_config(config: &RawConfig<'_>) -> BitResult<Self> {
+        Ok(Self { conflict_style: config.get("merge", "conflictStyle")? })
+    }
+}
+
+#[derive(Debug, Merge, Default)]
+pub struct UserConfig {
+    name: Option<String>,
+    email: Option<String>,
+}
+
+impl UserConfig {
+    fn from_config(config: &RawConfig<'_>) -> BitResult<Self> {
+        Ok(Self { name: config.get("user", "name")?, email: config.get("user", "email")? })
+    }
+}
+
+#[derive(Debug, Merge, Default)]
+pub struct CoreConfig {
+    repositoryformatversion: Option<i64>,
+    bare: Option<bool>,
+    filemode: Option<bool>,
+    pager: Option<String>,
+}
+
+impl CoreConfig {
+    fn from_config(config: &RawConfig<'_>) -> BitResult<Self> {
+        macro_rules! get {
+            ($key:literal ?? $default:expr) => {
+                match config.get("core", $key)? {
+                    Some(value) => value,
+                    None => $default,
+                }
+            };
+            ($key:literal) => {
+                config.get("core", $key)?
+            };
+        }
+
+        Ok(Self {
+            repositoryformatversion: get!("repositoryformatversion"),
+            bare: get!("bare"),
+            filemode: get!("filemode"),
+            pager: get!("pager"),
+        })
+    }
+}
+
+/// Wrapper around gitconfig with a higher level api
+pub struct RawConfig<'c> {
+    inner: GitConfig<'c>,
+    path: BitPath,
+}
+
+impl<'rcx> BitRepo<'rcx> {
+    /// Use this API for setting config values, otherwise use `.config()`
+    /// The current repository config settings will NOT be refreshed
+    pub fn with_raw_local_config(
+        self,
+        f: impl FnOnce(&mut RawConfig<'_>) -> BitResult<()>,
+    ) -> BitResult<()> {
+        debug_assert!(self.config_path().try_exists()?);
+        let mut config = RawConfig::open(self.config_path())?;
+        f(&mut config)?;
+        config.write()?;
         Ok(())
-    }
-
-    pub fn with_local<R>(
-        path: impl AsRef<Path>,
-        f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>,
-    ) -> BitResult<R> {
-        with_config(BitConfigScope::Local, path, f)
-    }
-
-    fn with_global_config<R>(f: impl FnOnce(&mut BitConfig<'_>) -> BitResult<R>) -> BitResult<R> {
-        with_config(BitConfigScope::Global, GLOBAL_PATH.as_path(), f)
     }
 }
 
@@ -149,7 +185,20 @@ impl BitConfigValue for ConflictStyle {
     }
 }
 
-impl<'c> BitConfig<'c> {
+impl<'c> RawConfig<'c> {
+    pub fn open(path: BitPath) -> BitResult<Self> {
+        Ok(Self { inner: GitConfig::open(path)?, path })
+    }
+
+    /// write the configuration to disk
+    fn write(&self) -> BitResult<()> {
+        let inner = &self.inner;
+        let bytes: Vec<u8> = inner.into();
+        let mut file = File::with_options().write(true).open(&self.path)?;
+        file.write_all(&bytes)?;
+        Ok(())
+    }
+
     fn get_raw(&self, section: &str, key: &str) -> Option<Cow<'_, [u8]>> {
         self.inner.value(section, None, key).ok()
     }
@@ -160,13 +209,13 @@ impl<'c> BitConfig<'c> {
             .transpose()
     }
 
+    /// Writes changes in memory but does not flush to disk
     pub fn set(&mut self, section_name: &str, key: &str, value: impl ToString) -> BitResult<()> {
         let mut section = match self.inner.section_mut(section_name, None) {
             Ok(section) => section,
             Err(_) => self.inner.new_section(section_name.intern(), None),
         };
         section.set(key.intern().into(), value.to_string().intern().as_bytes().into());
-        self.write()?;
         Ok(())
     }
 }
@@ -176,23 +225,9 @@ impl<'c> BitConfig<'c> {
 // if none of the configurations contain the value
 macro_rules! get_opt {
     ($section:ident.$field:ident:$ty:ty) => {
-        impl<'a, 'rcx> Config<'a, 'rcx> {
-            pub fn $field(&self) -> BitResult<Option<$ty>> {
-                self.repo.with_local_config(|config| config.$field())
-            }
-        }
-
-        impl<'c> BitConfig<'c> {
-            pub fn $field(&self) -> BitResult<Option<$ty>> {
-                let section = stringify!($section);
-                let field = stringify!($field);
-                match self.get(section, field)? {
-                    Some(value) => return Ok(Some(value)),
-                    None => match self.scope {
-                        BitConfigScope::Global => Ok(None),
-                        BitConfigScope::Local => Self::with_global_config(|global| global.$field()),
-                    },
-                }
+        impl BitConfig {
+            pub fn $field(&self) -> Option<$ty> {
+                self.$section.$field.clone()
             }
         }
     };
@@ -200,25 +235,9 @@ macro_rules! get_opt {
 
 macro_rules! get {
     ($section:ident.$field:ident:$ty:ty, $default:expr) => {
-        impl<'a, 'rcx> Config<'a, 'rcx> {
-            #[allow(non_snake_case)]
-            pub fn $field(&self) -> BitResult<$ty> {
-                self.repo.with_local_config(|config| config.$field())
-            }
-        }
-
-        impl<'c> BitConfig<'c> {
-            #[allow(non_snake_case)]
-            pub fn $field(&self) -> BitResult<$ty> {
-                let section = stringify!($section);
-                let field = stringify!($field);
-                match self.get(section, field)? {
-                    Some(value) => return Ok(value),
-                    None => match self.scope {
-                        BitConfigScope::Global => Ok($default),
-                        BitConfigScope::Local => Self::with_global_config(|global| global.$field()),
-                    },
-                }
+        impl BitConfig {
+            pub fn $field(&self) -> $ty {
+                self.$section.$field.clone().unwrap_or($default)
             }
         }
     };
@@ -227,7 +246,7 @@ macro_rules! get {
 get!(core.filemode: bool, false);
 get!(core.pager: String, "less".to_owned());
 
-get!(merge.conflictStyle: ConflictStyle, ConflictStyle::Merge);
+get!(merge.conflict_style: ConflictStyle, ConflictStyle::Merge);
 
 get_opt!(core.repositoryformatversion: i64);
 get_opt!(core.bare: bool);

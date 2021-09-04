@@ -25,6 +25,8 @@
 #![feature(array_methods)]
 #![feature(with_options)]
 
+extern crate self as libbit;
+
 #[macro_use]
 extern crate smallvec;
 

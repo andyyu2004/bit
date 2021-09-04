@@ -231,7 +231,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
                 }
 
                 match xdiff::merge(
-                    repo.config().conflictStyle()?,
+                    repo.config().conflict_style(),
                     "HEAD",
                     &self.their_head_desc,
                     &base_bytes,

@@ -17,8 +17,8 @@ Omit --global to set the identity only in this repository."#;
 
 impl<'rcx> BitRepo<'rcx> {
     pub fn user_signature(&self) -> BitResult<BitSignature> {
-        let name = self.config().name()?;
-        let email = self.config().email()?;
+        let name = self.config().name();
+        let email = self.config().email();
         if let (Some(name), Some(email)) = (name, email) {
             Ok(BitSignature { name, email, time: BitTime::now() })
         } else {

@@ -19,7 +19,7 @@ impl Cmd for BitLogCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
         let revisions = self.revisions.iter().collect::<Vec<_>>();
         let revwalk = repo.revwalk(&revisions)?;
-        let mut pager = Command::new(&repo.config().pager()?).stdin(Stdio::piped()).spawn()?;
+        let mut pager = Command::new(&repo.config().pager()).stdin(Stdio::piped()).spawn()?;
         let stdin = pager.stdin.as_mut().unwrap();
 
         let refs = repo.ls_refs()?;
