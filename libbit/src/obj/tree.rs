@@ -149,7 +149,7 @@ impl Tree<'_> {
         Self: Sized,
     {
         let mut r = r.take(size);
-        let mut entries = Vec::with_capacity(size as usize / 40);
+        let mut entries = Vec::with_capacity(size as usize / 30);
         while !r.is_at_eof()? {
             let entry = TreeEntry::deserialize(&mut r)?;
             entries.push(entry);

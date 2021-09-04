@@ -4,6 +4,7 @@ use crate::iter::BitIterator;
 use crate::obj::FileMode;
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::fmt::{self, Formatter};
 
 #[derive(Debug, Default)]
@@ -71,6 +72,7 @@ impl<'a> TreeDiffEntry<'a> {
 
 pub struct TreeDiffIter<'rcx, I, J> {
     repo: BitRepo<'rcx>,
+    unmodified_cache: VecDeque<BitIndexEntry>,
     old_iter: I,
     new_iter: J,
     opts: DiffOpts,
@@ -78,7 +80,7 @@ pub struct TreeDiffIter<'rcx, I, J> {
 
 impl<'rcx, I, J> TreeDiffIter<'rcx, I, J> {
     pub fn new(repo: BitRepo<'rcx>, old_iter: I, new_iter: J, opts: DiffOpts) -> Self {
-        Self { repo, old_iter, new_iter, opts }
+        Self { repo, old_iter, new_iter, opts, unmodified_cache: Default::default() }
     }
 }
 
@@ -96,6 +98,9 @@ where
 
     fn next(&mut self) -> Result<Option<Self::Item<'_>>, Self::Error> {
         loop {
+            if let Some(entry) = self.unmodified_cache.pop_front() {
+                return Ok(Some(TreeDiffEntry::UnmodifiedBlob(entry)));
+            }
             match (self.old_iter.peek()?, self.new_iter.peek()?) {
                 (None, None) => return Ok(None),
                 (None, Some(new)) => return self.on_created(new),
@@ -120,10 +125,18 @@ where
                                 if old.oid().is_known() && old == new =>
                             {
                                 // If hashes match and both are directories we can step over them
-                                // (unless we want to include unmodified, in which case we step inside)
+                                // (unless we want to include unmodified, in which case we "step inside")
                                 if self.opts.include_unmodified() {
-                                    self.old_iter.next()?;
-                                    self.new_iter.next()?;
+                                    // // as an optimization we can step over one of the trees entirely,
+                                    // // and collect the other one into a local cache.
+                                    // // This is cheaper than wastefully stepping through both of them one by one.
+                                    self.old_iter.over()?;
+
+                                    assert!(self.unmodified_cache.is_empty());
+                                    self.unmodified_cache = (&mut self.new_iter
+                                        as &mut dyn BitTreeIterator)
+                                        .collect_over_tree_files_iter()
+                                        .collect()?;
                                 } else {
                                     self.old_iter.over()?;
                                     self.new_iter.over()?;
@@ -271,7 +284,7 @@ pub trait TreeDiffer {
         new_iter: impl BitTreeIterator,
         opts: DiffOpts,
     ) -> BitResult<()> {
-        TreeDiffIter { repo, old_iter, new_iter, opts }.for_each(|diff_entry| match diff_entry {
+        TreeDiffIter::new(repo, old_iter, new_iter, opts).for_each(|diff_entry| match diff_entry {
             TreeDiffEntry::DeletedBlob(old) => self.deleted_blob(old),
             TreeDiffEntry::CreatedBlob(new) => self.created_blob(new),
             TreeDiffEntry::ModifiedBlob(old, new) => self.modified_blob(old, new),
@@ -334,7 +347,7 @@ impl<'a> TreeEntriesConsumer<'a> {
         self,
         container: &mut Vec<BitIndexEntry>,
     ) -> BitResult<BitIndexEntry> {
-        self.iter.into_inner().collect_over_tree_files(container)
+        self.iter.into_inner().collect_over_tree_blobs(container)
     }
 
     pub fn iter_files(self) -> impl BitIterator<BitIndexEntry> + 'a {

@@ -46,7 +46,7 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
     }
 
     // TODO these names all suck
-    fn collect_over_tree_files(
+    fn collect_over_tree_blobs(
         &mut self,
         container: &mut Vec<BitIndexEntry>,
     ) -> BitResult<Self::Item> {

@@ -40,11 +40,11 @@ struct OffsetVec<T> {
 }
 
 impl<T> OffsetVec<T> {
-    pub fn new(offset: isize) -> Self {
+    pub fn _new(offset: isize) -> Self {
         Self { offset, base: Default::default() }
     }
 
-    pub fn with_capacity(offset: isize, capacity: usize) -> Self {
+    pub fn _with_capacity(offset: isize, capacity: usize) -> Self {
         Self { offset, base: Vec::with_capacity(capacity) }
     }
 }
@@ -70,7 +70,7 @@ impl<T> IndexMut<isize> for OffsetVec<T> {
 }
 
 struct MyersDiff<'a, 's> {
-    something: &'a (),
+    _something: &'a (),
     a: &'a [&'s str],
     b: &'a [&'s str],
     v: OffsetVec<isize>,
@@ -86,7 +86,7 @@ impl<'a, 's> MyersDiff<'a, 's> {
         let n = b.len();
         let size = m + n;
         let v = OffsetVec::filled_with_capacity(size as isize, size * 2);
-        Self { a, b, v, something: &() }
+        Self { a, b, v, _something: &() }
     }
 
     pub fn diff(mut self) -> isize {
