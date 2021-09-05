@@ -73,6 +73,10 @@ impl SHA1Hash {
     pub fn to_hex(&self) -> String {
         self.0.to_hex()
     }
+
+    pub fn short(&self) -> String {
+        self.to_hex()[0..7].to_owned()
+    }
 }
 
 #[cfg(test)]

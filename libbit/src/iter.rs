@@ -20,8 +20,8 @@ use rustc_hash::FxHashSet;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::ffi::OsStr;
-use std::path::Path;
-use walkdir::WalkDir;
+use std::fs::FileType;
+use std::path::{Path, PathBuf};
 
 pub type PathMode = (BitPath, FileMode);
 
@@ -154,7 +154,7 @@ struct WorktreeRawIter<'rcx> {
     // TODO ignoring all nonroot ignores for now
     // not sure what the correct collection for this is? some kind of tree where gitignores know their "parent" gitignore?
     ignore: Vec<Gitignore>,
-    walk: walkdir::IntoIter,
+    jwalk: jwalk::DirEntryIter<((), ())>,
 }
 
 impl<'rcx> WorktreeRawIter<'rcx> {
@@ -170,21 +170,33 @@ impl<'rcx> WorktreeRawIter<'rcx> {
             repo,
             ignore,
             tracked,
-            walk: WalkDir::new(repo.workdir)
-                .sort_by(|a, b| {
-                    let x = a.path();
-                    let y = b.path();
-
-                    // for correct ordering and avoiding allocation where possible
-                    let t = a.file_type().is_dir().then(|| x.join(BitPath::EMPTY));
-                    let u = b.file_type().is_dir().then(|| y.join(BitPath::EMPTY));
-
-                    match (&t, &u) {
-                        (None, None) => BitPath::path_cmp(x, y),
-                        (None, Some(u)) => BitPath::path_cmp(x, u),
-                        (Some(t), None) => BitPath::path_cmp(t, y),
-                        (Some(t), Some(u)) => BitPath::path_cmp(t, u),
-                    }
+            jwalk: jwalk::WalkDir::new(repo.workdir)
+                .skip_hidden(false)
+                .process_read_dir(|_, _, _, children| {
+                    // ignore `.git` directories
+                    children.retain(|entry| {
+                        entry
+                            .as_ref()
+                            .map(|entry| BitPath::DOT_GIT != entry.file_name())
+                            .unwrap_or(true)
+                    });
+                    children.sort_by(|a, b| match (a, b) {
+                        (Ok(a), Ok(b)) => {
+                            let mut x = a.path();
+                            let mut y = b.path();
+                            // for correct ordering and avoiding allocation where possible
+                            if a.file_type().is_dir() {
+                                x.push(BitPath::EMPTY);
+                            }
+                            if b.file_type().is_dir() {
+                                y.push(BitPath::EMPTY);
+                            }
+                            BitPath::path_cmp(x, y)
+                        }
+                        (Ok(_), Err(_)) => Ordering::Less,
+                        (Err(_), Ok(_)) => Ordering::Greater,
+                        (Err(_), Err(_)) => Ordering::Equal,
+                    })
                 })
                 .into_iter(),
         })
@@ -192,14 +204,15 @@ impl<'rcx> WorktreeRawIter<'rcx> {
 
     // we need to explicitly ignore our root `.bit/.git` directories
     // TODO testing
-    fn is_ignored(&self, path: &Path, is_dir: bool) -> BitResult<bool> {
-        debug_assert!(path.is_absolute());
+    fn is_ignored(&self, entry: &DirEntry) -> BitResult<bool> {
+        debug_assert!(entry.path.is_absolute());
 
-        let relative = self.repo.to_relative_path(path)?;
-        debug_assert!(relative.iter().all(|component| BitPath::DOT_GIT != component));
+        let relative = self.repo.to_relative_path(&entry.path)?;
+        debug_assert!(
+            relative.iter().all(|component| BitPath::DOT_GIT != component),
+            "git directories should be filtered out by now"
+        );
 
-        // keeping a list of tracked files is sufficient (without considering tracked directories)
-        // as we just checked `path` only points to a file
         if self.tracked.contains(&relative.as_os_str()) {
             return Ok(false);
         }
@@ -220,34 +233,32 @@ impl<'rcx> WorktreeRawIter<'rcx> {
             // }
             // path ignoreme/a will not be ignored by `matched_path`
             // using `matched_path_or_any_parents` for now
-            if ignore.matched_path_or_any_parents(path, is_dir).is_ignore() {
+            if ignore.matched_path_or_any_parents(&entry.path, entry.file_type.is_dir()).is_ignore()
+            {
                 return Ok(true);
             }
         }
 
         Ok(false)
     }
+}
 
-    pub(super) fn skip_current_dir(&mut self) {
-        self.walk.skip_current_dir()
-    }
+#[derive(Debug)]
+pub struct DirEntry {
+    file_type: FileType,
+    path: PathBuf,
 }
 
 impl FallibleIterator for WorktreeRawIter<'_> {
     type Error = BitGenericError;
-    type Item = walkdir::DirEntry;
+    type Item = DirEntry;
 
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
         loop {
-            match self.walk.next().transpose()? {
+            match self.jwalk.next().transpose()? {
                 Some(entry) => {
-                    let path = entry.path();
-                    let is_dir = entry.file_type().is_dir();
-                    // Explicitly stepover any .git directory.
-                    let is_git_dir = BitPath::DOT_GIT == entry.file_name();
-                    if is_dir && is_git_dir {
-                        self.walk.skip_current_dir();
-                    } else if !self.is_ignored(path, is_dir)? {
+                    let entry = DirEntry { path: entry.path(), file_type: entry.file_type() };
+                    if !self.is_ignored(&entry)? {
                         // this iterator doesn't yield directory entries
                         return Ok(Some(entry));
                     }
@@ -280,11 +291,11 @@ impl FallibleIterator for WorktreeIter<'_> {
             };
 
             // we don't yield directory entries in this type of iterator
-            if entry.file_type().is_dir() {
+            if entry.file_type.is_dir() {
                 continue;
             }
 
-            return BitIndexEntry::from_path(self.inner.repo, entry.path()).map(Some);
+            return BitIndexEntry::from_path(self.inner.repo, &entry.path).map(Some);
         }
     }
 }

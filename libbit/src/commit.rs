@@ -73,9 +73,9 @@ pub struct CommitSummary<'rcx> {
 impl Display for CommitSummary<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.sym == SymbolicRef::HEAD {
-            writeln!(f, "[detached HEAD {}]", self.commit.oid())?;
+            writeln!(f, "[detached HEAD {}]", self.commit.oid().short())?;
         } else {
-            writeln!(f, "[{} {}]", self.sym.short(), self.commit.oid())?;
+            writeln!(f, "[{} {}]", self.sym.short(), self.commit.oid().short())?;
         }
 
         // TODO show full diffstat summary (deletions, insertions)

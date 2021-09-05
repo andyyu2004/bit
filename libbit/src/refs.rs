@@ -251,7 +251,7 @@ impl BitRef {
 
     pub fn short(&self, _repo: BitRepo<'_>) -> String {
         match self {
-            BitRef::Direct(_oid) => todo!("short (unambiguous) oid"),
+            BitRef::Direct(oid) => oid.short(),
             BitRef::Symbolic(sym) => sym.short().to_owned(),
         }
     }
