@@ -5,7 +5,7 @@ use crate::obj::FileMode;
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::fmt::{self, Formatter};
+use std::fmt::{self, Debug, Formatter};
 
 #[derive(Debug, Default)]
 pub struct DiffOpts {
@@ -30,6 +30,7 @@ bitflags! {
     }
 }
 
+#[derive(Debug)]
 pub enum TreeDiffEntry<'a> {
     DeletedBlob(BitIndexEntry),
     CreatedBlob(BitIndexEntry),
@@ -307,10 +308,10 @@ pub trait TreeDiffer {
 }
 
 /// The consumer can either choose to just step over the tree or step over the tree and collect all its subentries
-#[must_use = "The tree iterator will not advance until one of the available methods have been called"]
+/// The tree will be stepped over if still not consumed when dropped
 pub struct TreeEntriesConsumer<'a> {
     // refcell is here mostly so `peek` doesn't require a mutable reference
-    iter: RefCell<&'a mut dyn BitTreeIterator>,
+    iter: Option<RefCell<&'a mut dyn BitTreeIterator>>,
 }
 
 impl std::fmt::Debug for TreeEntriesConsumer<'_> {
@@ -319,20 +320,37 @@ impl std::fmt::Debug for TreeEntriesConsumer<'_> {
     }
 }
 
+impl<'a> Drop for TreeEntriesConsumer<'a> {
+    fn drop(&mut self) {
+        if let Some(iter) = self.iter.take() {
+            iter.into_inner().over().expect("is it better to panic here or just ignore the error?");
+        }
+    }
+}
+
 impl<'a> TreeEntriesConsumer<'a> {
     pub(crate) fn new(iter: &'a mut dyn BitTreeIterator) -> Self {
-        Self { iter: RefCell::new(iter) }
+        Self { iter: Some(RefCell::new(iter)) }
     }
 
     /// Peek the tree entry
     pub fn peek(&self) -> BitIndexEntry {
-        self.iter.borrow_mut().peek().expect("peek shouldn't fail on a second call surely").unwrap()
+        self.iter
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .peek()
+            .expect("peek shouldn't fail on a second call surely")
+            .unwrap()
+    }
+
+    fn into_inner(mut self) -> &'a mut dyn BitTreeIterator {
+        self.iter.take().unwrap().into_inner()
     }
 
     /// Step over the tree and return the entry of the tree itself
     pub fn step_over(self) -> BitResult<BitIndexEntry> {
         Ok(self
-            .iter
             .into_inner()
             .over()?
             .expect("there is definitely something as we peeked this entry"))
@@ -340,27 +358,27 @@ impl<'a> TreeEntriesConsumer<'a> {
 
     /// appends all the non-tree subentries of the tree to `container`
     pub fn collect_over_all(self, container: &mut Vec<BitIndexEntry>) -> BitResult<BitIndexEntry> {
-        self.iter.into_inner().collect_over_tree_all(container)
+        self.into_inner().collect_over_tree_all(container)
     }
 
     pub fn collect_over_files(
         self,
         container: &mut Vec<BitIndexEntry>,
     ) -> BitResult<BitIndexEntry> {
-        self.iter.into_inner().collect_over_tree_blobs(container)
+        self.into_inner().collect_over_tree_blobs(container)
     }
 
     pub fn iter_files(self) -> impl BitIterator<BitIndexEntry> + 'a {
-        self.iter.into_inner().collect_over_tree_files_iter()
+        self.into_inner().collect_over_tree_files_iter()
     }
 
     /// Returns an iterator that yields the root of the subtree and all its subentries
     pub fn iter(self) -> impl BitIterator<BitIndexEntry> + 'a {
-        self.iter.into_inner().collect_over_tree_iter()
+        self.into_inner().collect_over_tree_iter()
     }
 
     pub fn collect(self) -> BitResult<Vec<BitIndexEntry>> {
-        self.iter.into_inner().collect_over_tree_iter().collect()
+        self.into_inner().collect_over_tree_iter().collect()
     }
 }
 

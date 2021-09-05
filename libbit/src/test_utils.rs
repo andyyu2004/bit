@@ -121,13 +121,13 @@ pub fn generate_sane_string_with_newlines(range: std::ops::Range<usize>) -> Stri
 }
 
 macro_rules! check_next {
-    ($next:expr => $path:literal:$mode:expr) => {
+    ($next:expr => $path:literal:$mode:expr) => {{
         #[allow(unused_imports)]
         use crate::iter::*;
         let entry = $next?.unwrap();
         assert_eq!(entry.path(), $path);
         assert_eq!(entry.mode(), $mode);
-    };
+    }};
 }
 
 macro_rules! exists {

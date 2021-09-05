@@ -111,7 +111,7 @@ impl<'rcx> BitIndex<'rcx> {
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
         self.apply_migration(&migration)?;
 
-        // if forced, then the worktree and index should match exactly
+        // if forced, then the worktree and index and target_tree should match exactly
         #[cfg(debug_assertions)]
         if is_forced {
             use crate::pathspec::Pathspec;
@@ -137,9 +137,10 @@ impl<'rcx> BitIndex<'rcx> {
 
     fn apply_migration(&mut self, migration: &Migration) -> BitResult<()> {
         let repo = self.repo;
+
         for rmrf in &migration.rmrfs {
             let path = repo.to_absolute_path(&rmrf.path);
-            if path.try_exists()? {
+            if path.is_dir() {
                 std::fs::remove_dir_all(&path)?;
             }
             self.remove_directory(&rmrf.path)?;
@@ -244,11 +245,11 @@ pub struct CheckoutCtxt<'a, 'rcx> {
 // helps keep the condition on one line
 macro_rules! cond {
     ($pred:expr => $then:expr; $otherwise:expr) => {
-        if $pred { $then } else { $otherwise }
+        if $pred { $then? } else { $otherwise? }
     };
     ($pred:expr => $then:expr) => {
         if $pred {
-            $then
+            $then?
         }
     };
 }
@@ -274,22 +275,24 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         diff_iter.for_each(|diff_entry| {
             // matchup the worktree iterator with the diff iterator by comparing order of entries
             match worktree_iter.peek()? {
-                Some(worktree_entry) => match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
-                    // worktree behind diffs, process worktree_entry alone
-                    Ordering::Less => {
-                        self.worktree_only(worktree_entry)?;
-                        worktree_iter.next()?;
-                        Ok(())
+                Some(worktree_entry) => {
+                    match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
+                        // worktree behind diffs, process worktree_entry alone
+                        Ordering::Less => {
+                            self.worktree_only(worktree_entry)?;
+                            worktree_iter.next()?;
+                            Ok(())
+                        }
+                        // worktree even with diffs, process diff_entry and worktree_entry together
+                        Ordering::Equal => {
+                            self.with_worktree(diff_entry, worktree_entry)?;
+                            worktree_iter.next()?;
+                            Ok(())
+                        }
+                        // worktree ahead of diffs, process only diff_entry
+                        Ordering::Greater => self.no_worktree(diff_entry),
                     }
-                    // worktree even with diffs, process diff_entry and worktree_entry together
-                    Ordering::Equal => {
-                        self.with_worktree(diff_entry, worktree_entry)?;
-                        worktree_iter.next()?;
-                        Ok(())
-                    }
-                    // worktree ahead of diffs, process only diff_entry
-                    Ordering::Greater => self.no_worktree(diff_entry),
-                },
+                }
                 // again, worktree ahead of diffs
                 None => self.no_worktree(diff_entry),
             }
@@ -324,7 +327,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     cond!(self.opts.is_forced() => self.delete(entry); self.conflict(entry))
                 } else {
                     // case 9: B1 x B1 | delete blob (safe)
-                    self.delete(entry);
+                    self.delete(entry)?
                 },
 
             // case 3/4/6
@@ -338,9 +341,9 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
                 } else {
                     // case 16: B1 B2 B1 | update unmodified blob
-                    self.update(entry);
+                    self.update(entry)?
                 },
-            // case 14/15: B1 B1 B1/B2
+            // case 14/case 15: B1 B1 B1/B2
             TreeDiffEntry::UnmodifiedBlob(entry) =>
                 if self.index.is_worktree_entry_modified(worktree_entry)? {
                     // case 15: B1 B1 B2 | locally modified file (dirty)
@@ -349,22 +352,28 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 } else {
                     // case 14: B1 B1 B1 | unmodified file
                 },
-            TreeDiffEntry::DeletedTree(..) => todo!(),
+            // case 26
+            TreeDiffEntry::DeletedTree(tree) => cond!(self.opts.is_forced() => {
+                    // delete the actual worktree entry on disk
+                    self.delete(worktree_entry)?;
+                    // then delete the index records of the tree
+                    self.delete_tree(tree)
+                }; self.conflict(worktree_entry)),
+
             // case 6: x T1 B1/Bi | add tree with blob conflict (forceable)
             // TODO ignored case
             TreeDiffEntry::CreatedTree(tree) =>
                 if self.opts.is_forced() {
                     // replace worktree blob with target tree
-                    self.delete(worktree_entry);
-                    self.create_tree(tree)?;
+                    self.blob_to_tree(worktree_entry, tree)?
                 } else {
-                    self.conflict(tree.step_over()?)
+                    self.conflict(tree.step_over()?)?
                 },
             // case 22/case 23: B1 T1 B1/B2
             TreeDiffEntry::BlobToTree(blob, tree) =>
                 if self.index.is_worktree_entry_modified(worktree_entry)? {
                     // case 22
-                    cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree)?; self.conflict(worktree_entry))
+                    cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree); self.conflict(worktree_entry))
                 } else {
                     //case 23
                     self.blob_to_tree(blob, tree)?
@@ -390,7 +399,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 cond!(self.opts.is_forced() => self.create(blob)),
             // case 25: T1 x x | independently deleted tree (safe + missing)
             TreeDiffEntry::DeletedTree(tree) =>
-                cond!(self.opts.is_safe() => self.delete_tree(tree)?),
+                cond!(self.opts.is_safe() => self.delete_tree(tree)),
             TreeDiffEntry::CreatedTree(entries) => self.create_tree(entries)?,
             TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree)?,
             TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob)?,
@@ -398,7 +407,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         Ok(())
     }
 
-    fn update(&mut self, entry: impl Into<TreeEntry>) {
+    fn update(&mut self, entry: impl Into<TreeEntry>) -> BitResult<()> {
         let entry = entry.into();
         match entry.mode {
             FileMode::REG | FileMode::EXEC | FileMode::LINK => self.migration.rms.push(entry),
@@ -406,18 +415,22 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             FileMode::GITLINK => todo!(),
         }
         self.migration.creates.push(entry);
+        Ok(())
     }
 
-    fn conflict(&mut self, entry: impl Into<TreeEntry>) {
+    fn conflict(&mut self, entry: impl Into<TreeEntry>) -> BitResult<()> {
         self.conflicts.worktree.push(entry.into());
+        Ok(())
     }
 
-    fn create(&mut self, entry: impl Into<TreeEntry>) {
+    fn create(&mut self, entry: impl Into<TreeEntry>) -> BitResult<()> {
         self.migration.creates.push(entry.into());
+        Ok(())
     }
 
-    fn mkdir(&mut self, entry: impl Into<TreeEntry>) {
+    fn mkdir(&mut self, entry: impl Into<TreeEntry>) -> BitResult<()> {
         self.migration.mkdirs.push(entry.into());
+        Ok(())
     }
 
     // First, create the root of the subtree
@@ -429,7 +442,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 FileMode::REG | FileMode::EXEC | FileMode::LINK => self.create(entry),
                 FileMode::TREE => self.mkdir(entry),
                 FileMode::GITLINK => todo!(),
-            };
+            }?;
             Ok(())
         })
     }
@@ -440,8 +453,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         blob: impl Into<TreeEntry>,
     ) -> BitResult<()> {
         self.delete_tree(tree)?;
-        self.create(blob);
-        Ok(())
+        self.create(blob)
     }
 
     fn blob_to_tree(
@@ -449,7 +461,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         blob: impl Into<TreeEntry>,
         tree: TreeEntriesConsumer<'_>,
     ) -> BitResult<()> {
-        self.delete(blob);
+        self.delete(blob)?;
         self.create_tree(tree)
     }
 
@@ -458,8 +470,9 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         Ok(())
     }
 
-    fn delete(&mut self, entry: impl Into<TreeEntry>) {
-        self.migration.rms.push(entry.into())
+    fn delete(&mut self, entry: impl Into<TreeEntry>) -> BitResult<()> {
+        self.migration.rms.push(entry.into());
+        Ok(())
     }
 }
 

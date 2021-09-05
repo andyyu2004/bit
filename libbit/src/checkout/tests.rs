@@ -501,3 +501,35 @@ fn test_checkout_independentally_deleted_tree() -> BitResult<()> {
         Ok(())
     })
 }
+
+// case 26 (safe)
+#[test]
+fn test_safe_checkout_independentally_deleted_tree_with_untracked_blob() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        let target = commit! {
+            foo
+            bar
+        };
+        rmdir!(repo: "dir");
+        touch!(repo: "dir");
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 26 (forced)
+#[test_env_log::test]
+fn test_force_checkout_independentally_deleted_tree_with_untracked_blob() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        let target = commit! {
+            foo
+            bar
+        };
+        rmdir!(repo: "dir");
+        touch!(repo: "dir");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert!(!exists!(repo: "dir/baz"));
+        assert!(!exists!(repo: "dir/bar/qux"));
+        Ok(())
+    })
+}
