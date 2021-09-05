@@ -36,7 +36,7 @@ macro_rules! walk_common {
             // for when peek yields references and peek yields values
             match first_match {
                 None => first_match = Some(entry.clone()),
-                Some(fst_entry) => match entry.entry_cmp(&fst_entry) {
+                Some(fst_entry) => match entry.diff_cmp(&fst_entry) {
                     Ordering::Less => {
                         // if we found a entry that comes earlier then we forget
                         // the previous first_match and reset `next_entries`

@@ -105,7 +105,7 @@ where
                 (None, None) => return Ok(None),
                 (None, Some(new)) => return self.on_created(new),
                 (Some(old), None) => return self.on_deleted(old),
-                (Some(old), Some(new)) => match old.entry_cmp(&new) {
+                (Some(old), Some(new)) => match old.diff_cmp(&new) {
                     Ordering::Less => return self.on_deleted(old),
                     Ordering::Greater => return self.on_created(new),
                     Ordering::Equal => {
@@ -373,8 +373,8 @@ impl TreeDiffBuilder for TreeStatusDiffer {
     type Output = WorkspaceStatus;
 
     fn get_output(self) -> Self::Output {
-        debug_assert!(self.status.new.is_sorted_by(BitEntry::entry_partial_cmp));
-        debug_assert!(self.status.deleted.is_sorted_by(BitEntry::entry_partial_cmp));
+        debug_assert!(self.status.new.is_sorted_by(BitEntry::diff_partial_cmp));
+        debug_assert!(self.status.deleted.is_sorted_by(BitEntry::diff_partial_cmp));
         self.status
     }
 }

@@ -34,10 +34,3 @@ fn test_path_ordering() {
 
     assert!(p!("dir/bar.l") < p!("dir/bar/qux"));
 }
-
-#[test]
-fn test_path_join_empty() {
-    // we explicitly convert the path to a string to avoid path normalization complications
-    assert_ne!(p!("foo").join_trailing_slash().to_str().unwrap(), "foo");
-    assert_eq!(p!("foo").join_trailing_slash().to_str().unwrap(), "foo/");
-}

@@ -274,7 +274,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         diff_iter.for_each(|diff_entry| {
             // matchup the worktree iterator with the diff iterator by comparing order of entries
             match worktree_iter.peek()? {
-                Some(worktree_entry) => match worktree_entry.entry_cmp(&diff_entry.index_entry()) {
+                Some(worktree_entry) => match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
                     // worktree behind diffs, process worktree_entry alone
                     Ordering::Less => {
                         self.worktree_only(worktree_entry)?;

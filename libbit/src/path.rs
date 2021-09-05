@@ -43,13 +43,6 @@ impl BitPath {
         self.as_path().parent().map(Self::intern)
     }
 
-    /// adds trailing slash which is crucial for correct comparison ordering
-    // *IMPORTANT* do not intern the result of the trailing slash as it may get normalized away
-    // TODO consider a more succinct name
-    pub fn join_trailing_slash(self) -> PathBuf {
-        self.as_path().join("")
-    }
-
     /// return the filename of a path, empty path if no filename
     pub fn file_name(self) -> Self {
         Self::intern(self.as_path().file_name().unwrap_or_else(|| OsStr::new("")))
@@ -253,6 +246,38 @@ impl Ord for BitPath {
 }
 
 impl BitPath {
+    pub fn path_cmp_explicit(
+        a: impl AsRef<OsStr>,
+        a_is_dir: bool,
+        b: impl AsRef<OsStr>,
+        b_is_dir: bool,
+    ) -> std::cmp::Ordering {
+        // files with the same subpath should come before directories
+        let a = a.as_ref().as_bytes();
+        let b = b.as_ref().as_bytes();
+        let min_len = std::cmp::min(a.len(), b.len());
+
+        a[..min_len].cmp(&b[..min_len]).then_with(|| {
+            // Basically, if the path we are "at the end of" is a directory then
+            // we give it a '/' otherwise a null byte (which is less than anything so files come first).
+            // If it's not at the end then we give it the byte at that position and we compare.
+            let x = if a.len() == min_len {
+                if a_is_dir { b'/' } else { b'\0' }
+            } else {
+                a[min_len]
+            };
+
+            let y = if b.len() == min_len {
+                if b_is_dir { b'/' } else { b'\0' }
+            } else {
+                b[min_len]
+            };
+            x.cmp(&y)
+        })
+    }
+
+    /// Directories must have a trailing slash before calling this
+    /// Otherwise use `path_cmp_explicit`
     pub fn path_cmp(a: impl AsRef<OsStr>, b: impl AsRef<OsStr>) -> std::cmp::Ordering {
         // files with the same subpath should come before directories
         let a = a.as_ref().as_bytes();

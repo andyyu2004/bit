@@ -17,7 +17,6 @@ use fallible_iterator::Peekable;
 use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
 use rustc_hash::FxHashSet;
-use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs::FileType;
@@ -36,12 +35,18 @@ pub trait BitEntry {
 
     /// Comparison function for differs
     // This is not an `Ord` impl as it doesn't satisfy the `Ord` invariant `a.cmp(b) == Ordering::Equal <=> a == b`
-    fn entry_cmp(&self, other: &Self) -> Ordering {
+    // IMPORTANT: `diff_cmp` treats directories and files uniformly and does not do the funny ordering thing
+    // with trailing slashes and what not
+    fn diff_cmp(&self, other: &Self) -> Ordering {
         self.path().cmp(&other.path())
     }
 
-    fn entry_partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.entry_cmp(other))
+    fn diff_partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.diff_cmp(other))
+    }
+
+    fn entry_cmp(&self, other: &Self) -> Ordering {
+        BitPath::path_cmp_explicit(self.path(), self.is_tree(), other.path(), other.is_tree())
     }
 
     fn is_tree(&self) -> bool {
@@ -79,18 +84,6 @@ pub trait BitEntry {
         }
 
         repo.read_blob_from_worktree(self.path())
-    }
-
-    // we must have files sorted before directories
-    // i.e. index.rs < index/
-    // however, the trailing slash is not actually stored in the tree entry path (TODO confirm against git)
-    // we fix this by appending appending a slash
-    fn sort_path(&self) -> Cow<'static, Path> {
-        if self.mode() == FileMode::TREE {
-            Cow::Owned(self.path().join_trailing_slash())
-        } else {
-            Cow::Borrowed(self.path().as_path())
-        }
     }
 }
 
@@ -181,18 +174,12 @@ impl<'rcx> WorktreeRawIter<'rcx> {
                             .unwrap_or(true)
                     });
                     children.sort_by(|a, b| match (a, b) {
-                        (Ok(a), Ok(b)) => {
-                            let mut x = a.path();
-                            let mut y = b.path();
-                            // for correct ordering and avoiding allocation where possible
-                            if a.file_type().is_dir() {
-                                x.push(BitPath::EMPTY);
-                            }
-                            if b.file_type().is_dir() {
-                                y.push(BitPath::EMPTY);
-                            }
-                            BitPath::path_cmp(x, y)
-                        }
+                        (Ok(a), Ok(b)) => BitPath::path_cmp_explicit(
+                            a.path(),
+                            a.file_type.is_dir(),
+                            b.path(),
+                            b.file_type.is_dir(),
+                        ),
                         (Ok(_), Err(_)) => Ordering::Less,
                         (Err(_), Ok(_)) => Ordering::Greater,
                         (Err(_), Err(_)) => Ordering::Equal,

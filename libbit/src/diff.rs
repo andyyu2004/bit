@@ -82,7 +82,7 @@ where
                 (Some(old), Some(new)) => {
                     // there is an old record that no longer has a matching new record
                     // therefore it has been deleted
-                    match old.entry_cmp(new) {
+                    match old.diff_cmp(new) {
                         Ordering::Less => on_deleted!(old),
                         Ordering::Equal => on_modified!(old => new),
                         Ordering::Greater => on_created!(new),
