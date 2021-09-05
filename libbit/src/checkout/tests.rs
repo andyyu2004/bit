@@ -518,7 +518,7 @@ fn test_safe_checkout_independentally_deleted_tree_with_untracked_blob() -> BitR
 }
 
 // case 26 (forced)
-#[test_env_log::test]
+#[test]
 fn test_force_checkout_independentally_deleted_tree_with_untracked_blob() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         let target = commit! {
@@ -530,6 +530,137 @@ fn test_force_checkout_independentally_deleted_tree_with_untracked_blob() -> Bit
         bit_checkout!(repo: --force &rev!(target))?;
         assert!(!exists!(repo: "dir/baz"));
         assert!(!exists!(repo: "dir/bar/qux"));
+        Ok(())
+    })
+}
+
+// case 27
+#[test]
+fn test_checkout_deleted_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        bit_branch!(repo: "checkpoint");
+        let target = commit! {
+            foo
+            bar
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        assert!(!exists!(repo: "dir"));
+
+        // TODO fixme
+        // bit_reset!(repo: --hard "checkpoint");
+        // bit_checkout!(repo: --force &rev!(target))?;
+        // assert!(!exists!(repo: "dir"));
+        Ok(())
+    })
+}
+
+// case 28
+#[test]
+fn test_checkout_deleted_tree_and_added_blob() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        bit_branch!(repo: "checkpoint");
+        let target = commit! {
+            foo
+            bar
+            dir < "changed to a file"
+        };
+        rmdir!(repo: "dir");
+        bit_checkout!(repo: &rev!(target))?;
+
+        // reset and test force checkout as well
+        bit_reset!(repo: --hard "checkpoint");
+        assert!(exists!(repo: "dir/bar"));
+        rmdir!(repo: "dir");
+        bit_checkout!(repo: &rev!(target))?;
+        assert_eq!(cat!(repo: "dir"), "changed to a file");
+        Ok(())
+    })
+}
+
+// case 29 (safe)
+#[test]
+fn test_safe_checkout_independently_typechanged_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        let target = commit! {
+            foo
+            bar
+            dir < "changed to a file"
+        };
+        rmdir!(repo: "dir");
+        touch!(repo: "dir" < "changed to a file");
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 29 (forced)
+#[test]
+fn test_force_checkout_independently_typechanged_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        let target = commit! {
+            foo
+            bar
+            dir < "changed to a file"
+        };
+        rmdir!(repo: "dir");
+        touch!(repo: "dir" < "changed to a file");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "dir"), "changed to a file");
+        Ok(())
+    })
+}
+
+// case 30 (safe)
+#[test]
+fn test_safe_checkout_typechange_tree_to_blob_with_conflicting() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        let target = commit! {
+            foo
+            bar
+            dir < "changed to a file"
+        };
+        rmdir!(repo: "dir");
+        touch!(repo: "dir" < "changed to a different file");
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 31 (forced)
+#[test]
+fn test_force_checkout_typechange_tree_to_blob_with_conflicting() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        let target = commit! {
+            foo
+            bar
+            dir < "changed to a file original"
+        };
+        rmdir!(repo: "dir");
+        touch!(repo: "dir" < "changed to a different file");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "dir"), "changed to a file original");
+        Ok(())
+    })
+}
+
+// case 32 (safe)
+#[test]
+fn test_safe_checkout_locally_deleted_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        rmdir!(repo: "dir");
+        bit_checkout!(repo: "master")?;
+        assert!(!exists!(repo: "dir"));
+        Ok(())
+    })
+}
+
+// case 32 (forced)
+#[test]
+fn test_force_checkout_locally_deleted_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        rmdir!(repo: "dir");
+        bit_checkout!(repo: --force "master")?;
+        assert!(exists!(repo: "dir"));
         Ok(())
     })
 }

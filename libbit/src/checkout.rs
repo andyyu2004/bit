@@ -109,6 +109,7 @@ impl<'rcx> BitIndex<'rcx> {
         let target = repo.tree_iter(target_tree);
         let worktree = self.worktree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
+        dbg!(&migration);
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index and target_tree should match exactly
@@ -116,7 +117,7 @@ impl<'rcx> BitIndex<'rcx> {
         if is_forced {
             use crate::pathspec::Pathspec;
             debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
-            debug_assert!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
+            debug_assert!(dbg!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?).is_empty());
         }
         Ok(())
     }
@@ -353,13 +354,15 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     // case 14: B1 B1 B1 | unmodified file
                 },
             // case 26
-            TreeDiffEntry::DeletedTree(tree) => cond!(self.opts.is_forced() => {
+            TreeDiffEntry::DeletedTree(tree) =>
+                if self.opts.is_forced() {
                     // delete the actual worktree entry on disk
                     self.delete(worktree_entry)?;
                     // then delete the index records of the tree
-                    self.delete_tree(tree)
-                }; self.conflict(worktree_entry)),
-
+                    self.delete_tree(tree)?
+                } else {
+                    self.conflict(worktree_entry)?
+                },
             // case 6: x T1 B1/Bi | add tree with blob conflict (forceable)
             // TODO ignored case
             TreeDiffEntry::CreatedTree(tree) =>
@@ -375,10 +378,17 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     // case 22
                     cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree); self.conflict(worktree_entry))
                 } else {
-                    //case 23
+                    // case 23
                     self.blob_to_tree(blob, tree)?
                 },
-            TreeDiffEntry::TreeToBlob(..) => todo!(),
+            // case 29/case 30: T1 B1 B1|B2 | (forceable)
+            TreeDiffEntry::TreeToBlob(tree, blob) =>
+                if self.opts.is_forced() {
+                    self.delete(worktree_entry)?;
+                    self.tree_to_blob(tree, blob)?
+                } else {
+                    self.conflict(worktree_entry)?
+                },
         };
         Ok(())
     }
