@@ -244,7 +244,7 @@ impl FallibleIterator for WorktreeRawIter<'_> {
         loop {
             match self.jwalk.next().transpose()? {
                 Some(entry) => {
-                    let entry = DirEntry { path: entry.path(), file_type: entry.file_type() };
+                    let entry = DirEntry { file_type: entry.file_type(), path: entry.path };
                     if !self.is_ignored(&entry)? {
                         // this iterator doesn't yield directory entries
                         return Ok(Some(entry));
