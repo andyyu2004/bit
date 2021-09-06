@@ -181,6 +181,7 @@ fn test_tree_diff_include_unmodified() -> BitResult<()> {
 
         check_next!(iter.next() => "a":FileMode::REG);
         check_next!(iter.next() => "b":FileMode::REG);
+        check_next!(iter.next() => "dir":FileMode::REG);
         check_next!(iter.next() => "dir/c":FileMode::REG);
         check_next!(iter.next() => "k":FileMode::REG);
 

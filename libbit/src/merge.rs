@@ -2,7 +2,7 @@ use crate::checkout::CheckoutOpts;
 use crate::error::{BitError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, Conflicts, MergeStage};
 use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
-use crate::obj::{BitObject, Commit, CommitMessage, MutableBlob, Oid, TreeEntry};
+use crate::obj::{BitObject, Commit, CommitMessage, Oid};
 use crate::peel::Peel;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
