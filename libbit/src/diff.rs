@@ -10,6 +10,7 @@ use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
+use crate::time::Timespec;
 use fallible_iterator::{FallibleIterator, Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -377,16 +378,19 @@ impl<'rcx> BitIndex<'rcx> {
         // the "old" entry should always have a calculated hash
         debug_assert!(index_entry.oid.is_known());
 
+        // Check that both the entries have populated fields
+        // If any of the fields are missing then the checks will go wrong and
+        // will probably incorrectly show up as modified
+        debug_assert!(index_entry.inode != 0 && worktree_entry.inode != 0);
+        debug_assert!(index_entry.mtime != Timespec::ZERO);
+        debug_assert!(worktree_entry.mtime != Timespec::ZERO);
+        debug_assert!(index_entry.filesize != BitIndexEntry::UNKNOWN_SIZE);
+        debug_assert!(worktree_entry.filesize != BitIndexEntry::UNKNOWN_SIZE);
+
         match self.has_changes_inner(index_entry, worktree_entry)? {
             Changed::Yes => Ok(true),
             Changed::No => Ok(false),
             Changed::Maybe => {
-                // This section should only be hit if `old` is an index entry
-                // A "tree_entry" should never reach this section as it should always have a known hash.
-                // To assert this we just check the inode to be non-zero.
-                // (as this is the default value given when a tree entry is converted to an index entry and would not be possible otherwise)
-                debug_assert!(index_entry.inode != 0);
-
                 // file may have changed, but we are not certain, so check the hash
                 let mut new_hash = worktree_entry.oid;
                 if new_hash.is_unknown() {
@@ -408,7 +412,6 @@ impl<'rcx> BitIndex<'rcx> {
 
     fn has_changes_inner(&self, idxe: &BitIndexEntry, wte: &BitIndexEntry) -> BitResult<Changed> {
         //? check assume_unchanged and skip_worktree here?
-
         // we must check the hash before anything else in case the entry is generated from a `TreeEntry`
         // where most of the fields are zeroed but the hash is known
         // these checks confirm whether entries have definitely NOT changed

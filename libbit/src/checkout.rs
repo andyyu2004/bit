@@ -434,6 +434,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 25: T1 x x | independently deleted tree (safe + missing)
             TreeDiffEntry::DeletedTree(tree) =>
                 cond!(self.opts.is_safe() => self.delete_tree(tree)),
+            // case 5: x T1 x | created tree
             TreeDiffEntry::CreatedTree(entries) => self.create_tree(entries)?,
             TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree)?,
             TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob)?,

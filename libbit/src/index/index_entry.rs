@@ -142,7 +142,7 @@ impl From<TreeEntry> for BitIndexEntry {
             mode: entry.mode,
             uid: 0,
             gid: 0,
-            filesize: 0,
+            filesize: Self::UNKNOWN_SIZE,
             oid: entry.oid,
             flags: BitIndexEntryFlags::with_path_len(entry.path.len()),
             extended_flags: BitIndexEntryExtendedFlags::default(),
@@ -170,6 +170,8 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
             + std::mem::size_of::<u16>(); // flags
 
 impl BitIndexEntry {
+    pub const UNKNOWN_SIZE: u32 = u32::MAX;
+
     pub fn from_path(repo: BitRepo<'_>, path: &Path) -> BitResult<Self> {
         let normalized = repo.normalize_path(path)?;
         let relative = repo.to_relative_path(&normalized)?;

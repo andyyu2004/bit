@@ -26,18 +26,17 @@ impl<'rcx> FallibleIterator for WorktreeTreeIter<'rcx> {
         };
 
         let repo = self.inner.repo;
-        let path = BitPath::intern(repo.to_relative_path(&entry.path)?);
-        let oid = if entry.file_type.is_file() {
-            // TODO what to do here?
-            Oid::UNKNOWN
-            // repo.hash_blob_from_worktree(path)?
+        let index_entry = if entry.file_type.is_dir() {
+            TreeEntry {
+                oid: Oid::UNKNOWN,
+                mode: FileMode::TREE,
+                path: BitPath::intern(repo.to_relative_path(&entry.path)?),
+            }
+            .into()
         } else {
-            Oid::UNKNOWN
+            BitIndexEntry::from_path(repo, &entry.path)?
         };
-        let tree_entry =
-            TreeEntry { path, oid, mode: FileMode::from_metadata(&entry.path.metadata()?) };
-
-        Ok(Some(tree_entry.into()))
+        Ok(Some(index_entry))
     }
 }
 
