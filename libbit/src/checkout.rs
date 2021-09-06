@@ -275,28 +275,34 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         // skip the root
         debug_assert_eq!(worktree.next()?.unwrap().path(), BitPath::EMPTY);
 
+        self.index
+            .worktree_tree_iter()?
+            .for_each(|entry| Ok(println!("{:?}", TreeEntry::from(entry))))?;
+
         diff_iter.for_each(|diff_entry| {
-            let worktree_entry = worktree.peek()?;
-            info!(
-                "CheckoutCtxt::generate({:?} {:?})",
-                diff_entry,
-                worktree_entry.map(|entry| entry.path())
-            );
-            // matchup the worktree iterator with the diff iterator by comparing order of entries
-            match worktree_entry {
-                Some(worktree_entry) => {
-                    match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
-                        // worktree behind diffs, process worktree_entry alone
-                        Ordering::Less => self.worktree_only(&mut worktree, worktree_entry),
-                        // worktree even with diffs, process diff_entry and worktree_entry together
-                        Ordering::Equal =>
-                            self.with_worktree(&mut worktree, diff_entry, worktree_entry),
-                        // worktree ahead of diffs, process only diff_entry
-                        Ordering::Greater => self.no_worktree(diff_entry),
+            loop {
+                let worktree_entry = worktree.peek()?;
+                info!(
+                    "CheckoutCtxt::generate({:#?}, {:#?})",
+                    diff_entry,
+                    worktree_entry.map(|entry| TreeEntry::from(entry))
+                );
+                // matchup the worktree iterator with the diff iterator by comparing order of entries
+                match worktree_entry {
+                    Some(worktree_entry) => {
+                        match dbg!(worktree_entry.diff_cmp(&diff_entry.index_entry())) {
+                            // worktree behind diffs, process worktree_entry alone
+                            Ordering::Less => self.worktree_only(&mut worktree, worktree_entry)?,
+                            // worktree even with diffs, process diff_entry and worktree_entry together
+                            Ordering::Equal =>
+                                break self.with_worktree(&mut worktree, diff_entry, worktree_entry),
+                            // worktree ahead of diffs, process only diff_entry
+                            Ordering::Greater => break self.no_worktree(diff_entry),
+                        }
                     }
+                    // again, worktree ahead of diffs
+                    None => break self.no_worktree(diff_entry),
                 }
-                // again, worktree ahead of diffs
-                None => self.no_worktree(diff_entry),
             }
         })?;
 

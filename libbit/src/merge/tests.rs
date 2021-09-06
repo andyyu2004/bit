@@ -206,7 +206,7 @@ fn test_simple_merge() -> BitResult<()> {
     })
 }
 
-#[test]
+#[test_env_log::test]
 fn test_merge_conflict_types() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         bit_branch!(repo: "alternative");
