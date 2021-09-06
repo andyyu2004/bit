@@ -275,10 +275,6 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         // skip the root
         debug_assert_eq!(worktree.next()?.unwrap().path(), BitPath::EMPTY);
 
-        self.index
-            .worktree_tree_iter()?
-            .for_each(|entry| Ok(println!("{:?}", TreeEntry::from(entry))))?;
-
         diff_iter.for_each(|diff_entry| {
             loop {
                 let worktree_entry = worktree.peek()?;
@@ -290,7 +286,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 // matchup the worktree iterator with the diff iterator by comparing order of entries
                 match worktree_entry {
                     Some(worktree_entry) => {
-                        match dbg!(worktree_entry.diff_cmp(&diff_entry.index_entry())) {
+                        match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
                             // worktree behind diffs, process worktree_entry alone
                             Ordering::Less => self.worktree_only(&mut worktree, worktree_entry)?,
                             // worktree even with diffs, process diff_entry and worktree_entry together
@@ -374,6 +370,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     // case 16: B1 B2 B1 | update unmodified blob
                     self.update(entry)?
                 },
+            TreeDiffEntry::ModifiedTree(..) => {}
             // case 14/case 15: B1 B1 B1/B2
             TreeDiffEntry::UnmodifiedBlob(entry) =>
                 if self.index.is_worktree_entry_modified(&worktree_entry)? {
@@ -435,6 +432,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 13: B1 B2 x | modify/delete conflict
             TreeDiffEntry::ModifiedBlob(_, entry) =>
                 cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
+            TreeDiffEntry::ModifiedTree(..) => {}
             // case 12: B1 B1 x | locally deleted blob (safe + missing)
             TreeDiffEntry::UnmodifiedBlob(blob) =>
                 cond!(self.opts.is_forced() => self.create(blob)),

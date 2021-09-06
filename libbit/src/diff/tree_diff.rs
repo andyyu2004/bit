@@ -34,6 +34,10 @@ pub enum TreeDiffEntry<'a> {
     DeletedBlob(BitIndexEntry),
     CreatedBlob(BitIndexEntry),
     ModifiedBlob(BitIndexEntry, BitIndexEntry),
+    // This is a bit of a edge case, both iterators will always step into the trees.
+    // This is just letting us know the tree entry exists.
+    // This is necessary for the worktree in checkout to matchup with the treediff correctly
+    ModifiedTree(BitIndexEntry),
     UnmodifiedBlob(BitIndexEntry),
     UnmodifiedTree(TreeEntriesConsumer<'a>),
     DeletedTree(TreeEntriesConsumer<'a>),
@@ -62,6 +66,7 @@ impl<'a> TreeDiffEntry<'a> {
             TreeDiffEntry::DeletedBlob(old) => *old,
             TreeDiffEntry::CreatedBlob(new) => *new,
             TreeDiffEntry::ModifiedBlob(_, new) => *new,
+            TreeDiffEntry::ModifiedTree(entry) => *entry,
             TreeDiffEntry::DeletedTree(old) => old.peek(),
             TreeDiffEntry::CreatedTree(new) => new.peek(),
             TreeDiffEntry::UnmodifiedBlob(entry) => *entry,
@@ -138,6 +143,7 @@ where
                                 // two trees with non matching oids, then step inside for both
                                 self.old_iter.next()?;
                                 self.new_iter.next()?;
+                                return Ok(Some(TreeDiffEntry::ModifiedTree(new)));
                             }
                             (FileMode::TREE, _) => {
                                 debug_assert!(new.is_blob());
@@ -284,6 +290,7 @@ pub trait TreeDiffer {
             TreeDiffEntry::CreatedTree(new_entries) => self.created_tree(new_entries),
             TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
             TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
+            TreeDiffEntry::ModifiedTree(..) => Ok(()),
             TreeDiffEntry::UnmodifiedBlob(..) | TreeDiffEntry::UnmodifiedTree(..) =>
                 panic!("included unmodified files when calculating a diff?"),
         })
