@@ -377,6 +377,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 } else {
                     // case 14: B1 B1 B1 | unmodified file
                 },
+            TreeDiffEntry::UnmodifiedTree(_) => todo!(),
             // case 26
             TreeDiffEntry::DeletedTree(tree) =>
                 if self.opts.is_forced() {
@@ -431,6 +432,9 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 12: B1 B1 x | locally deleted blob (safe + missing)
             TreeDiffEntry::UnmodifiedBlob(blob) =>
                 cond!(self.opts.is_forced() => self.create(blob)),
+            // case 32: T1 T1 x
+            TreeDiffEntry::UnmodifiedTree(tree) =>
+                cond!(self.opts.is_forced() => self.create_tree(tree)),
             // case 25: T1 x x | independently deleted tree (safe + missing)
             TreeDiffEntry::DeletedTree(tree) =>
                 cond!(self.opts.is_safe() => self.delete_tree(tree)),
@@ -475,7 +479,9 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         tree.iter().for_each(|entry: BitIndexEntry| {
             match entry.mode() {
                 FileMode::REG | FileMode::EXEC | FileMode::LINK => self.create(entry),
-                FileMode::TREE => self.mkdir(entry),
+                FileMode::TREE => Ok(if entry.path() != BitPath::EMPTY {
+                    self.mkdir(entry)?
+                }),
                 FileMode::GITLINK => todo!(),
             }?;
             Ok(())

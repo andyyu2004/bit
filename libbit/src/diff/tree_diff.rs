@@ -4,7 +4,6 @@ use crate::iter::BitIterator;
 use crate::obj::FileMode;
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::fmt::{self, Debug, Formatter};
 
 #[derive(Debug, Default)]
@@ -36,6 +35,7 @@ pub enum TreeDiffEntry<'a> {
     CreatedBlob(BitIndexEntry),
     ModifiedBlob(BitIndexEntry, BitIndexEntry),
     UnmodifiedBlob(BitIndexEntry),
+    UnmodifiedTree(TreeEntriesConsumer<'a>),
     DeletedTree(TreeEntriesConsumer<'a>),
     CreatedTree(TreeEntriesConsumer<'a>),
     BlobToTree(BitIndexEntry, TreeEntriesConsumer<'a>),
@@ -65,6 +65,7 @@ impl<'a> TreeDiffEntry<'a> {
             TreeDiffEntry::DeletedTree(old) => old.peek(),
             TreeDiffEntry::CreatedTree(new) => new.peek(),
             TreeDiffEntry::UnmodifiedBlob(entry) => *entry,
+            TreeDiffEntry::UnmodifiedTree(tree) => tree.peek(),
             TreeDiffEntry::BlobToTree(_, new) => new.peek(),
             TreeDiffEntry::TreeToBlob(_, new) => *new,
         }
@@ -73,7 +74,6 @@ impl<'a> TreeDiffEntry<'a> {
 
 pub struct TreeDiffIter<'rcx, I, J> {
     repo: BitRepo<'rcx>,
-    unmodified_cache: VecDeque<BitIndexEntry>,
     old_iter: I,
     new_iter: J,
     opts: DiffOpts,
@@ -81,7 +81,7 @@ pub struct TreeDiffIter<'rcx, I, J> {
 
 impl<'rcx, I, J> TreeDiffIter<'rcx, I, J> {
     pub fn new(repo: BitRepo<'rcx>, old_iter: I, new_iter: J, opts: DiffOpts) -> Self {
-        Self { repo, old_iter, new_iter, opts, unmodified_cache: Default::default() }
+        Self { repo, old_iter, new_iter, opts }
     }
 }
 
@@ -99,9 +99,6 @@ where
 
     fn next(&mut self) -> Result<Option<Self::Item<'_>>, Self::Error> {
         loop {
-            if let Some(entry) = self.unmodified_cache.pop_front() {
-                return Ok(Some(TreeDiffEntry::UnmodifiedBlob(entry)));
-            }
             match (self.old_iter.peek()?, self.new_iter.peek()?) {
                 (None, None) => return Ok(None),
                 (None, Some(new)) => return self.on_created(new),
@@ -126,18 +123,12 @@ where
                                 if old.oid().is_known() && old == new =>
                             {
                                 // If hashes match and both are directories we can step over them
-                                // (unless we want to include unmodified, in which case we "step inside")
+                                // (unless we want to include unmodified)
                                 if self.opts.include_unmodified() {
-                                    // // as an optimization we can step over one of the trees entirely,
-                                    // // and collect the other one into a local cache.
-                                    // // This is cheaper than wastefully stepping through both of them one by one.
                                     self.old_iter.over()?;
-
-                                    assert!(self.unmodified_cache.is_empty());
-                                    self.unmodified_cache = (&mut self.new_iter
-                                        as &mut dyn BitTreeIterator)
-                                        .collect_over_tree_files_iter()
-                                        .collect()?;
+                                    return Ok(Some(TreeDiffEntry::UnmodifiedTree(
+                                        self.new_iter.as_consumer(),
+                                    )));
                                 } else {
                                     self.old_iter.over()?;
                                     self.new_iter.over()?;
@@ -293,7 +284,7 @@ pub trait TreeDiffer {
             TreeDiffEntry::CreatedTree(new_entries) => self.created_tree(new_entries),
             TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
             TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
-            TreeDiffEntry::UnmodifiedBlob(..) =>
+            TreeDiffEntry::UnmodifiedBlob(..) | TreeDiffEntry::UnmodifiedTree(..) =>
                 panic!("included unmodified files when calculating a diff?"),
         })
     }
