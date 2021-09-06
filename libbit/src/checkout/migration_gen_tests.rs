@@ -38,7 +38,7 @@ fn test_migration_gen_on_sample_repo() -> BitResult<()> {
         let new_iter = repo.head_tree_iter()?;
 
         repo.with_index_mut(|index| {
-            let worktree = index.worktree_iter()?;
+            let worktree = index.worktree_tree_iter()?;
 
             let expected = TestMigration {
                 rmrfs: vec![],
@@ -84,7 +84,12 @@ fn test_simple_migration_gen() -> BitResult<()> {
         let new_iter = repo.tree_iter(b);
 
         repo.with_index_mut(|index| {
-            let worktree = index.worktree_iter()?;
+            let worktree = index.worktree_tree_iter()?;
+            use fallible_iterator::FallibleIterator;
+            index
+                .worktree_iter()?
+                .for_each(|entry| Ok(println!("{:?}", crate::obj::TreeEntry::from(entry))))?;
+            dbg!(index.worktree_tree_iter()?.count())?;
             let expected = TestMigration {
                 rmrfs: vec!["qux"],
                 rms: vec!["bar/baz", "foo"],

@@ -10,7 +10,6 @@ use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
-use crate::time::Timespec;
 use fallible_iterator::{FallibleIterator, Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -384,9 +383,9 @@ impl<'rcx> BitIndex<'rcx> {
             Changed::Maybe => {
                 // This section should only be hit if `old` is an index entry
                 // A "tree_entry" should never reach this section as it should always have a known hash.
-                // To assert this we just check the ctime to be zero.
+                // To assert this we just check the inode to be non-zero.
                 // (as this is the default value given when a tree entry is converted to an index entry and would not be possible otherwise)
-                debug_assert!(index_entry.ctime != Timespec::ZERO);
+                debug_assert!(index_entry.inode != 0);
 
                 // file may have changed, but we are not certain, so check the hash
                 let mut new_hash = worktree_entry.oid;

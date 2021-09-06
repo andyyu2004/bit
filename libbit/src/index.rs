@@ -29,6 +29,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::io::{prelude::*, BufReader};
 use std::ops::{Deref, DerefMut};
+use std::path::Path;
 
 const BIT_INDEX_HEADER_SIG: &[u8; 4] = b"DIRC";
 const BIT_INDEX_TREECACHE_SIG: &[u8; 4] = b"TREE";
@@ -133,8 +134,16 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(())
     }
 
-    /// if entry with the same path already exists, it will be replaced
+    pub fn add_entry_from_path(&mut self, path: &Path) -> BitResult<()> {
+        self.add_entry(BitIndexEntry::from_path(self.repo, path)?)
+    }
+
+    /// Add fully populated index entry to the index. If entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, entry: BitIndexEntry) -> BitResult<()> {
+        debug_assert_ne!(
+            entry.inode, 0,
+            "detected unfilled index entry (was this created from a tree entry?)"
+        );
         self.remove_conflicted(entry.path);
         self.add_entry_common(entry)
     }

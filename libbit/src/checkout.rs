@@ -3,6 +3,7 @@ use crate::error::{BitError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
+use crate::path::BitPath;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
@@ -107,16 +108,15 @@ impl<'rcx> BitIndex<'rcx> {
         let is_forced = opts.is_forced();
         let baseline = repo.head_tree_iter()?;
         let target = repo.tree_iter(target_tree);
-        let worktree = self.worktree_iter()?;
+        let worktree = self.worktree_tree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
-        dbg!(&migration);
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index and target_tree should match exactly
         #[cfg(debug_assertions)]
         if is_forced {
             use crate::pathspec::Pathspec;
-            debug_assert!(self.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
+            debug_assert!(dbg!(self.diff_worktree(Pathspec::MATCH_ALL)?).is_empty());
             debug_assert!(dbg!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?).is_empty());
         }
         Ok(())
@@ -130,7 +130,7 @@ impl<'rcx> BitIndex<'rcx> {
         &mut self,
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
-        worktree: impl BitEntryIterator,
+        worktree: impl BitTreeIterator,
         opts: CheckoutOpts,
     ) -> BitResult<Migration> {
         CheckoutCtxt::new(self, opts).generate(baseline, target, worktree)
@@ -211,7 +211,7 @@ impl Migration {
         index: &mut BitIndex<'_>,
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
-        worktree: impl BitEntryIterator,
+        worktree: impl BitTreeIterator,
         opts: CheckoutOpts,
     ) -> BitResult<Self> {
         CheckoutCtxt::new(index, opts).generate(baseline, target, worktree)
@@ -267,29 +267,30 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         mut self,
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
-        worktree: impl BitEntryIterator,
+        mut worktree: impl BitTreeIterator,
     ) -> BitResult<Migration> {
-        let mut worktree_iter = worktree.peekable();
         let opts = DiffOpts::with_flags(DiffOptFlags::INCLUDE_UNMODIFIED);
         let diff_iter = self.repo.tree_diff_iter_with_opts(baseline, target, opts);
 
+        // skip the root
+        debug_assert_eq!(worktree.next()?.unwrap().path(), BitPath::EMPTY);
+
         diff_iter.for_each(|diff_entry| {
+            let worktree_entry = worktree.peek()?;
+            info!(
+                "CheckoutCtxt::generate({:?} {:?})",
+                diff_entry,
+                worktree_entry.map(|entry| entry.path())
+            );
             // matchup the worktree iterator with the diff iterator by comparing order of entries
-            match worktree_iter.peek()? {
+            match worktree_entry {
                 Some(worktree_entry) => {
                     match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
                         // worktree behind diffs, process worktree_entry alone
-                        Ordering::Less => {
-                            self.worktree_only(worktree_entry)?;
-                            worktree_iter.next()?;
-                            Ok(())
-                        }
+                        Ordering::Less => self.worktree_only(&mut worktree, worktree_entry),
                         // worktree even with diffs, process diff_entry and worktree_entry together
-                        Ordering::Equal => {
-                            self.with_worktree(diff_entry, worktree_entry)?;
-                            worktree_iter.next()?;
-                            Ok(())
-                        }
+                        Ordering::Equal =>
+                            self.with_worktree(&mut worktree, diff_entry, worktree_entry),
                         // worktree ahead of diffs, process only diff_entry
                         Ordering::Greater => self.no_worktree(diff_entry),
                     }
@@ -300,7 +301,9 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         })?;
 
         // consume the remaining unmatched worktree entries
-        worktree_iter.for_each(|worktree_entry| self.worktree_only(&worktree_entry))?;
+        while let Some(worktree_entry) = worktree.peek()? {
+            self.worktree_only(&mut worktree, worktree_entry)?
+        }
 
         if self.conflicts.is_empty() {
             Ok(self.migration)
@@ -309,21 +312,42 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         }
     }
 
-    fn worktree_only(&mut self, worktree_entry: &BitIndexEntry) -> BitResult<()> {
+    fn worktree_only(
+        &mut self,
+        worktree: &mut impl BitTreeIterator,
+        worktree_entry: BitIndexEntry,
+    ) -> BitResult<()> {
         // TODO consider .gitignore rules
-        cond!(self.opts.is_forced() => self.delete(worktree_entry));
+        match worktree_entry.mode() {
+            FileMode::REG | FileMode::EXEC | FileMode::LINK => {
+                worktree.next()?;
+                cond!(self.opts.is_forced() => self.delete(worktree_entry));
+            }
+            FileMode::TREE =>
+                if self.opts.is_forced() {
+                    self.delete_tree(worktree.as_consumer())?
+                } else {
+                    worktree.over()?;
+                },
+            FileMode::GITLINK => todo!(),
+        };
         Ok(())
     }
 
     fn with_worktree(
         &mut self,
+        worktree: &mut impl BitTreeIterator,
         diff_entry: TreeDiffEntry<'_>,
-        worktree_entry: &BitIndexEntry,
+        worktree_entry: BitIndexEntry,
     ) -> BitResult<()> {
+        if worktree_entry.is_tree() {
+            panic!()
+        }
+        worktree.next()?;
         match diff_entry {
             // case 9/case 10: B1 x B1|B2
             TreeDiffEntry::DeletedBlob(entry) =>
-                if self.index.is_worktree_entry_modified(worktree_entry)? {
+                if self.index.is_worktree_entry_modified(&worktree_entry)? {
                     // case 10: B1 x B2 | delete of modified blob (forceable)
                     cond!(self.opts.is_forced() => self.delete(entry); self.conflict(entry))
                 } else {
@@ -337,7 +361,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
             // case 16/17/18: B1 B2 (B1|B2|B3)
             TreeDiffEntry::ModifiedBlob(_, entry) =>
-                if self.index.is_worktree_entry_modified(worktree_entry)? {
+                if self.index.is_worktree_entry_modified(&worktree_entry)? {
                     // case 17/case 18: B1 B2 (B2|B3)
                     cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
                 } else {
@@ -346,7 +370,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 },
             // case 14/case 15: B1 B1 B1/B2
             TreeDiffEntry::UnmodifiedBlob(entry) =>
-                if self.index.is_worktree_entry_modified(worktree_entry)? {
+                if self.index.is_worktree_entry_modified(&worktree_entry)? {
                     // case 15: B1 B1 B2 | locally modified file (dirty)
                     // change is only applied to index if forced
                     cond!(self.opts.is_forced() => self.update(entry))
@@ -374,7 +398,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 },
             // case 22/case 23: B1 T1 B1/B2
             TreeDiffEntry::BlobToTree(blob, tree) =>
-                if self.index.is_worktree_entry_modified(worktree_entry)? {
+                if self.index.is_worktree_entry_modified(&worktree_entry)? {
                     // case 22
                     cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree); self.conflict(worktree_entry))
                 } else {

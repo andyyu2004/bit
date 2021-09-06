@@ -28,7 +28,9 @@ impl<'rcx> FallibleIterator for WorktreeTreeIter<'rcx> {
         let repo = self.inner.repo;
         let path = BitPath::intern(repo.to_relative_path(&entry.path)?);
         let oid = if entry.file_type.is_file() {
-            repo.hash_blob_from_worktree(path)?
+            // TODO what to do here?
+            Oid::UNKNOWN
+            // repo.hash_blob_from_worktree(path)?
         } else {
             Oid::UNKNOWN
         };
@@ -41,9 +43,10 @@ impl<'rcx> FallibleIterator for WorktreeTreeIter<'rcx> {
 
 impl<'rcx> BitTreeIterator for WorktreeTreeIter<'rcx> {
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
-        unreachable!(
-            "this won't ever be called as the trees yielded by this iterator will not have a known oid and so are not skippable"
-        );
+        let mut iter = self.as_consumer().iter();
+        let tree_entry = iter.next();
+        iter.count()?;
+        tree_entry
     }
 
     // these copy/paste manual peek impls are a bit sad but not sure how to avoid them

@@ -140,7 +140,7 @@ fn test_read_symlink_reads_contents_unresolved() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         modify!(repo: "foo" < "test content");
         assert_eq!(cat!(repo: "foo"), "test content");
-        let hash = repo.hash_blob_from_worktree("dir/link".into())?;
+        let hash = repo.hash_blob_from_worktree("dir/link")?;
 
         let symlink_hash = hash_symlink!(repo: "dir/link");
         assert_eq!(symlink_hash, hash);

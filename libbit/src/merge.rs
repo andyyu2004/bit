@@ -230,6 +230,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
                     todo!("mode conflict");
                 }
 
+                let full_path = repo.normalize_path(path.as_path())?;
                 match xdiff::merge(
                     repo.config().conflict_style(),
                     "HEAD",
@@ -239,20 +240,19 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
                     &z.read_to_blob(repo)?,
                 ) {
                     Ok(merged) => {
-                        let oid = repo.write_obj(&MutableBlob::new(merged))?;
-                        self.index.add_entry(TreeEntry { oid, path: y.path, mode: y.mode }.into())
+                        // write the merged file to disk
+                        std::fs::File::create(&full_path)?.write_all(&merged)?;
+                        self.index.add_entry_from_path(&full_path)
                     }
                     Err(conflicted) => {
                         // write the conflicted file to disk
-                        let full_path = repo.normalize_path(path.as_path())?;
-
+                        std::fs::File::create(full_path)?.write_all(&conflicted)?;
                         if let Some(b) = base {
                             self.index.add_conflicted_entry(b, MergeStage::Base)?;
                         }
                         self.index.add_conflicted_entry(y, MergeStage::Left)?;
                         self.index.add_conflicted_entry(z, MergeStage::Right)?;
 
-                        std::fs::File::create(full_path)?.write_all(&conflicted)?;
                         Ok(())
                     }
                 }
