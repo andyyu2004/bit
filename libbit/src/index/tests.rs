@@ -292,10 +292,6 @@ fn test_status_staged_deleted_files() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         rm!(repo: "foo");
         bit_add_all!(repo);
-        repo.with_index(|index| {
-            dbg_entry_iter!(index.index_tree_iter());
-            Ok(())
-        })?;
         let diff = repo.diff_head_index(Pathspec::MATCH_ALL)?;
         assert!(diff.new.is_empty());
         assert!(diff.modified.is_empty());

@@ -179,13 +179,15 @@ fn test_tree_diff_include_unmodified() -> BitResult<()> {
             DiffOpts::with_flags(DiffOptFlags::INCLUDE_UNMODIFIED),
         );
 
+        check_next!(iter.next() => "":FileMode::TREE);
         check_next!(iter.next() => "a":FileMode::REG);
         check_next!(iter.next() => "b":FileMode::REG);
-        check_next!(iter.next() => "dir":FileMode::REG);
-        check_next!(iter.next() => "dir/c":FileMode::REG);
+        check_next!(iter.next() => "dir":FileMode::TREE);
+        // will not yield "dir/c" as that is inside an unchanged tree which will get skipped when the tree consumer is dropped
         check_next!(iter.next() => "k":FileMode::REG);
 
         let mut iter = repo.tree_diff_iter(repo.tree_iter(a), repo.tree_iter(b));
+        check_next!(iter.next() => "":FileMode::TREE);
         check_next!(iter.next() => "b":FileMode::REG);
         check_next!(iter.next() => "k":FileMode::REG);
 

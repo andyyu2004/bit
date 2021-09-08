@@ -272,9 +272,6 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         let opts = DiffOpts::with_flags(DiffOptFlags::INCLUDE_UNMODIFIED);
         let diff_iter = self.repo.tree_diff_iter_with_opts(baseline, target, opts);
 
-        // skip the root
-        debug_assert_eq!(worktree.next()?.unwrap().path(), BitPath::EMPTY);
-
         diff_iter.for_each(|diff_entry| {
             loop {
                 let worktree_entry = worktree.peek()?;
@@ -286,6 +283,9 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 // matchup the worktree iterator with the diff iterator by comparing order of entries
                 match worktree_entry {
                     Some(worktree_entry) => {
+                        // to avoid the unfortunate `ModifiedTree` case we can probably do
+                        // something like `if diff_entry.path().starts_with(worktree_entry.path()) { skip this worktree_entry as it's a tree entry that has been modified }`
+                        // to keep them in sync
                         match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
                             // worktree behind diffs, process worktree_entry alone
                             Ordering::Less => self.worktree_only(&mut worktree, worktree_entry)?,
@@ -336,6 +336,73 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         Ok(())
     }
 
+    fn with_worktree_dir(
+        &mut self,
+        worktree: &mut impl BitTreeIterator,
+        diff_entry: TreeDiffEntry<'_>,
+        worktree_entry: BitIndexEntry,
+    ) -> BitResult<()> {
+        match diff_entry {
+            // case 11: B1 x T1 | independentally deleted blob and untracked/ignored tree
+            TreeDiffEntry::DeletedBlob(..) =>
+                cond!(self.opts.is_forced() => self.delete_tree(worktree.as_consumer())),
+            TreeDiffEntry::CreatedBlob(_) => todo!(),
+            TreeDiffEntry::ModifiedBlob(_, _) => todo!(),
+            // case 37: T1 T2 T1/T2/T3 | update to existing tree
+            TreeDiffEntry::ModifiedTree(_) => {
+                worktree.next()?;
+            }
+            TreeDiffEntry::UnmodifiedBlob(_) => todo!(),
+            // case 34: T1 T1 T1/T2 | unmodified tree
+            TreeDiffEntry::UnmodifiedTree(tree) =>
+                if self.opts.is_forced() {
+                    // Rhis is pretty weird
+                    // We want to update the worktree to match `tree`,
+                    // but we can't just do the super straightforward thing of removing
+                    // the entire directory and building it up as firstly it's probably inefficient.
+                    // But more important, because the current directory might be the root directory.
+                    // So we calculate the diff from `worktree` to `tree` and apply it.
+                    self.repo.tree_diff_iter(worktree, tree.iter()).for_each(
+                        |diff_entry: TreeDiffEntry<'_>| match dbg!(diff_entry) {
+                            TreeDiffEntry::DeletedBlob(blob) => self.delete(blob),
+                            TreeDiffEntry::CreatedBlob(create) => self.create(create),
+                            TreeDiffEntry::ModifiedBlob(old, new) => {
+                                self.delete(old)?;
+                                self.create(new)
+                            }
+                            TreeDiffEntry::ModifiedTree(..) => Ok(()),
+                            TreeDiffEntry::UnmodifiedBlob(..) => Ok(()),
+                            TreeDiffEntry::UnmodifiedTree(..) => unreachable!(),
+                            TreeDiffEntry::DeletedTree(tree) => self.delete_tree(tree),
+                            TreeDiffEntry::CreatedTree(created) => self.create_tree(created),
+                            TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
+                            TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
+                        },
+                    )?
+                } else {
+                    worktree.over()?;
+                },
+            // case 27: T1 x T1/T2
+            // TODO behaviour is not really correct
+            // this will cause us to lose work I think
+            // but we also don't want to only do this when forced
+            // because that will retain the directory when we don't want to
+            // how do we tell the difference?
+            TreeDiffEntry::DeletedTree(..) => self.delete_worktree_tree(worktree_entry)?,
+            // case 7: x T1 T1/T2 | independently added tree
+            TreeDiffEntry::CreatedTree(_tree) => {
+                // TODO recurse inside?
+                if self.opts.is_forced() {
+                    // TODO
+                    // replace worktree with `tree`
+                }
+            }
+            TreeDiffEntry::BlobToTree(_, _) => todo!(),
+            TreeDiffEntry::TreeToBlob(_, _) => todo!(),
+        };
+        Ok(())
+    }
+
     fn with_worktree(
         &mut self,
         worktree: &mut impl BitTreeIterator,
@@ -343,80 +410,81 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         worktree_entry: BitIndexEntry,
     ) -> BitResult<()> {
         if worktree_entry.is_tree() {
-            panic!()
-        }
-        worktree.next()?;
-        match diff_entry {
-            // case 9/case 10: B1 x B1|B2
-            TreeDiffEntry::DeletedBlob(entry) =>
-                if self.index.is_worktree_entry_modified(&worktree_entry)? {
-                    // case 10: B1 x B2 | delete of modified blob (forceable)
-                    cond!(self.opts.is_forced() => self.delete(entry); self.conflict(entry))
-                } else {
-                    // case 9: B1 x B1 | delete blob (safe)
-                    self.delete(entry)?
-                },
+            self.with_worktree_dir(worktree, diff_entry, worktree_entry)?
+        } else {
+            worktree.next()?;
+            match diff_entry {
+                // case 9/case 10: B1 x B1|B2
+                TreeDiffEntry::DeletedBlob(entry) =>
+                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                        // case 10: B1 x B2 | delete of modified blob (forceable)
+                        cond!(self.opts.is_forced() => self.delete(entry); self.conflict(entry))
+                    } else {
+                        // case 9: B1 x B1 | delete blob (safe)
+                        self.delete(entry)?
+                    },
 
-            // case 3/4/6
-            // TODO case 6 (if ignored)
-            TreeDiffEntry::CreatedBlob(entry) =>
-                cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
-            // case 16/17/18: B1 B2 (B1|B2|B3)
-            TreeDiffEntry::ModifiedBlob(_, entry) =>
-                if self.index.is_worktree_entry_modified(&worktree_entry)? {
-                    // case 17/case 18: B1 B2 (B2|B3)
-                    cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
-                } else {
-                    // case 16: B1 B2 B1 | update unmodified blob
-                    self.update(entry)?
-                },
-            TreeDiffEntry::ModifiedTree(..) => {}
-            // case 14/case 15: B1 B1 B1/B2
-            TreeDiffEntry::UnmodifiedBlob(entry) =>
-                if self.index.is_worktree_entry_modified(&worktree_entry)? {
-                    // case 15: B1 B1 B2 | locally modified file (dirty)
-                    // change is only applied to index if forced
-                    cond!(self.opts.is_forced() => self.update(entry))
-                } else {
-                    // case 14: B1 B1 B1 | unmodified file
-                },
-            TreeDiffEntry::UnmodifiedTree(_) => todo!(),
-            // case 26
-            TreeDiffEntry::DeletedTree(tree) =>
-                if self.opts.is_forced() {
-                    // delete the actual worktree entry on disk
-                    self.delete(worktree_entry)?;
-                    // then delete the index records of the tree
-                    self.delete_tree(tree)?
-                } else {
-                    self.conflict(worktree_entry)?
-                },
-            // case 6: x T1 B1/Bi | add tree with blob conflict (forceable)
-            // TODO ignored case
-            TreeDiffEntry::CreatedTree(tree) =>
-                if self.opts.is_forced() {
-                    // replace worktree blob with target tree
-                    self.blob_to_tree(worktree_entry, tree)?
-                } else {
-                    self.conflict(tree.step_over()?)?
-                },
-            // case 22/case 23: B1 T1 B1/B2
-            TreeDiffEntry::BlobToTree(blob, tree) =>
-                if self.index.is_worktree_entry_modified(&worktree_entry)? {
-                    // case 22
-                    cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree); self.conflict(worktree_entry))
-                } else {
-                    // case 23
-                    self.blob_to_tree(blob, tree)?
-                },
-            // case 29/case 30: T1 B1 B1|B2 | (forceable)
-            TreeDiffEntry::TreeToBlob(tree, blob) =>
-                if self.opts.is_forced() {
-                    self.delete(worktree_entry)?;
-                    self.tree_to_blob(tree, blob)?
-                } else {
-                    self.conflict(worktree_entry)?
-                },
+                // case 3/4/6
+                // TODO case 6 (if ignored)
+                TreeDiffEntry::CreatedBlob(entry) =>
+                    cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
+                // case 16/17/18: B1 B2 (B1|B2|B3)
+                TreeDiffEntry::ModifiedBlob(_, entry) =>
+                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                        // case 17/case 18: B1 B2 (B2|B3)
+                        cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
+                    } else {
+                        // case 16: B1 B2 B1 | update unmodified blob
+                        self.update(entry)?
+                    },
+                TreeDiffEntry::ModifiedTree(..) => {}
+                // case 14/case 15: B1 B1 B1/B2
+                TreeDiffEntry::UnmodifiedBlob(entry) =>
+                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                        // case 15: B1 B1 B2 | locally modified file (dirty)
+                        // change is only applied to index if forced
+                        cond!(self.opts.is_forced() => self.update(entry))
+                    } else {
+                        // case 14: B1 B1 B1 | unmodified file
+                    },
+                TreeDiffEntry::UnmodifiedTree(_) => todo!(),
+                // case 26
+                TreeDiffEntry::DeletedTree(tree) =>
+                    if self.opts.is_forced() {
+                        // delete the actual worktree entry on disk
+                        self.delete(worktree_entry)?;
+                        // then delete the index records of the tree
+                        self.delete_tree(tree)?
+                    } else {
+                        self.conflict(worktree_entry)?
+                    },
+                // case 6: x T1 B1/Bi | add tree with blob conflict (forceable)
+                // TODO ignored case
+                TreeDiffEntry::CreatedTree(tree) =>
+                    if self.opts.is_forced() {
+                        // replace worktree blob with target tree
+                        self.blob_to_tree(worktree_entry, tree)?
+                    } else {
+                        self.conflict(tree.step_over()?)?
+                    },
+                // case 22/case 23: B1 T1 B1/B2
+                TreeDiffEntry::BlobToTree(blob, tree) =>
+                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                        // case 22
+                        cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree); self.conflict(worktree_entry))
+                    } else {
+                        // case 23
+                        self.blob_to_tree(blob, tree)?
+                    },
+                // case 29/case 30: T1 B1 B1|B2 | (forceable)
+                TreeDiffEntry::TreeToBlob(tree, blob) =>
+                    if self.opts.is_forced() {
+                        self.delete(worktree_entry)?;
+                        self.tree_to_blob(tree, blob)?
+                    } else {
+                        self.conflict(worktree_entry)?
+                    },
+            }
         };
         Ok(())
     }
@@ -508,6 +576,11 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
     ) -> BitResult<()> {
         self.delete(blob)?;
         self.create_tree(tree)
+    }
+
+    fn delete_worktree_tree(&mut self, tree: impl Into<TreeEntry>) -> BitResult<()> {
+        self.migration.rmrfs.push(tree.into());
+        Ok(())
     }
 
     fn delete_tree(&mut self, tree: TreeEntriesConsumer<'_>) -> BitResult<()> {

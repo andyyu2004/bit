@@ -366,12 +366,12 @@ impl<'a> TreeEntriesConsumer<'a> {
         self.into_inner().collect_over_tree_blobs(container)
     }
 
-    pub fn iter_files(self) -> impl BitIterator<BitIndexEntry> + 'a {
+    pub fn iter_files(self) -> impl BitTreeIterator + 'a {
         self.into_inner().collect_over_tree_files_iter()
     }
 
     /// Returns an iterator that yields the root of the subtree and all its subentries
-    pub fn iter(self) -> impl BitIterator<BitIndexEntry> + 'a {
+    pub fn iter(self) -> impl BitTreeIterator + 'a {
         self.into_inner().collect_over_tree_iter()
     }
 

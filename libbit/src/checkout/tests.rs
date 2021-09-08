@@ -54,7 +54,7 @@ fn test_checkout_moves_head_to_branch_not_commit() -> BitResult<()> {
     })
 }
 
-// case 1
+// case 1 (safe)
 #[test]
 fn test_safe_checkout_keeps_untracked() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
@@ -68,8 +68,8 @@ fn test_safe_checkout_keeps_untracked() -> BitResult<()> {
     })
 }
 
-// case 2
-#[test]
+// case 1 (forced)
+#[test_env_log::test]
 fn test_force_checkout_removes_untracked() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         touch!(repo: "untracked");

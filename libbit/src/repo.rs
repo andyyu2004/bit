@@ -560,6 +560,8 @@ impl<'rcx> BitRepo<'rcx> {
 
     /// Get the blob at `path` on the worktree and return its hash
     pub(crate) fn hash_blob_from_worktree(self, path: impl AsRef<Path>) -> BitResult<Oid> {
+        let path = path.as_ref();
+        debug_assert!(!path.is_dir());
         self.read_blob_from_worktree(path).and_then(|blob| blob.hash())
     }
 

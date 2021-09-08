@@ -134,6 +134,7 @@ impl BitResultExt for BitGenericError {
                 BitError::ObjectNotFound(..)
                     | BitError::ObjectNotFoundInPackIndex(..)
                     | BitError::MergeConflict(..)
+                    | BitError::CheckoutConflict(..)
                     | BitError::PackBackendWrite
             ),
             None => true,

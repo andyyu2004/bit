@@ -42,6 +42,10 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
     where
         Self: Sized,
     {
+        debug_assert_eq!(
+            self.peek().unwrap().expect("can't call `as_consumer` on empty iterator").mode(),
+            FileMode::TREE
+        );
         TreeEntriesConsumer::new(self)
     }
 
@@ -98,16 +102,14 @@ impl<'a> dyn BitTreeIterator + 'a {
     #[doc(hidden)]
     /// Create an iterator that yields all files within the current subtree
     // Only for use from tree_entries consumer
-    pub(crate) fn collect_over_tree_iter(&'a mut self) -> impl BitIterator<BitIndexEntry> + 'a {
+    pub(crate) fn collect_over_tree_iter(&'a mut self) -> impl BitTreeIterator + 'a {
         let entry =
             self.peek().expect("should have been successfully peeked before calling this").unwrap();
         assert_eq!(entry.mode(), FileMode::TREE);
-        CollectTree { iter: self, tree_entry: TreeEntry::from(entry) }
+        CollectSubtree { iter: self, tree_entry: TreeEntry::from(entry) }
     }
 
-    pub(crate) fn collect_over_tree_files_iter(
-        &'a mut self,
-    ) -> impl BitIterator<BitIndexEntry> + 'a {
+    pub(crate) fn collect_over_tree_files_iter(&'a mut self) -> impl BitTreeIterator + 'a {
         self.collect_over_tree_iter().filter(|entry: &BitIndexEntry| Ok(entry.is_blob()))
     }
 }
@@ -163,23 +165,40 @@ fn build_tree_internal(
 }
 
 #[must_use]
-pub struct CollectTree<'a> {
+pub struct CollectSubtree<'a> {
     tree_entry: TreeEntry,
     iter: &'a mut dyn BitTreeIterator,
 }
 
-impl FallibleIterator for CollectTree<'_> {
+impl CollectSubtree<'_> {
+    /// Whether we are still in the relevant subtree
+    fn in_subtree(&mut self) -> BitResult<bool> {
+        let tree_entry_path = self.tree_entry.path;
+        Ok(self.iter.peek()?.map(|next| next.path().starts_with(tree_entry_path)).unwrap_or(false))
+    }
+}
+
+impl FallibleIterator for CollectSubtree<'_> {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        let tree_entry_path = self.tree_entry.path;
-        if self.iter.peek()?.map(|next| next.path().starts_with(tree_entry_path)).unwrap_or(false) {
+        if self.in_subtree()? {
             let entry = self.iter.next()?.unwrap();
             Ok(Some(entry))
         } else {
             Ok(None)
         }
+    }
+}
+
+impl BitTreeIterator for CollectSubtree<'_> {
+    fn over(&mut self) -> BitResult<Option<Self::Item>> {
+        if self.in_subtree()? { Ok(Some(self.iter.over()?.unwrap())) } else { Ok(None) }
+    }
+
+    fn peek(&mut self) -> BitResult<Option<Self::Item>> {
+        if self.in_subtree()? { Ok(Some(self.iter.peek()?.unwrap())) } else { Ok(None) }
     }
 }
 
