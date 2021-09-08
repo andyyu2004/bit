@@ -356,12 +356,13 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 34: T1 T1 T1/T2 | unmodified tree
             TreeDiffEntry::UnmodifiedTree(tree) =>
                 if self.opts.is_forced() {
-                    // Rhis is pretty weird
+                    // This is pretty weird
                     // We want to update the worktree to match `tree`,
                     // but we can't just do the super straightforward thing of removing
                     // the entire directory and building it up as firstly it's probably inefficient.
                     // But more important, because the current directory might be the root directory.
                     // So we calculate the diff from `worktree` to `tree` and apply it.
+                    // This is suspiciously similar to `no_worktree` but not similar enough to use it
                     self.repo.tree_diff_iter(worktree, tree.iter()).for_each(
                         |diff_entry: TreeDiffEntry<'_>| match dbg!(diff_entry) {
                             TreeDiffEntry::DeletedBlob(blob) => self.delete(blob),

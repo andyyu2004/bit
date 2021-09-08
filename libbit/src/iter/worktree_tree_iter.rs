@@ -34,10 +34,7 @@ impl<'rcx> FallibleIterator for WorktreeTreeIter<'rcx> {
             }
             .into()
         } else {
-            let mut entry = BitIndexEntry::from_path(repo, &entry.path)?;
-            // hashing every blob for now
-            entry.oid = repo.hash_blob_from_worktree(entry.path)?;
-            entry
+            BitIndexEntry::from_path(repo, &entry.path)?
         };
         Ok(Some(index_entry))
     }

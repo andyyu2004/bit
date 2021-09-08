@@ -161,38 +161,49 @@ where
                                     self.new_iter.as_consumer(),
                                 )));
                             }
-                            _ if old.is_blob()
-                                && new.is_blob()
-                                && old.oid() == new.oid()
-                                && (!self.repo.config().filemode() || old.mode() == new.mode()) =>
-                            {
-                                // matching files
-                                debug_assert!(old.oid().is_known() && new.oid().is_known());
-                                let entry = self.old_iter.next()?.unwrap();
-                                self.new_iter.next()?;
-                                if self.opts.include_unmodified() {
-                                    return Ok(Some(TreeDiffEntry::UnmodifiedBlob(entry)));
-                                }
-                            }
                             _ => {
-                                debug_assert!(old.is_blob() && new.is_blob());
+                                debug_assert!(old.is_blob());
+                                debug_assert!(new.is_blob());
                                 debug_assert!(
-                                    old.oid().is_known() && new.oid().is_known(),
-                                    "all non-tree entries should have known oids"
+                                    old.oid.is_known() || new.oid.is_known(),
+                                    "Two unknown oids? should only be known if it's a worktree entry or an index entry,
+                                    and we shouldn't be comparing two of those together here.
+                                    Obviously, worktree_to_worktree and index_to_index diffs makes no sense,
+                                    and worktree_to_index diffs should be done using specialized index_worktree differs"
                                 );
-                                // non-matching files
-                                trace!(
-                                    "TreeDifferGeneric::on_matched modified `{}`, {}({}) -> {}({}",
-                                    old.path,
-                                    old.oid,
-                                    old.mode,
-                                    new.oid,
-                                    new.mode
-                                );
-                                self.old_iter.next()?;
-                                self.new_iter.next()?;
+                                let mut old_oid = old.oid;
+                                if old_oid.is_unknown() {
+                                    old_oid = self.repo.hash_blob_from_worktree(old.path)?;
+                                }
+                                let mut new_oid = new.oid;
+                                if new_oid.is_unknown() {
+                                    new_oid = self.repo.hash_blob_from_worktree(new.path)?;
+                                }
 
-                                return Ok(Some(TreeDiffEntry::ModifiedBlob(old, new)));
+                                if old_oid == new_oid
+                                    && (!self.repo.config().filemode() || old.mode() == new.mode())
+                                {
+                                    // matching files
+                                    self.old_iter.next()?;
+                                    self.new_iter.next()?;
+                                    if self.opts.include_unmodified() {
+                                        return Ok(Some(TreeDiffEntry::UnmodifiedBlob(new)));
+                                    }
+                                } else {
+                                    // non-matching files
+                                    trace!(
+                                        "TreeDifferGeneric::on_matched modified `{}`, {}({}) -> {}({}",
+                                        old.path,
+                                        old.oid,
+                                        old.mode,
+                                        new.oid,
+                                        new.mode
+                                    );
+                                    self.old_iter.next()?;
+                                    self.new_iter.next()?;
+
+                                    return Ok(Some(TreeDiffEntry::ModifiedBlob(old, new)));
+                                }
                             }
                         }
                     }
