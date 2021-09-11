@@ -243,7 +243,7 @@ fn test_forced_checkout_add_tree_with_blob_conflict() -> BitResult<()> {
 }
 
 // case 7 (safe)
-#[test]
+#[test_env_log::test]
 fn test_safe_checkout_independently_added_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let target = commit! {

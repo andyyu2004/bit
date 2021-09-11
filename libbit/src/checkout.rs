@@ -276,6 +276,26 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         target: impl BitTreeIterator,
         mut worktree: impl BitTreeIterator,
     ) -> BitResult<Migration> {
+        self.checkout(baseline, target, &mut worktree)?;
+
+        // consume the remaining unmatched worktree entries
+        while let Some(worktree_entry) = worktree.peek()? {
+            self.worktree_only(&mut worktree, worktree_entry)?
+        }
+
+        if self.conflicts.is_empty() {
+            Ok(self.migration)
+        } else {
+            bail!(BitError::CheckoutConflict(self.conflicts))
+        }
+    }
+
+    fn checkout(
+        &mut self,
+        baseline: impl BitTreeIterator,
+        target: impl BitTreeIterator,
+        worktree: &mut impl BitTreeIterator,
+    ) -> BitResult<()> {
         let diff_iter =
             self.repo.tree_diff_iter_with_opts(baseline, target, DiffOpts::INCLUDE_UNMODIFIED);
 
@@ -295,10 +315,10 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                         // to keep them in sync
                         match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
                             // worktree behind diffs, process worktree_entry alone
-                            Ordering::Less => self.worktree_only(&mut worktree, worktree_entry)?,
+                            Ordering::Less => self.worktree_only(worktree, worktree_entry)?,
                             // worktree even with diffs, process diff_entry and worktree_entry together
                             Ordering::Equal =>
-                                break self.with_worktree(&mut worktree, diff_entry, worktree_entry),
+                                break self.with_worktree(worktree, diff_entry, worktree_entry),
                             // worktree ahead of diffs, process only diff_entry
                             Ordering::Greater => break self.no_worktree(diff_entry),
                         }
@@ -307,18 +327,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     None => break self.no_worktree(diff_entry),
                 }
             }
-        })?;
-
-        // consume the remaining unmatched worktree entries
-        while let Some(worktree_entry) = worktree.peek()? {
-            self.worktree_only(&mut worktree, worktree_entry)?
-        }
-
-        if self.conflicts.is_empty() {
-            Ok(self.migration)
-        } else {
-            bail!(BitError::CheckoutConflict(self.conflicts))
-        }
+        })
     }
 
     fn worktree_only(
@@ -368,7 +377,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 34: T1 T1 T1/T2 | unmodified tree
             TreeDiffEntry::UnmodifiedTree(tree) =>
                 if self.opts.is_forced() {
-                    self.reset_worktree(worktree, tree)?
+                    self.reset_worktree(worktree, tree)?;
                 } else {
                     // otherwise we can just keep all changes from the working tree
                     worktree.over()?;
@@ -383,11 +392,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 7: x T1 T1/T2 | independently added tree
             TreeDiffEntry::CreatedTree(tree) =>
                 if self.opts.is_forced() {
-                    // TODO this is basically a hard reset to `tree` on a subtree
-                    // can probably just use that when `reset` supports taking a path?
-                    // this index_add is more a hack than a proper solution
-                    self.index.add(&Pathspec::new(worktree_entry.path()))?;
-                    self.reset_worktree(worktree, tree)?;
+                    self.reset_created_worktree(worktree, tree)?
                 } else {
                     worktree.over()?;
                     self.conflict(tree.step_over()?)?
@@ -396,9 +401,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // TODO implementation is exactly the same as above case?
             TreeDiffEntry::BlobToTree(_, tree) =>
                 if self.opts.is_forced() {
-                    // this index_add is more a hack than a proper solution
-                    self.index.add(&Pathspec::new(worktree_entry.path()))?;
-                    self.reset_worktree(worktree, tree)?;
+                    self.reset_created_worktree(worktree, tree)?
                 } else {
                     worktree.over()?;
                     self.conflict(tree.step_over()?)?
@@ -523,7 +526,21 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         Ok(())
     }
 
-    /// Reset the worktree to exactly match `tree`
+    /// TODO naming
+    fn reset_created_worktree(
+        &mut self,
+        worktree: &mut impl BitTreeIterator,
+        tree: TreeEntriesConsumer<'_>,
+    ) -> BitResult<()> {
+        let mut tree_iter = tree.iter();
+        debug_assert_eq!(worktree.peek()?.unwrap().path(), tree_iter.peek()?.unwrap().path());
+        // we have to consume the `root` entry and create the directory otherwise the recursive
+        // call to `checkout` may just recurse indefinitely
+        self.migration.mkdirs.push(tree_iter.next()?.unwrap().into());
+        self.checkout(self.repo.empty_tree_iter(), tree_iter, worktree)
+    }
+
+    /// Reset the the current worktree tree to exactly match the subtree `tree`
     fn reset_worktree(
         &mut self,
         worktree: &mut impl BitTreeIterator,

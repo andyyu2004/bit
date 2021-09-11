@@ -231,7 +231,7 @@ where
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn head_tree_iter(self) -> BitResult<TreeIter<'rcx>> {
+    pub fn head_tree_iter(self) -> BitResult<impl BitTreeIterator + 'rcx> {
         let oid = self.head_tree()?;
         Ok(self.tree_iter(oid))
     }
@@ -241,6 +241,30 @@ impl<'rcx> BitRepo<'rcx> {
     // We can't use an `impl Treeish` here as the above case will not work
     pub fn tree_iter(self, oid: Oid) -> TreeIter<'rcx> {
         TreeIter::new(self, oid)
+    }
+
+    pub fn empty_tree_iter(self) -> impl BitTreeIterator {
+        struct EmptyTreeIter;
+        impl FallibleIterator for EmptyTreeIter {
+            type Error = BitGenericError;
+            type Item = BitIndexEntry;
+
+            fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+                Ok(None)
+            }
+        }
+
+        impl BitTreeIterator for EmptyTreeIter {
+            fn over(&mut self) -> BitResult<Option<Self::Item>> {
+                Ok(None)
+            }
+
+            fn peek(&mut self) -> BitResult<Option<Self::Item>> {
+                Ok(None)
+            }
+        }
+
+        EmptyTreeIter
     }
 }
 
