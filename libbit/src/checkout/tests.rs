@@ -884,14 +884,72 @@ fn test_safe_checkout_local_tree_to_blob() -> BitResult<()> {
 }
 
 // case 33 (forced)
-// #[test_env_log::test]
-// fn test_forced_checkout_local_tree_to_blob() -> BitResult<()> {
-//     BitRepo::with_sample_repo(|repo| {
-//         rmdir!(repo: "dir");
-//         touch!(repo: "dir" < "hi");
-//         bit_checkout!(repo: --force "master")?;
-//         assert!(exists!(repo: "foo/baz"));
-//         assert!(exists!(repo: "foo/bar.l"));
-//         Ok(())
-//     })
-// }
+#[test_env_log::test]
+fn test_forced_checkout_local_tree_to_blob() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        rmdir!(repo: "dir");
+        touch!(repo: "dir" < "hi");
+        bit_checkout!(repo: --force "master")?;
+        assert!(exists!(repo: "dir/baz"));
+        assert!(exists!(repo: "dir/bar.l"));
+        Ok(())
+    })
+}
+
+// case 34 (safe)
+#[test]
+fn test_safe_checkout_locally_modified_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "dir/bar.l" < "modified");
+        bit_checkout!(repo: "master")?;
+        assert_eq!(cat!(repo: "dir/bar.l"), "modified");
+        Ok(())
+    })
+}
+
+// case 34 (forced)
+#[test]
+fn test_forced_checkout_locally_modified_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        touch!(repo: "dir/bar.l" < "modified");
+        bit_checkout!(repo: --force "master")?;
+        assert_eq!(cat!(repo: "dir/bar.l"), "");
+        Ok(())
+    })
+}
+
+// case 35 (safe)
+#[test]
+fn test_safe_checkout_update_locally_deleted_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        rmdir!(repo: "dir");
+        let target = commit! {
+            foo
+            bar
+            dir {
+                bar < "modified"
+            }
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        assert_eq!(cat!(repo: "dir/bar"), "modified");
+        Ok(())
+    })
+}
+
+// case 35 (forced)
+#[test]
+fn test_force_checkout_update_locally_deleted_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        rmdir!(repo: "dir");
+        let target = commit! {
+            foo
+            bar
+            dir {
+                bar < "modified"
+            }
+        };
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "dir/bar"), "modified");
+        Ok(())
+    })
+}

@@ -541,6 +541,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
     }
 
     /// Reset the the current worktree tree to exactly match the subtree `tree`
+    /// Assumes that the baseline and target tree are exactly matching?
     fn reset_worktree(
         &mut self,
         worktree: &mut impl BitTreeIterator,
