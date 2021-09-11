@@ -143,39 +143,19 @@ impl BitIndexInner {
     /// remove directory and all subentries (recursively)
     pub fn remove_directory(&mut self, entry_path: &Path) -> BitResult<()> {
         debug_assert!(entry_path.is_relative());
-        // TODO revisit this for a more efficient implementation as this will iterate the entire index just to remove a single directory
 
-        // there is a bug in the second (commented out) implementation below where we try to use a range where not all relevant entries are removed
-        // probably a bug in the annoying path ordering or something
-        // I've reproduced this bug in neovim and libgit2 by simply going something along the lines of
-        // bit checkout @~100
-        // following by
-        // bit checkout @~1000
-        // One checkout is probably enough anyway, but there will be some staged additions, and some unstaged deletions for the same file
-        // which just implies the index has some entries it shouldn't.
         let to_remove = self
             .entries
-            .drain_filter(|&(path, stage), _| {
-                stage == MergeStage::None && path.starts_with(entry_path)
-            })
-            .map(|(key, _)| key)
+            // We need the do the trailing slash hack to create the correct range
+            .range((BitPath::intern(entry_path.join("")), MergeStage::None)..)
+            .take_while(|(&(path, _), _)| path.starts_with(entry_path))
+            .filter(|((_, stage), _)| *stage == MergeStage::None)
+            .map(|(key, _)| *key)
             .collect::<Vec<_>>();
 
         for key in to_remove {
             self.remove_entry(key);
         }
-
-        // for (&(path, stage), _) in self.entries.range((entry_path, MergeStage::None)..) {
-        //     // don't remove conflict entries
-        //     if stage != MergeStage::None || !path.starts_with(entry_path) {
-        //         break;
-        //     }
-        //     self.remove_entry((path, stage));
-        // }
-
-        // for key in to_remove {
-        //     assert!(self.remove_entry(key));
-        // }
 
         Ok(())
     }
@@ -183,11 +163,12 @@ impl BitIndexInner {
     /// removes collisions where there was originally a directory but was replaced by a file
     // implemented by just removing the directory
     fn remove_dir_file_collisions(&mut self, index_entry: &BitIndexEntry) -> BitResult<()> {
+        // there is a collision if there exists an entry in the index whose path starts with the new file's path
         let has_collision = self
             .entries
             .range(
                 (index_entry.path, MergeStage::None)
-                    ..(index_entry.path.lexicographical_successor(), MergeStage::Right),
+                    ..(index_entry.path.approximate_lexicographical_successor(), MergeStage::None),
             )
             .skip(1)
             .position(|((path, _), _)| path.starts_with(index_entry.path))
