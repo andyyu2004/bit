@@ -165,7 +165,13 @@ impl<'rcx> BitIndex<'rcx> {
         }
 
         for mkdir in &migration.mkdirs {
-            std::fs::create_dir(repo.to_absolute_path(&mkdir.path)).with_context(|| {
+            let path = repo.to_absolute_path(&mkdir.path);
+            debug_assert!(!path.is_file());
+            // TODO think there's a bug somewhere that requires this to be `create_dir_all`
+            // Go to any sufficiently large repo and just do something like `bit checkout @~500~
+            // and there's likely to be a directory that failed to be created
+            // due to the parent directories not existing
+            std::fs::create_dir_all(&path).with_context(|| {
                 anyhow!("failed to create directory `{}`, in `apply_migration`", mkdir.path)
             })?;
         }

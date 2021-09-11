@@ -183,7 +183,20 @@ impl BitIndexInner {
     /// removes collisions where there was originally a directory but was replaced by a file
     // implemented by just removing the directory
     fn remove_dir_file_collisions(&mut self, index_entry: &BitIndexEntry) -> BitResult<()> {
-        self.remove_directory(&index_entry.path)
+        let has_collision = self
+            .entries
+            .range(
+                (index_entry.path, MergeStage::None)
+                    ..(index_entry.path.lexicographical_successor(), MergeStage::Right),
+            )
+            .skip(1)
+            .position(|((path, _), _)| path.starts_with(index_entry.path))
+            .is_some();
+
+        if has_collision {
+            self.remove_directory(&index_entry.path)?;
+        }
+        Ok(())
     }
 
     /// remove directory/file and file/directory collisions that are possible in the index

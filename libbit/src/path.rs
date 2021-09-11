@@ -120,6 +120,13 @@ impl BitPath {
     pub fn root_component(self) -> &'static Path {
         self.as_path().iter().next().unwrap().as_ref()
     }
+
+    // not exactly the next lexographic path but good enough?
+    pub(crate) fn lexicographical_successor(self) -> BitPath {
+        let mut s = self.path.to_str().unwrap().to_owned();
+        s.push('a');
+        Self::intern(s)
+    }
 }
 
 impl Borrow<Path> for BitPath {
