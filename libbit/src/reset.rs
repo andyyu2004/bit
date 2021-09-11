@@ -48,9 +48,7 @@ impl<'rcx> BitIndex<'rcx> {
         if kind > ResetKind::Mixed {
             // force checkout the tree
             self.force_checkout_tree(target_tree)?;
-        }
-
-        if kind > ResetKind::Soft {
+        } else if kind > ResetKind::Soft {
             // make index match the target commit's tree
             self.read_tree(target_tree)?;
         }

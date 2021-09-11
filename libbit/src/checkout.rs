@@ -4,6 +4,7 @@ use crate::index::{BitIndex, BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
 use crate::path::BitPath;
+use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
@@ -104,20 +105,20 @@ impl<'rcx> BitIndex<'rcx> {
     ) -> BitResult<()> {
         let repo = self.repo;
         let target_tree = treeish.treeish_oid(repo)?;
-        #[cfg(debug_assertions)]
         let is_forced = opts.is_forced();
         let baseline = repo.head_tree_iter()?;
         let target = repo.tree_iter(target_tree);
         let worktree = self.worktree_tree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
+        #[cfg(debug_assertions)]
+        dbg!(&migration);
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index and target_tree should match exactly
-        #[cfg(debug_assertions)]
         if is_forced {
-            use crate::pathspec::Pathspec;
-            debug_assert!(dbg!(self.diff_worktree(Pathspec::MATCH_ALL)?).is_empty());
             debug_assert!(dbg!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?).is_empty());
+            debug_assert!(dbg!(self.diff_worktree(Pathspec::MATCH_ALL)?).is_empty());
+            self.update_cache_tree(target_tree)?;
         }
         Ok(())
     }
@@ -153,9 +154,9 @@ impl<'rcx> BitIndex<'rcx> {
                 std::fs::remove_file(&path)
                     .with_context(|| anyhow!("failed to remove file in `apply_migration`"))?;
 
+                let parent = path.parent().expect("a file must have a parent");
                 // if we remove a file and that results in the directory being empty
                 // we can just remove the directory too
-                let parent = path.parent().expect("a file must have a parent");
                 if parent.read_dir()?.next().is_none() {
                     std::fs::remove_dir(parent)?;
                 }
@@ -164,13 +165,17 @@ impl<'rcx> BitIndex<'rcx> {
         }
 
         for mkdir in &migration.mkdirs {
-            std::fs::create_dir(repo.to_absolute_path(&mkdir.path))
-                .with_context(|| anyhow!("failed to create directory in `apply_migration`"))?;
+            std::fs::create_dir(repo.to_absolute_path(&mkdir.path)).with_context(|| {
+                anyhow!("failed to create directory `{}`, in `apply_migration`", mkdir.path)
+            })?;
         }
 
         for create in &migration.creates {
             let path = repo.to_absolute_path(&create.path);
             let blob = create.read_to_blob(repo)?;
+            // this is necessary due to `rm` above deleting empty directories that may be repopulated
+            // there is probably a better way
+            std::fs::create_dir_all(path.parent().unwrap())?;
 
             if create.mode.is_link() {
                 //? is it guaranteed that a symlink contains the path of the target, or is it fs impl dependent?
@@ -183,7 +188,9 @@ impl<'rcx> BitIndex<'rcx> {
                     .read(false)
                     .write(true)
                     .open(&path)
-                    .with_context(|| anyhow!("failed to create file in `apply_migration`"))?;
+                    .with_context(|| {
+                        anyhow!("failed to create file `{}` in `apply_migration`", path)
+                    })?;
                 file.write_all(&blob)?;
                 file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
             }
@@ -269,8 +276,8 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         target: impl BitTreeIterator,
         mut worktree: impl BitTreeIterator,
     ) -> BitResult<Migration> {
-        let opts = DiffOpts::with_flags(DiffOptFlags::INCLUDE_UNMODIFIED);
-        let diff_iter = self.repo.tree_diff_iter_with_opts(baseline, target, opts);
+        let diff_iter =
+            self.repo.tree_diff_iter_with_opts(baseline, target, DiffOpts::INCLUDE_UNMODIFIED);
 
         diff_iter.for_each(|diff_entry| {
             loop {
@@ -343,44 +350,27 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         worktree_entry: BitIndexEntry,
     ) -> BitResult<()> {
         match diff_entry {
-            // case 11: B1 x T1 | independentally deleted blob and untracked/ignored tree
+            // case 11: B1 x T1 | independently deleted blob and untracked/ignored tree
             TreeDiffEntry::DeletedBlob(..) =>
                 cond!(self.opts.is_forced() => self.delete_tree(worktree.as_consumer())),
             TreeDiffEntry::CreatedBlob(_) => todo!(),
-            TreeDiffEntry::ModifiedBlob(_, _) => todo!(),
+            // case 20:  B1 B2 T1
+            TreeDiffEntry::ModifiedBlob(_, entry) => {
+                let consumer = worktree.as_consumer();
+                cond!(self.opts.is_forced() => self.tree_to_blob(consumer, entry); self.conflict(consumer.step_over()?))
+            }
             // case 37: T1 T2 T1/T2/T3 | update to existing tree
             TreeDiffEntry::ModifiedTree(_) => {
                 worktree.next()?;
             }
+            // case 19: B1 B1 T1?
             TreeDiffEntry::UnmodifiedBlob(_) => todo!(),
             // case 34: T1 T1 T1/T2 | unmodified tree
             TreeDiffEntry::UnmodifiedTree(tree) =>
                 if self.opts.is_forced() {
-                    // This is pretty weird
-                    // We want to update the worktree to match `tree`,
-                    // but we can't just do the super straightforward thing of removing
-                    // the entire directory and building it up as firstly it's probably inefficient.
-                    // But more important, because the current directory might be the root directory.
-                    // So we calculate the diff from `worktree` to `tree` and apply it.
-                    // This is suspiciously similar to `no_worktree` but not similar enough to use it
-                    self.repo.tree_diff_iter(worktree, tree.iter()).for_each(
-                        |diff_entry: TreeDiffEntry<'_>| match dbg!(diff_entry) {
-                            TreeDiffEntry::DeletedBlob(blob) => self.delete(blob),
-                            TreeDiffEntry::CreatedBlob(create) => self.create(create),
-                            TreeDiffEntry::ModifiedBlob(old, new) => {
-                                self.delete(old)?;
-                                self.create(new)
-                            }
-                            TreeDiffEntry::ModifiedTree(..) => Ok(()),
-                            TreeDiffEntry::UnmodifiedBlob(..) => Ok(()),
-                            TreeDiffEntry::UnmodifiedTree(..) => unreachable!(),
-                            TreeDiffEntry::DeletedTree(tree) => self.delete_tree(tree),
-                            TreeDiffEntry::CreatedTree(created) => self.create_tree(created),
-                            TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
-                            TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
-                        },
-                    )?
+                    self.reset_worktree(worktree, tree)?
                 } else {
+                    // otherwise we can just keep all changes from the working tree
                     worktree.over()?;
                 },
             // case 27: T1 x T1/T2
@@ -391,14 +381,28 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // how do we tell the difference?
             TreeDiffEntry::DeletedTree(..) => self.delete_worktree_tree(worktree_entry)?,
             // case 7: x T1 T1/T2 | independently added tree
-            TreeDiffEntry::CreatedTree(_tree) => {
-                // TODO recurse inside?
+            TreeDiffEntry::CreatedTree(tree) =>
                 if self.opts.is_forced() {
-                    // TODO
-                    // replace worktree with `tree`
-                }
-            }
-            TreeDiffEntry::BlobToTree(_, _) => todo!(),
+                    // TODO this is basically a hard reset to `tree` on a subtree
+                    // can probably just use that when `reset` supports taking a path?
+                    // this index_add is more a hack than a proper solution
+                    self.index.add(&Pathspec::new(worktree_entry.path()))?;
+                    self.reset_worktree(worktree, tree)?;
+                } else {
+                    worktree.over()?;
+                    self.conflict(tree.step_over()?)?
+                },
+            // case 24: B1 T1 T1/T2 | add tree with deleted blob (forceable)
+            // TODO implementation is exactly the same as above case?
+            TreeDiffEntry::BlobToTree(_, tree) =>
+                if self.opts.is_forced() {
+                    // this index_add is more a hack than a proper solution
+                    self.index.add(&Pathspec::new(worktree_entry.path()))?;
+                    self.reset_worktree(worktree, tree)?;
+                } else {
+                    worktree.over()?;
+                    self.conflict(tree.step_over()?)?
+                },
             TreeDiffEntry::TreeToBlob(_, _) => todo!(),
         };
         Ok(())
@@ -517,6 +521,31 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob)?,
         };
         Ok(())
+    }
+
+    /// Reset the worktree to exactly match `tree`
+    fn reset_worktree(
+        &mut self,
+        worktree: &mut impl BitTreeIterator,
+        tree: TreeEntriesConsumer<'_>,
+    ) -> BitResult<()> {
+        self.repo
+            .tree_diff_iter_with_opts(worktree, tree.iter(), DiffOpts::INCLUDE_UNMODIFIED)
+            .for_each(|diff_entry: TreeDiffEntry<'_>| match diff_entry {
+                TreeDiffEntry::DeletedBlob(blob) => self.delete(blob),
+                TreeDiffEntry::CreatedBlob(create) => self.create(create),
+                TreeDiffEntry::ModifiedBlob(old, new) => {
+                    self.delete(old)?;
+                    self.create(new)
+                }
+                TreeDiffEntry::UnmodifiedBlob(..) => Ok(()),
+                TreeDiffEntry::ModifiedTree(..) => Ok(()),
+                TreeDiffEntry::UnmodifiedTree(..) => unreachable!(),
+                TreeDiffEntry::DeletedTree(tree) => self.delete_tree(tree),
+                TreeDiffEntry::CreatedTree(created) => self.create_tree(created),
+                TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
+                TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
+            })
     }
 
     fn update(&mut self, entry: impl Into<TreeEntry>) -> BitResult<()> {

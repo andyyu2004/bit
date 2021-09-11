@@ -1,5 +1,3 @@
-#![feature(iter_intersperse)]
-
 mod cli;
 mod util;
 

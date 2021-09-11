@@ -21,6 +21,8 @@ use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, Serialize};
 use crate::time::Timespec;
 use bitflags::bitflags;
+#[allow(unused_imports)]
+use fallible_iterator::FallibleIterator;
 use itertools::Itertools;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
@@ -81,7 +83,7 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(Self { repo, inner, mtime })
     }
 
-    fn update_cache_tree(&mut self, tree: Oid) -> BitResult<()> {
+    pub(crate) fn update_cache_tree(&mut self, tree: Oid) -> BitResult<()> {
         let repo = self.repo;
         match self.tree_cache.as_mut() {
             Some(tree_cache) => tree_cache.update(repo, tree)?,
@@ -94,6 +96,7 @@ impl<'rcx> BitIndex<'rcx> {
     pub fn read_tree(&mut self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
         let repo = self.repo;
         let tree = treeish.treeish_oid(repo)?;
+        // TODO use the iterator diff API
         let diff = self.diff_tree(tree, Pathspec::MATCH_ALL)?;
         self.apply_diff(&diff)?;
 
@@ -161,7 +164,7 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(())
     }
 
-    /// makes the index exactly match the working tree (removes, updates, and adds)
+    /// Makes the index exactly match the working tree (removes, updates, and adds)
     pub fn add_all(&mut self) -> BitResult<()> {
         let diff = self.diff_worktree(Pathspec::MATCH_ALL)?;
         self.apply_diff(&diff)?;
@@ -195,6 +198,9 @@ impl<'rcx> BitIndex<'rcx> {
     }
 
     pub fn add(&mut self, pathspec: &Pathspec) -> BitResult<()> {
+        // TODO shouldn't need to iterate over entire worktree always
+        // i.e. `bit add foo` we should be able to just start traversing from `foo` rather than
+        // the entire worktree and then filter out things
         let mut iter = pathspec.match_worktree(self)?.peekable();
         // if a `match_all` doesn't match any files then it's not an error, just means there are no files
         ensure!(

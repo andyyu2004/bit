@@ -3,7 +3,6 @@
 #![feature(path_try_exists)]
 #![feature(generic_associated_types)]
 #![feature(btree_drain_filter)]
-#![feature(iter_intersperse)]
 #![feature(hash_raw_entry)]
 #![feature(thread_local)]
 #![feature(pattern)]

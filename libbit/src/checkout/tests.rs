@@ -83,9 +83,29 @@ fn test_force_checkout_removes_untracked() -> BitResult<()> {
     })
 }
 
+// case 2
+#[test]
+fn test_checkout_add_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo < "default foo contents"
+            newfile
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        assert!(exists!(repo: "newfile"));
+
+        bit_reset!(repo: --hard "master");
+        assert!(!exists!(repo: "newfile"));
+
+        bit_checkout!(repo: &rev!(target))?;
+        assert!(exists!(repo: "newfile"));
+        Ok(())
+    })
+}
+
 // case 3 (safe)
 #[test]
-fn test_safe_checkout_of_independentally_added_blob() -> BitResult<()> {
+fn test_safe_checkout_of_independently_added_blob() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         // essentially emulating an addition in the target by removing the file and committing
         // and then trying to go back
@@ -106,7 +126,7 @@ fn test_safe_checkout_of_independentally_added_blob() -> BitResult<()> {
 
 // case 3 (forced)
 #[test]
-fn test_force_checkout_of_independentally_added_blob() -> BitResult<()> {
+fn test_force_checkout_of_independently_added_blob() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         rm!(repo: "foo");
         bit_commit_all!(repo);
@@ -222,12 +242,72 @@ fn test_forced_checkout_add_tree_with_blob_conflict() -> BitResult<()> {
     })
 }
 
-// case 8
+// case 7 (safe)
 #[test]
-fn test_checkout_independently_deleted_blob() -> BitResult<()> {
+fn test_safe_checkout_independently_added_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            dir {
+                bar
+                baz
+                nested {
+                    foo
+                }
+            }
+        };
+        mkdir!(repo: "dir");
+        touch!(repo: "dir/bar");
+        touch!(repo: "dir/baz");
+        mkdir!(repo: "dir/nested");
+        touch!(repo: "dir/nested/notfoo");
+        // unsure what the correct semantics is, but just conflicting for now is an easy solution :)
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 7 (forced)
+#[test_env_log::test]
+fn test_force_checkout_independently_added_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            dir {
+                bar
+                baz
+                nested {
+                    foo
+                }
+            }
+        };
+        mkdir!(repo: "dir");
+        touch!(repo: "dir/bar");
+        touch!(repo: "dir/baz");
+        mkdir!(repo: "dir/nested");
+        touch!(repo: "dir/nested/notfoo");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert!(exists!(repo: "dir/nested/foo"));
+        assert!(!exists!(repo: "dir/nested/notfoo"));
+        Ok(())
+    })
+}
+
+// case 8 (safe)
+#[test]
+fn test_safe_checkout_independently_deleted_blob() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         rm!(repo: "foo");
         bit_checkout!(repo: &rev!(commit! {}))?;
+        assert!(!exists!(repo: "foo"));
+        Ok(())
+    })
+}
+
+// case 8 (forced)
+#[test]
+fn test_force_checkout_independently_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        rm!(repo: "foo");
+        bit_checkout!(repo: --force &rev!(commit! {}))?;
         assert!(!exists!(repo: "foo"));
         Ok(())
     })
@@ -238,6 +318,11 @@ fn test_checkout_independently_deleted_blob() -> BitResult<()> {
 fn test_checkout_delete_blob() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         bit_checkout!(repo: &rev!(commit! {}))?;
+        assert!(!exists!(repo: "foo"));
+
+        bit_checkout!(repo: "master")?;
+        assert!(exists!(repo: "foo"));
+        bit_checkout!(repo: --force &rev!(commit! {}))?;
         assert!(!exists!(repo: "foo"));
         Ok(())
     })
@@ -262,6 +347,33 @@ fn test_force_checkout_delete_of_modified_blob() -> BitResult<()> {
         modify!(repo: "foo");
         bit_checkout!(repo: --force &rev!(commit! {}))?;
         assert!(!exists!(repo: "foo"));
+        Ok(())
+    })
+}
+
+// case 11 (safe)
+#[test]
+fn test_safe_checkout_independently_deleted_blob_and_untracked_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        rm!(repo: "foo");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar");
+        bit_checkout!(repo: &rev!(commit! {}))?;
+        assert!(exists!(repo: "foo/bar"));
+        Ok(())
+    })
+}
+
+// case 11 (forced)
+#[test]
+fn test_force_checkout_independently_deleted_blob_and_untracked_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        rm!(repo: "foo");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar");
+        bit_checkout!(repo: --force &rev!(commit! {}))?;
+        assert!(!exists!(repo: "foo"));
+        assert!(!exists!(repo: "foo/bar"));
         Ok(())
     })
 }
@@ -425,6 +537,63 @@ fn test_forced_checkout_update_to_modified_blob() -> BitResult<()> {
     })
 }
 
+// case 19 (safe)
+#[test_env_log::test]
+fn test_safe_checkout_local_blob_to_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        rm!(repo: "foo");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar");
+        bit_checkout!(repo: "master")?;
+        assert!(exists!(repo: "foo/bar"));
+        Ok(())
+    })
+}
+
+// case 19 (forced)
+#[test]
+fn test_force_checkout_local_blob_to_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        rm!(repo: "foo");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar");
+        bit_checkout!(repo: --force "master")?;
+        assert_eq!(cat!(repo: "foo"), "default foo contents");
+        Ok(())
+    })
+}
+
+// case 20 (safe)
+#[test]
+fn test_safe_checkout_updated_blob_with_untracked_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo < "updated foo contents"
+        };
+        rm!(repo: "foo");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar");
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 20 (forced)
+#[test]
+fn test_force_checkout_updated_blob_with_untracked_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo < "updated foo contents"
+        };
+        rm!(repo: "foo");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "foo"), "updated foo contents");
+        Ok(())
+    })
+}
+
 // case 21
 #[test]
 fn test_checkout_add_tree_with_locally_deleted_blob() -> BitResult<()> {
@@ -487,9 +656,46 @@ fn test_forced_checkout_blob_to_tree_with_locally_modified_blob() -> BitResult<(
     })
 }
 
+// case 24
+#[test]
+fn test_safe_checkout_add_tree_with_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        rm!(repo: "foo");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar" < "bar contents");
+
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 24 (forced)
+#[test]
+fn test_force_checkout_add_tree_with_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let target = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        rm!(repo: "foo");
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/bar" < "bar contents");
+
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
 // case 25
 #[test]
-fn test_checkout_independentally_deleted_tree() -> BitResult<()> {
+fn test_checkout_independently_deleted_tree() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         let target = commit! {
             foo
@@ -504,7 +710,7 @@ fn test_checkout_independentally_deleted_tree() -> BitResult<()> {
 
 // case 26 (safe)
 #[test]
-fn test_safe_checkout_independentally_deleted_tree_with_untracked_blob() -> BitResult<()> {
+fn test_safe_checkout_independently_deleted_tree_with_untracked_blob() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         let target = commit! {
             foo
@@ -519,7 +725,7 @@ fn test_safe_checkout_independentally_deleted_tree_with_untracked_blob() -> BitR
 
 // case 26 (forced)
 #[test]
-fn test_force_checkout_independentally_deleted_tree_with_untracked_blob() -> BitResult<()> {
+fn test_force_checkout_independently_deleted_tree_with_untracked_blob() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         let target = commit! {
             foo
@@ -664,3 +870,28 @@ fn test_force_checkout_locally_deleted_tree() -> BitResult<()> {
         Ok(())
     })
 }
+
+// case 33 (safe)
+#[test]
+fn test_safe_checkout_local_tree_to_blob() -> BitResult<()> {
+    BitRepo::with_sample_repo(|repo| {
+        rmdir!(repo: "dir");
+        touch!(repo: "dir" < "hi");
+        bit_checkout!(repo: "master")?;
+        assert_eq!(cat!(repo: "dir"), "hi");
+        Ok(())
+    })
+}
+
+// case 33 (forced)
+// #[test_env_log::test]
+// fn test_forced_checkout_local_tree_to_blob() -> BitResult<()> {
+//     BitRepo::with_sample_repo(|repo| {
+//         rmdir!(repo: "dir");
+//         touch!(repo: "dir" < "hi");
+//         bit_checkout!(repo: --force "master")?;
+//         assert!(exists!(repo: "foo/baz"));
+//         assert!(exists!(repo: "foo/bar.l"));
+//         Ok(())
+//     })
+// }

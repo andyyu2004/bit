@@ -12,6 +12,8 @@ pub struct DiffOpts {
 }
 
 impl DiffOpts {
+    pub const INCLUDE_UNMODIFIED: Self = Self { flags: DiffOptFlags::INCLUDE_UNMODIFIED };
+
     pub fn with_flags(flags: DiffOptFlags) -> Self {
         Self { flags }
     }
