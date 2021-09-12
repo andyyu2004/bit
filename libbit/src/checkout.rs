@@ -138,11 +138,8 @@ impl<'rcx> BitIndex<'rcx> {
     fn apply_migration(&mut self, migration: &Migration) -> BitResult<()> {
         let repo = self.repo;
 
-        let workdir = repo.workdir;
-        let to_absolute_path = |path| workdir.join(path);
-
         migration.rmrfs.iter().try_for_each(|rmrf| {
-            let path = to_absolute_path(&rmrf.path);
+            let path = repo.to_absolute_path(&rmrf.path);
             if path.is_dir() {
                 std::fs::remove_dir_all(&path)?;
             }
