@@ -52,11 +52,12 @@ impl BitTreeCache {
         self.find_child_internal(path.components())
     }
 
-    fn find_child_internal(&self, mut components: impl Iterator<Item = BitPath>) -> Option<&Self> {
-        match components.next() {
-            Some(next) => self.children.get(&next)?.find_child_internal(components),
-            None => Some(self),
+    fn find_child_internal(&self, components: impl Iterator<Item = BitPath>) -> Option<&Self> {
+        let mut child = Some(self);
+        for component in components {
+            child = child?.children.get(&component);
         }
+        child
     }
 
     pub fn find_child_mut(&mut self, path: BitPath) -> Option<&mut Self> {
@@ -65,12 +66,13 @@ impl BitTreeCache {
 
     fn find_child_mut_internal(
         &mut self,
-        mut components: impl Iterator<Item = BitPath>,
+        components: impl Iterator<Item = BitPath>,
     ) -> Option<&mut Self> {
-        match components.next() {
-            Some(next) => self.children.get_mut(&next)?.find_child_mut_internal(components),
-            None => Some(self),
+        let mut child = Some(self);
+        for component in components {
+            child = child?.children.get_mut(&component);
         }
+        child
     }
 
     pub fn invalidate_path(&mut self, path: BitPath) {
