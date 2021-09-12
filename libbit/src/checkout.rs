@@ -451,7 +451,15 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                         // case 16: B1 B2 B1 | update unmodified blob
                         self.update(entry)?
                     },
-                TreeDiffEntry::ModifiedTree(..) => {}
+                // case 36: T1 T2 B1/Bi | update to tree with typechanged tree->blob conflict (forceable)
+                TreeDiffEntry::ModifiedTree(..) =>
+                    if !self.opts.is_forced() {
+                        // If it's not forced, then this should be a conflict.
+                        self.conflict(worktree_entry)?;
+                    } else {
+                        // Otherwise, we can just step in and continue after deleting the worktree blob
+                        self.delete(worktree_entry)?;
+                    },
                 // case 14/case 15: B1 B1 B1/B2
                 TreeDiffEntry::UnmodifiedBlob(entry) =>
                     if self.index.is_worktree_entry_modified(&worktree_entry)? {

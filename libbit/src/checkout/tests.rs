@@ -1,5 +1,6 @@
 use crate::error::{BitErrorExt, BitResult};
 use crate::obj::FileMode;
+use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 
@@ -950,6 +951,43 @@ fn test_force_checkout_update_locally_deleted_tree() -> BitResult<()> {
         };
         bit_checkout!(repo: --force &rev!(target))?;
         assert_eq!(cat!(repo: "dir/bar"), "modified");
+        Ok(())
+    })
+}
+
+// case 36 (safe)
+#[test_env_log::test]
+fn test_safe_checkout_updated_tree_with_local_tree_to_blob_conflict() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        rmdir!(repo: "dir");
+        touch!(repo: "dir");
+        let target = commit! {
+            foo
+            bar
+            dir {
+                bar < "modified"
+            }
+        };
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 37 (safe)
+#[test_env_log::test]
+fn test_force_checkout_updated_tree_with_local_tree_to_blob_conflict() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        rmdir!(repo: "dir");
+        touch!(repo: "dir");
+        let target = commit! {
+            foo
+            bar
+            dir {
+                bar < "modified"
+            }
+        };
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert!(repo.diff_tree_worktree(target, Pathspec::MATCH_ALL)?.is_empty());
         Ok(())
     })
 }
