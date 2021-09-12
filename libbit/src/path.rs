@@ -31,6 +31,10 @@ impl BitPath {
         Self { path }
     }
 
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
+        Self::intern(OsStr::from_bytes(bytes))
+    }
+
     pub fn is_empty(self) -> bool {
         self == Self::EMPTY
     }

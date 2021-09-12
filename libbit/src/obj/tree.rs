@@ -9,7 +9,6 @@ use crate::peel::Peel;
 use crate::repo::BitRepo;
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::tls;
-use crate::util;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
@@ -279,8 +278,7 @@ impl Deserialize for TreeEntry {
         );
 
         let j = r.read_until(0x00, &mut buf)?;
-        // fairly disgusting way of deserializing a path..
-        let path = util::path_from_bytes(&buf[i..i + j - 1]);
+        let path = BitPath::from_bytes(&buf[i..i + j - 1]);
 
         let mut hash_bytes = [0; 20];
         r.read_exact(&mut hash_bytes)?;

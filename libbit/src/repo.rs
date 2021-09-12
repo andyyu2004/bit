@@ -14,7 +14,6 @@ use crate::tls;
 use anyhow::Context;
 use parking_lot::RwLock;
 use std::borrow::Cow;
-use std::cell::Cell;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -22,6 +21,7 @@ use std::lazy::SyncOnceCell;
 use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use typed_arena::Arena as TypedArena;
 
 pub const BIT_INDEX_FILE_PATH: &str = "index";
@@ -65,7 +65,7 @@ pub struct RepoCtxt<'rcx> {
     refdb_cell: SyncOnceCell<BitRefDb<'rcx>>,
     index_cell: SyncOnceCell<RwLock<BitIndex<'rcx>>>,
     virtual_odb: SyncOnceCell<VirtualOdb<'rcx>>,
-    virtual_write: Cell<bool>,
+    virtual_write: AtomicBool,
 }
 
 impl<'rcx> RepoCtxt<'rcx> {
@@ -465,9 +465,9 @@ impl<'rcx> BitRepo<'rcx> {
     /// Useful for ephemeral writes (such as virtual merge bases).
     /// Be careful as all writes and reads within the closure will be issued to the virtual odb
     pub(crate) fn with_virtual_write<R>(self, f: impl FnOnce() -> R) -> R {
-        self.virtual_write.set(true);
+        self.virtual_write.store(true, Ordering::Release);
         let ret = f();
-        self.virtual_write.set(false);
+        self.virtual_write.store(false, Ordering::Release);
         ret
     }
 
@@ -483,7 +483,7 @@ impl<'rcx> BitRepo<'rcx> {
 
     /// writes `obj` into the object store returning its full hash
     pub fn write_obj(self, obj: &dyn WritableObject) -> BitResult<Oid> {
-        if self.virtual_write.get() {
+        if self.virtual_write.load(Ordering::Acquire) {
             self.virtual_odb().write(obj)
         } else {
             // TODO cache this object as a write is often followed by an immediate read
@@ -494,7 +494,7 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
         let oid = self.expand_id(id)?;
-        if self.virtual_write.get() {
+        if self.virtual_write.load(Ordering::Acquire) {
             Ok(self.virtual_odb().read(oid))
         } else {
             self.obj_cache.write().get_or_insert_with(oid, || {

@@ -110,8 +110,6 @@ impl<'rcx> BitIndex<'rcx> {
         let target = repo.tree_iter(target_tree);
         let worktree = self.worktree_tree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
-        #[cfg(debug_assertions)]
-        dbg!(&migration);
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index and target_tree should match exactly
@@ -140,13 +138,16 @@ impl<'rcx> BitIndex<'rcx> {
     fn apply_migration(&mut self, migration: &Migration) -> BitResult<()> {
         let repo = self.repo;
 
-        for rmrf in &migration.rmrfs {
-            let path = repo.to_absolute_path(&rmrf.path);
+        let workdir = repo.workdir;
+        let to_absolute_path = |path| workdir.join(path);
+
+        migration.rmrfs.iter().try_for_each(|rmrf| {
+            let path = to_absolute_path(&rmrf.path);
             if path.is_dir() {
                 std::fs::remove_dir_all(&path)?;
             }
-            self.remove_directory(rmrf.path)?;
-        }
+            self.remove_directory(rmrf.path)
+        })?;
 
         for rm in &migration.rms {
             let path = repo.to_absolute_path(&rm.path);
