@@ -973,7 +973,7 @@ fn test_safe_checkout_updated_tree_with_local_tree_to_blob_conflict() -> BitResu
     })
 }
 
-// case 37 (safe)
+// case 36 (safe)
 #[test_env_log::test]
 fn test_force_checkout_updated_tree_with_local_tree_to_blob_conflict() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
