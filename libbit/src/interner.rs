@@ -1,11 +1,9 @@
 use crate::path::BitPath;
 use bumpalo::Bump as Arena;
-use itertools::Itertools;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
 
 // This interner deals only with `OsStr` (instead of `Path`) to avoid normalization issues.
 // In particular, we want trailing slashes to be significant (it gets normalized away by path)
@@ -13,8 +11,6 @@ use std::path::Path;
 pub(crate) struct Interner {
     arena: Arena,
     set: FxHashSet<&'static str>,
-    // paths: Vec<&'static OsStr>,
-    components: FxHashMap<BitPath, &'static [BitPath]>,
 }
 
 pub trait Intern {
@@ -51,27 +47,6 @@ impl Interner {
         // // SAFETY it is safe to cast to &'static as we will only access it while the arena contained in `self` is alive
         let static_path = OsStr::from_bytes(unsafe { &*(ptr as *const [u8]) });
         BitPath::new(static_path)
-    }
-
-    fn intern_components(&mut self, path: impl AsRef<Path>) -> &'static [BitPath] {
-        // recursively interns each of the paths components
-        let vec = path
-            .as_ref()
-            .iter()
-            .map(|os_str| self.intern_path(os_str.to_str().unwrap()))
-            .collect_vec();
-        unsafe { &*(self.arena.alloc_slice_copy(&vec) as *const _) }
-    }
-
-    pub fn get_components(&mut self, bitpath: BitPath) -> &'static [BitPath] {
-        if let Some(components) = self.components.get(&bitpath) {
-            return components;
-        }
-        // let path = self.get_path(bitpath);
-        let path = bitpath.as_path();
-        let components = self.intern_components(path);
-        debug_assert!(self.components.insert(bitpath, components).is_none());
-        components
     }
 }
 

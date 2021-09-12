@@ -49,7 +49,7 @@ impl BitTreeCache {
     }
 
     pub fn find_child(&self, path: BitPath) -> Option<&Self> {
-        self.find_child_internal(path.components().iter().copied())
+        self.find_child_internal(path.components())
     }
 
     fn find_child_internal(&self, mut components: impl Iterator<Item = BitPath>) -> Option<&Self> {
@@ -60,7 +60,7 @@ impl BitTreeCache {
     }
 
     pub fn find_child_mut(&mut self, path: BitPath) -> Option<&mut Self> {
-        self.find_child_mut_internal(path.components().iter().copied())
+        self.find_child_mut_internal(path.components())
     }
 
     fn find_child_mut_internal(

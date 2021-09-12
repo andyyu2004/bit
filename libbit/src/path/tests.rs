@@ -11,10 +11,10 @@ impl Arbitrary for BitPath {
 #[test]
 fn test_path_components() {
     let path = p!("foo/bar/baz");
-    let components = path.components();
-    assert_eq!(components[0], "foo");
-    assert_eq!(components[1], "bar");
-    assert_eq!(components[2], "baz");
+    let mut components = path.components();
+    assert_eq!(components.next().unwrap(), "foo");
+    assert_eq!(components.next().unwrap(), "bar");
+    assert_eq!(components.next().unwrap(), "baz");
 }
 
 #[test]
@@ -24,6 +24,7 @@ fn test_path_accumulative_components() {
     assert_eq!(components.next().unwrap(), "foo");
     assert_eq!(components.next().unwrap(), "foo/bar");
     assert_eq!(components.next().unwrap(), "foo/bar/baz");
+    assert!(components.next().is_none());
 }
 
 #[test]

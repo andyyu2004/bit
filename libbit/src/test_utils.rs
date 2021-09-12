@@ -37,7 +37,7 @@ macro_rules! indent {
 
 impl Display for DebugTreeEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        indent!(f, self.path().components().len());
+        indent!(f, self.path().components().count());
         match self {
             DebugTreeEntry::Tree(tree) => write!(f, "{}", tree),
             DebugTreeEntry::File(entry) =>

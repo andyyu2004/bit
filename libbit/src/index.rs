@@ -132,7 +132,7 @@ impl<'rcx> BitIndex<'rcx> {
     fn add_entry_common(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(entry.path)?;
         entry.oid = entry.write(self.repo)?;
-        assert!(entry.oid.is_known());
+        debug_assert!(entry.oid.is_known());
         self.insert_entry(entry);
         Ok(())
     }

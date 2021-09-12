@@ -93,16 +93,16 @@ impl BitIndexInner {
         }
     }
 
-    pub(super) fn remove_conflicted(&mut self, path: BitPath) {
-        self.remove_entry((path, MergeStage::Base));
-        self.remove_entry((path, MergeStage::Left));
-        self.remove_entry((path, MergeStage::Right));
-    }
-
     fn invalidate_tree_cache_path(&mut self, path: BitPath) {
         if let Some(tree_cache) = &mut self.tree_cache {
             tree_cache.invalidate_path(path)
         }
+    }
+
+    pub(super) fn remove_conflicted(&mut self, path: BitPath) {
+        self.remove_entry((path, MergeStage::Base));
+        self.remove_entry((path, MergeStage::Left));
+        self.remove_entry((path, MergeStage::Right));
     }
 
     pub fn conflicts(&self) -> Conflicts {

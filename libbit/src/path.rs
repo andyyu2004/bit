@@ -91,27 +91,42 @@ impl BitPath {
 
     /// returns the components of a path
     /// foo/bar/baz -> [foo, bar, baz]
-    pub fn components(self) -> &'static [BitPath] {
-        with_path_interner(|interner| interner.get_components(self))
+    pub fn components(self) -> impl Iterator<Item = BitPath> {
+        self.as_path().iter().map(BitPath::new)
     }
 
     /// similar to `[BitPath::components](crate::path::BitPath::components)`
     /// foo/bar/baz -> [foo, foo/bar, foo/bar/baz]
     pub fn cumulative_components(self) -> impl Iterator<Item = BitPath> {
-        self.components().iter().scan(BitPath::EMPTY, |ps, p| {
-            *ps = ps.join(p);
-            Some(*ps)
+        let path = self.path.as_bytes();
+        let mut index = 0;
+        let mut done = false;
+        std::iter::from_fn(move || {
+            if done {
+                return None;
+            }
+            index += 1 + match path[index..].iter().position(|&b| b == b'/') {
+                Some(i) => i,
+                None => {
+                    done = true;
+                    return Some(self);
+                }
+            };
+            Some(Self::new(OsStr::from_bytes(&path[..index - 1])))
         })
     }
 
+    #[inline]
     pub fn len(self) -> usize {
         self.as_os_str().len()
     }
 
+    #[inline]
     pub fn as_os_str(self) -> &'static OsStr {
-        self.as_path().as_os_str()
+        self.path
     }
 
+    #[inline]
     pub fn as_bytes(self) -> &'static [u8] {
         self.as_path().as_os_str().as_bytes()
     }
