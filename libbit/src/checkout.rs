@@ -145,12 +145,12 @@ impl<'rcx> BitIndex<'rcx> {
             if path.is_dir() {
                 std::fs::remove_dir_all(&path)?;
             }
-            self.remove_directory(&rmrf.path)?;
+            self.remove_directory(rmrf.path)?;
         }
 
         for rm in &migration.rms {
             let path = repo.to_absolute_path(&rm.path);
-            if path.try_exists()? {
+            if path.is_file() {
                 std::fs::remove_file(&path)
                     .with_context(|| anyhow!("failed to remove file in `apply_migration`"))?;
 
@@ -366,8 +366,10 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
     ) -> BitResult<()> {
         match diff_entry {
             // case 11: B1 x T1 | independently deleted blob and untracked/ignored tree
-            TreeDiffEntry::DeletedBlob(..) =>
-                cond!(self.opts.is_forced() => self.delete_tree(worktree.as_consumer())),
+            TreeDiffEntry::DeletedBlob(blob) => {
+                self.delete(blob)?;
+                cond!(self.opts.is_forced() => self.delete_tree(worktree.as_consumer()))
+            }
             TreeDiffEntry::CreatedBlob(_) => todo!(),
             // case 20:  B1 B2 T1
             TreeDiffEntry::ModifiedBlob(_, entry) => {

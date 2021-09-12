@@ -2,7 +2,6 @@ use super::*;
 use arrayvec::ArrayVec;
 use indexmap::IndexMap;
 use std::io::BufWriter;
-use std::path::Path;
 
 /// representation of the index file
 // refer to https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
@@ -132,28 +131,28 @@ impl BitIndexInner {
     }
 
     /// removes collisions where there was originally a file but was replaced by a directory
-    fn remove_file_dir_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
+    fn remove_file_dir_collisions(&mut self, path: BitPath) -> BitResult<()> {
         //? only removing entries with no merge stage (may need changes)
-        for component in entry.path.cumulative_components() {
+        for component in path.cumulative_components() {
             self.remove_entry((component, MergeStage::None));
         }
         Ok(())
     }
 
     /// remove directory and all subentries (recursively)
-    pub fn remove_directory(&mut self, entry_path: &Path) -> BitResult<()> {
+    pub fn remove_directory(&mut self, entry_path: BitPath) -> BitResult<()> {
         debug_assert!(entry_path.is_relative());
 
-        let to_remove = self
+        let subentries = self
             .entries
             // We need the do the trailing slash hack to create the correct range
-            .range((BitPath::intern(entry_path.join("")), MergeStage::None)..)
+            .range((entry_path.join(""), MergeStage::None)..)
             .take_while(|(&(path, _), _)| path.starts_with(entry_path))
             .filter(|((_, stage), _)| *stage == MergeStage::None)
             .map(|(key, _)| *key)
             .collect::<Vec<_>>();
 
-        for key in to_remove {
+        for key in subentries {
             self.remove_entry(key);
         }
 
@@ -162,28 +161,28 @@ impl BitIndexInner {
 
     /// removes collisions where there was originally a directory but was replaced by a file
     // implemented by just removing the directory
-    fn remove_dir_file_collisions(&mut self, index_entry: &BitIndexEntry) -> BitResult<()> {
+    fn remove_dir_file_collisions(&mut self, path: BitPath) -> BitResult<()> {
         // there is a collision if there exists an entry in the index whose path starts with the new file's path
         let has_collision = self
             .entries
             .range(
-                (index_entry.path, MergeStage::None)
-                    ..(index_entry.path.approximate_lexicographical_successor(), MergeStage::None),
+                (path, MergeStage::None)
+                    ..(path.approximate_lexicographical_successor(), MergeStage::None),
             )
             .skip(1)
-            .position(|((path, _), _)| path.starts_with(index_entry.path))
+            .position(|((p, _), _)| p.starts_with(path))
             .is_some();
 
         if has_collision {
-            self.remove_directory(&index_entry.path)?;
+            self.remove_directory(path)?;
         }
         Ok(())
     }
 
     /// remove directory/file and file/directory collisions that are possible in the index
-    pub(super) fn remove_collisions(&mut self, entry: &BitIndexEntry) -> BitResult<()> {
-        self.remove_file_dir_collisions(entry)?;
-        self.remove_dir_file_collisions(entry)
+    pub(super) fn remove_collisions(&mut self, path: BitPath) -> BitResult<()> {
+        self.remove_file_dir_collisions(path)?;
+        self.remove_dir_file_collisions(path)
     }
 
     pub fn len(&self) -> usize {
