@@ -76,17 +76,23 @@ impl BitTreeCache {
     }
 
     pub fn invalidate_path(&mut self, path: BitPath) {
-        self.entry_count = -1;
-        // this isn't strictly necessary but it's easy to forget the `is_valid` check
-        // so this will make errors more obviously hopefully
-        self.tree_oid = Oid::UNKNOWN;
+        self.invalidate_path_internal(path);
+    }
 
-        // don't do this recursively as each path contains the full path, not just a component
-        for path in path.cumulative_components() {
-            if let Some(child) = self.find_child_mut(path) {
-                child.entry_count = -1;
-            }
+    pub fn invalidate_path_internal(&mut self, path: BitPath) -> Option<()> {
+        self.invalidate();
+        let mut child = self;
+        for component in path.components() {
+            child = child.children.get_mut(&component)?;
+            child.invalidate();
         }
+        Some(())
+    }
+
+    pub(super) fn invalidate(&mut self) {
+        self.entry_count = -1;
+        // the following is not strictly necessary but makes errors more obvious
+        self.tree_oid = Oid::UNKNOWN;
     }
 
     pub fn is_valid(&self) -> bool {

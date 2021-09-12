@@ -193,6 +193,7 @@ impl Pack {
     }
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct PackIndex {
     /// layer 1 of the fanout table

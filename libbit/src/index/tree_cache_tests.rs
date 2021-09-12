@@ -53,9 +53,8 @@ fn test_tree_cache_invalidate_path() {
     cache_tree.invalidate_path("dir".into());
 
     let mut expected_tree = CACHE_TREE.clone();
-    expected_tree.entry_count = -1;
-    expected_tree.tree_oid = Oid::UNKNOWN;
-    expected_tree.find_child_mut("dir".into()).unwrap().entry_count = -1;
+    expected_tree.invalidate();
+    expected_tree.find_child_mut("dir".into()).unwrap().invalidate();
 
     assert_eq!(cache_tree, expected_tree);
 }
