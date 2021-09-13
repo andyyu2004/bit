@@ -180,7 +180,8 @@ impl CollectSubtree<'_> {
 
 impl Drop for CollectSubtree<'_> {
     fn drop(&mut self) {
-        while self.next().unwrap().is_some() {}
+        // consume any remaining items
+        self.count().unwrap();
     }
 }
 

@@ -8,6 +8,8 @@ use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
 use crate::xdiff;
+#[allow(unused_imports)]
+use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -395,12 +397,10 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
             // unset the result bit, as we don't want to propogate the result flag
             let mut parent_flags = *flags & !NodeFlags::RESULT;
 
-            if flags.contains(NodeFlags::PARENT1 | NodeFlags::PARENT2) {
+            if flags.contains(NodeFlags::PARENT1 | NodeFlags::PARENT2)
+                && !flags.contains(NodeFlags::STALE)
+            {
                 if !flags.contains(NodeFlags::RESULT) {
-                    assert!(
-                        !flags.contains(NodeFlags::STALE),
-                        "maybe need to add this to the condition above?"
-                    );
                     flags.insert(NodeFlags::RESULT);
                     self.candidates.push(node.commit);
                 }

@@ -396,7 +396,6 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 // It is safe to remove if there are no local changes
                 let has_local_changes =
                     self.repo.trees_are_diff(tree.iter(), worktree.as_consumer().iter())?;
-                dbg!(has_local_changes);
                 if has_local_changes {
                     self.conflict(worktree_entry)?
                 } else {
@@ -462,6 +461,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 // case 36: T1 T2 B1/Bi | update to tree with typechanged tree->blob conflict (forceable)
                 TreeDiffEntry::MaybeModifiedTree(..) =>
                     if !self.opts.is_forced() {
+                        // TODO this could be smarter as this is only "maybe modified" but we're assuming it is modified (i.e. case 36)
                         // If it's not forced, then this should be a conflict.
                         self.conflict(worktree_entry)?;
                     } else {
