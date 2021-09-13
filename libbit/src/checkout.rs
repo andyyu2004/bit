@@ -388,13 +388,21 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     // otherwise we can just keep all changes from the working tree
                     worktree.over()?;
                 },
-            // case 27: T1 x T1/T2
-            // TODO behaviour is not really correct
-            // this will cause us to lose work I think
-            // but we also don't want to only do this when forced
-            // because that will retain the directory when we don't want to
-            // how do we tell the difference?
-            TreeDiffEntry::DeletedTree(..) => self.delete_worktree_tree(worktree_entry)?,
+            // case 27: T1 x T1/T2 (maybe safe)
+            TreeDiffEntry::DeletedTree(tree) => {
+                if self.opts.is_forced() {
+                    return self.delete_worktree_tree(worktree_entry);
+                }
+                // It is safe to remove if there are no local changes
+                let has_local_changes =
+                    self.repo.trees_are_diff(tree.iter(), worktree.as_consumer().iter())?;
+                dbg!(has_local_changes);
+                if has_local_changes {
+                    self.conflict(worktree_entry)?
+                } else {
+                    self.delete_worktree_tree(worktree_entry)?
+                }
+            }
             // case 7: x T1 T1/T2 | independently added tree
             TreeDiffEntry::CreatedTree(tree) =>
                 if self.opts.is_forced() {

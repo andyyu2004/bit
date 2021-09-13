@@ -178,6 +178,12 @@ impl CollectSubtree<'_> {
     }
 }
 
+impl Drop for CollectSubtree<'_> {
+    fn drop(&mut self) {
+        while self.next().unwrap().is_some() {}
+    }
+}
+
 impl FallibleIterator for CollectSubtree<'_> {
     type Error = BitGenericError;
     type Item = BitIndexEntry;

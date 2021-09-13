@@ -11,7 +11,7 @@ use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
 use crate::time::Timespec;
-use fallible_iterator::{FallibleIterator, Fuse, Peekable};
+use fallible_iterator::{FallibleIterator, FallibleLendingIterator, Fuse, Peekable};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -246,6 +246,21 @@ impl<'rcx> BitRepo<'rcx> {
         b: impl BitTreeIterator,
     ) -> BitResult<WorkspaceStatus> {
         self.diff_iterators_with_opts(a, b, DiffOpts::default())
+    }
+
+    /// Given two tree iterators, return whether the two trees are different
+    pub fn trees_are_diff(
+        self,
+        a: impl BitTreeIterator,
+        b: impl BitTreeIterator,
+    ) -> BitResult<bool> {
+        let mut diff_iter = self.tree_diff_iter(a, b);
+        diff_iter.any(|entry| match entry {
+            TreeDiffEntry::ModifiedTree(_)
+            | TreeDiffEntry::UnmodifiedBlob(_)
+            | TreeDiffEntry::UnmodifiedTree(_) => Ok(false),
+            _ => Ok(true),
+        })
     }
 }
 

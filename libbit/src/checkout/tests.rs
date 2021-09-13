@@ -741,9 +741,9 @@ fn test_force_checkout_independently_deleted_tree_with_untracked_blob() -> BitRe
     })
 }
 
-// case 27
+// case 27 (safe)
 #[test]
-fn test_checkout_deleted_tree() -> BitResult<()> {
+fn test_safe_checkout_deleted_tree() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         bit_branch!(repo: "checkpoint");
         let target = commit! {
@@ -753,10 +753,42 @@ fn test_checkout_deleted_tree() -> BitResult<()> {
         bit_checkout!(repo: &rev!(target))?;
         assert!(!exists!(repo: "dir"));
 
-        // TODO fixme
-        // bit_reset!(repo: --hard "checkpoint");
-        // bit_checkout!(repo: --force &rev!(target))?;
-        // assert!(!exists!(repo: "dir"));
+        bit_reset!(repo: "checkpoint");
+        bit_checkout!(repo: &rev!(target))?;
+        assert!(!exists!(repo: "dir"));
+        Ok(())
+    })
+}
+
+// case 27 (safe)
+#[test]
+fn test_safe_checkout_deleted_tree_with_local_changes() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        let target = commit! {
+            foo
+            bar
+        };
+        modify!(repo: "dir/baz" < "modified");
+        bit_checkout!(repo: &rev!(target)).unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
+// case 27 (forced)
+#[test]
+fn test_force_checkout_deleted_tree() -> BitResult<()> {
+    BitRepo::with_sample_repo_no_sym(|repo| {
+        bit_branch!(repo: "checkpoint");
+        let target = commit! {
+            foo
+            bar
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        assert!(!exists!(repo: "dir"));
+
+        bit_reset!(repo: --hard "checkpoint");
+        bit_checkout!(repo: --force &rev!(target))?;
+        assert!(!exists!(repo: "dir"));
         Ok(())
     })
 }
