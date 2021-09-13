@@ -220,7 +220,7 @@ impl Serialize for Vec<u8> {
     }
 }
 
-impl<'a> Serialize for &'a [u8] {
+impl Serialize for [u8] {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         Ok(writer.write_all(self)?)
     }

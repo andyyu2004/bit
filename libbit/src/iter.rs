@@ -17,6 +17,7 @@ use fallible_iterator::Peekable;
 use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
 use rustc_hash::FxHashSet;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs::FileType;
@@ -66,11 +67,11 @@ pub trait BitEntry {
         if oid.is_known() {
             return Ok(oid);
         }
-        let blob = self.read_to_blob(repo)?;
-        repo.write_obj(&blob)
+        let bytes = self.read_to_bytes(repo)?;
+        repo.write_obj(&bytes.as_ref())
     }
 
-    fn read_to_blob(&self, repo: BitRepo<'_>) -> BitResult<MutableBlob> {
+    fn read_to_bytes<'rcx>(&self, repo: BitRepo<'rcx>) -> BitResult<Cow<'rcx, [u8]>> {
         let oid = self.oid();
         // if object is known we try to read it from the object store
         // however, it's possible the object does not live there as the hash may have just been calculated to allow for comparisons
@@ -78,12 +79,12 @@ pub trait BitEntry {
         // if the oid is not known, then it's definitely on disk (as otherwise it would have a known `oid`)
         if oid.is_known() {
             match repo.read_obj(oid) {
-                Ok(obj) => return Ok(obj.into_blob().clone().into_inner()),
+                Ok(obj) => return Ok(Cow::Borrowed(obj.into_blob().bytes())),
                 Err(err) => err.try_into_obj_not_found_err()?,
             };
         }
 
-        repo.read_blob_from_worktree(self.path())
+        repo.read_blob_from_worktree(self.path()).map(MutableBlob::into_bytes).map(Cow::Owned)
     }
 }
 

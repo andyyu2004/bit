@@ -110,6 +110,7 @@ impl<'rcx> BitIndex<'rcx> {
         let target = repo.tree_iter(target_tree);
         let worktree = self.worktree_tree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
+        info!("{:#?}", migration);
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index and target_tree should match exactly
@@ -176,14 +177,14 @@ impl<'rcx> BitIndex<'rcx> {
 
         for create in &migration.creates {
             let path = repo.to_absolute_path(&create.path);
-            let blob = create.read_to_blob(repo)?;
+            let bytes = create.read_to_bytes(repo)?;
             // this is necessary due to `rm` above deleting empty directories that may be repopulated
             // there is probably a better way
             std::fs::create_dir_all(path.parent().unwrap())?;
 
             if create.mode.is_link() {
                 //? is it guaranteed that a symlink contains the path of the target, or is it fs impl dependent?
-                let symlink_target = OsStr::from_bytes(&blob);
+                let symlink_target = OsStr::from_bytes(&bytes);
                 std::os::unix::fs::symlink(symlink_target, path)?;
             } else {
                 debug_assert!(create.mode.is_file());
@@ -195,7 +196,7 @@ impl<'rcx> BitIndex<'rcx> {
                     .with_context(|| {
                         anyhow!("failed to create file `{}` in `apply_migration`", path)
                     })?;
-                file.write_all(&blob)?;
+                file.write_all(&bytes)?;
                 file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
             }
 
@@ -381,6 +382,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 19: B1 B1 T1?
             TreeDiffEntry::UnmodifiedBlob(_) => todo!(),
             // case 34: T1 T1 T1/T2 | unmodified tree
+            // Be wary that we could be currently be in the root directory so don't do a rm -rf here..
             TreeDiffEntry::UnmodifiedTree(tree) =>
                 if self.opts.is_forced() {
                     self.reset_worktree(worktree, tree)?;

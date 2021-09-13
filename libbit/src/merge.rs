@@ -11,6 +11,7 @@ use crate::xdiff;
 #[allow(unused_imports)]
 use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashMap;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::fmt::{self, Display, Formatter};
@@ -224,8 +225,8 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
                 let path = y.path;
 
                 let base_bytes = match base {
-                    Some(b) => b.read_to_blob(repo)?.into_bytes(),
-                    None => vec![],
+                    Some(b) => b.read_to_bytes(repo)?,
+                    None => Cow::Owned(vec![]),
                 };
 
                 if y.mode != z.mode {
@@ -238,8 +239,8 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
                     "HEAD",
                     &self.their_head_desc,
                     &base_bytes,
-                    &y.read_to_blob(repo)?,
-                    &z.read_to_blob(repo)?,
+                    &y.read_to_bytes(repo)?,
+                    &z.read_to_bytes(repo)?,
                 ) {
                     Ok(merged) => {
                         // write the merged file to disk
@@ -285,6 +286,7 @@ impl<'a, 'rcx> MergeCtxt<'a, 'rcx> {
             }
             // merge
             (None, Some(y), Some(z)) => three_way_merge(None, y, z),
+            (Some(b), Some(y), Some(z)) if b.oid() == y.oid() && y.oid() == z.oid() => Ok(()),
             (Some(b), Some(y), Some(z)) => three_way_merge(Some(b), y, z),
         }
     }
@@ -397,20 +399,23 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
             // unset the result bit, as we don't want to propogate the result flag
             let mut parent_flags = *flags & !NodeFlags::RESULT;
 
-            if flags.contains(NodeFlags::PARENT1 | NodeFlags::PARENT2)
-                && !flags.contains(NodeFlags::STALE)
-            {
-                if !flags.contains(NodeFlags::RESULT) {
+            if flags.contains(NodeFlags::PARENT1 | NodeFlags::PARENT2) {
+                // parent nodes of a potential result node are stale and we can rule them out of our candidate set
+                parent_flags.insert(NodeFlags::STALE);
+                // add to the candidate set only if it is neither a result or stale
+                if !flags.intersects(NodeFlags::RESULT | NodeFlags::STALE) {
                     flags.insert(NodeFlags::RESULT);
                     self.candidates.push(node.commit);
                 }
-                // parent nodes of a result node are stale and we can rule them out of our candidate set
-                parent_flags.insert(NodeFlags::STALE);
             }
 
             for &parent in &parents {
+                let pflags = self.node_flags.entry(parent).or_default();
+                if *pflags == parent_flags {
+                    continue;
+                }
                 let parent = self.repo.read_obj_commit(parent)?;
-                self.node_flags.entry(parent.oid()).or_default().insert(parent_flags);
+                pflags.insert(parent_flags);
                 let parent_node = self.mk_node(parent);
                 self.pqueue.push(parent_node);
             }
@@ -435,21 +440,13 @@ impl<'rcx> Commit<'rcx> {
     }
 
     /// Returns lowest common ancestor found.
-    /// Only returns a single solution even when there may be multiple valid/optimal solutions.
-    // TODO
-    // I'm pretty sure this function will not work in all cases (i.e. return a non-optimal solution)
-    // Not sure if those cases will come up realistically though, to investigate
+    /// If there are multiple candidates then the first is returned
     pub fn find_merge_base(
         &'rcx self,
         other: &'rcx Commit<'rcx>,
     ) -> BitResult<Option<&'rcx Commit<'rcx>>> {
         let merge_bases = self.find_merge_bases(other)?;
-        if merge_bases.is_empty() {
-            Ok(None)
-        } else {
-            assert!(merge_bases.len() < 2, "TODO multiple merge bases");
-            Ok(Some(merge_bases[0]))
-        }
+        if merge_bases.is_empty() { Ok(None) } else { Ok(Some(merge_bases[0])) }
     }
 }
 

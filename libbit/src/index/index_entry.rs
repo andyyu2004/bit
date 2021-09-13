@@ -228,11 +228,6 @@ impl BitIndexEntry {
         debug_assert!(padding_size > 0 && padding_size <= 8);
         padding_size
     }
-
-    pub fn read_to_bytes(&self, repo: BitRepo<'_>) -> BitResult<Vec<u8>> {
-        let blob = self.read_to_blob(repo)?;
-        Ok(blob.into_bytes())
-    }
 }
 
 impl BitEntry for BitIndexEntry {

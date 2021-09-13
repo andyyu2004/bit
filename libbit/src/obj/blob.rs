@@ -27,6 +27,12 @@ impl Deref for Blob<'_> {
     }
 }
 
+impl<'a> WritableObject for &'a [u8] {
+    fn obj_ty(&self) -> BitObjType {
+        BitObjType::Blob
+    }
+}
+
 impl WritableObject for MutableBlob {
     fn obj_ty(&self) -> BitObjType {
         BitObjType::Blob
