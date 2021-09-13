@@ -256,7 +256,7 @@ impl<'rcx> BitRepo<'rcx> {
     ) -> BitResult<bool> {
         let mut diff_iter = self.tree_diff_iter(a, b);
         diff_iter.any(|entry| match entry {
-            TreeDiffEntry::ModifiedTree(_)
+            TreeDiffEntry::MaybeModifiedTree(_)
             | TreeDiffEntry::UnmodifiedBlob(_)
             | TreeDiffEntry::UnmodifiedTree(_) => Ok(false),
             _ => Ok(true),

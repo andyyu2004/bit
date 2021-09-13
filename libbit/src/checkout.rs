@@ -375,7 +375,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                 cond!(self.opts.is_forced() => self.tree_to_blob(consumer, entry); self.conflict(consumer.step_over()?))
             }
             // case 37: T1 T2 T1/T2/T3 | update to existing tree
-            TreeDiffEntry::ModifiedTree(_) => {
+            TreeDiffEntry::MaybeModifiedTree(_) => {
                 worktree.next()?;
             }
             // case 19: B1 B1 T1?
@@ -460,7 +460,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                         self.update(entry)?
                     },
                 // case 36: T1 T2 B1/Bi | update to tree with typechanged tree->blob conflict (forceable)
-                TreeDiffEntry::ModifiedTree(..) =>
+                TreeDiffEntry::MaybeModifiedTree(..) =>
                     if !self.opts.is_forced() {
                         // If it's not forced, then this should be a conflict.
                         self.conflict(worktree_entry)?;
@@ -530,7 +530,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             // case 13: B1 B2 x | modify/delete conflict
             TreeDiffEntry::ModifiedBlob(_, entry) =>
                 cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
-            TreeDiffEntry::ModifiedTree(..) => {}
+            TreeDiffEntry::MaybeModifiedTree(..) => {}
             // case 12: B1 B1 x | locally deleted blob (safe + missing)
             TreeDiffEntry::UnmodifiedBlob(blob) =>
                 cond!(self.opts.is_forced() => self.create(blob)),
@@ -579,7 +579,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     self.create(new)
                 }
                 TreeDiffEntry::UnmodifiedBlob(..) => Ok(()),
-                TreeDiffEntry::ModifiedTree(..) => Ok(()),
+                TreeDiffEntry::MaybeModifiedTree(..) => Ok(()),
                 TreeDiffEntry::UnmodifiedTree(..) => unreachable!(),
                 TreeDiffEntry::DeletedTree(tree) => self.delete_tree(tree),
                 TreeDiffEntry::CreatedTree(created) => self.create_tree(created),
