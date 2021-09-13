@@ -110,7 +110,7 @@ where
                 (None, None) => return Ok(None),
                 (None, Some(new)) => return self.on_created(new),
                 (Some(old), None) => return self.on_deleted(old),
-                (Some(mut old), Some(mut new)) => match old.diff_cmp(&new) {
+                (Some(old), Some(mut new)) => match old.diff_cmp(&new) {
                     Ordering::Less => return self.on_deleted(old),
                     Ordering::Greater => return self.on_created(new),
                     Ordering::Equal => {
@@ -166,19 +166,16 @@ where
                             _ => {
                                 debug_assert!(old.is_blob());
                                 debug_assert!(new.is_blob());
-                                debug_assert!(old.oid.is_known() || new.oid.is_known());
-
-                                if old.oid.is_unknown() {
-                                    old.oid = self.repo.hash_blob_from_worktree(old.path)?;
-                                }
+                                debug_assert!(old.oid.is_known());
 
                                 if new.oid.is_unknown() {
                                     new.oid = self.repo.hash_blob_from_worktree(new.path)?;
                                 }
 
-                                if old.oid == new.oid
-                                    && (!self.repo.config().filemode() || old.mode() == new.mode())
-                                {
+                                let has_changed = old.oid == new.oid
+                                    && (!self.repo.config().filemode() || old.mode() == new.mode());
+
+                                if has_changed {
                                     // matching files
                                     self.old_iter.next()?;
                                     self.new_iter.next()?;

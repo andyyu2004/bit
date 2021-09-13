@@ -571,22 +571,23 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         worktree: &mut impl BitTreeIterator,
         tree: TreeEntriesConsumer<'_>,
     ) -> BitResult<()> {
+        // The cases are all "backwards" as we always want `worktree` to be the second argument to tree_diffs
         self.repo
-            .tree_diff_iter_with_opts(worktree, tree.iter(), DiffOpts::INCLUDE_UNMODIFIED)
+            .tree_diff_iter_with_opts(tree.iter(), worktree, DiffOpts::INCLUDE_UNMODIFIED)
             .for_each(|diff_entry: TreeDiffEntry<'_>| match diff_entry {
-                TreeDiffEntry::DeletedBlob(blob) => self.delete(blob),
-                TreeDiffEntry::CreatedBlob(create) => self.create(create),
-                TreeDiffEntry::ModifiedBlob(old, new) => {
-                    self.delete(old)?;
-                    self.create(new)
+                TreeDiffEntry::DeletedBlob(blob) => self.create(blob),
+                TreeDiffEntry::CreatedBlob(blob) => self.delete(blob),
+                TreeDiffEntry::ModifiedBlob(entry, wt) => {
+                    self.delete(wt)?;
+                    self.create(entry)
                 }
                 TreeDiffEntry::UnmodifiedBlob(..) => Ok(()),
                 TreeDiffEntry::MaybeModifiedTree(..) => Ok(()),
                 TreeDiffEntry::UnmodifiedTree(..) => unreachable!(),
-                TreeDiffEntry::DeletedTree(tree) => self.delete_tree(tree),
-                TreeDiffEntry::CreatedTree(created) => self.create_tree(created),
-                TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
-                TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
+                TreeDiffEntry::DeletedTree(tree) => self.create_tree(tree),
+                TreeDiffEntry::CreatedTree(tree) => self.delete_tree(tree),
+                TreeDiffEntry::BlobToTree(blob, tree) => self.tree_to_blob(tree, blob),
+                TreeDiffEntry::TreeToBlob(tree, blob) => self.blob_to_tree(blob, tree),
             })
     }
 
