@@ -78,7 +78,7 @@ impl<'rcx> BitRepo<'rcx> {
         &self,
         pathspec: impl TryInto<Pathspec, Error = BitGenericError>,
     ) -> BitResult<()> {
-        self.with_index_mut(|index| index.add(&pathspec.try_into()?))
+        self.index_mut()?.add(&pathspec.try_into()?)
     }
 
     // creates an empty repository in a temporary directory and initializes it
@@ -126,21 +126,19 @@ fn test_add_symlink() -> BitResult<()> {
         touch!(repo: "foo");
         symlink!(repo: "foo" <- "link");
         bit_add_all!(repo);
-        repo.with_index(|index| {
-            let mut iter = index.std_iter();
-            let fst = iter.next().unwrap();
-            assert_eq!(fst.mode, FileMode::REG);
-            assert_eq!(fst.path, "foo");
-            assert_eq!(fst.filesize, 0);
+        let mut iter = repo.index()?.std_iter();
+        let fst = iter.next().unwrap();
+        assert_eq!(fst.mode, FileMode::REG);
+        assert_eq!(fst.path, "foo");
+        assert_eq!(fst.filesize, 0);
 
-            let snd = iter.next().unwrap();
-            assert_eq!(snd.mode, FileMode::LINK);
-            assert_eq!(snd.path, "link");
-            // not entirely sure what the correct length is meant to be
-            // its 19 on my system at least
-            // assert_eq!(snd.filesize as usize, "foo".len());
-            Ok(())
-        })
+        let snd = iter.next().unwrap();
+        assert_eq!(snd.mode, FileMode::LINK);
+        assert_eq!(snd.path, "link");
+        // not entirely sure what the correct length is meant to be
+        // its 19 on my system at least
+        // assert_eq!(snd.filesize as usize, "foo".len());
+        Ok(())
     })
 }
 
@@ -161,15 +159,14 @@ fn test_index_add_directory() -> BitResult<()> {
         touch!(repo: "dir/c/d");
         touch!(repo: "dir/a");
         touch!(repo: "dir/b");
-        repo.with_index_mut(|index| {
-            index.add_str("dir")?;
-            assert_eq!(index.len(), 3);
-            let mut iterator = index.entries().values();
-            assert_eq!(iterator.next().unwrap().path, "dir/a");
-            assert_eq!(iterator.next().unwrap().path, "dir/b");
-            assert_eq!(iterator.next().unwrap().path, "dir/c/d");
-            Ok(())
-        })
+        let mut index = repo.index_mut()?;
+        index.add_str("dir")?;
+        assert_eq!(index.len(), 3);
+        let mut iterator = index.entries().values();
+        assert_eq!(iterator.next().unwrap().path, "dir/a");
+        assert_eq!(iterator.next().unwrap().path, "dir/b");
+        assert_eq!(iterator.next().unwrap().path, "dir/c/d");
+        Ok(())
     })
 }
 
@@ -202,18 +199,17 @@ fn index_file_directory_collision() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let a = repo.workdir.join("a");
         File::create(&a)?;
-        repo.with_index_mut(|index| {
-            index.add_str("a")?;
-            std::fs::remove_file(&a)?;
-            std::fs::create_dir(&a)?;
-            File::create(a.join("somefile"))?;
-            index.add_str("a")?;
+        let mut index = repo.index_mut()?;
+        index.add_str("a")?;
+        std::fs::remove_file(&a)?;
+        std::fs::create_dir(&a)?;
+        File::create(a.join("somefile"))?;
+        index.add_str("a")?;
 
-            assert_eq!(index.len(), 1);
-            let mut iterator = index.entries().values();
-            assert_eq!(iterator.next().unwrap().path, "a/somefile");
-            Ok(())
-        })
+        assert_eq!(index.len(), 1);
+        let mut iterator = index.entries().values();
+        assert_eq!(iterator.next().unwrap().path, "a/somefile");
+        Ok(())
     })
 }
 
@@ -240,13 +236,12 @@ fn index_nested_file_directory_collision() -> BitResult<()> {
         touch!(repo: "foo/bar/baz");
         bit_add_all!(repo);
 
-        repo.with_index_mut(|index| {
-            assert_eq!(index.len(), 2);
-            let mut iterator = index.entries().values();
-            assert_eq!(iterator.next().unwrap().path, "bar");
-            assert_eq!(iterator.next().unwrap().path, "foo/bar/baz");
-            Ok(())
-        })
+        let index = repo.index()?;
+        assert_eq!(index.len(), 2);
+        let mut iterator = index.entries().values();
+        assert_eq!(iterator.next().unwrap().path, "bar");
+        assert_eq!(iterator.next().unwrap().path, "foo/bar/baz");
+        Ok(())
     })
 }
 
@@ -267,23 +262,22 @@ fn index_nested_file_directory_collision() -> BitResult<()> {
 #[test]
 fn index_directory_file_collision() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        repo.with_index_mut(|index| {
-            mkdir!(repo: "foo");
-            touch!(repo: "foo/a");
-            touch!(repo: "foo/b");
-            mkdir!(repo: "foo/bar");
-            touch!(repo: "foo/bar/baz");
-            index.add(&pathspec!("foo"))?;
-            assert_eq!(index.len(), 3);
-            rmdir!(repo: "foo");
-            touch!(repo: "foo");
-            index.add(&pathspec!("foo"))?;
+        let mut index = repo.index_mut()?;
+        mkdir!(repo: "foo");
+        touch!(repo: "foo/a");
+        touch!(repo: "foo/b");
+        mkdir!(repo: "foo/bar");
+        touch!(repo: "foo/bar/baz");
+        index.add(&pathspec!("foo"))?;
+        assert_eq!(index.len(), 3);
+        rmdir!(repo: "foo");
+        touch!(repo: "foo");
+        index.add(&pathspec!("foo"))?;
 
-            assert_eq!(index.len(), 1);
-            let mut iter = index.entries().values();
-            assert_eq!(iter.next().unwrap().path, "foo");
-            Ok(())
-        })
+        assert_eq!(index.len(), 1);
+        let mut iter = index.entries().values();
+        assert_eq!(iter.next().unwrap().path, "foo");
+        Ok(())
     })
 }
 
@@ -309,22 +303,8 @@ fn test_stage_deleted_file() -> BitResult<()> {
         bit_add_all!(repo);
         rm!(repo: "foo");
         bit_add_all!(repo);
-        assert!(repo.with_index(|index| Ok(index.entries().is_empty()))?);
+        assert!(repo.index()?.entries().is_empty());
         Ok(())
-    })
-}
-
-// this test adds something to the index and checks the index is still parseable
-// `with_index` reparses it
-#[test]
-fn add_file_to_index() -> BitResult<()> {
-    BitRepo::with_empty_repo(|repo| {
-        let filepath = repo.workdir.join("a");
-        File::create(&filepath)?;
-        assert!(filepath.try_exists()?);
-        assert!(filepath.is_file());
-        repo.index_add("a")?;
-        repo.with_index(|_| Ok(()))
     })
 }
 
@@ -424,7 +404,7 @@ fn parse_index_header() -> BitResult<()> {
 #[test]
 fn bit_index_build_tree_test() -> BitResult<()> {
     BitRepo::find(repos_dir!("indextest"), |repo| {
-        let oid = repo.with_index_mut(|index| index.write_tree())?;
+        let oid = repo.write_tree()?;
         let tree = repo.read_obj_tree(oid)?;
 
         let entries = tree.entries.iter().collect_vec();
@@ -543,17 +523,16 @@ fn index_add_conflicts() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let entry =
             TreeEntry { mode: FileMode::REG, oid: Oid::EMPTY_BLOB, path: BitPath::A }.into();
-        repo.with_index_mut(|index| {
-            touch!(repo: "a");
-            index.add_conflicted_entry(entry, MergeStage::Left)?;
-            index.add_conflicted_entry(entry, MergeStage::Right)?;
-            let conflicts = index.conflicts();
-            assert_eq!(conflicts.len(), 1);
-            assert_eq!(
-                conflicts[0],
-                Conflict { path: BitPath::A, conflict_type: ConflictType::BothAdded }
-            );
-            Ok(())
-        })
+        let mut index = repo.index_mut()?;
+        touch!(repo: "a");
+        index.add_conflicted_entry(entry, MergeStage::Left)?;
+        index.add_conflicted_entry(entry, MergeStage::Right)?;
+        let conflicts = index.conflicts();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(
+            conflicts[0],
+            Conflict { path: BitPath::A, conflict_type: ConflictType::BothAdded }
+        );
+        Ok(())
     })
 }

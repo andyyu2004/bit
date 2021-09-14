@@ -6,12 +6,20 @@ use std::iter::FromIterator;
 
 pub type SkipTrees<I> = fallible_iterator::Filter<I, fn(&BitIndexEntry) -> BitResult<bool>>;
 
+#[derive(Debug, PartialEq)]
+pub enum IterKind {
+    Tree,
+    Index,
+    Worktree,
+}
+
 /// Tree iterators allow stepping over entire trees (skipping all entries recursively)
 // The methods on this trait yield index_entries rather than tree_entries as index_entries are strictly more general
 // In particular, the index tree iterator implements this trait and we don't want to lose the information in the index entry.
 // On the otherhand, its ok to just fill the extra fields with sentinels.
 // Considered using an enum holding either a tree entry or an index entry but it didn't seem worth it
 pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
+    fn kind(&self) -> IterKind;
     /// unstable semantics
     /// if the next entry is a tree then yield the tree entry but skip over its contents
     /// otherwise does the same as next
@@ -122,6 +130,10 @@ impl<'a, I: BitTreeIterator> BitTreeIterator for &'a mut I {
     fn peek(&mut self) -> BitResult<Option<Self::Item>> {
         (**self).peek()
     }
+
+    fn kind(&self) -> IterKind {
+        (**self).kind()
+    }
 }
 
 fn build_tree_internal(
@@ -200,6 +212,10 @@ impl FallibleIterator for CollectSubtree<'_> {
 }
 
 impl BitTreeIterator for CollectSubtree<'_> {
+    fn kind(&self) -> IterKind {
+        self.iter.kind()
+    }
+
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
         if self.in_subtree()? { Ok(Some(self.iter.over()?.unwrap())) } else { Ok(None) }
     }
@@ -214,6 +230,10 @@ where
     I: BitTreeIterator,
     F: FnMut(&I::Item) -> Result<bool, I::Error>,
 {
+    fn kind(&self) -> IterKind {
+        self.it.kind()
+    }
+
     fn over(&mut self) -> BitResult<Option<I::Item>> {
         let mut next = self.it.over()?;
         while let Some(x) = next {
@@ -262,6 +282,11 @@ impl<'rcx> BitRepo<'rcx> {
         }
 
         impl BitTreeIterator for EmptyTreeIter {
+            fn kind(&self) -> IterKind {
+                // TODO this might be to be parameterized
+                IterKind::Tree
+            }
+
             fn over(&mut self) -> BitResult<Option<Self::Item>> {
                 Ok(None)
             }
@@ -296,6 +321,10 @@ impl<'rcx> TreeIter<'rcx> {
 }
 
 impl<'rcx> BitTreeIterator for TreeIter<'rcx> {
+    fn kind(&self) -> IterKind {
+        IterKind::Tree
+    }
+
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
         match self.next()? {
             Some(entry) => {

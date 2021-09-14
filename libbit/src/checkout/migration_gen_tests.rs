@@ -38,22 +38,20 @@ fn test_migration_gen_on_sample_repo() -> BitResult<()> {
         let old_iter = repo.tree_iter(old_tree_oid);
         let new_iter = repo.head_tree_iter()?;
 
-        repo.with_index_mut(|index| {
-            let worktree = index.worktree_tree_iter()?;
+        let worktree = repo.index_mut()?.worktree_tree_iter()?;
 
-            let expected = TestMigration {
-                rmrfs: vec![],
-                rms: vec![],
-                mkdirs: vec!["dir", "dir/bar"],
-                creates: vec!["dir/bar.l", "dir/bar/qux", "dir/baz", "dir/link"],
-            };
+        let expected = TestMigration {
+            rmrfs: vec![],
+            rms: vec![],
+            mkdirs: vec!["dir", "dir/bar"],
+            creates: vec!["dir/bar.l", "dir/bar/qux", "dir/baz", "dir/link"],
+        };
 
-            let safe_migration =
-                Migration::generate(index, old_iter, new_iter, worktree, CheckoutOpts::default())?;
-            assert_eq!(TestMigration::from(safe_migration), expected);
+        let safe_migration =
+            repo.generate_migration(old_iter, new_iter, worktree, CheckoutOpts::default())?;
+        assert_eq!(TestMigration::from(safe_migration), expected);
 
-            Ok(())
-        })
+        Ok(())
     })
 }
 
@@ -84,19 +82,18 @@ fn test_simple_migration_gen() -> BitResult<()> {
         let old_iter = repo.tree_iter(a);
         let new_iter = repo.tree_iter(b);
 
-        repo.with_index_mut(|index| {
-            let worktree = index.worktree_tree_iter()?;
-            let expected = TestMigration {
-                rmrfs: vec!["qux"],
-                rms: vec!["bar/baz", "foo"],
-                mkdirs: vec!["bar/baz", "bar/baz/c"],
-                creates: vec!["bar/baz/c/d", "boo"],
-            };
+        let index = repo.index_mut()?;
+        let worktree = index.worktree_tree_iter()?;
+        let expected = TestMigration {
+            rmrfs: vec!["qux"],
+            rms: vec!["bar/baz", "foo"],
+            mkdirs: vec!["bar/baz", "bar/baz/c"],
+            creates: vec!["bar/baz/c/d", "boo"],
+        };
 
-            let migration =
-                Migration::generate(index, old_iter, new_iter, worktree, CheckoutOpts::default())?;
-            assert_eq!(TestMigration::from(migration), expected);
-            Ok(())
-        })
+        let migration =
+            repo.generate_migration(old_iter, new_iter, worktree, CheckoutOpts::default())?;
+        assert_eq!(TestMigration::from(migration), expected);
+        Ok(())
     })
 }

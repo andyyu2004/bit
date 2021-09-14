@@ -77,14 +77,6 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(())
     }
 
-    pub fn checkout_tree_with_opts(
-        self,
-        treeish: impl Treeish<'rcx>,
-        opts: CheckoutOpts,
-    ) -> BitResult<()> {
-        self.with_index_mut(|index| index.checkout_tree_with_opts(treeish, opts))
-    }
-
     pub fn checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
         self.checkout_tree_with_opts(treeish, CheckoutOpts::default())
     }
@@ -92,42 +84,36 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn force_checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
         self.checkout_tree_with_opts(treeish, CheckoutOpts::forced())
     }
-}
 
-impl<'rcx> BitIndex<'rcx> {
     /// Update working directory and index to match the tree referenced by `treeish`, accounting for changes in the working tree.
     // IMPORTANT
     // - Don't update HEAD before calling this as this does a diff relative to the current HEAD (for now)
     pub fn checkout_tree_with_opts(
-        &mut self,
+        self,
         treeish: impl Treeish<'rcx>,
         opts: CheckoutOpts,
     ) -> BitResult<()> {
-        let repo = self.repo;
-        let target_tree = treeish.treeish_oid(repo)?;
+        let target_tree = treeish.treeish_oid(self)?;
         let is_forced = opts.is_forced();
-        let baseline = repo.head_tree_iter()?;
-        let target = repo.tree_iter(target_tree);
-        let worktree = self.worktree_tree_iter()?;
+        let baseline = self.head_tree_iter()?;
+        let target = self.tree_iter(target_tree);
+        let worktree = self.index()?.worktree_tree_iter()?;
         let migration = self.generate_migration(baseline, target, worktree, opts)?;
         info!("{:#?}", migration);
         self.apply_migration(&migration)?;
 
         // if forced, then the worktree and index and target_tree should match exactly
         if is_forced {
-            debug_assert!(dbg!(self.diff_tree(target_tree, Pathspec::MATCH_ALL)?).is_empty());
-            debug_assert!(dbg!(self.diff_worktree(Pathspec::MATCH_ALL)?).is_empty());
-            self.update_cache_tree(target_tree)?;
+            let mut index = self.index_mut()?;
+            debug_assert!(dbg!(index.diff_tree(target_tree, Pathspec::MATCH_ALL)?).is_empty());
+            debug_assert!(dbg!(index.diff_worktree(Pathspec::MATCH_ALL)?).is_empty());
+            index.update_cache_tree(target_tree)?;
         }
         Ok(())
     }
 
-    pub fn force_checkout_tree(&mut self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
-        self.checkout_tree_with_opts(treeish, CheckoutOpts::forced())
-    }
-
     fn generate_migration(
-        &mut self,
+        self,
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
         worktree: impl BitTreeIterator,
@@ -136,19 +122,18 @@ impl<'rcx> BitIndex<'rcx> {
         CheckoutCtxt::new(self, opts).generate(baseline, target, worktree)
     }
 
-    fn apply_migration(&mut self, migration: &Migration) -> BitResult<()> {
-        let repo = self.repo;
-
+    fn apply_migration(self, migration: &Migration) -> BitResult<()> {
+        let mut index = self.index_mut()?;
         migration.rmrfs.iter().try_for_each(|rmrf| {
-            let path = repo.to_absolute_path(&rmrf.path);
+            let path = self.to_absolute_path(&rmrf.path);
             if path.is_dir() {
                 std::fs::remove_dir_all(&path)?;
             }
-            self.remove_directory(rmrf.path)
+            index.remove_directory(rmrf.path)
         })?;
 
         for rm in &migration.rms {
-            let path = repo.to_absolute_path(&rm.path);
+            let path = self.to_absolute_path(&rm.path);
             if path.is_file() {
                 std::fs::remove_file(&path)
                     .with_context(|| anyhow!("failed to remove file in `apply_migration`"))?;
@@ -160,11 +145,11 @@ impl<'rcx> BitIndex<'rcx> {
                     std::fs::remove_dir(parent)?;
                 }
             }
-            self.remove_entry((rm.path, MergeStage::None));
+            index.remove_entry((rm.path, MergeStage::None));
         }
 
         for mkdir in &migration.mkdirs {
-            let path = repo.to_absolute_path(&mkdir.path);
+            let path = self.to_absolute_path(&mkdir.path);
             debug_assert!(!path.is_file());
             // TODO think there's a bug somewhere that requires this to be `create_dir_all`
             // Go to any sufficiently large repo and just do something like `bit checkout @~500~
@@ -176,8 +161,8 @@ impl<'rcx> BitIndex<'rcx> {
         }
 
         for create in &migration.creates {
-            let path = repo.to_absolute_path(&create.path);
-            let bytes = create.read_to_bytes(repo)?;
+            let path = self.to_absolute_path(&create.path);
+            let bytes = create.read_to_bytes(self)?;
             // this is necessary due to `rm` above deleting empty directories that may be repopulated
             // there is probably a better way
             std::fs::create_dir_all(path.parent().unwrap())?;
@@ -200,10 +185,13 @@ impl<'rcx> BitIndex<'rcx> {
                 file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
             }
 
-            self.add_entry(BitIndexEntry::from_path(repo, &path)?)?;
+            index.add_entry(BitIndexEntry::from_path(self, &path)?)?;
         }
         Ok(())
     }
+}
+
+impl<'rcx> BitIndex<'rcx> {
 }
 
 #[derive(Default, Debug)]
@@ -220,13 +208,13 @@ pub struct Migration {
 
 impl Migration {
     pub fn generate(
-        index: &mut BitIndex<'_>,
+        repo: BitRepo<'_>,
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
         worktree: impl BitTreeIterator,
         opts: CheckoutOpts,
     ) -> BitResult<Self> {
-        CheckoutCtxt::new(index, opts).generate(baseline, target, worktree)
+        CheckoutCtxt::new(repo, opts).generate(baseline, target, worktree)
     }
 }
 
@@ -246,9 +234,8 @@ impl CheckoutConflicts {
     }
 }
 
-pub struct CheckoutCtxt<'a, 'rcx> {
+pub struct CheckoutCtxt<'rcx> {
     repo: BitRepo<'rcx>,
-    index: &'a mut BitIndex<'rcx>,
     migration: Migration,
     opts: CheckoutOpts,
     conflicts: CheckoutConflicts,
@@ -267,10 +254,9 @@ macro_rules! cond {
     };
 }
 
-impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
-    pub fn new(index: &'a mut BitIndex<'rcx>, opts: CheckoutOpts) -> Self {
-        let repo = index.repo;
-        Self { index, repo, opts, migration: Default::default(), conflicts: Default::default() }
+impl<'rcx> CheckoutCtxt<'rcx> {
+    pub fn new(repo: BitRepo<'rcx>, opts: CheckoutOpts) -> Self {
+        Self { repo, opts, migration: Default::default(), conflicts: Default::default() }
     }
 
     // Refer to https://github.com/libgit2/libgit2/blob/main/docs/checkout-internals.md
@@ -430,18 +416,19 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         &mut self,
         worktree: &mut impl BitTreeIterator,
         diff_entry: TreeDiffEntry<'_>,
-        worktree_entry: BitIndexEntry,
+        mut worktree_entry: BitIndexEntry,
     ) -> BitResult<()> {
         if worktree_entry.is_tree() {
             self.with_worktree_dir(worktree, diff_entry, worktree_entry)?
         } else {
             worktree.next()?;
+            let mut index = self.repo.index_mut()?;
             match diff_entry {
                 // case 9/case 10: B1 x B1|B2
                 TreeDiffEntry::DeletedBlob(entry) =>
-                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                    if index.is_worktree_entry_modified(&mut worktree_entry)? {
                         // case 10: B1 x B2 | delete of modified blob (forceable)
-                        cond!(self.opts.is_forced() => self.delete(entry); self.conflict(entry))
+                        cond!(self.opts.is_forced() => self.delete(worktree_entry); self.conflict(entry))
                     } else {
                         // case 9: B1 x B1 | delete blob (safe)
                         self.delete(entry)?
@@ -453,7 +440,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
                 // case 16/17/18: B1 B2 (B1|B2|B3)
                 TreeDiffEntry::ModifiedBlob(_, entry) =>
-                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                    if index.is_worktree_entry_modified(&mut worktree_entry)? {
                         // case 17/case 18: B1 B2 (B2|B3)
                         cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
                     } else {
@@ -472,7 +459,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     },
                 // case 14/case 15: B1 B1 B1/B2
                 TreeDiffEntry::UnmodifiedBlob(entry) =>
-                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                    if index.is_worktree_entry_modified(&mut worktree_entry)? {
                         // case 15: B1 B1 B2 | locally modified file (dirty)
                         // change is only applied to index if forced
                         cond!(self.opts.is_forced() => self.update(entry))
@@ -501,7 +488,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     },
                 // case 22/case 23: B1 T1 B1/B2
                 TreeDiffEntry::BlobToTree(blob, tree) =>
-                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                    if index.is_worktree_entry_modified(&mut worktree_entry)? {
                         // case 22
                         cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree); self.conflict(worktree_entry))
                     } else {

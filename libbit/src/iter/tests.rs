@@ -38,60 +38,56 @@ fn test_head_iterator() -> BitResult<()> {
 #[test]
 fn test_worktree_iterator_reads_symlinks() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        repo.with_index(|index| {
-            touch!(repo: "foo");
-            symlink!(repo: "foo" <- "link");
-            let entries = index.worktree_iter()?.collect::<Vec<_>>()?;
-            assert_eq!(entries.len(), 2);
-            Ok(())
-        })
+        let index = repo.index()?;
+        touch!(repo: "foo");
+        symlink!(repo: "foo" <- "link");
+        let entries = index.worktree_iter()?.collect::<Vec<_>>()?;
+        assert_eq!(entries.len(), 2);
+        Ok(())
     })
 }
 
 #[test]
 fn test_simple_root_gitignore_file() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        repo.with_index(|index| {
-            gitignore!(repo: {
-                "ignore"
-            });
-            touch!(repo: "ignore");
-            let entries = index.worktree_iter()?.collect::<Vec<_>>()?;
-            assert_eq!(entries.len(), 1);
-            assert_eq!(entries[0].path, ".gitignore");
-            Ok(())
-        })
+        let index = repo.index()?;
+        gitignore!(repo: {
+            "ignore"
+        });
+        touch!(repo: "ignore");
+        let entries = index.worktree_iter()?.collect::<Vec<_>>()?;
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, ".gitignore");
+        Ok(())
     })
 }
 
 #[test]
 fn test_root_gitignore_ignore_self() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        repo.with_index(|index| {
-            gitignore!(repo: {
-                ".gitignore"
-            });
-            assert_eq!(index.worktree_iter()?.count()?, 0);
-            Ok(())
-        })
+        let index = repo.index()?;
+        gitignore!(repo: {
+            ".gitignore"
+        });
+        assert_eq!(index.worktree_iter()?.count()?, 0);
+        Ok(())
     })
 }
 
 #[test]
 fn test_simple_root_gitignore_ignore_directory() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
-        repo.with_index(|index| {
-            gitignore!(repo: {
-                "ignore"
-                ".gitignore"
-            });
-            mkdir!(repo: "ignore");
-            touch!(repo: "ignore/a");
-            touch!(repo: "ignore/b");
-            touch!(repo: "ignore/c");
-            assert_eq!(index.worktree_iter()?.count()?, 0);
-            Ok(())
-        })
+        let index = repo.index()?;
+        gitignore!(repo: {
+            "ignore"
+            ".gitignore"
+        });
+        mkdir!(repo: "ignore");
+        touch!(repo: "ignore/a");
+        touch!(repo: "ignore/b");
+        touch!(repo: "ignore/c");
+        assert_eq!(index.worktree_iter()?.count()?, 0);
+        Ok(())
     })
 }
 

@@ -8,11 +8,16 @@ thread_local! {
 }
 
 pub(crate) fn enter_repo<'rcx, R>(
-    ctxt: &'rcx RepoCtxt<'rcx>,
+    rcx: &'rcx RepoCtxt<'rcx>,
     f: impl FnOnce(BitRepo<'rcx>) -> BitResult<R>,
 ) -> BitResult<R> {
-    REPO_CTXT.with(|ptr| ptr.set(ctxt as *const _ as usize));
-    with_repo(f)
+    REPO_CTXT.with(|ptr| {
+        assert_eq!(ptr.get(), 0, "nested repos?");
+        ptr.set(rcx as *const _ as usize);
+        let r = with_repo(f);
+        ptr.set(0);
+        r
+    })
 }
 
 pub(crate) fn with_repo<'rcx, R>(f: impl FnOnce(BitRepo<'rcx>) -> R) -> R {

@@ -75,7 +75,7 @@ where
         }
 
         loop {
-            match (self.old_iter.peek()?, self.new_iter.peek()?) {
+            match (self.old_iter.peek()?, self.new_iter.peek_mut()?) {
                 (None, None) => return Ok(None),
                 (None, Some(new)) => on_created!(new),
                 (Some(old), None) => on_deleted!(old),
@@ -178,23 +178,21 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn diff_tree_worktree(self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        self.with_index(|index| {
-            let tree_iter = pathspec.match_tree_iter(self.tree_iter(tree));
-            let worktree_iter = pathspec.match_tree_iter(index.worktree_tree_iter()?);
-            self.diff_iterators(tree_iter, worktree_iter)
-        })
+        let tree_iter = pathspec.match_tree_iter(self.tree_iter(tree));
+        let worktree_iter = pathspec.match_tree_iter(self.index()?.worktree_tree_iter()?);
+        self.diff_iterators(tree_iter, worktree_iter)
     }
 
     pub fn diff_tree_index(self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        self.with_index_mut(|index| index.diff_tree(tree, pathspec))
+        self.index()?.diff_tree(tree, pathspec)
     }
 
     pub fn diff_index_worktree(self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        self.with_index_mut(|index| index.diff_worktree(pathspec))
+        self.index_mut()?.diff_worktree(pathspec)
     }
 
     pub fn diff_head_index(self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        self.with_index_mut(|index| index.diff_head(pathspec))
+        self.index()?.diff_head(pathspec)
     }
 
     pub fn diff_tree_to_tree(self, a: Oid, b: Oid) -> BitResult<WorkspaceStatus> {
@@ -370,7 +368,7 @@ impl Differ for IndexWorktreeDiffer {
 impl<'rcx> BitIndex<'rcx> {
     pub fn is_worktree_entry_modified(
         &mut self,
-        worktree_entry: &BitIndexEntry,
+        worktree_entry: &mut BitIndexEntry,
     ) -> BitResult<bool> {
         match self.find_entry(worktree_entry.key()) {
             Some(&index_entry) => self.has_changes(&index_entry, worktree_entry),
@@ -378,14 +376,13 @@ impl<'rcx> BitIndex<'rcx> {
         }
     }
 
-    //? maybe the parameters to this function need to be less general
-    //? and rather than be `old` and `new` needs to be `index_entry` and `worktree_entry
-    /// determine's whether `new` is *definitely* different from `old`
-    // (preferably without comparing hashes)
+    /// Determine's whether `new` is *definitely* different from `old`
+    /// (preferably without comparing hashes)
+    /// It takes a mutable reference to the worktree_entry as it may calculate its hash if required
     fn has_changes(
         &mut self,
         index_entry: &BitIndexEntry,
-        worktree_entry: &BitIndexEntry,
+        worktree_entry: &mut BitIndexEntry,
     ) -> BitResult<bool> {
         trace!("BitIndex::has_changes({} -> {})?", index_entry.path, worktree_entry.path);
         // should only be comparing the same file
@@ -407,12 +404,11 @@ impl<'rcx> BitIndex<'rcx> {
             Changed::No => Ok(false),
             Changed::Maybe => {
                 // file may have changed, but we are not certain, so check the hash
-                let mut new_hash = worktree_entry.oid;
-                if new_hash.is_unknown() {
-                    new_hash = self.repo.hash_blob_from_worktree(worktree_entry.path)?;
+                if worktree_entry.oid.is_unknown() {
+                    worktree_entry.oid = self.repo.hash_blob_from_worktree(worktree_entry.path)?;
                 }
 
-                let changed = index_entry.oid != new_hash;
+                let changed = index_entry.oid != worktree_entry.oid;
                 if !changed {
                     // update index entries so we don't hit this slow path again
                     // we just replace the old entry with the new one to do the update

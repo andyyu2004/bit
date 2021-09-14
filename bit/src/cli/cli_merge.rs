@@ -12,7 +12,7 @@ pub struct BitMergeCliOpts {
 
 impl Cmd for BitMergeCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
-        match repo.merge(&self.revision)? {
+        match repo.merge_rev(&self.revision)? {
             // Updating f160da1..7e6f94d
             // Fast-forward
             //  foo | 0

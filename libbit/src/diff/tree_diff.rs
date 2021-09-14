@@ -1,6 +1,6 @@
 use super::*;
 use crate::error::BitGenericError;
-use crate::iter::BitIterator;
+use crate::iter::{BitIterator, IterKind};
 use crate::obj::FileMode;
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
@@ -86,8 +86,13 @@ pub struct TreeDiffIter<'rcx, I, J> {
     opts: DiffOpts,
 }
 
-impl<'rcx, I, J> TreeDiffIter<'rcx, I, J> {
+impl<'rcx, I: BitTreeIterator, J> TreeDiffIter<'rcx, I, J> {
     pub fn new(repo: BitRepo<'rcx>, old_iter: I, new_iter: J, opts: DiffOpts) -> Self {
+        assert_ne!(
+            old_iter.kind(),
+            IterKind::Worktree,
+            "old iterator is not allowed to be a worktree iterator"
+        );
         Self { repo, old_iter, new_iter, opts }
     }
 }
@@ -168,14 +173,14 @@ where
                                 debug_assert!(new.is_blob());
                                 debug_assert!(old.oid.is_known());
 
-                                if new.oid.is_unknown() {
-                                    new.oid = self.repo.hash_blob_from_worktree(new.path)?;
-                                }
+                                let has_changed = if self.new_iter.kind() == IterKind::Worktree {
+                                    self.repo.index_mut()?.is_worktree_entry_modified(&mut new)?
+                                } else {
+                                    debug_assert!(new.oid.is_known());
+                                    old.oid != new.oid
+                                };
 
-                                let has_changed = old.oid == new.oid
-                                    && (!self.repo.config().filemode() || old.mode() == new.mode());
-
-                                if has_changed {
+                                if !has_changed {
                                     // matching files
                                     self.old_iter.next()?;
                                     self.new_iter.next()?;
