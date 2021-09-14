@@ -6,20 +6,20 @@ use std::str::FromStr;
 impl<'rcx> BitRepo<'rcx> {
     pub fn bit_commit_tree(
         &self,
+        tree: Oid,
         parents: CommitParents,
         message: Option<String>,
-        tree: Oid,
     ) -> BitResult<()> {
-        let oid = self.commit_tree(parents, message, tree)?;
+        let oid = self.commit_tree(tree, parents, message)?;
         println!("{}", oid);
         Ok(())
     }
 
     pub fn commit_tree(
         &self,
+        tree: Oid,
         parents: CommitParents,
         message: Option<String>,
-        tree: Oid,
     ) -> BitResult<Oid> {
         // arguably the act of calling into the editor should move out of lib into bin
         let message = match &message {
@@ -27,6 +27,6 @@ impl<'rcx> BitRepo<'rcx> {
             None => self.read_commit_msg(),
         }?;
 
-        self.write_commit(tree, message, parents)
+        self.write_commit(tree, parents, message)
     }
 }

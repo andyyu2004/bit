@@ -36,7 +36,7 @@ impl<'rcx> CommitGraphBuilder<'rcx> {
                 Some(tree) => tree,
                 None => self.repo.write_tree()?,
             };
-            let commit = self.repo.write_commit(tree, message, parents)?;
+            let commit = self.repo.write_commit(tree, parents, message)?;
             commits.insert(node, commit);
             Ok(())
         })?;

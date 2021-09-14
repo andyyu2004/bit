@@ -141,8 +141,8 @@ impl<'rcx> BitRepo<'rcx> {
     fn mk_commit(
         self,
         tree: Oid,
-        message: CommitMessage,
         parents: CommitParents,
+        message: CommitMessage,
     ) -> BitResult<MutableCommit> {
         ensure!(self.read_obj_header(tree)?.obj_type == BitObjType::Tree);
         let author = self.user_signature()?;
@@ -166,21 +166,21 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn write_commit(
         self,
         tree: Oid,
-        message: CommitMessage,
         parents: CommitParents,
+        message: CommitMessage,
     ) -> BitResult<Oid> {
-        let commit = self.mk_commit(tree, message, parents)?;
+        let commit = self.mk_commit(tree, parents, message)?;
         self.write_obj(&commit)
     }
 
     pub fn virtual_write_commit(
         self,
         tree: Oid,
-        message: CommitMessage,
         parents: CommitParents,
+        message: CommitMessage,
     ) -> BitResult<&'rcx Commit<'rcx>> {
         self.with_virtual_write(|| {
-            let oid = self.write_commit(tree, message, parents)?;
+            let oid = self.write_commit(tree, parents, message)?;
             self.read_obj_commit(oid)
         })
     }

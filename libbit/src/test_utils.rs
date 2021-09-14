@@ -568,7 +568,7 @@ macro_rules! commit {
     ( $($tt:tt)* ) => {{
        let tree = tree! { $($tt)* };
        let msg = $crate::obj::CommitMessage::new_subject("generated commit from macro")?;
-       $crate::tls::with_repo(|repo| repo.write_commit(tree, msg, smallvec![]))?
+       $crate::tls::with_repo(|repo| repo.write_commit(tree, smallvec![], msg))?
     }}
 }
 

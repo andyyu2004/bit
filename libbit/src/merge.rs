@@ -124,8 +124,8 @@ impl<'rcx> MergeCtxt<'rcx> {
         let merged_tree = index.virtual_write_tree()?;
         let merge_commit = self.repo.virtual_write_commit(
             merged_tree,
-            CommitMessage::new_subject("generated virtual merge commit")?,
             smallvec![our_head.oid(), their_head.oid()],
+            CommitMessage::new_subject("generated virtual merge commit")?,
         )?;
 
         #[cfg(test)]
@@ -165,12 +165,12 @@ impl<'rcx> MergeCtxt<'rcx> {
 
         if !self.opts.no_commit {
             let merged_tree = repo.index_mut()?.write_tree()?;
-            let merge_commit = self.repo.write_commit(
+            let merge_commit = self.repo.commit_tree(
                 merged_tree,
-                CommitMessage::new_subject("todo ask user for commit message")?,
                 // ordering is significant here for `--first-parent`
                 // i.e. the first parent should always be our head
                 smallvec![our_head, their_head],
+                None,
             )?;
 
             repo.force_checkout_tree(merge_commit)?;
