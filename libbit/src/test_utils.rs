@@ -205,7 +205,7 @@ macro_rules! bit_commit_all {
 macro_rules! bit_merge {
     ($repo:ident: $rev:expr) => {{
         let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
-        $repo.merge_rev(&revision, $crate::merge::MergeOpts::default()).unwrap()
+        $repo.merge_rev(&revision, $crate::merge::MergeOpts::NO_EDIT).unwrap()
     }};
 }
 
@@ -214,7 +214,7 @@ macro_rules! bit_merge_expect_conflicts {
         use crate::error::*;
         let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
         $repo
-            .merge_rev(&revision, $crate::merge::MergeOpts::default())
+            .merge_rev(&revision, $crate::merge::MergeOpts::NO_EDIT)
             .unwrap_err()
             .try_into_merge_conflict()
             .unwrap()

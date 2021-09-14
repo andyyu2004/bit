@@ -22,11 +22,16 @@ pub type ConflictStyle = diffy::ConflictStyle;
 #[derive(Debug)]
 pub struct MergeOpts {
     pub no_commit: bool,
+    pub no_edit: bool,
+}
+
+impl MergeOpts {
+    pub const NO_EDIT: Self = Self { no_edit: true, no_commit: false };
 }
 
 impl Default for MergeOpts {
     fn default() -> Self {
-        Self { no_commit: false }
+        Self { no_commit: false, no_edit: false }
     }
 }
 
@@ -164,13 +169,17 @@ impl<'rcx> MergeCtxt<'rcx> {
         }
 
         if !self.opts.no_commit {
+            let message = self
+                .opts
+                .no_edit
+                .then(|| format!("Merge commit `{}` into HEAD", self.their_head_ref));
             let merged_tree = repo.index_mut()?.write_tree()?;
             let merge_commit = self.repo.commit_tree(
                 merged_tree,
                 // ordering is significant here for `--first-parent`
                 // i.e. the first parent should always be our head
                 smallvec![our_head, their_head],
-                None,
+                message,
             )?;
 
             repo.force_checkout_tree(merge_commit)?;
