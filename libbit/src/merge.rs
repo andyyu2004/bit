@@ -19,6 +19,17 @@ use std::io::Write;
 
 pub type ConflictStyle = diffy::ConflictStyle;
 
+#[derive(Debug)]
+pub struct MergeOpts {
+    pub no_commit: bool,
+}
+
+impl Default for MergeOpts {
+    fn default() -> Self {
+        Self { no_commit: false }
+    }
+}
+
 impl<'rcx> BitRepo<'rcx> {
     pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<Option<&'rcx Commit<'rcx>>> {
         let commit_a = a.peel(self)?;
@@ -30,12 +41,12 @@ impl<'rcx> BitRepo<'rcx> {
         a.peel(self)?.find_merge_bases(b.peel(self)?)
     }
 
-    pub fn merge(self, their_head_ref: BitRef) -> BitResult<MergeResults> {
-        MergeCtxt::new(self, their_head_ref)?.merge()
+    pub fn merge(self, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<MergeResults> {
+        MergeCtxt::new(self, their_head_ref, opts)?.merge()
     }
 
-    pub fn merge_rev(self, their_head: &Revspec) -> BitResult<MergeResults> {
-        self.merge(self.resolve_rev(their_head)?)
+    pub fn merge_rev(self, their_head: &Revspec, opts: MergeOpts) -> BitResult<MergeResults> {
+        self.merge(self.resolve_rev(their_head)?, opts)
     }
 }
 
@@ -58,6 +69,7 @@ struct MergeCtxt<'rcx> {
     their_head_desc: String,
     their_head_ref: BitRef,
     their_head: Oid,
+    opts: MergeOpts,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -77,10 +89,10 @@ pub enum MergeResults {
 pub struct MergeSummary {}
 
 impl<'rcx> MergeCtxt<'rcx> {
-    fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef) -> BitResult<Self> {
+    fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
         let their_head = repo.fully_resolve_ref(their_head_ref)?;
         let their_head_desc = their_head_ref.short(repo);
-        Ok(Self { repo, their_head_ref, their_head, their_head_desc })
+        Ok(Self { repo, their_head_ref, their_head, their_head_desc, opts })
     }
 
     fn merge_base_recursive(
@@ -147,24 +159,23 @@ impl<'rcx> MergeCtxt<'rcx> {
 
         self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
 
-        let mut index = repo.index_mut()?;
-        if index.has_conflicts() {
-            bail!(BitError::MergeConflict(MergeConflict { conflicts: index.conflicts() }))
+        if repo.index()?.has_conflicts() {
+            bail!(BitError::MergeConflict(MergeConflict { conflicts: repo.index()?.conflicts() }))
         }
 
-        let merged_tree = index.write_tree()?;
-        drop(index);
+        if !self.opts.no_commit {
+            let merged_tree = repo.index_mut()?.write_tree()?;
+            let merge_commit = self.repo.write_commit(
+                merged_tree,
+                CommitMessage::new_subject("todo ask user for commit message")?,
+                // ordering is significant here for `--first-parent`
+                // i.e. the first parent should always be our head
+                smallvec![our_head, their_head],
+            )?;
 
-        let merge_commit = self.repo.write_commit(
-            merged_tree,
-            CommitMessage::new_subject("todo ask user for commit message")?,
-            // ordering is significant here for `--first-parent`
-            // i.e. the first parent should always be our head
-            smallvec![our_head, their_head],
-        )?;
-
-        repo.force_checkout_tree(merge_commit)?;
-        repo.update_current_ref_for_merge(their_head)?;
+            repo.force_checkout_tree(merge_commit)?;
+            repo.update_current_ref_for_merge(their_head)?;
+        }
 
         Ok(MergeResults::Merge(MergeSummary {}))
     }
