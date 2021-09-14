@@ -6,6 +6,6 @@ pub struct BitCommitTreeCliOpts {
     #[clap(short = 'm', long = "message")]
     pub message: Option<String>,
     #[clap(short = 'p', long = "parent")]
-    pub parent: Option<Oid>,
+    pub parents: Vec<Oid>,
     pub tree: Oid,
 }

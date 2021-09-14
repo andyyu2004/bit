@@ -19,6 +19,7 @@ impl Cmd for BitCheckoutCliOpts {
         if self.force {
             opts.strategy = CheckoutStrategy::Force;
         }
-        repo.checkout_revision(&self.revision, opts)
+        repo.checkout_revision(&self.revision, opts)?;
+        Ok(())
     }
 }

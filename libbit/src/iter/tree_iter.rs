@@ -266,8 +266,8 @@ impl<'rcx> BitRepo<'rcx> {
     /// Return's tree iterator for a tree (or treeish object) with oid = `oid`
     /// It is valid to pass `Oid::UNKNOWN` which will represent an empty iterator which only yields the root
     // We can't use an `impl Treeish` here as the above case will not work
-    pub fn tree_iter(self, oid: Oid) -> TreeIter<'rcx> {
-        TreeIter::new(self, oid)
+    pub fn tree_iter(self, treeish_oid: Oid) -> TreeIter<'rcx> {
+        TreeIter::new(self, treeish_oid)
     }
 
     pub fn empty_tree_iter(self) -> impl BitTreeIterator {

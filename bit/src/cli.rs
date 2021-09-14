@@ -80,7 +80,8 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
         BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
         BitSubCmd::Checkout(opts) => opts.exec(repo),
         BitSubCmd::Config(opts) => opts.execute(repo),
-        BitSubCmd::CommitTree(opts) => repo.bit_commit_tree(opts.parent, opts.message, opts.tree),
+        BitSubCmd::CommitTree(opts) =>
+            repo.bit_commit_tree(opts.parents.into_iter().collect(), opts.message, opts.tree),
         BitSubCmd::Commit(opts) => opts.exec(repo),
         BitSubCmd::Diff(opts) => opts.exec(repo),
         BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),

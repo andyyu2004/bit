@@ -35,7 +35,7 @@ impl<'rcx> BitRepo<'rcx> {
             bail!(self.status(Pathspec::MATCH_ALL)?)
         }
 
-        let commit_oid = self.commit_tree(parent, msg, tree)?;
+        let commit_oid = self.commit_tree(parent.into_iter().collect(), msg, tree)?;
         let commit = commit_oid.peel(self)?;
 
         // TODO print status of commit

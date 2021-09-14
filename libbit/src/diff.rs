@@ -183,8 +183,8 @@ impl<'rcx> BitRepo<'rcx> {
         self.diff_iterators(tree_iter, worktree_iter)
     }
 
-    pub fn diff_tree_index(self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        self.index()?.diff_tree(tree, pathspec)
+    pub fn diff_tree_index(self, treeish: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+        self.index()?.diff_tree(treeish, pathspec)
     }
 
     pub fn diff_index_worktree(self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
@@ -267,8 +267,8 @@ impl<'rcx> BitIndex<'rcx> {
         IndexWorktreeDiffer::new(pathspec).build_diff(self)
     }
 
-    pub fn diff_tree(&self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        let tree_iter = self.repo.tree_iter(tree);
+    pub fn diff_tree(&self, treeish_oid: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+        let tree_iter = self.repo.tree_iter(treeish_oid);
         self.diff_iterator(tree_iter, pathspec)
     }
 

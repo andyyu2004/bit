@@ -52,16 +52,29 @@ impl Default for CheckoutStrategy {
     }
 }
 
+#[derive(Debug)]
+pub struct CheckoutSummary {
+    pub new_head: BitRef,
+}
+
 impl<'rcx> BitRepo<'rcx> {
     /// checkout the branch/commit specified by the revision
     /// - updates the worktree to match the tree represented by the tree of the commit
     /// - moves HEAD to point at the branch/commit
-    pub fn checkout_revision(self, rev: &Revspec, opts: CheckoutOpts) -> BitResult<()> {
+    pub fn checkout_revision(
+        self,
+        rev: &Revspec,
+        opts: CheckoutOpts,
+    ) -> BitResult<CheckoutSummary> {
         let reference = self.resolve_rev(rev)?;
         self.checkout(reference, opts)
     }
 
-    pub fn checkout(self, reference: impl Into<BitRef>, opts: CheckoutOpts) -> BitResult<()> {
+    pub fn checkout(
+        self,
+        reference: impl Into<BitRef>,
+        opts: CheckoutOpts,
+    ) -> BitResult<CheckoutSummary> {
         let reference: BitRef = reference.into();
         // doesn't make sense to move HEAD -> HEAD
         assert_ne!(reference, BitRef::HEAD);
@@ -74,7 +87,7 @@ impl<'rcx> BitRepo<'rcx> {
         let new_head = if reference.is_remote() { commit_oid.into() } else { reference };
         self.update_head_for_checkout(new_head)?;
 
-        Ok(())
+        Ok(CheckoutSummary { new_head })
     }
 
     pub fn checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {

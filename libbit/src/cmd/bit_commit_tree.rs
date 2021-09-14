@@ -1,23 +1,23 @@
 use crate::error::BitResult;
-use crate::obj::{CommitMessage, Oid};
+use crate::obj::{CommitMessage, CommitParents, Oid};
 use crate::repo::BitRepo;
 use std::str::FromStr;
 
 impl<'rcx> BitRepo<'rcx> {
     pub fn bit_commit_tree(
         &self,
-        parent: Option<Oid>,
+        parents: CommitParents,
         message: Option<String>,
         tree: Oid,
     ) -> BitResult<()> {
-        let oid = self.commit_tree(parent, message, tree)?;
+        let oid = self.commit_tree(parents, message, tree)?;
         println!("{}", oid);
         Ok(())
     }
 
     pub fn commit_tree(
         &self,
-        parents: Option<Oid>,
+        parents: CommitParents,
         message: Option<String>,
         tree: Oid,
     ) -> BitResult<Oid> {
@@ -27,6 +27,6 @@ impl<'rcx> BitRepo<'rcx> {
             None => self.read_commit_msg(),
         }?;
 
-        self.write_commit(tree, message, parents.into_iter().collect())
+        self.write_commit(tree, message, parents)
     }
 }

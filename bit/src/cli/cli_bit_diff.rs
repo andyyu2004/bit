@@ -1,7 +1,6 @@
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
-use libbit::obj::Treeish;
 use libbit::pathspec::Pathspec;
 use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
@@ -30,12 +29,11 @@ impl Cmd for BitDiffCliOpts {
                     repo.diff_index_worktree(pathspec)?
                 },
             [rev] => {
-                let commit_oid = repo.fully_resolve_rev(rev)?;
-                let tree_oid = commit_oid.treeish_oid(repo)?;
+                let treeish_oid = repo.fully_resolve_rev_to_any(rev)?;
                 if self.staged {
-                    repo.diff_tree_index(tree_oid, pathspec)?
+                    repo.diff_tree_index(treeish_oid, pathspec)?
                 } else {
-                    repo.diff_tree_worktree(tree_oid, pathspec)?
+                    repo.diff_tree_worktree(treeish_oid, pathspec)?
                 }
             }
             [a, b] => {
@@ -43,8 +41,8 @@ impl Cmd for BitDiffCliOpts {
                     !self.staged,
                     "`--staged` has no effect when passing two revisions to diff"
                 );
-                let a = repo.fully_resolve_rev(a)?.treeish_oid(repo)?;
-                let b = repo.fully_resolve_rev(b)?.treeish_oid(repo)?;
+                let a = repo.fully_resolve_rev_to_any(a)?;
+                let b = repo.fully_resolve_rev_to_any(b)?;
                 repo.diff_tree_to_tree(a, b)?
             }
             _ => unreachable!(),
