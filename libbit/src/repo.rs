@@ -293,15 +293,21 @@ impl<'rcx> BitRepo<'rcx> {
 
     #[inline]
     pub fn index(self) -> BitResult<RwLockReadGuard<'rcx, BitIndex<'rcx>>> {
-        Ok(self.index_lock()?.read())
+        Ok(self
+            .index_lock()?
+            .try_read()
+            .expect("trying to read index when something is already writing"))
     }
 
+    /// Grant mutable access to the index
+    /// Be very cautious and hold the lock for the shortest period possible as it's fairly easy to run into deadlocks.
+    /// Don't just declare index at the top of the function.
     #[inline]
     pub fn index_mut(self) -> BitResult<RwLockWriteGuard<'rcx, BitIndex<'rcx>>> {
         Ok(self
             .index_lock()?
             .try_write()
-            .expect("concurrent writes to the index shouldn't be possible atm"))
+            .expect("concurrent writes to the index shouldn't be possible atm; probably tried to acquire this reentrantly"))
     }
 
     // returns unit as we don't want anyone accessing the repo directly like this

@@ -1,5 +1,4 @@
 use crate::error::BitResult;
-use crate::index::BitIndex;
 use crate::peel::Peel;
 use crate::repo::{BitRepo, RepoState};
 use crate::rev::Revspec;
@@ -18,26 +17,19 @@ impl Default for ResetKind {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn reset(self, revision: &Revspec, kind: ResetKind) -> BitResult<()> {
-        self.index_mut()?.reset(revision, kind)
-    }
-}
-
-impl<'rcx> BitIndex<'rcx> {
     /// Set the current branch to point at the specified commit_oid `target`
     /// and set the working tree/index to match depending on the reset kind.
     /// [ResetKind::Soft] does only the above.
     /// [ResetKind::Mixed] does a `soft` reset and also makes the index match the target tree
     /// [ResetKind::Hard] does a `mixed` reset and the working tree will match the target tree
-    pub fn reset(&mut self, revision: &Revspec, kind: ResetKind) -> BitResult<()> {
-        let repo = self.repo;
-        let target = repo.resolve_rev(revision)?;
-        if repo.repo_state() == RepoState::Merging {
+    pub fn reset(self, revision: &Revspec, kind: ResetKind) -> BitResult<()> {
+        let target = self.resolve_rev(revision)?;
+        if self.repo_state() == RepoState::Merging {
             bail!("cannot perform reset when repository is in the middle of a merge")
         }
 
-        let target_commit_oid = repo.fully_resolve_ref(target)?;
-        let target_commit = target_commit_oid.peel(repo)?;
+        let target_commit_oid = self.fully_resolve_ref(target)?;
+        let target_commit = target_commit_oid.peel(self)?;
         let target_tree = target_commit.tree_oid();
 
         // Important to call `checkout_tree` before HEAD is updated as it internally read's the current head.
@@ -50,10 +42,10 @@ impl<'rcx> BitIndex<'rcx> {
             self.force_checkout_tree(target_tree)?;
         } else if kind > ResetKind::Soft {
             // make index match the target commit's tree
-            self.read_tree(target_tree)?;
+            self.index_mut()?.read_tree(target_tree)?;
         }
 
-        repo.update_current_ref_for_reset(target_commit_oid)?;
+        self.update_current_ref_for_reset(target_commit_oid)?;
         Ok(())
     }
 }
