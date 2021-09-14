@@ -78,6 +78,10 @@ impl<'a> FallibleIterator for IndexTreeIter<'a> {
 }
 
 impl<'a> BitTreeIterator for IndexTreeIter<'a> {
+    fn kind(&self) -> IterKind {
+        IterKind::Index
+    }
+
     fn peek(&mut self) -> BitResult<Option<Self::Item>> {
         if let Some(peeked) = self.peeked {
             Ok(Some(peeked))

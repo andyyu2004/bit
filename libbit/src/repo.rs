@@ -12,7 +12,7 @@ use crate::rev::Revspec;
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
@@ -153,6 +153,23 @@ impl<'rcx> RepoCtxt<'rcx> {
         f(BitRepo { rcx: self })
     }
 
+    /// Enter the repository context for a "transaction".
+    /// If any fatal error occurs during the closure, then writes to the index are rolled back.
+    /// This should generally be used as the entry point to accessing the repository
+    pub fn enter<R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> BitResult<R>) -> BitResult<R> {
+        tls::enter_repo(self, |repo| match f(repo) {
+            Ok(r) => Ok(r),
+            Err(err) => {
+                // This is definitely pretty dodgy and subtle way to handle rolling back.
+                // It's currently here to guard against the MergeConflict error from rolling back the index
+                if err.is_fatal() && repo.index_cell.get().is_some() {
+                    repo.index_lock()?.write().rollback();
+                }
+                Err(err)
+            }
+        })
+    }
+
     #[inline]
     pub fn config_path(&self) -> BitPath {
         self.config_filepath
@@ -215,8 +232,7 @@ impl<'rcx> BitRepo<'rcx> {
         f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
         Self::init(&path)?;
-        let ctxt = RepoCtxt::load(&path)?;
-        tls::enter_repo(&ctxt, f)
+        RepoCtxt::load(&path)?.enter(f)
     }
 
     /// recursively searches parents starting from the current directory for a git repo
@@ -228,9 +244,7 @@ impl<'rcx> BitRepo<'rcx> {
         let canonical_path = path.canonicalize().with_context(|| {
             format!("failed to find bit repository in nonexistent path `{}`", path.display())
         })?;
-        let ctxt = RepoCtxt::find_inner(canonical_path.as_ref())?;
-
-        tls::enter_repo(&ctxt, f)
+        RepoCtxt::find_inner(canonical_path.as_ref())?.enter(f)
     }
 
     #[inline]
@@ -271,37 +285,23 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    fn index(self) -> BitResult<&'rcx RwLock<BitIndex<'rcx>>> {
+    fn index_lock(self) -> BitResult<&'rcx RwLock<BitIndex<'rcx>>> {
         self.rcx
             .index_cell
             .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(self)?)))
     }
 
     #[inline]
-    pub fn with_index<R>(self, f: impl FnOnce(&BitIndex<'rcx>) -> BitResult<R>) -> BitResult<R> {
-        // don't have to error check here as the index only
-        f(&*self.index()?.read())
+    pub fn index(self) -> BitResult<RwLockReadGuard<'rcx, BitIndex<'rcx>>> {
+        Ok(self.index_lock()?.read())
     }
 
-    pub fn with_index_mut<R>(
-        self,
-        f: impl FnOnce(&mut BitIndex<'rcx>) -> BitResult<R>,
-    ) -> BitResult<R> {
-        let index_ref = self.index()?;
-        let index = &mut *index_ref
+    #[inline]
+    pub fn index_mut(self) -> BitResult<RwLockWriteGuard<'rcx, BitIndex<'rcx>>> {
+        Ok(self
+            .index_lock()?
             .try_write()
-            .expect("don't expect concurrent writes, probably tried to grab it reentrantly");
-        match f(index) {
-            Ok(r) => Ok(r),
-            Err(err) => {
-                // This is definitely pretty dodgy and subtle way to handle rolling back.
-                // It's currently here to guard against the MergeConflict error from rolling back the index
-                if err.is_fatal() {
-                    index.rollback();
-                }
-                Err(err)
-            }
-        }
+            .expect("concurrent writes to the index shouldn't be possible atm"))
     }
 
     // returns unit as we don't want anyone accessing the repo directly like this

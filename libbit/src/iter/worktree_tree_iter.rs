@@ -41,6 +41,10 @@ impl<'rcx> FallibleIterator for WorktreeTreeIter<'rcx> {
 }
 
 impl<'rcx> BitTreeIterator for WorktreeTreeIter<'rcx> {
+    fn kind(&self) -> IterKind {
+        IterKind::Worktree
+    }
+
     fn over(&mut self) -> BitResult<Option<Self::Item>> {
         let mut iter = self.as_consumer().iter();
         let tree_entry = iter.next();

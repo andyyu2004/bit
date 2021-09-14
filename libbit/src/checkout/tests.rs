@@ -13,7 +13,7 @@ fn test_simple_checkout_rm_rf() -> BitResult<()> {
 
         assert!(repo.read_head()?.is_direct());
 
-        let mut iter = repo.with_index(|index| index.worktree_iter())?;
+        let mut iter = repo.index()?.worktree_iter()?;
         check_next!(iter.next() => "bar":FileMode::REG);
         check_next!(iter.next() => "foo":FileMode::REG);
         Ok(())

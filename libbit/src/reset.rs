@@ -19,7 +19,7 @@ impl Default for ResetKind {
 
 impl<'rcx> BitRepo<'rcx> {
     pub fn reset(self, revision: &Revspec, kind: ResetKind) -> BitResult<()> {
-        self.with_index_mut(|index| index.reset(revision, kind))
+        self.index_mut()?.reset(revision, kind)
     }
 }
 

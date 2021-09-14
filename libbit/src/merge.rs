@@ -31,7 +31,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn merge_ref(self, their_head_ref: BitRef) -> BitResult<MergeResults> {
-        self.with_index_mut(|index| index.merge(their_head_ref))
+        self.index_mut()?.merge(their_head_ref)
     }
 
     pub fn merge(self, their_head: &Revspec) -> BitResult<MergeResults> {

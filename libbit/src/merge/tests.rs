@@ -117,7 +117,6 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
         assert_eq!(cat!(repo: "foo"), "foo contents");
         bit_branch!(repo: "d" @ rev!(commits[&d]));
         bit_merge!(repo: "d");
-        dbg!(bit_status!(repo));
         assert!(bit_status!(repo).is_empty());
 
         Ok(())

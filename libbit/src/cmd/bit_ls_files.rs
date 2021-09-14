@@ -6,15 +6,14 @@ pub struct BitLsFilesOpts {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    pub fn bit_ls_files(&self, opts: BitLsFilesOpts) -> BitResult<()> {
-        self.with_index(|index| {
-            index.std_iter().for_each(|entry| {
-                if opts.stage {
-                    print!("{} {} {}\t", entry.mode, entry.oid, entry.stage());
-                }
-                println!("{}", entry.path);
-            });
-            Ok(())
-        })
+    pub fn bit_ls_files(self, opts: BitLsFilesOpts) -> BitResult<()> {
+        let index = self.index()?;
+        index.std_iter().for_each(|entry| {
+            if opts.stage {
+                print!("{} {} {}\t", entry.mode, entry.oid, entry.stage());
+            }
+            println!("{}", entry.path);
+        });
+        Ok(())
     }
 }

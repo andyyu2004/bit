@@ -82,7 +82,7 @@ impl<'rcx> BitRepo<'rcx> {
         treeish: impl Treeish<'rcx>,
         opts: CheckoutOpts,
     ) -> BitResult<()> {
-        self.with_index_mut(|index| index.checkout_tree_with_opts(treeish, opts))
+        self.index_mut()?.checkout_tree_with_opts(treeish, opts)
     }
 
     pub fn checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
@@ -430,7 +430,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
         &mut self,
         worktree: &mut impl BitTreeIterator,
         diff_entry: TreeDiffEntry<'_>,
-        worktree_entry: BitIndexEntry,
+        mut worktree_entry: BitIndexEntry,
     ) -> BitResult<()> {
         if worktree_entry.is_tree() {
             self.with_worktree_dir(worktree, diff_entry, worktree_entry)?
@@ -439,9 +439,9 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
             match diff_entry {
                 // case 9/case 10: B1 x B1|B2
                 TreeDiffEntry::DeletedBlob(entry) =>
-                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                    if self.index.is_worktree_entry_modified(&mut worktree_entry)? {
                         // case 10: B1 x B2 | delete of modified blob (forceable)
-                        cond!(self.opts.is_forced() => self.delete(entry); self.conflict(entry))
+                        cond!(self.opts.is_forced() => self.delete(worktree_entry); self.conflict(entry))
                     } else {
                         // case 9: B1 x B1 | delete blob (safe)
                         self.delete(entry)?
@@ -453,7 +453,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
                 // case 16/17/18: B1 B2 (B1|B2|B3)
                 TreeDiffEntry::ModifiedBlob(_, entry) =>
-                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                    if self.index.is_worktree_entry_modified(&mut worktree_entry)? {
                         // case 17/case 18: B1 B2 (B2|B3)
                         cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
                     } else {
@@ -472,7 +472,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     },
                 // case 14/case 15: B1 B1 B1/B2
                 TreeDiffEntry::UnmodifiedBlob(entry) =>
-                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                    if self.index.is_worktree_entry_modified(&mut worktree_entry)? {
                         // case 15: B1 B1 B2 | locally modified file (dirty)
                         // change is only applied to index if forced
                         cond!(self.opts.is_forced() => self.update(entry))
@@ -501,7 +501,7 @@ impl<'a, 'rcx> CheckoutCtxt<'a, 'rcx> {
                     },
                 // case 22/case 23: B1 T1 B1/B2
                 TreeDiffEntry::BlobToTree(blob, tree) =>
-                    if self.index.is_worktree_entry_modified(&worktree_entry)? {
+                    if self.index.is_worktree_entry_modified(&mut worktree_entry)? {
                         // case 22
                         cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree); self.conflict(worktree_entry))
                     } else {

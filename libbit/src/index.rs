@@ -72,7 +72,7 @@ trait BitIndexExt {
 }
 
 impl<'rcx> BitIndex<'rcx> {
-    pub fn rollback(&mut self) {
+    pub fn rollback(&self) {
         self.inner.rollback()
     }
 
