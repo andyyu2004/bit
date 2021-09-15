@@ -21,6 +21,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs::FileType;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 pub type PathMode = (BitPath, FileMode);
@@ -32,6 +33,17 @@ pub trait BitEntry {
 
     fn path_mode(&self) -> PathMode {
         (self.path(), self.mode())
+    }
+
+    fn entry_eq(&self, other: &Self) -> bool {
+        self.oid() == other.oid() && self.mode_eq(other) && self.path() == other.path()
+    }
+
+    fn mode_eq(&self, other: &Self) -> bool {
+        // TODO consider filemode setting
+        // TODO in general some bugs where we are not careful with filemode
+        // filemode only blurs REG and EXEC, all other modes are still distinct
+        self.mode() == other.mode()
     }
 
     /// Comparison function for differs
@@ -62,6 +74,7 @@ pub trait BitEntry {
         self.mode().is_gitlink()
     }
 
+    /// Write the entry to the object store
     fn write(&self, repo: BitRepo<'_>) -> BitResult<Oid> {
         let oid = self.oid();
         if oid.is_known() {
@@ -69,6 +82,12 @@ pub trait BitEntry {
         }
         let bytes = self.read_to_bytes(repo)?;
         repo.write_obj(&bytes.as_ref())
+    }
+
+    fn write_to_disk(&self, repo: BitRepo<'_>) -> BitResult<()> {
+        let bytes = self.read_to_bytes(repo)?;
+        let mut file = std::fs::File::create(repo.to_absolute_path(self.path()))?;
+        Ok(file.write_all(&bytes)?)
     }
 
     fn read_to_bytes<'rcx>(&self, repo: BitRepo<'rcx>) -> BitResult<Cow<'rcx, [u8]>> {

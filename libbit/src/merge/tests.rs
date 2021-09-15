@@ -1,4 +1,4 @@
-use crate::error::BitResult;
+use crate::error::{BitErrorExt, BitResult};
 use crate::graph::{Dag, DagBuilder, DagNode, Node};
 use crate::index::{Conflict, ConflictType};
 use crate::merge::MergeResults;
@@ -268,15 +268,6 @@ fn test_fast_forward_merge() -> BitResult<()> {
 }
 
 impl<'rcx> BitRepo<'rcx> {
-    /// Setup a repository to have the following structure
-    ///        ours
-    ///      /  ^
-    /// base   HEAD
-    ///      \
-    ///       theirs
-    /// Where `base` is the old HEAD
-    /// Then merge theirs into HEAD
-    /// This won't work if `self` is an empty repo
     fn three_way_merge(
         self,
         ours: impl Treeish<'rcx>,
@@ -292,6 +283,30 @@ impl<'rcx> BitRepo<'rcx> {
         bit_merge!(self: "theirs")
     }
 
+    /// Setup a repository to have the following structure
+    ///        ours
+    ///      /  ^
+    /// base   HEAD
+    ///      \
+    ///       theirs
+    /// Where `base` is the old HEAD
+    /// Then merge theirs into HEAD
+    /// This won't work if `self` is an empty repo
+    fn setup_three_way_merge(
+        self,
+        ours: impl Treeish<'rcx>,
+        theirs: impl Treeish<'rcx>,
+    ) -> BitResult<()> {
+        bit_branch!(self: "base");
+        self.checkout_tree(theirs)?;
+        bit_commit!(self: --allow-empty);
+        bit_branch!(self: "theirs");
+        bit_checkout!(self: "base")?;
+        self.checkout_tree(ours)?;
+        bit_commit!(self: --allow-empty);
+        Ok(())
+    }
+
     /// Same as `three_way_merge` except the base is reset to the provided base commit
     fn three_way_merge_with_base(
         self,
@@ -304,8 +319,8 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
-/// Test case where the file is present only in our head, not in base or other.
-/// This means we added the file and it should be kept.
+/// Test case where the file is present only in our head, not in base or other
+/// This means we added the file and it should be kept
 #[test]
 fn test_merge_our_head_only() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
@@ -316,6 +331,115 @@ fn test_merge_our_head_only() -> BitResult<()> {
         let theirs = commit! {};
         repo.three_way_merge_with_base(base, ours, theirs)?;
         assert_eq!(cat!(repo: "foo"), "hello");
+        Ok(())
+    })
+}
+
+/// Test case where the file is present only in base
+/// Both new heads deleted the file so it should be deleted
+#[test]
+fn test_merge_base_only() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {};
+        let theirs = commit! {};
+        repo.three_way_merge(ours, theirs)?;
+        assert!(!exists!(repo: "foo"));
+        Ok(())
+    })
+}
+
+/// Test case where the file is present only in their head
+#[test]
+fn test_merge_theirs_only() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let base = commit! {};
+        let ours = commit! {};
+        let theirs = commit! {
+            foo < "theirs"
+        };
+        repo.three_way_merge_with_base(base, ours, theirs)?;
+        assert_eq!(cat!(repo: "foo"), "theirs");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_deleted_in_ours_and_unchanged_in_theirs() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {};
+        let theirs = commit! {
+            foo < "default foo contents"
+        };
+        repo.three_way_merge(ours, theirs)?;
+        assert!(!exists!(repo: "foo"));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_unchanged_in_ours_and_deleted_in_theirs() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo < "default foo contents"
+        };
+        let theirs = commit! {};
+        repo.three_way_merge(ours, theirs)?;
+        assert!(!exists!(repo: "foo"));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_deleted_in_ours_and_modified_in_theirs() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {};
+        let theirs = commit! {
+            foo < "modified"
+        };
+        let merge_conflict =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let conflicts = merge_conflict.conflicts;
+        assert_eq!(conflicts[0], Conflict::new_with_type(p!("foo"), ConflictType::DeleteModify));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_modified_in_ours_and_deleted_in_theirs() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo < "modified"
+        };
+        let theirs = commit! {};
+        let merge_conflict =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let conflicts = merge_conflict.conflicts;
+        assert_eq!(conflicts[0], Conflict::new_with_type(p!("foo"), ConflictType::ModifyDelete));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_with_unclean_worktree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo < "default foo contents"
+        };
+        let theirs = commit! {};
+        repo.setup_three_way_merge(ours, theirs)?;
+        modify!(repo: "foo" < "modified");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_file_to_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo < "modified"
+        };
+        let theirs = commit! {};
+        let merge_conflict = repo.three_way_merge(ours, theirs)?;
         Ok(())
     })
 }

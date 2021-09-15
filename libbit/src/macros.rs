@@ -7,6 +7,10 @@ macro_rules! ensure_eq {
     };
 }
 
+macro_rules! arrayvec {
+    ($($tt:tt)*) => { arrayvec::ArrayVec::from([$($tt)*])}
+}
+
 macro_rules! bug {
     ($($arg:tt)*) => {{
         eprintln!("BUG! Please file an issue!");

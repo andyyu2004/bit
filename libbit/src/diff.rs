@@ -460,7 +460,7 @@ impl<'rcx> BitIndex<'rcx> {
             return Ok(Changed::Yes);
         }
 
-        if self.repo.config().filemode() && idxe.mode != wte.mode {
+        if !idxe.mode_eq(&wte) {
             debug!("{} changed: filemode {} -> {}", idxe.path, idxe.mode, wte.mode);
             return Ok(Changed::Yes);
         }

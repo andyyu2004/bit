@@ -36,6 +36,11 @@ impl Conflict {
     pub fn new((path, stages): (BitPath, ArrayVec<MergeStage, 3>)) -> Self {
         Self { path, conflict_type: ConflictType::new(stages) }
     }
+
+    #[cfg(test)]
+    pub fn new_with_type(path: impl AsRef<std::ffi::OsStr>, conflict_type: ConflictType) -> Self {
+        Self { path: BitPath::intern(path), conflict_type }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

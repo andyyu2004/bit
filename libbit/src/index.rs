@@ -166,6 +166,7 @@ impl<'rcx> BitIndex<'rcx> {
 
     /// Makes the index exactly match the working tree (removes, updates, and adds)
     pub fn add_all(&mut self) -> BitResult<()> {
+        // TODO use iterator diff api
         let diff = self.diff_worktree(Pathspec::MATCH_ALL)?;
         self.apply_diff(&diff)?;
 

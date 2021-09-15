@@ -41,10 +41,10 @@ impl BitObjDb {
             // I think it will always be true that pack contains far more objects than loose, and
             // so in terms of chance we will have a much higher success rate if we look in pack first
             // and save the wasted work from searching in loose.
-            backends: ArrayVec::from([
+            backends: arrayvec![
                 Box::new(BitPackedObjDb::new(objects_path)?),
                 Box::new(BitLooseObjDb::new(objects_path)) as Box<dyn BitObjDbBackend>,
-            ]),
+            ],
         })
     }
 }
