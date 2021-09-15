@@ -182,8 +182,7 @@ impl<'rcx> MergeCtxt<'rcx> {
                 message,
             )?;
 
-            repo.force_checkout_tree(merge_commit)?;
-            repo.update_current_ref_for_merge(their_head)?;
+            repo.update_current_ref_for_merge(merge_commit)?;
         }
 
         Ok(MergeResults::Merge(MergeSummary {}))
@@ -222,15 +221,15 @@ impl<'rcx> MergeCtxt<'rcx> {
     fn merge_entries(
         &mut self,
         base: Option<BitIndexEntry>,
-        a: Option<BitIndexEntry>,
-        b: Option<BitIndexEntry>,
+        ours: Option<BitIndexEntry>,
+        theirs: Option<BitIndexEntry>,
     ) -> BitResult<()> {
         debug!(
-            "merge_entries(path: {:?}, {:?}, {:?}, {:?})",
-            base.or(a).or(b).map(|entry| entry.path),
+            "merge_entries(path: {:?}, base: {:?}, ours: {:?}, theirs: {:?})",
+            base.or(ours).or(theirs).map(|entry| entry.path),
             base.as_ref().map(BitEntry::oid),
-            a.as_ref().map(BitEntry::oid),
-            b.as_ref().map(BitEntry::oid)
+            ours.as_ref().map(BitEntry::oid),
+            theirs.as_ref().map(BitEntry::oid)
         );
 
         let repo = self.repo;
@@ -278,34 +277,33 @@ impl<'rcx> MergeCtxt<'rcx> {
                 }
             };
 
-        match (base, a, b) {
+        match (base, ours, theirs) {
             (None, None, None) => unreachable!(),
             // present in ancestor but removed in both newer commits so just remove it
-            (Some(b), None, None) => {
-                index.remove_entry(b.key());
-                Ok(())
-            }
+            (Some(b), None, None) => index.remove_entry(b.key()),
             // y/z is a new file that is not present in the other two
-            (None, Some(entry), None) | (None, None, Some(entry)) => index.add_entry(entry),
-            // unchanged in relative to the base in one, but removed in the other
-            (Some(b), Some(x), None) | (Some(b), None, Some(x)) if b.oid == x.oid => {
-                index.remove_entry(x.key());
-                Ok(())
+            (None, Some(entry), None) => index.add_entry_from_path(&entry.path)?,
+            (None, None, Some(entry)) => {
+                todo!("write file to disk and then add to index `from_path` like above")
             }
+            // unchanged in relative to the base in one, but removed in the other
+            (Some(b), Some(x), None) | (Some(b), None, Some(x)) if b.oid == x.oid =>
+                index.remove_entry(x.key()),
             // modify/delete conflict
             (Some(b), Some(y), None) => {
                 index.add_conflicted_entry(b, MergeStage::Base)?;
-                index.add_conflicted_entry(y, MergeStage::Left)
+                index.add_conflicted_entry(y, MergeStage::Left)?;
             }
             (Some(b), None, Some(z)) => {
                 index.add_conflicted_entry(b, MergeStage::Base)?;
-                index.add_conflicted_entry(z, MergeStage::Right)
+                index.add_conflicted_entry(z, MergeStage::Right)?;
             }
             // merge
-            (None, Some(y), Some(z)) => three_way_merge(None, y, z),
-            (Some(b), Some(y), Some(z)) if b.oid() == y.oid() && y.oid() == z.oid() => Ok(()),
-            (Some(b), Some(y), Some(z)) => three_way_merge(Some(b), y, z),
+            (None, Some(y), Some(z)) => three_way_merge(None, y, z)?,
+            (Some(b), Some(y), Some(z)) if b.oid() == y.oid() && y.oid() == z.oid() => {}
+            (Some(b), Some(y), Some(z)) => three_way_merge(Some(b), y, z)?,
         }
+        Ok(())
     }
 }
 

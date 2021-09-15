@@ -186,7 +186,10 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn read_commit_msg(self) -> BitResult<CommitMessage> {
-        let editor = std::env::var("EDITOR").expect("$EDITOR variable is not set");
+        let editor = match std::env::var("EDITOR") {
+            Ok(editor) => editor,
+            Err(..) => bail!("$EDITOR variable not set"),
+        };
         let template = r#"
 # Please; enter the commit message for your changes. Lines starting
 # with '#' will be ignored, and an empty message aborts the commit."#;

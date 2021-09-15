@@ -143,8 +143,8 @@ impl<'rcx> BitIndex<'rcx> {
 
     /// Add fully populated index entry to the index. If entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, entry: BitIndexEntry) -> BitResult<()> {
-        debug_assert_ne!(
-            entry.inode, 0,
+        assert!(
+            entry.inode != 0 && entry.filesize != BitIndexEntry::UNKNOWN_SIZE,
             "detected unfilled index entry (was this created from a tree entry?)"
         );
         self.remove_conflicted(entry.path);

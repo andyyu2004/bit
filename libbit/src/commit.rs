@@ -10,14 +10,20 @@ use std::fmt::{self, Display, Formatter};
 
 #[bitflags]
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum BitStatusFlags {
     Initial,
 }
 
+#[derive(Debug, Default)]
+pub struct CommitOpts {
+    pub message: Option<String>,
+    pub allow_empty: bool,
+}
+
 impl<'rcx> BitRepo<'rcx> {
     // TODO return a BitCommitReport which includes the oid, and kind (CommitKind) etc
-    pub fn commit(self, msg: Option<String>) -> BitResult<CommitSummary<'rcx>> {
+    pub fn commit(self, opts: CommitOpts) -> BitResult<CommitSummary<'rcx>> {
         let head = self.read_head()?;
         let sym = match head {
             BitRef::Direct(..) => SymbolicRef::HEAD,
@@ -28,14 +34,15 @@ impl<'rcx> BitRepo<'rcx> {
         let tree = self.write_tree()?;
         let head_tree = self.head_tree()?;
 
-        // don't allow empty commits; also don't currently provide the option to do so as it's not that useful
-        // the rhs of the disjunction checks for the case of an empty initial commit
-        if tree == head_tree || head_tree.is_unknown() && tree == Oid::EMPTY_TREE {
+        // The RHS of the disjunction checks for the case of an empty initial commit
+        let commit_is_empty =
+            tree == head_tree || head_tree.is_unknown() && tree == Oid::EMPTY_TREE;
+        if !opts.allow_empty && commit_is_empty {
             // rather oddly, we bail with the status report as the error message
             bail!(self.status(Pathspec::MATCH_ALL)?)
         }
 
-        let commit_oid = self.commit_tree(tree, parent.into_iter().collect(), msg)?;
+        let commit_oid = self.commit_tree(tree, parent.into_iter().collect(), opts.message)?;
         let commit = commit_oid.peel(self)?;
 
         // TODO print status of commit

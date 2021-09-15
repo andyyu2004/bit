@@ -72,6 +72,7 @@ mod debug;
 
 pub mod checkout;
 pub mod cmd;
+pub mod commit;
 pub mod config;
 pub mod diff;
 pub mod error;
@@ -91,7 +92,6 @@ pub mod serialize;
 pub mod status;
 pub mod xdiff;
 
-mod commit;
 mod core;
 mod delta;
 mod interner;

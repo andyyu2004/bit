@@ -2,7 +2,7 @@ use crate::error::BitResult;
 use crate::graph::{Dag, DagBuilder, DagNode, Node};
 use crate::index::{Conflict, ConflictType};
 use crate::merge::MergeResults;
-use crate::obj::{BitObject, CommitMessage, Oid};
+use crate::obj::{BitObject, CommitMessage, Oid, Treeish};
 use crate::repo::BitRepo;
 use crate::test_utils::generate_random_string;
 use fallible_iterator::FallibleIterator;
@@ -116,7 +116,7 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
         bit_reset!(repo: --hard rev!(commits[&c]));
         assert_eq!(cat!(repo: "foo"), "foo contents");
         bit_branch!(repo: "d" @ rev!(commits[&d]));
-        bit_merge!(repo: "d");
+        bit_merge!(repo: "d")?;
         assert!(bit_status!(repo).is_empty());
 
         Ok(())
@@ -165,7 +165,7 @@ fn test_nontrivial_criss_cross_merge() -> BitResult<()> {
         bit_reset!(repo: --hard rev!(commits[&c]));
         bit_branch!(repo: "d" @ rev!(commits[&d]));
 
-        bit_merge!(repo: "d");
+        bit_merge!(repo: "d")?;
 
         Ok(())
     })
@@ -243,8 +243,8 @@ fn test_null_merge() -> BitResult<()> {
         bit_branch!(repo: -b "b");
         modify!(repo: "foo");
         bit_commit_all!(repo);
-        let merge_kind = bit_merge!(repo: "master");
-        assert_eq!(merge_kind, MergeResults::Null);
+        let merge_results = bit_merge!(repo: "master")?;
+        assert_eq!(merge_results, MergeResults::Null);
         Ok(())
     })
 }
@@ -256,13 +256,66 @@ fn test_fast_forward_merge() -> BitResult<()> {
         modify!(repo: "foo");
         bit_commit_all!(repo);
         bit_checkout!(repo: "master")?;
-        let merge_kind = bit_merge!(repo: "b");
-        assert_eq!(merge_kind, MergeResults::FastForward { to: symbolic_ref!("refs/heads/b") });
+        let merge_results = bit_merge!(repo: "b")?;
+        assert_eq!(merge_results, MergeResults::FastForward { to: symbolic_ref!("refs/heads/b") });
 
         // HEAD should not have moved
         assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/master"));
         // But `master` itself should now point to the same commit as `b`
         assert_eq!(repo.fully_resolve_ref("master")?, repo.fully_resolve_ref("b")?);
+        Ok(())
+    })
+}
+
+impl<'rcx> BitRepo<'rcx> {
+    /// Setup a repository to have the following structure
+    ///        ours
+    ///      /  ^
+    /// base   HEAD
+    ///      \
+    ///       theirs
+    /// Where `base` is the old HEAD
+    /// Then merge theirs into HEAD
+    /// This won't work if `self` is an empty repo
+    fn three_way_merge(
+        self,
+        ours: impl Treeish<'rcx>,
+        theirs: impl Treeish<'rcx>,
+    ) -> BitResult<MergeResults> {
+        bit_branch!(self: "base");
+        self.checkout_tree(theirs)?;
+        bit_commit!(self: --allow-empty);
+        bit_branch!(self: "theirs");
+        bit_checkout!(self: "base")?;
+        self.checkout_tree(ours)?;
+        bit_commit!(self: --allow-empty);
+        bit_merge!(self: "theirs")
+    }
+
+    /// Same as `three_way_merge` except the base is reset to the provided base commit
+    fn three_way_merge_with_base(
+        self,
+        base: Oid,
+        ours: impl Treeish<'rcx>,
+        theirs: impl Treeish<'rcx>,
+    ) -> BitResult<MergeResults> {
+        bit_reset!(self: --hard &rev!(base));
+        self.three_way_merge(ours, theirs)
+    }
+}
+
+/// Test case where the file is present only in our head, not in base or other.
+/// This means we added the file and it should be kept.
+#[test]
+fn test_merge_our_head_only() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let base = commit! {};
+        let ours = commit! {
+            foo < "hello"
+        };
+        let theirs = commit! {};
+        repo.three_way_merge_with_base(base, ours, theirs)?;
+        assert_eq!(cat!(repo: "foo"), "hello");
         Ok(())
     })
 }

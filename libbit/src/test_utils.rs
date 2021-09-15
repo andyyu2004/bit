@@ -145,8 +145,17 @@ macro_rules! test_serde {
     }};
 }
 macro_rules! bit_commit {
+    ($repo:ident: --allow-empty) => {
+        $repo.commit($crate::commit::CommitOpts {
+            message: Some(String::from("arbitrary message")),
+            allow_empty: true,
+        })?
+    };
     ($repo:expr) => {
-        $repo.commit(Some(String::from("arbitrary message")))?
+        $repo.commit($crate::commit::CommitOpts {
+            message: Some(String::from("arbitrary message")),
+            allow_empty: false,
+        })?
     };
 }
 
@@ -205,19 +214,14 @@ macro_rules! bit_commit_all {
 macro_rules! bit_merge {
     ($repo:ident: $rev:expr) => {{
         let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
-        $repo.merge_rev(&revision, $crate::merge::MergeOpts::NO_EDIT).unwrap()
+        $repo.merge_rev(&revision, $crate::merge::MergeOpts::NO_EDIT)
     }};
 }
 
 macro_rules! bit_merge_expect_conflicts {
     ($repo:ident: $rev:expr) => {{
-        use crate::error::*;
-        let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
-        $repo
-            .merge_rev(&revision, $crate::merge::MergeOpts::NO_EDIT)
-            .unwrap_err()
-            .try_into_merge_conflict()
-            .unwrap()
+        use $crate::error::BitErrorExt;
+        bit_merge!($repo: $rev).unwrap_err().try_into_merge_conflict().unwrap()
     }};
 }
 
