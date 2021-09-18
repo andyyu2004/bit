@@ -865,7 +865,59 @@ fn test_safe_checkout_typechange_tree_to_blob_with_conflicting() -> BitResult<()
     })
 }
 
+// case 31 (safe)
+#[test]
+fn test_safe_checkout_typechange_tree_to_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        bit_branch!(repo: "original");
+        let target = commit! {
+            foo {
+                bar
+            }
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        bit_checkout!(repo: "original")?;
+        assert_eq!(cat!(repo: "foo"), "default foo contents");
+        Ok(())
+    })
+}
+
+// case 31 (conflict)
+#[test]
+fn test_safe_checkout_typechange_tree_to_blob_with_local_changes() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        bit_branch!(repo: "original");
+        let target = commit! {
+            foo {
+                bar
+            }
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        // make local changes so is no longer safe to checkout
+        modify!(repo: "foo/bar");
+        bit_checkout!(repo: "original").unwrap_err().try_into_checkout_conflict()?;
+        Ok(())
+    })
+}
+
 // case 31 (forced)
+#[test]
+fn test_force_checkout_typechange_tree_to_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        bit_branch!(repo: "original");
+        let target = commit! {
+            foo {
+                bar
+            }
+        };
+        bit_checkout!(repo: &rev!(target))?;
+        bit_checkout!(repo: --force "original")?;
+        assert_eq!(cat!(repo: "foo"), "default foo contents");
+        Ok(())
+    })
+}
+
+// case 31 (forced) don't think this test case actually hits the case 31 codepath
 #[test]
 fn test_force_checkout_typechange_tree_to_blob_with_conflicting() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {

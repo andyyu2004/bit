@@ -420,8 +420,22 @@ impl<'rcx> CheckoutCtxt<'rcx> {
                     worktree.over()?;
                     self.conflict(tree.step_over()?)?
                 },
-            TreeDiffEntry::TreeToBlob(_, _) => todo!(),
-        };
+            // case 31 T1 B1 T1/T2 | typechange tree->blob
+            TreeDiffEntry::TreeToBlob(tree, blob) =>
+                if self.opts.is_forced() {
+                    self.tree_to_blob(tree, blob)?
+                } else {
+                    // It is safe to replace tree with blob if there are no local changes
+                    let has_local_changes =
+                        self.repo.trees_are_diff(tree.iter(), worktree.as_consumer().iter())?;
+                    if has_local_changes {
+                        self.conflict(blob)?
+                    } else {
+                        self.delete_worktree_tree(worktree_entry)?;
+                        self.create(blob)?;
+                    }
+                },
+        }
         Ok(())
     }
 
