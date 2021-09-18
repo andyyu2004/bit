@@ -3,6 +3,7 @@ use crate::io::BufReadExt;
 use crate::iter::BitEntry;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
+use std::borrow::Cow;
 use std::fmt::{self, Debug, Formatter};
 use std::iter::FromIterator;
 use std::os::unix::fs::MetadataExt;
@@ -172,19 +173,30 @@ const ENTRY_SIZE_WITHOUT_FILEPATH: usize = std::mem::size_of::<u64>() // ctime
 impl BitIndexEntry {
     pub const UNKNOWN_SIZE: u32 = u32::MAX;
 
-    pub fn from_path(repo: BitRepo<'_>, path: &Path) -> BitResult<Self> {
-        let normalized = repo.normalize_path(path)?;
-        let relative = repo.to_relative_path(&normalized)?;
+    /// Fill stat data for the entry
+    pub fn fill(&mut self, repo: BitRepo<'_>) -> BitResult<()> {
+        if !self.is_filled() {
+            // we want the stat information, but we also do not want to rehash the object when we already know it
+            let mut entry = BitIndexEntry::from_relative_path(repo, self.path())?;
+            entry.oid = self.oid;
+            debug_assert!(entry.mode == self.mode);
+            *self = entry;
+        }
 
+        Ok(())
+    }
+
+    /// Returns whether this entry contains filled stat information
+    pub fn is_filled(&self) -> bool {
+        self.inode != 0 && self.filesize != BitIndexEntry::UNKNOWN_SIZE
+    }
+
+    fn new(normalized: Cow<'_, Path>, relative_path: BitPath) -> BitResult<Self> {
         debug_assert!(!normalized.is_dir(), "bit index entry should not be a directory");
         let metadata = normalized.symlink_metadata()?;
 
-        // the path must be relative to the repository root
-        // as this is the correct representation for the index entry
-        // and otherwise, the pathlen in the flags will be off
-        let path = BitPath::intern(relative);
         Ok(Self {
-            path,
+            path: relative_path,
             ctime: Timespec::ctime(&metadata),
             mtime: Timespec::mtime(&metadata),
             device: metadata.dev() as u32,
@@ -196,9 +208,21 @@ impl BitIndexEntry {
             // we don't calculate oid upfront as an optimization
             // we first try to use the index metadata to detect change
             oid: Oid::UNKNOWN,
-            flags: BitIndexEntryFlags::with_path_len(path.len()),
+            flags: BitIndexEntryFlags::with_path_len(relative_path.len()),
             extended_flags: BitIndexEntryExtendedFlags::default(),
         })
+    }
+
+    pub fn from_relative_path(repo: BitRepo<'_>, relative: BitPath) -> BitResult<Self> {
+        debug_assert!(relative.is_relative());
+        let normalized = repo.normalize_path(&relative)?;
+        Self::new(normalized, relative)
+    }
+
+    pub fn from_absolute_path(repo: BitRepo<'_>, absolute: &Path) -> BitResult<Self> {
+        let relative = BitPath::intern(repo.to_relative_path(&absolute)?);
+        let normalized = repo.normalize_path(absolute)?;
+        Self::new(normalized, relative)
     }
 
     pub fn stage(&self) -> MergeStage {

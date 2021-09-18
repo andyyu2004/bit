@@ -54,10 +54,10 @@ pub enum ConflictType {
 impl ConflictType {
     fn new(stages: ArrayVec<MergeStage, 3>) -> Self {
         match &stages[..] {
-            [MergeStage::Base, MergeStage::Left, MergeStage::Right] => Self::BothModified,
-            [MergeStage::Left, MergeStage::Right] => Self::BothAdded,
-            [MergeStage::Base, MergeStage::Left] => Self::ModifyDelete,
-            [MergeStage::Base, MergeStage::Right] => Self::DeleteModify,
+            [MergeStage::Base, MergeStage::Ours, MergeStage::Theirs] => Self::BothModified,
+            [MergeStage::Ours, MergeStage::Theirs] => Self::BothAdded,
+            [MergeStage::Base, MergeStage::Ours] => Self::ModifyDelete,
+            [MergeStage::Base, MergeStage::Theirs] => Self::DeleteModify,
             _ => unreachable!("probably missing some cases `{:?}`", stages),
         }
     }
@@ -106,8 +106,8 @@ impl BitIndexInner {
 
     pub(super) fn remove_conflicted(&mut self, path: BitPath) {
         self.remove_entry((path, MergeStage::Base));
-        self.remove_entry((path, MergeStage::Left));
-        self.remove_entry((path, MergeStage::Right));
+        self.remove_entry((path, MergeStage::Ours));
+        self.remove_entry((path, MergeStage::Theirs));
     }
 
     pub fn conflicts(&self) -> Conflicts {

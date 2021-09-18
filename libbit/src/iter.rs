@@ -86,7 +86,11 @@ pub trait BitEntry {
 
     fn write_to_disk(&self, repo: BitRepo<'_>) -> BitResult<()> {
         let bytes = self.read_to_bytes(repo)?;
-        let mut file = std::fs::File::create(repo.to_absolute_path(self.path()))?;
+        let mut file = std::fs::File::with_options()
+            .create_new(true)
+            .write(true)
+            .read(false)
+            .open(repo.to_absolute_path(self.path()))?;
         Ok(file.write_all(&bytes)?)
     }
 
@@ -302,7 +306,7 @@ impl FallibleIterator for WorktreeIter<'_> {
                 continue;
             }
 
-            return BitIndexEntry::from_path(self.inner.repo, &entry.path).map(Some);
+            return BitIndexEntry::from_absolute_path(self.inner.repo, &entry.path).map(Some);
         }
     }
 }

@@ -138,15 +138,12 @@ impl<'rcx> BitIndex<'rcx> {
     }
 
     pub fn add_entry_from_path(&mut self, path: &Path) -> BitResult<()> {
-        self.add_entry(BitIndexEntry::from_path(self.repo, path)?)
+        self.add_entry(BitIndexEntry::from_absolute_path(self.repo, path)?)
     }
 
     /// Add fully populated index entry to the index. If entry with the same path already exists, it will be replaced
-    pub fn add_entry(&mut self, entry: BitIndexEntry) -> BitResult<()> {
-        assert!(
-            entry.inode != 0 && entry.filesize != BitIndexEntry::UNKNOWN_SIZE,
-            "detected unfilled index entry (was this created from a tree entry?)"
-        );
+    pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
+        entry.fill(self.repo)?;
         self.remove_conflicted(entry.path);
         self.add_entry_common(entry)
     }
@@ -162,6 +159,21 @@ impl<'rcx> BitIndex<'rcx> {
         entry.set_stage(stage);
         self.add_entry_common(entry)?;
         Ok(())
+    }
+
+    pub(crate) fn unlink_and_remove_blob(
+        &mut self,
+        (path, stage): (BitPath, MergeStage),
+    ) -> BitResult<()> {
+        std::fs::remove_file(self.repo.to_absolute_path(&path))?;
+        self.remove_entry((path, stage));
+        Ok(())
+    }
+
+    pub(crate) fn write_and_add_blob(&mut self, entry: BitIndexEntry) -> BitResult<()> {
+        debug_assert!(entry.oid.is_known());
+        entry.write_to_disk(self.repo)?;
+        self.add_entry(entry)
     }
 
     /// Makes the index exactly match the working tree (removes, updates, and adds)
@@ -246,10 +258,10 @@ pub struct BitIndexExtension {
 #[repr(u8)]
 pub enum MergeStage {
     /// not merging
-    None  = 0,
-    Base  = 1,
-    Left  = 2,
-    Right = 3,
+    None   = 0,
+    Base   = 1,
+    Ours   = 2,
+    Theirs = 3,
 }
 
 #[cfg(test)]

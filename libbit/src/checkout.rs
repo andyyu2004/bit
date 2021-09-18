@@ -198,7 +198,7 @@ impl<'rcx> BitRepo<'rcx> {
                 file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
             }
 
-            index.add_entry(BitIndexEntry::from_path(self, &path)?)?;
+            index.add_entry(BitIndexEntry::from_absolute_path(self, &path)?)?;
         }
         Ok(())
     }

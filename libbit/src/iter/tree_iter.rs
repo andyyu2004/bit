@@ -317,7 +317,7 @@ impl<'rcx> TreeIter<'rcx> {
         debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_treeish());
         let oid = if oid.is_known() { oid } else { Oid::EMPTY_TREE };
         let entry_stack = vec![TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE }];
-        Self { repo, previous_len: 0, entry_stack }
+        Self { repo, entry_stack, previous_len: 0 }
     }
 }
 

@@ -432,14 +432,14 @@ fn test_merge_with_unclean_worktree() -> BitResult<()> {
     })
 }
 
-#[test]
-fn test_merge_file_to_tree() -> BitResult<()> {
-    BitRepo::with_minimal_repo(|repo| {
-        let ours = commit! {
-            foo < "modified"
-        };
-        let theirs = commit! {};
-        let merge_conflict = repo.three_way_merge(ours, theirs)?;
-        Ok(())
-    })
-}
+// #[test]
+// fn test_merge_file_to_tree() -> BitResult<()> {
+//     BitRepo::with_minimal_repo(|repo| {
+//         let ours = commit! {
+//             foo < "modified"
+//         };
+//         let theirs = commit! {};
+//         let merge_conflict = repo.three_way_merge(ours, theirs)?;
+//         Ok(())
+//     })
+// }

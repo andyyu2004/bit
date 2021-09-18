@@ -2,7 +2,7 @@ use crate::checkout::CheckoutOpts;
 use crate::error::{BitError, BitResult};
 use crate::index::{BitIndexEntry, Conflicts, MergeStage};
 use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
-use crate::obj::{BitObject, Commit, CommitMessage, Oid};
+use crate::obj::{BitObject, Commit, CommitMessage, FileMode, Oid};
 use crate::pathspec::Pathspec;
 use crate::peel::Peel;
 use crate::refs::BitRef;
@@ -200,9 +200,9 @@ impl<'rcx> MergeCtxt<'rcx> {
         let repo = self.repo;
         let merge_base_tree = merge_base.map(|c| c.tree_oid()).unwrap_or(Oid::UNKNOWN);
         self.merge_from_iterators(
-            repo.tree_iter(merge_base_tree).skip_trees(),
-            repo.tree_iter(our_head_commit.tree_oid()).skip_trees(),
-            repo.tree_iter(their_head_commit.tree_oid()).skip_trees(),
+            repo.tree_iter(merge_base_tree),
+            repo.tree_iter(our_head_commit.tree_oid()),
+            repo.tree_iter(their_head_commit.tree_oid()),
         )
     }
 
@@ -221,19 +221,200 @@ impl<'rcx> MergeCtxt<'rcx> {
         Ok(())
     }
 
+    // fn merge_entries(
+    //     &mut self,
+    //     base: Option<BitIndexEntry>,
+    //     ours: Option<BitIndexEntry>,
+    //     theirs: Option<BitIndexEntry>,
+    // ) -> BitResult<()> {
+    //     debug!(
+    //         "merge_entries(path: {:?}, base: {:?}, ours: {:?}, theirs: {:?})",
+    //         base.or(ours).or(theirs).map(|entry| entry.path),
+    //         base.as_ref().map(BitEntry::oid),
+    //         ours.as_ref().map(BitEntry::oid),
+    //         theirs.as_ref().map(BitEntry::oid)
+    //     );
+
+    //     let repo = self.repo;
+    //     let mut index = repo.index_mut()?;
+
+    //     let mut three_way_merge = |base: Option<BitIndexEntry>,
+    //                                ours: BitIndexEntry,
+    //                                theirs: BitIndexEntry| {
+    //         debug_assert_eq!(ours.path, theirs.path);
+    //         let path = ours.path;
+
+    //         let base_bytes = match base {
+    //             Some(b) => b.read_to_bytes(repo)?,
+    //             None => Cow::Owned(vec![]),
+    //         };
+
+    //         if ours.mode != theirs.mode {
+    //             todo!("mode conflict");
+    //         }
+
+    //         let full_path = repo.normalize_path(path.as_path())?;
+    //         let mut file = std::fs::OpenOptions::new().read(false).write(true).open(&full_path)?;
+    //         match xdiff::merge(
+    //             repo.config().conflict_style(),
+    //             "HEAD",
+    //             &self.their_head_desc,
+    //             &base_bytes,
+    //             &ours.read_to_bytes(repo)?,
+    //             &theirs.read_to_bytes(repo)?,
+    //         ) {
+    //             Ok(merged) => {
+    //                 // write the merged file to disk
+    //                 file.write_all(&merged)?;
+    //                 index.add_entry_from_path(&full_path)
+    //             }
+    //             Err(conflicted) => {
+    //                 // write the conflicted file to disk
+    //                 file.write_all(&conflicted)?;
+    //                 if let Some(b) = base {
+    //                     index.add_conflicted_entry(b, MergeStage::Base)?;
+    //                 }
+    //                 index.add_conflicted_entry(ours, MergeStage::Left)?;
+    //                 index.add_conflicted_entry(theirs, MergeStage::Right)?;
+
+    //                 Ok(())
+    //             }
+    //         }
+    //     };
+
+    //     match (base, ours, theirs) {
+    //         (None, None, None) => unreachable!(),
+    //         // present in ancestor but removed in both newer commits so just remove it
+    //         (Some(base), None, None) => index.remove_entry(base.key()),
+    //         // y/z is a new file that is not present in the other two
+    //         (None, Some(ours), None) => index.add_entry_from_path(&ours.path)?,
+    //         (None, None, Some(theirs)) => {
+    //             theirs.write_to_disk(repo)?;
+    //             index.add_entry_from_path(&theirs.path)?
+    //         }
+    //         // unchanged in relative to the base in one, but removed in the other
+    //         (Some(base), Some(ours), None) if base.entry_eq(&ours) => {
+    //             std::fs::remove_file(repo.to_absolute_path(ours.path))?;
+    //             index.remove_entry(ours.key())
+    //         }
+    //         (Some(base), None, Some(theirs)) if base.entry_eq(&theirs) =>
+    //             index.remove_entry(theirs.key()),
+    //         // modify/delete conflict
+    //         (Some(base), Some(ours), None) => {
+    //             index.add_conflicted_entry(base, MergeStage::Base)?;
+    //             index.add_conflicted_entry(ours, MergeStage::Left)?;
+    //         }
+    //         (Some(base), None, Some(theirs)) => {
+    //             index.add_conflicted_entry(base, MergeStage::Base)?;
+    //             index.add_conflicted_entry(theirs, MergeStage::Right)?;
+    //         }
+    //         // merge
+    //         (None, Some(ours), Some(theirs)) => three_way_merge(None, ours, theirs)?,
+    //         (Some(base), Some(ours), Some(theirs)) =>
+    //             if base.oid() == ours.oid() && ours.oid() == theirs.oid() {
+    //                 // nothing has changed between the three trees
+    //             } else {
+    //                 three_way_merge(Some(base), ours, theirs)?
+    //             },
+    //     }
+    //     Ok(())
+    // }
+
+    // this is pretty similar to tree_diff but dissimilar enough to warrant doing it separately I think
+    fn diff_base_to_other(
+        &mut self,
+        base: Option<BitIndexEntry>,
+        other: Option<BitIndexEntry>,
+    ) -> Option<MergeDiffEntry> {
+        match (base, other) {
+            (None, None) => None,
+            (None, Some(other)) => Some(self.other_only(other)),
+            (Some(base), None) => Some(self.base_only(base)),
+            (Some(base), Some(other)) => match base.diff_cmp(&other) {
+                Ordering::Less => Some(self.base_only(base)),
+                Ordering::Greater => Some(self.other_only(other)),
+                Ordering::Equal => {
+                    assert!(base.oid().is_known());
+                    assert!(other.oid().is_known());
+                    match (base.mode(), other.mode()) {
+                        (FileMode::GITLINK, _) | (_, FileMode::GITLINK) => todo!("submodules"),
+                        (FileMode::TREE, FileMode::TREE) if base.oid() == other.oid() =>
+                            Some(MergeDiffEntry::UnmodifiedTree(other)),
+                        (FileMode::TREE, FileMode::TREE) =>
+                            Some(MergeDiffEntry::ModifiedTree(other)),
+                        (FileMode::TREE, _) => Some(MergeDiffEntry::TreeToBlob(other)),
+                        (_, FileMode::TREE) => Some(MergeDiffEntry::BlobToTree(other)),
+                        _ if base.oid() == other.oid() =>
+                            Some(MergeDiffEntry::UnmodifiedBlob(other)),
+                        _ => Some(MergeDiffEntry::ModifiedBlob(other)),
+                    }
+                }
+            },
+        }
+    }
+
+    fn base_only(&mut self, base: BitIndexEntry) -> MergeDiffEntry {
+        match base.mode() {
+            FileMode::REG | FileMode::EXEC | FileMode::LINK => MergeDiffEntry::DeletedBlob(base),
+            FileMode::TREE => MergeDiffEntry::DeletedTree(base),
+            FileMode::GITLINK => todo!(),
+        }
+    }
+
+    fn other_only(&mut self, other: BitIndexEntry) -> MergeDiffEntry {
+        match other.mode() {
+            FileMode::REG | FileMode::EXEC | FileMode::LINK => MergeDiffEntry::CreatedBlob(other),
+            FileMode::TREE => MergeDiffEntry::CreatedTree(other),
+            FileMode::GITLINK => todo!(),
+        }
+    }
+
     fn merge_entries(
         &mut self,
         base: Option<BitIndexEntry>,
         ours: Option<BitIndexEntry>,
         theirs: Option<BitIndexEntry>,
     ) -> BitResult<()> {
-        debug!(
-            "merge_entries(path: {:?}, base: {:?}, ours: {:?}, theirs: {:?})",
-            base.or(ours).or(theirs).map(|entry| entry.path),
-            base.as_ref().map(BitEntry::oid),
-            ours.as_ref().map(BitEntry::oid),
-            theirs.as_ref().map(BitEntry::oid)
-        );
+        let base_to_ours = self.diff_base_to_other(base, ours);
+        let base_to_theirs = self.diff_base_to_other(base, theirs);
+        match (base_to_ours, base_to_theirs) {
+            (None, None) => Ok(()),
+            (None, Some(base_to_theirs)) => self.base_to_theirs_only(base_to_theirs),
+            (Some(base_to_ours), None) => self.base_to_ours_only(base_to_ours),
+            (Some(base_to_ours), Some(base_to_theirs)) =>
+                self.merge_entry(base, base_to_ours, base_to_theirs),
+        }
+    }
+
+    fn base_to_ours_only(&mut self, base_to_ours: MergeDiffEntry) -> BitResult<()> {
+        match base_to_ours {
+            MergeDiffEntry::CreatedBlob(entry) => self.repo.index_mut()?.add_entry(entry),
+            MergeDiffEntry::CreatedTree(_) => todo!(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn base_to_theirs_only(&mut self, base_to_theirs: MergeDiffEntry) -> BitResult<()> {
+        match base_to_theirs {
+            MergeDiffEntry::CreatedBlob(entry) => self.repo.index_mut()?.write_and_add_blob(entry),
+            MergeDiffEntry::CreatedTree(_) => todo!(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn merge_entry(
+        &mut self,
+        base: Option<BitIndexEntry>,
+        base_to_ours: MergeDiffEntry,
+        base_to_theirs: MergeDiffEntry,
+    ) -> BitResult<()> {
+        // debug!(
+        //     "merge_entries(path: {:?}, base: {:?}, ours: {:?}, theirs: {:?})",
+        //     base.or(ours).or(theirs).map(|entry| entry.path),
+        //     base.as_ref().map(BitEntry::oid),
+        //     ours.as_ref().map(BitEntry::oid),
+        //     theirs.as_ref().map(BitEntry::oid)
+        // );
 
         let repo = self.repo;
         let mut index = repo.index_mut()?;
@@ -274,51 +455,86 @@ impl<'rcx> MergeCtxt<'rcx> {
                     if let Some(b) = base {
                         index.add_conflicted_entry(b, MergeStage::Base)?;
                     }
-                    index.add_conflicted_entry(ours, MergeStage::Left)?;
-                    index.add_conflicted_entry(theirs, MergeStage::Right)?;
+                    index.add_conflicted_entry(ours, MergeStage::Ours)?;
+                    index.add_conflicted_entry(theirs, MergeStage::Theirs)?;
 
                     Ok(())
                 }
             }
         };
 
-        match (base, ours, theirs) {
-            (None, None, None) => unreachable!(),
-            // present in ancestor but removed in both newer commits so just remove it
-            (Some(base), None, None) => index.remove_entry(base.key()),
-            // y/z is a new file that is not present in the other two
-            (None, Some(ours), None) => index.add_entry_from_path(&ours.path)?,
-            (None, None, Some(theirs)) => {
-                theirs.write_to_disk(repo)?;
-                index.add_entry_from_path(&theirs.path)?
+        match (base_to_ours, base_to_theirs) {
+            (MergeDiffEntry::DeletedBlob(entry), MergeDiffEntry::DeletedBlob(_)) =>
+                index.remove_entry(entry.key()),
+            (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::ModifiedBlob(theirs)) => {
+                index.add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
+                index.add_conflicted_entry(theirs, MergeStage::Theirs)?;
             }
-            // unchanged in relative to the base in one, but removed in the other
-            (Some(base), Some(ours), None) if base.entry_eq(&ours) => {
-                std::fs::remove_file(repo.to_absolute_path(ours.path))?;
-                index.remove_entry(ours.key())
+            (MergeDiffEntry::DeletedBlob(ours), MergeDiffEntry::UnmodifiedBlob(_)) =>
+                index.remove_entry(ours.key()),
+            (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
+            (MergeDiffEntry::CreatedBlob(ours), MergeDiffEntry::CreatedBlob(theirs)) =>
+                three_way_merge(base, ours, theirs)?,
+            (MergeDiffEntry::CreatedBlob(_), MergeDiffEntry::UnmodifiedBlob(_)) => todo!(),
+            (MergeDiffEntry::CreatedBlob(_), MergeDiffEntry::CreatedTree(_)) => todo!(),
+            (MergeDiffEntry::ModifiedBlob(ours), MergeDiffEntry::DeletedBlob(_)) => {
+                index.add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
+                index.add_conflicted_entry(ours, MergeStage::Ours)?;
             }
-            (Some(base), None, Some(theirs)) if base.entry_eq(&theirs) =>
-                index.remove_entry(theirs.key()),
-            // modify/delete conflict
-            (Some(base), Some(ours), None) => {
-                index.add_conflicted_entry(base, MergeStage::Base)?;
-                index.add_conflicted_entry(ours, MergeStage::Left)?;
-            }
-            (Some(base), None, Some(theirs)) => {
-                index.add_conflicted_entry(base, MergeStage::Base)?;
-                index.add_conflicted_entry(theirs, MergeStage::Right)?;
-            }
-            // merge
-            (None, Some(ours), Some(theirs)) => three_way_merge(None, ours, theirs)?,
-            (Some(base), Some(ours), Some(theirs)) =>
-                if base.oid() == ours.oid() && ours.oid() == theirs.oid() {
-                    // nothing has changed between the three trees
-                } else {
-                    three_way_merge(Some(base), ours, theirs)?
-                },
+            (MergeDiffEntry::ModifiedBlob(ours), MergeDiffEntry::ModifiedBlob(theirs)) =>
+                three_way_merge(base, ours, theirs)?,
+            (MergeDiffEntry::ModifiedBlob(entry), MergeDiffEntry::UnmodifiedBlob(_)) =>
+                index.add_entry(entry)?,
+            (MergeDiffEntry::ModifiedBlob(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
+            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::ModifiedTree(_)) => {}
+            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
+            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
+            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
+            (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::DeletedBlob(entry)) =>
+                index.unlink_and_remove_blob(entry.key())?,
+            (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::ModifiedBlob(theirs)) =>
+                index.write_and_add_blob(theirs)?,
+            (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::UnmodifiedBlob(_)) => {}
+            (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
+            (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::ModifiedTree(_)) => {}
+            (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
+            (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
+            (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
+            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(_)) => todo!(),
+            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => todo!(),
+            (MergeDiffEntry::DeletedTree(entry), MergeDiffEntry::DeletedTree(_)) =>
+                index.remove_directory(entry.path())?,
+            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
+            (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedTree(_)) => todo!(),
+            (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedBlob(_)) => todo!(),
+            (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::DeletedBlob(_)) => todo!(),
+            (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::ModifiedBlob(_)) => todo!(),
+            (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::UnmodifiedBlob(_)) => todo!(),
+            (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
+            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::ModifiedTree(_)) => todo!(),
+            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::UnmodifiedTree(_)) => todo!(),
+            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
+            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
+            _ => unreachable!("the remaining cases should be impossible"),
         }
+
         Ok(())
     }
+}
+
+// The entries present in each variant represents the "new" entry
+// i.e. post modification/typechange
+enum MergeDiffEntry {
+    DeletedBlob(BitIndexEntry),
+    CreatedBlob(BitIndexEntry),
+    ModifiedBlob(BitIndexEntry),
+    ModifiedTree(BitIndexEntry),
+    UnmodifiedBlob(BitIndexEntry),
+    UnmodifiedTree(BitIndexEntry),
+    DeletedTree(BitIndexEntry),
+    CreatedTree(BitIndexEntry),
+    BlobToTree(BitIndexEntry),
+    TreeToBlob(BitIndexEntry),
 }
 
 bitflags! {
