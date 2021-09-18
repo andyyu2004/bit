@@ -412,10 +412,8 @@ impl<'rcx> MergeCtxt<'rcx> {
             (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::ModifiedTree(_))
             | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
             | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::ModifiedTree(_))
+            | (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(_))
             | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_)) => {}
-            // We need to recreate the deleted folder for us to write the modified entries to
-            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(tree)) =>
-                repo.mkdir(tree.path())?,
             (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::DeletedBlob(entry)) =>
                 index.unlink_and_remove_blob(entry.key())?,
