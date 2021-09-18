@@ -142,7 +142,16 @@ impl<'rcx> ImmutableBitObject<'rcx> for Tree<'rcx> {
         )
     }
 }
-impl Tree<'_> {
+impl<'rcx> Tree<'rcx> {
+    pub fn empty(repo: BitRepo<'rcx>) -> &'rcx Self {
+        let tree = Self {
+            owner: repo,
+            cached: BitObjCached::new(Oid::EMPTY_TREE, BitObjType::Tree, 0),
+            entries: vec![],
+        };
+        repo.alloc_tree(tree)
+    }
+
     fn read_entries(r: impl BufRead, size: u64) -> BitResult<Vec<TreeEntry>>
     where
         Self: Sized,

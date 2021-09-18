@@ -315,6 +315,7 @@ pub struct TreeIter<'rcx> {
 impl<'rcx> TreeIter<'rcx> {
     pub fn new(repo: BitRepo<'rcx>, oid: Oid) -> Self {
         debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_treeish());
+        let oid = if oid.is_known() { oid } else { Oid::EMPTY_TREE };
         let entry_stack = vec![TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE }];
         Self { repo, previous_len: 0, entry_stack }
     }

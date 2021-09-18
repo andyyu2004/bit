@@ -500,7 +500,9 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
         let oid = self.expand_id(id)?;
-        if self.virtual_write.load(Ordering::Acquire) {
+        if oid == Oid::EMPTY_TREE {
+            Ok(BitObjKind::Tree(Tree::empty(self)))
+        } else if self.virtual_write.load(Ordering::Acquire) {
             Ok(self.virtual_odb().read(oid))
         } else {
             self.obj_cache.write().get_or_insert_with(oid, || {
