@@ -12,6 +12,8 @@ pub struct BitMergeCliOpts {
     no_commit: bool,
     #[clap(long = "no-edit")]
     no_edit: bool,
+    #[clap(long = "no-ff")]
+    no_ff: bool,
 }
 
 impl Cmd for BitMergeCliOpts {
@@ -19,6 +21,7 @@ impl Cmd for BitMergeCliOpts {
         let mut opts = MergeOpts::default();
         opts.no_commit = self.no_commit;
         opts.no_edit = self.no_edit;
+        opts.no_ff = self.no_ff;
 
         match repo.merge_rev(&self.revision, opts)? {
             // Updating f160da1..7e6f94d

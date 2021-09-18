@@ -25,15 +25,17 @@ pub type ConflictStyle = diffy::ConflictStyle;
 pub struct MergeOpts {
     pub no_commit: bool,
     pub no_edit: bool,
+    pub no_ff: bool,
 }
 
 impl MergeOpts {
-    pub const NO_EDIT: Self = Self { no_edit: true, no_commit: false };
+    pub const DEFAULT: Self = Self { no_edit: true, no_commit: false, no_ff: false };
+    pub const NO_EDIT: Self = Self { no_edit: true, ..Self::DEFAULT };
 }
 
 impl Default for MergeOpts {
     fn default() -> Self {
-        Self { no_commit: false, no_edit: false }
+        Self::DEFAULT
     }
 }
 
@@ -157,7 +159,7 @@ impl<'rcx> MergeCtxt<'rcx> {
                 return Ok(MergeResults::Null);
             }
 
-            if merge_base.oid() == our_head {
+            if !self.opts.no_ff && merge_base.oid() == our_head {
                 repo.checkout_tree_with_opts(their_head_commit, CheckoutOpts::default())?;
                 repo.update_current_ref_for_ff_merge(self.their_head_ref)?;
                 return Ok(MergeResults::FastForward { to: self.their_head_ref });
