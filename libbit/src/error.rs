@@ -1,5 +1,5 @@
 use crate::checkout::CheckoutConflicts;
-use crate::merge::MergeConflict;
+use crate::merge::MergeConflicts;
 use crate::obj::{BitId, BitObjType, Oid, PartialOid};
 use crate::refs::SymbolicRef;
 use crate::status::BitStatus;
@@ -19,7 +19,7 @@ pub enum BitError {
     ObjectNotFoundInPackIndex(Oid, u64),
     AmbiguousPrefix(PartialOid, Vec<Oid>),
     NonExistentSymRef(SymbolicRef),
-    MergeConflict(MergeConflict),
+    MergeConflict(MergeConflicts),
     CheckoutConflict(CheckoutConflicts),
     ExpectedCommit(Oid, BitObjType),
     PackBackendWrite,
@@ -32,7 +32,7 @@ pub trait BitErrorExt {
     fn try_into_bit_error(self) -> BitResult<BitError>;
     fn try_into_status_error(self) -> BitResult<BitStatus>;
     fn try_into_expected_commit_error(self) -> BitResult<(Oid, BitObjType)>;
-    fn try_into_merge_conflict(self) -> BitResult<MergeConflict>;
+    fn try_into_merge_conflict(self) -> BitResult<MergeConflicts>;
     fn try_into_checkout_conflict(self) -> BitResult<CheckoutConflicts>;
 }
 
@@ -54,7 +54,7 @@ impl BitErrorExt for BitGenericError {
         }
     }
 
-    fn try_into_merge_conflict(self) -> BitResult<MergeConflict> {
+    fn try_into_merge_conflict(self) -> BitResult<MergeConflicts> {
         match self.try_into_bit_error()? {
             BitError::MergeConflict(merge_conflict) => Ok(merge_conflict),
             err => Err(anyhow!(err)),

@@ -617,10 +617,30 @@ impl<'rcx> BitRepo<'rcx> {
         paths.iter().fold(self.bitdir, |base, path| base.join(path))
     }
 
+    #[inline]
     pub(crate) fn mk_bitdir(self, path: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(self.bitdir.join(path))
     }
 
+    #[inline]
+    pub(crate) fn mkdir(self, path: BitPath) -> io::Result<()> {
+        std::fs::create_dir(self.to_absolute_path(path))
+    }
+
+    #[inline]
+    pub(crate) fn rm(self, path: BitPath) -> BitResult<()> {
+        std::fs::remove_file(self.to_absolute_path(path))
+            .with_context(|| anyhow!("failed to rm `{}`", path))
+    }
+
+    #[inline]
+    pub(crate) fn mv(self, from: BitPath, to: impl AsRef<Path>) -> BitResult<()> {
+        let to = to.as_ref();
+        std::fs::rename(self.to_absolute_path(from), self.to_absolute_path(to))
+            .with_context(|| anyhow!("failed to mv `{}` to `{}", from, to.display()))
+    }
+
+    #[inline]
     pub(crate) fn mk_bitfile(self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.bitdir.join(path))
     }

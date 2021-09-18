@@ -1,6 +1,6 @@
 use crate::diff::WorkspaceStatus;
 use crate::error::BitResult;
-use crate::index::{BitIndex, BitIndexEntry, Conflict, ConflictType, Conflicts};
+use crate::index::{BitIndex, BitIndexEntry, Conflicts};
 use crate::pathspec::Pathspec;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
@@ -208,24 +208,6 @@ impl BitStatus {
         }
 
         Ok(())
-    }
-}
-
-impl Display for Conflict {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:\t{}", self.conflict_type, self.path)
-    }
-}
-
-impl Display for ConflictType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let msg = match self {
-            ConflictType::BothModified => "both modified",
-            ConflictType::BothAdded => "both added",
-            ConflictType::ModifyDelete => "deleted by them",
-            ConflictType::DeleteModify => "deleted by us",
-        };
-        write!(f, "{}", msg)
     }
 }
 

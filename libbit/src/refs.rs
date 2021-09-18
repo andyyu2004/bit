@@ -249,7 +249,7 @@ impl BitRef {
         }
     }
 
-    pub fn short(&self, _repo: BitRepo<'_>) -> String {
+    pub fn short(&self) -> String {
         match self {
             BitRef::Direct(oid) => oid.short(),
             BitRef::Symbolic(sym) => sym.short().to_owned(),

@@ -433,17 +433,83 @@ fn test_merge_with_unclean_worktree() -> BitResult<()> {
 }
 
 #[test]
-fn test_merge_unmodified_file_to_tree() -> BitResult<()> {
+fn test_merge_tree_into_unmodified_file() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let ours = commit! {
             foo < "default foo contents"
         };
         let theirs = commit! {
             foo {
-                bar
+                bar < "bar contents"
             }
         };
-        let merge_conflict = repo.three_way_merge(ours, theirs)?;
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_tree_into_modified_file() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo < "modified foo contents"
+        };
+        let theirs = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        let merge_conflicts =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("foo"), ConflictType::ModifyDelete)
+        );
+        assert_eq!(cat!(repo: "foo~HEAD"), "modified foo contents");
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_unmodified_blob_into_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        let theirs = commit! {
+            foo < "default foo contents"
+        };
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_modified_file_into_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        let theirs = commit! {
+            foo < "modified foo contents"
+        };
+        let merge_conflicts =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("foo"), ConflictType::DeleteModify)
+        );
+        assert_eq!(cat!(repo: "foo~theirs"), "modified foo contents");
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
         Ok(())
     })
 }
