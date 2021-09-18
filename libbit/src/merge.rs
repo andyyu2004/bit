@@ -2,7 +2,8 @@ use crate::checkout::CheckoutOpts;
 use crate::error::{BitError, BitResult};
 use crate::index::{BitIndexEntry, Conflicts, MergeStage};
 use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
-use crate::obj::{BitObject, Commit, CommitMessage, FileMode, Oid};
+use crate::obj::{BitObject, Commit, CommitMessage, FileMode, Oid, TreeEntry};
+use crate::path::BitPath;
 use crate::pathspec::Pathspec;
 use crate::peel::Peel;
 use crate::refs::BitRef;
@@ -15,7 +16,7 @@ use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::io::Write;
 
 pub type ConflictStyle = diffy::ConflictStyle;
@@ -309,13 +310,13 @@ impl<'rcx> MergeCtxt<'rcx> {
         base_to_ours: MergeDiffEntry,
         base_to_theirs: MergeDiffEntry,
     ) -> BitResult<()> {
-        // debug!(
-        //     "merge_entries(path: {:?}, base: {:?}, ours: {:?}, theirs: {:?})",
-        //     base.or(ours).or(theirs).map(|entry| entry.path),
-        //     base.as_ref().map(BitEntry::oid),
-        //     ours.as_ref().map(BitEntry::oid),
-        //     theirs.as_ref().map(BitEntry::oid)
-        // );
+        info!(
+            "merge_entries(path: {:?}, base: {:?}, ours: {:?}, theirs: {:?})",
+            base_to_ours.path(),
+            base.as_ref().map(TreeEntry::from),
+            base_to_ours,
+            base_to_theirs,
+        );
 
         let repo = self.repo;
         let mut index = repo.index_mut()?;
@@ -367,9 +368,12 @@ impl<'rcx> MergeCtxt<'rcx> {
         match (base_to_ours, base_to_theirs) {
             (MergeDiffEntry::DeletedBlob(entry), MergeDiffEntry::DeletedBlob(_)) =>
                 index.remove_entry(entry.key()),
+            // CONFLICT (modify/delete): dir/bar deleted in theirs and modified in HEAD. Version HEAD of dir/bar left in tree.
+            // Automatic merge failed; fix conflicts and then commit the result.
             (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::ModifiedBlob(theirs)) => {
                 index.add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
                 index.add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                theirs.write_to_disk(repo)?;
             }
             (MergeDiffEntry::ModifiedBlob(ours), MergeDiffEntry::DeletedBlob(_)) => {
                 index.add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
@@ -405,9 +409,13 @@ impl<'rcx> MergeCtxt<'rcx> {
                     format!("{}~{}", theirs.path(), self.their_head_desc),
                 )?;
             }
-            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::ModifiedTree(_)) => {}
-            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
-            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
+            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::ModifiedTree(_))
+            | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
+            | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::ModifiedTree(_))
+            | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_)) => {}
+            // We need to recreate the deleted folder for us to write the modified entries to
+            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(tree)) =>
+                repo.mkdir(tree.path())?,
             (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::DeletedBlob(entry)) =>
                 index.unlink_and_remove_blob(entry.key())?,
@@ -419,11 +427,9 @@ impl<'rcx> MergeCtxt<'rcx> {
                 repo.rm(path)?;
                 repo.mkdir(path)?;
             }
-            (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::ModifiedTree(_)) => {}
             (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
             (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
             (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
-            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(_)) => todo!(),
             (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => todo!(),
             (MergeDiffEntry::DeletedTree(entry), MergeDiffEntry::DeletedTree(_)) =>
                 index.remove_directory(entry.path())?,
@@ -457,6 +463,64 @@ enum MergeDiffEntry {
     CreatedTree(BitIndexEntry),
     BlobToTree(BitIndexEntry),
     TreeToBlob(BitIndexEntry),
+}
+
+impl Debug for MergeDiffEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DeletedBlob(entry) =>
+                f.debug_tuple("DeletedBlob").field(&TreeEntry::from(entry)).finish(),
+            Self::CreatedBlob(entry) =>
+                f.debug_tuple("CreatedBlob").field(&TreeEntry::from(entry)).finish(),
+            Self::ModifiedBlob(entry) =>
+                f.debug_tuple("ModifiedBlob").field(&TreeEntry::from(entry)).finish(),
+            Self::ModifiedTree(entry) =>
+                f.debug_tuple("ModifiedTree").field(&TreeEntry::from(entry)).finish(),
+            Self::UnmodifiedBlob(entry) =>
+                f.debug_tuple("UnmodifiedBlob").field(&TreeEntry::from(entry)).finish(),
+            Self::UnmodifiedTree(entry) =>
+                f.debug_tuple("UnmodifiedTree").field(&TreeEntry::from(entry)).finish(),
+            Self::DeletedTree(entry) =>
+                f.debug_tuple("DeletedTree").field(&TreeEntry::from(entry)).finish(),
+            Self::CreatedTree(entry) =>
+                f.debug_tuple("CreatedTree").field(&TreeEntry::from(entry)).finish(),
+            Self::BlobToTree(entry) =>
+                f.debug_tuple("BlobToTree").field(&TreeEntry::from(entry)).finish(),
+            Self::TreeToBlob(entry) =>
+                f.debug_tuple("TreeToBlob").field(&TreeEntry::from(entry)).finish(),
+        }
+    }
+}
+
+impl MergeDiffEntry {
+    pub fn entry(&self) -> BitIndexEntry {
+        match *self {
+            MergeDiffEntry::DeletedBlob(entry) => entry,
+            MergeDiffEntry::CreatedBlob(entry) => entry,
+            MergeDiffEntry::ModifiedBlob(entry) => entry,
+            MergeDiffEntry::ModifiedTree(entry) => entry,
+            MergeDiffEntry::UnmodifiedBlob(entry) => entry,
+            MergeDiffEntry::UnmodifiedTree(entry) => entry,
+            MergeDiffEntry::DeletedTree(entry) => entry,
+            MergeDiffEntry::CreatedTree(entry) => entry,
+            MergeDiffEntry::BlobToTree(entry) => entry,
+            MergeDiffEntry::TreeToBlob(entry) => entry,
+        }
+    }
+}
+
+impl BitEntry for MergeDiffEntry {
+    fn oid(&self) -> Oid {
+        self.entry().oid()
+    }
+
+    fn path(&self) -> BitPath {
+        self.entry().path()
+    }
+
+    fn mode(&self) -> FileMode {
+        self.entry().mode()
+    }
 }
 
 bitflags! {

@@ -513,3 +513,64 @@ fn test_merge_modified_file_into_tree() -> BitResult<()> {
         Ok(())
     })
 }
+
+#[test_env_log::test]
+fn test_merge_deleted_directory_into_modified_directory() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {
+            dir {
+                bar < "modified bar contents"
+            }
+        };
+        let theirs = commit! {};
+        let merge_conflicts =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("dir/bar"), ConflictType::ModifyDelete)
+        );
+        assert_eq!(cat!(repo: "dir/bar"), "modified bar contents");
+        Ok(())
+    })
+}
+
+#[test_env_log::test]
+fn test_merge_modified_directory_into_deleted_directory() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {};
+        let theirs = commit! {
+            dir {
+                bar < "modified bar contents"
+            }
+        };
+        let merge_conflicts =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("dir/bar"), ConflictType::DeleteModify)
+        );
+        assert_eq!(cat!(repo: "dir/bar"), "modified bar contents");
+        Ok(())
+    })
+}
+// #[test]
+// fn test_merge_todo() -> BitResult<()> {
+//     BitRepo::with_minimal_repo(|repo| {
+//         let ours = commit! {};
+//         let theirs = commit! {
+//             foo < "modified foo contents"
+//         };
+//         let merge_conflicts =
+//             repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+//         let mut conflicts = merge_conflicts.conflicts.into_iter();
+//         assert_eq!(
+//             conflicts.next().unwrap(),
+//             Conflict::new_with_type(p!("foo"), ConflictType::DeleteModify)
+//         );
+//         assert_eq!(cat!(repo: "foo~theirs"), "modified foo contents");
+//         assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+//         Ok(())
+//     })
+// }

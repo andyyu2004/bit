@@ -628,6 +628,17 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
+    pub(crate) fn touch(self, path: impl AsRef<Path>) -> BitResult<std::fs::File> {
+        let path = path.as_ref();
+        std::fs::File::with_options()
+            .create_new(true)
+            .write(true)
+            .read(false)
+            .open(dbg!(self.to_absolute_path(path)))
+            .with_context(|| anyhow!("failed to touch `{}`", path.display()))
+    }
+
+    #[inline]
     pub(crate) fn rm(self, path: BitPath) -> BitResult<()> {
         std::fs::remove_file(self.to_absolute_path(path))
             .with_context(|| anyhow!("failed to rm `{}`", path))

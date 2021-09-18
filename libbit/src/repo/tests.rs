@@ -33,6 +33,17 @@ impl<'rcx> BitRepo<'rcx> {
         })
     }
 
+    pub fn with_minimal_repo_with_dir<R>(
+        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
+    ) -> BitResult<R> {
+        Self::with_empty_repo(|repo| {
+            mkdir!(repo: "dir");
+            touch!(repo: "dir/bar" < "default bar contents");
+            bit_commit_all!(repo);
+            f(repo)
+        })
+    }
+
     // same repo as above but without the symlink issue
     pub fn with_sample_repo_no_sym<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {

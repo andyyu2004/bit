@@ -338,9 +338,11 @@ macro_rules! hash_symlink {
 }
 
 macro_rules! cat {
-    ($repo:ident: $path:expr) => {
-        std::fs::read_to_string($repo.workdir.join($path))?
-    };
+    ($repo:ident: $path:expr) => {{
+        use $crate::anyhow::Context;
+        std::fs::read_to_string($repo.workdir.join($path))
+            .with_context(|| anyhow!("failed to cat file at `{}`", $path))?
+    }};
 }
 
 /// `rm -r`

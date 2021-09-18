@@ -87,11 +87,7 @@ pub trait BitEntry {
     /// Write the entry to disk at `path` (where `path` is relative to repo root)
     fn write_to_disk_at(&self, repo: BitRepo<'_>, path: impl AsRef<Path>) -> BitResult<()> {
         let bytes = self.read_to_bytes(repo)?;
-        let mut file = std::fs::File::with_options()
-            .create_new(true)
-            .write(true)
-            .read(false)
-            .open(repo.to_absolute_path(path))?;
+        let mut file = repo.touch(path)?;
         Ok(file.write_all(&bytes)?)
     }
 
