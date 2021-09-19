@@ -160,6 +160,10 @@ macro_rules! bit_commit {
 }
 
 macro_rules! bit_checkout {
+    ($repo:ident: -b $branch:literal) => {{
+        $repo.bit_create_branch($branch, &rev!("HEAD"))?;
+        bit_checkout!($repo: $branch)
+    }};
     ($repo:ident: --force $rev:literal) => {{
         let revision = $rev.parse::<$crate::rev::Revspec>()?;
         $repo.checkout_revision(&revision, $crate::checkout::CheckoutOpts::forced())
@@ -177,10 +181,6 @@ macro_rules! bit_checkout {
 }
 
 macro_rules! bit_branch {
-    ($repo:ident: -b $branch:literal) => {{
-        $repo.bit_create_branch($branch, &rev!("HEAD"))?;
-        bit_checkout!($repo: $branch)?
-    }};
     ($repo:ident: $branch:literal @ $rev:expr) => {
         $repo.bit_create_branch($branch, &$rev)?
     };

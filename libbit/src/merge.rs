@@ -383,7 +383,6 @@ impl<'rcx> MergeCtxt<'rcx> {
             }
             (MergeDiffEntry::DeletedBlob(ours), MergeDiffEntry::UnmodifiedBlob(_)) =>
                 index.remove_entry(ours.key()),
-            (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
             (MergeDiffEntry::CreatedBlob(ours), MergeDiffEntry::CreatedBlob(theirs)) =>
                 three_way_merge(base, ours, theirs)?,
             (MergeDiffEntry::CreatedBlob(_), MergeDiffEntry::UnmodifiedBlob(_)) => todo!(),
@@ -415,6 +414,9 @@ impl<'rcx> MergeCtxt<'rcx> {
             | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
             | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::ModifiedTree(_))
             | (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(_))
+            | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
+            | (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::DeletedBlob(_))
+            | (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::BlobToTree(_))
             | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_)) => {}
             (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::DeletedBlob(entry)) =>
@@ -427,7 +429,6 @@ impl<'rcx> MergeCtxt<'rcx> {
                 repo.rm(path)?;
                 repo.mkdir(path)?;
             }
-            (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
             (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
             (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
             (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => todo!(),
@@ -436,7 +437,6 @@ impl<'rcx> MergeCtxt<'rcx> {
             (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
             (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedTree(_)) => todo!(),
             (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedBlob(_)) => todo!(),
-            (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::DeletedBlob(_)) => todo!(),
             (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::UnmodifiedBlob(_)) => {}
             (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
             (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::ModifiedTree(_)) => todo!(),

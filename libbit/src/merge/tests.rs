@@ -240,7 +240,7 @@ fn test_merge_conflict_types() -> BitResult<()> {
 #[test]
 fn test_null_merge() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        bit_branch!(repo: -b "b");
+        bit_checkout!(repo: -b "b")?;
         modify!(repo: "foo");
         bit_commit_all!(repo);
         let merge_results = bit_merge!(repo: "master")?;
@@ -252,7 +252,7 @@ fn test_null_merge() -> BitResult<()> {
 #[test]
 fn test_fast_forward_merge() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        bit_branch!(repo: -b "b");
+        bit_checkout!(repo: -b "b")?;
         modify!(repo: "foo");
         bit_commit_all!(repo);
         bit_checkout!(repo: "master")?;
@@ -273,13 +273,7 @@ impl<'rcx> BitRepo<'rcx> {
         ours: impl Treeish<'rcx>,
         theirs: impl Treeish<'rcx>,
     ) -> BitResult<MergeResults> {
-        bit_branch!(self: "base");
-        self.checkout_tree(theirs)?;
-        bit_commit!(self: --allow-empty);
-        bit_branch!(self: "theirs");
-        bit_checkout!(self: "base")?;
-        self.checkout_tree(ours)?;
-        bit_commit!(self: --allow-empty);
+        self.setup_three_way_merge(ours, theirs)?;
         bit_merge!(self: "theirs")
     }
 
@@ -298,10 +292,13 @@ impl<'rcx> BitRepo<'rcx> {
         theirs: impl Treeish<'rcx>,
     ) -> BitResult<()> {
         bit_branch!(self: "base");
+
+        bit_checkout!(self: -b "theirs")?;
         self.checkout_tree(theirs)?;
         bit_commit!(self: --allow-empty);
-        bit_branch!(self: "theirs");
+
         bit_checkout!(self: "base")?;
+        bit_checkout!(self: -b "ours")?;
         self.checkout_tree(ours)?;
         bit_commit!(self: --allow-empty);
         Ok(())
@@ -555,22 +552,33 @@ fn test_merge_modified_directory_into_deleted_directory() -> BitResult<()> {
         Ok(())
     })
 }
-// #[test]
-// fn test_merge_todo() -> BitResult<()> {
-//     BitRepo::with_minimal_repo(|repo| {
-//         let ours = commit! {};
-//         let theirs = commit! {
-//             foo < "modified foo contents"
-//         };
-//         let merge_conflicts =
-//             repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-//         let mut conflicts = merge_conflicts.conflicts.into_iter();
-//         assert_eq!(
-//             conflicts.next().unwrap(),
-//             Conflict::new_with_type(p!("foo"), ConflictType::DeleteModify)
-//         );
-//         assert_eq!(cat!(repo: "foo~theirs"), "modified foo contents");
-//         assert_eq!(cat!(repo: "foo/bar"), "bar contents");
-//         Ok(())
-//     })
-// }
+
+#[test]
+fn test_merge_blob_to_tree_into_deleted_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {};
+        let theirs = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_deleted_blob_into_blob_to_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo {
+                bar < "bar contents"
+            }
+        };
+        let theirs = commit! {};
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
