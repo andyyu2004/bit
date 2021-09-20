@@ -628,6 +628,12 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
+    pub(crate) fn rmdir_all(self, path: impl AsRef<Path>) -> BitResult<()> {
+        let path = self.to_absolute_path(path.as_ref());
+        std::fs::remove_dir_all(path).with_context(|| anyhow!("failed to rmdir `{}`", path))
+    }
+
+    #[inline]
     pub(crate) fn touch(self, path: impl AsRef<Path>) -> BitResult<std::fs::File> {
         let path = self.to_absolute_path(path.as_ref());
         std::fs::create_dir_all(path.parent().unwrap())?;
@@ -640,6 +646,11 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
+    pub(crate) fn path_exists(self, path: impl AsRef<Path>) -> io::Result<bool> {
+        self.to_absolute_path(path).try_exists()
+    }
+
+    #[inline]
     pub(crate) fn rm(self, path: BitPath) -> BitResult<()> {
         std::fs::remove_file(self.to_absolute_path(path))
             .with_context(|| anyhow!("failed to rm `{}`", path))
@@ -648,6 +659,7 @@ impl<'rcx> BitRepo<'rcx> {
     #[inline]
     pub(crate) fn mv(self, from: BitPath, to: impl AsRef<Path>) -> BitResult<()> {
         let to = to.as_ref();
+        debug_assert!(!to.try_exists()?);
         std::fs::rename(self.to_absolute_path(from), self.to_absolute_path(to))
             .with_context(|| anyhow!("failed to mv `{}` to `{}", from, to.display()))
     }

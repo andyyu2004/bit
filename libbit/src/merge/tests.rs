@@ -285,12 +285,13 @@ impl<'rcx> BitRepo<'rcx> {
     ///       theirs
     /// Where `base` is the old HEAD
     /// Then merge theirs into HEAD
-    /// This won't work if `self` is an empty repo
     fn setup_three_way_merge(
         self,
         ours: impl Treeish<'rcx>,
         theirs: impl Treeish<'rcx>,
     ) -> BitResult<()> {
+        // empty commit just to allow this to work starting from an empty repo
+        bit_commit!(self: --allow-empty);
         bit_branch!(self: "base");
 
         bit_checkout!(self: -b "theirs")?;
@@ -498,6 +499,9 @@ fn test_merge_modified_file_into_tree() -> BitResult<()> {
         let theirs = commit! {
             foo < "modified foo contents"
         };
+        touch!(repo: "foo~theirs");
+        touch!(repo: "foo~theirs_0");
+        touch!(repo: "foo~theirs_2");
         let merge_conflicts =
             repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
         let mut conflicts = merge_conflicts.conflicts.into_iter();
@@ -505,7 +509,7 @@ fn test_merge_modified_file_into_tree() -> BitResult<()> {
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("foo"), ConflictType::DeleteModify)
         );
-        assert_eq!(cat!(repo: "foo~theirs"), "modified foo contents");
+        assert_eq!(cat!(repo: "foo~theirs_1"), "modified foo contents");
         assert_eq!(cat!(repo: "foo/bar"), "bar contents");
         Ok(())
     })
@@ -579,6 +583,159 @@ fn test_merge_deleted_blob_into_blob_to_tree() -> BitResult<()> {
         let theirs = commit! {};
         repo.three_way_merge(ours, theirs)?;
         assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_tree_to_blob_into_modified_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {
+            dir {
+                bar < "modified bar contents"
+            }
+        };
+        let theirs = commit! {
+            dir < "dir is now a file"
+        };
+        let merge_conflicts =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("dir"), ConflictType::AddedByThem)
+        );
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("dir/bar"), ConflictType::ModifyDelete)
+        );
+        assert_eq!(cat!(repo: "dir~theirs"), "dir is now a file");
+        assert_eq!(cat!(repo: "dir/bar"), "modified bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_modified_tree_into_tree_to_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {
+            dir < "dir is now a file"
+        };
+        let theirs = commit! {
+            dir {
+                bar < "modified bar contents"
+            }
+        };
+        let merge_conflicts =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("dir"), ConflictType::AddedByUs)
+        );
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("dir/bar"), ConflictType::DeleteModify)
+        );
+        assert_eq!(cat!(repo: "dir~HEAD"), "dir is now a file");
+        assert_eq!(cat!(repo: "dir/bar"), "modified bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_unmodified_tree_into_deleted_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {};
+        let theirs = commit! {
+            dir {
+                bar < "default bar contents"
+            }
+        };
+        repo.three_way_merge(ours, theirs)?;
+        assert!(!exists!(repo: "dir"));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_unmodified_tree_into_nested_deleted_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let base = commit! {
+            dir {
+                nested {
+                    bar < "default bar contents"
+                }
+                bar
+            }
+        };
+        let ours = commit! {};
+        let theirs = base;
+        repo.three_way_merge_with_base(base, ours, theirs)?;
+        assert!(!exists!(repo: "dir"));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_deleted_tree_into_unmodified_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {
+            dir {
+                bar < "default bar contents"
+            }
+        };
+        let theirs = commit! {};
+        repo.three_way_merge(ours, theirs)?;
+        assert!(!exists!(repo: "dir"));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_nested_deleted_tree_into_unmodified_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let base = commit! {
+            dir {
+                nested {
+                    bar < "default bar contents"
+                }
+                bar
+            }
+        };
+        let ours = base;
+        let theirs = commit! {};
+        repo.three_way_merge_with_base(base, ours, theirs)?;
+        assert!(!exists!(repo: "dir"));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_created_tree_into_created_blob() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let ours = commit! {
+            foo < "some foo contents"
+        };
+        let theirs = commit! {
+            foo {
+                bar < "some bar contents"
+            }
+        };
+
+        touch!(repo: "foo~HEAD" < "original foo~HEAD");
+        touch!(repo: "foo~HEAD_0" < "original foo~HEAD_0");
+        touch!(repo: "foo~HEAD_1");
+        touch!(repo: "foo~HEAD_2");
+        let merge_conflicts =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("foo"), ConflictType::AddedByUs)
+        );
+        assert_eq!(cat!(repo: "foo~HEAD_3"), "some foo contents");
+        assert_eq!(cat!(repo: "foo/bar"), "some bar contents");
         Ok(())
     })
 }

@@ -49,6 +49,8 @@ pub enum ConflictType {
     BothAdded,
     ModifyDelete,
     DeleteModify,
+    AddedByUs,
+    AddedByThem,
 }
 
 impl ConflictType {
@@ -58,6 +60,8 @@ impl ConflictType {
             [MergeStage::Ours, MergeStage::Theirs] => Self::BothAdded,
             [MergeStage::Base, MergeStage::Ours] => Self::ModifyDelete,
             [MergeStage::Base, MergeStage::Theirs] => Self::DeleteModify,
+            [MergeStage::Ours] => Self::AddedByUs,
+            [MergeStage::Theirs] => Self::AddedByThem,
             _ => unreachable!("probably missing some cases `{:?}`", stages),
         }
     }
@@ -76,6 +80,8 @@ impl Display for ConflictType {
             ConflictType::BothAdded => "both added",
             ConflictType::ModifyDelete => "deleted by them",
             ConflictType::DeleteModify => "deleted by us",
+            ConflictType::AddedByUs => "added by us",
+            ConflictType::AddedByThem => "added by them",
         };
         write!(f, "{}", msg)
     }

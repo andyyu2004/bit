@@ -1,5 +1,6 @@
 use crate::checkout::CheckoutOpts;
 use crate::error::{BitError, BitResult};
+use crate::fs::UniquePath;
 use crate::index::{BitIndexEntry, Conflicts, MergeStage};
 use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
 use crate::obj::{BitObject, Commit, CommitMessage, FileMode, Oid, TreeEntry};
@@ -220,7 +221,6 @@ impl<'rcx> MergeCtxt<'rcx> {
         let walk =
             repo.walk_tree_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
         walk.for_each(|[base, a, b]| self.merge_entries(base, a, b))?;
-
         Ok(())
     }
 
@@ -291,6 +291,7 @@ impl<'rcx> MergeCtxt<'rcx> {
     }
 
     fn base_to_ours_only(&mut self, base_to_ours: MergeDiffEntry) -> BitResult<()> {
+        info!("MergeCtxt::base_to_ours_only(base_to_ours: {:?})", base_to_ours);
         match base_to_ours {
             MergeDiffEntry::CreatedBlob(entry) => self.repo.index_mut()?.add_entry(entry),
             MergeDiffEntry::CreatedTree(_) => todo!(),
@@ -299,11 +300,23 @@ impl<'rcx> MergeCtxt<'rcx> {
     }
 
     fn base_to_theirs_only(&mut self, base_to_theirs: MergeDiffEntry) -> BitResult<()> {
+        info!("MergeCtxt::base_to_theirs_only(base_to_theirs: {:?})", base_to_theirs,);
         match base_to_theirs {
             MergeDiffEntry::CreatedBlob(entry) => self.repo.index_mut()?.write_and_add_blob(entry),
             MergeDiffEntry::CreatedTree(_) => todo!(),
             _ => unreachable!(),
         }
+    }
+
+    fn write_their_conflicted(&mut self, theirs: &BitIndexEntry) -> BitResult<()> {
+        let moved_path =
+            UniquePath::new(self.repo, format!("{}~{}", theirs.path(), self.their_head_desc))?;
+        return theirs.write_to_disk_at(self.repo, moved_path);
+    }
+
+    fn mv_our_conflicted(&mut self, path: BitPath) -> BitResult<()> {
+        let moved_path = UniquePath::new(self.repo, format!("{}~HEAD", path))?;
+        return self.repo.mv(path, moved_path);
     }
 
     fn merge_entry(
@@ -313,8 +326,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         base_to_theirs: MergeDiffEntry,
     ) -> BitResult<()> {
         info!(
-            "merge_entries(path: {:?}, base: {:?}, ours: {:?}, theirs: {:?})",
-            base_to_ours.path(),
+            "MergeCtxt::merge_entries(base: {:?}, ours: {:?}, theirs: {:?})",
             base.as_ref().map(TreeEntry::from),
             base_to_ours,
             base_to_theirs,
@@ -385,8 +397,6 @@ impl<'rcx> MergeCtxt<'rcx> {
                 index.remove_entry(ours.key()),
             (MergeDiffEntry::CreatedBlob(ours), MergeDiffEntry::CreatedBlob(theirs)) =>
                 three_way_merge(base, ours, theirs)?,
-            (MergeDiffEntry::CreatedBlob(_), MergeDiffEntry::UnmodifiedBlob(_)) => todo!(),
-            (MergeDiffEntry::CreatedBlob(_), MergeDiffEntry::CreatedTree(_)) => todo!(),
             (MergeDiffEntry::ModifiedBlob(ours), MergeDiffEntry::ModifiedBlob(theirs)) =>
                 three_way_merge(base, ours, theirs)?,
             (MergeDiffEntry::ModifiedBlob(entry), MergeDiffEntry::UnmodifiedBlob(_)) =>
@@ -399,16 +409,21 @@ impl<'rcx> MergeCtxt<'rcx> {
                 // Automatic merge failed; fix conflicts and then commit the result.
                 index.add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
                 index.add_conflicted_entry(ours, MergeStage::Ours)?;
-                repo.mv(ours.path(), format!("{}~HEAD", ours.path()))?;
+                self.mv_our_conflicted(ours.path())?;
                 repo.mkdir(tree.path())?;
             }
             (MergeDiffEntry::BlobToTree(..), MergeDiffEntry::ModifiedBlob(theirs)) => {
                 index.add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
                 index.add_conflicted_entry(theirs, MergeStage::Theirs)?;
-                theirs.write_to_disk_at(
-                    repo,
-                    format!("{}~{}", theirs.path(), self.their_head_desc),
-                )?;
+                self.write_their_conflicted(&theirs)?;
+            }
+            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::TreeToBlob(theirs)) => {
+                index.add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                self.write_their_conflicted(&theirs)?;
+            }
+            (MergeDiffEntry::TreeToBlob(ours), MergeDiffEntry::ModifiedTree(_)) => {
+                index.add_conflicted_entry(ours, MergeStage::Ours)?;
+                self.mv_our_conflicted(ours.path())?;
             }
             (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::ModifiedTree(_))
             | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
@@ -416,30 +431,36 @@ impl<'rcx> MergeCtxt<'rcx> {
             | (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(_))
             | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
             | (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::DeletedBlob(_))
+            | (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::UnmodifiedBlob(_))
             | (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::BlobToTree(_))
-            | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_)) => {}
-            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
+            | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_))
+            | (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
+            (MergeDiffEntry::UnmodifiedTree(tree), MergeDiffEntry::DeletedTree(_)) => {
+                let path = tree.path();
+                index.remove_directory(path)?;
+                repo.rmdir_all(path)?;
+            }
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::DeletedBlob(entry)) =>
                 index.unlink_and_remove_blob(entry.key())?,
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::ModifiedBlob(theirs)) =>
                 index.write_and_add_blob(theirs)?,
-            (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::UnmodifiedBlob(_)) => {}
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::BlobToTree(tree)) => {
                 let path = tree.path();
                 repo.rm(path)?;
                 repo.mkdir(path)?;
             }
-            (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
+            (MergeDiffEntry::CreatedBlob(ours), MergeDiffEntry::CreatedTree(_)) => {
+                index.add_conflicted_entry(ours, MergeStage::Ours)?;
+                self.mv_our_conflicted(ours.path())?;
+            }
+            (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedBlob(_)) => todo!(),
             (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
-            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => todo!(),
             (MergeDiffEntry::DeletedTree(entry), MergeDiffEntry::DeletedTree(_)) =>
                 index.remove_directory(entry.path())?,
             (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
             (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedTree(_)) => todo!(),
-            (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedBlob(_)) => todo!(),
             (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::UnmodifiedBlob(_)) => {}
             (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
-            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::ModifiedTree(_)) => todo!(),
             (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::UnmodifiedTree(_)) => todo!(),
             (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
             (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
