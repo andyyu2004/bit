@@ -161,6 +161,11 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(())
     }
 
+    pub(crate) fn update_blob(&mut self, entry: BitIndexEntry) -> BitResult<()> {
+        self.repo.rm(entry.path())?;
+        self.write_and_add_blob(entry)
+    }
+
     pub(crate) fn write_and_add_blob(&mut self, entry: BitIndexEntry) -> BitResult<()> {
         debug_assert!(entry.oid.is_known());
         entry.write_to_disk(self.repo)?;

@@ -472,6 +472,36 @@ fn test_merge_tree_into_modified_file() -> BitResult<()> {
 }
 
 #[test]
+fn test_merge_modified_blob_into_unmodified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo < "default foo contents"
+        };
+        let theirs = commit! {
+            foo < "modified foo contents"
+        };
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "foo"), "modified foo contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_unmodified_blob_into_modified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo < "modified foo contents"
+        };
+        let theirs = commit! {
+            foo < "default foo contents"
+        };
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "foo"), "modified foo contents");
+        Ok(())
+    })
+}
+
+#[test]
 fn test_merge_unmodified_blob_into_blob_into_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let ours = commit! {

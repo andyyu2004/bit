@@ -636,6 +636,7 @@ impl<'rcx> BitRepo<'rcx> {
     #[inline]
     pub(crate) fn touch(self, path: impl AsRef<Path>) -> BitResult<std::fs::File> {
         let path = self.to_absolute_path(path.as_ref());
+        debug_assert!(!path.try_exists()?);
         std::fs::create_dir_all(path.parent().unwrap())?;
         std::fs::File::with_options()
             .create_new(true)

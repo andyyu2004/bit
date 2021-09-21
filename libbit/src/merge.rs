@@ -431,7 +431,7 @@ impl<'rcx> MergeCtxt<'rcx> {
                 repo.rmdir_all(path)?;
             }
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::ModifiedBlob(theirs)) =>
-                index.write_and_add_blob(theirs)?,
+                index.update_blob(theirs)?,
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::BlobToTree(tree)) => {
                 let path = tree.path();
                 repo.rm(path)?;
