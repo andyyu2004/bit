@@ -80,6 +80,8 @@ struct MergeCtxt<'rcx> {
     their_head_ref: BitRef,
     their_head: Oid,
     opts: MergeOpts,
+    deferred_rmdirs: Vec<BitPath>,
+    deferred_writes: Vec<BitIndexEntry>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -102,7 +104,15 @@ impl<'rcx> MergeCtxt<'rcx> {
     fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
         let their_head = repo.fully_resolve_ref(their_head_ref)?;
         let their_head_desc = their_head_ref.short();
-        Ok(Self { repo, their_head_ref, their_head, their_head_desc, opts })
+        Ok(Self {
+            repo,
+            their_head_ref,
+            their_head,
+            their_head_desc,
+            opts,
+            deferred_rmdirs: Default::default(),
+            deferred_writes: Default::default(),
+        })
     }
 
     fn merge_base_recursive(
@@ -146,7 +156,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         Ok(merge_commit)
     }
 
-    pub fn merge(&mut self) -> BitResult<MergeResults> {
+    pub fn merge(mut self) -> BitResult<MergeResults> {
         debug!("MergeCtxt::merge()");
         let repo = self.repo;
         let their_head = self.their_head;
@@ -221,6 +231,15 @@ impl<'rcx> MergeCtxt<'rcx> {
         let walk =
             repo.walk_tree_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
         walk.for_each(|[base, a, b]| self.merge_entries(base, a, b))?;
+
+        for rmdir in std::mem::take(&mut self.deferred_rmdirs) {
+            repo.rmdir(rmdir)?;
+        }
+        let mut index = repo.index_mut()?;
+        for entry in std::mem::take(&mut self.deferred_writes) {
+            entry.write_to_disk(repo)?;
+            index.add_entry(entry)?;
+        }
         Ok(())
     }
 
@@ -453,15 +472,21 @@ impl<'rcx> MergeCtxt<'rcx> {
                 index.add_conflicted_entry(ours, MergeStage::Ours)?;
                 self.mv_our_conflicted(ours.path())?;
             }
-            (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedBlob(_)) => todo!(),
-            (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
+            (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedBlob(theirs)) => {
+                index.add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                self.write_their_conflicted(&theirs)?;
+            }
             (MergeDiffEntry::DeletedTree(entry), MergeDiffEntry::DeletedTree(_)) =>
                 index.remove_directory(entry.path())?,
+            (MergeDiffEntry::UnmodifiedTree(ours), MergeDiffEntry::TreeToBlob(theirs)) => {
+                self.deferred_rmdirs.push(ours.path());
+                self.deferred_writes.push(theirs);
+            }
+            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
             (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
             (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedTree(_)) => todo!(),
             (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::UnmodifiedBlob(_)) => {}
             (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
-            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::UnmodifiedTree(_)) => todo!(),
             (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
             (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
             _ => unreachable!("the remaining cases should be impossible"),

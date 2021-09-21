@@ -178,6 +178,7 @@ impl BitIndexEntry {
         if !self.is_filled() {
             // we want the stat information, but we also do not want to rehash the object when we already know it
             let mut entry = BitIndexEntry::from_relative_path(repo, self.path())?;
+            debug_assert!(self.oid.is_known());
             entry.oid = self.oid;
             debug_assert!(entry.mode == self.mode);
             *self = entry;

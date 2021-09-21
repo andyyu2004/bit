@@ -1,5 +1,4 @@
 use crate::error::BitResult;
-use crate::path::BitPath;
 use crate::repo::BitRepo;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};

@@ -630,7 +630,13 @@ impl<'rcx> BitRepo<'rcx> {
     #[inline]
     pub(crate) fn rmdir_all(self, path: impl AsRef<Path>) -> BitResult<()> {
         let path = self.to_absolute_path(path.as_ref());
-        std::fs::remove_dir_all(path).with_context(|| anyhow!("failed to rmdir `{}`", path))
+        std::fs::remove_dir_all(path).with_context(|| anyhow!("failed to rmdir_all `{}`", path))
+    }
+
+    #[inline]
+    pub(crate) fn rmdir(self, path: impl AsRef<Path>) -> BitResult<()> {
+        let path = self.to_absolute_path(path.as_ref());
+        std::fs::remove_dir(path).with_context(|| anyhow!("failed to rmdir `{}`", path))
     }
 
     #[inline]

@@ -516,7 +516,7 @@ fn test_merge_modified_file_into_tree() -> BitResult<()> {
 }
 
 #[test_env_log::test]
-fn test_merge_deleted_directory_into_modified_directory() -> BitResult<()> {
+fn test_merge_deleted_tree_into_modified_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo_with_dir(|repo| {
         let ours = commit! {
             dir {
@@ -537,7 +537,7 @@ fn test_merge_deleted_directory_into_modified_directory() -> BitResult<()> {
 }
 
 #[test_env_log::test]
-fn test_merge_modified_directory_into_deleted_directory() -> BitResult<()> {
+fn test_merge_modified_tree_into_deleted_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo_with_dir(|repo| {
         let ours = commit! {};
         let theirs = commit! {
@@ -677,7 +677,7 @@ fn test_merge_unmodified_tree_into_nested_deleted_tree() -> BitResult<()> {
     })
 }
 
-#[test]
+#[test_env_log::test]
 fn test_merge_deleted_tree_into_unmodified_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo_with_dir(|repo| {
         let ours = commit! {
@@ -736,6 +736,68 @@ fn test_merge_created_tree_into_created_blob() -> BitResult<()> {
         );
         assert_eq!(cat!(repo: "foo~HEAD_3"), "some foo contents");
         assert_eq!(cat!(repo: "foo/bar"), "some bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_created_blob_into_created_tree() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let ours = commit! {
+            foo {
+                bar < "some bar contents"
+            }
+        };
+        let theirs = commit! {
+            foo < "some foo contents"
+        };
+
+        let merge_conflicts =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("foo"), ConflictType::AddedByThem)
+        );
+        assert_eq!(cat!(repo: "foo~theirs"), "some foo contents");
+        assert_eq!(cat!(repo: "foo/bar"), "some bar contents");
+        Ok(())
+    })
+}
+
+#[test_env_log::test]
+fn test_merge_tree_to_blob_into_unmodified_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {
+            dir {
+                bar < "default bar contents"
+            }
+        };
+
+        let theirs = commit! {
+            dir < "typechange blob->tree"
+        };
+
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "dir"), "typechange blob->tree");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_unmodified_tree_into_tree_to_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {
+            dir < "typechange blob->tree"
+        };
+        let theirs = commit! {
+            dir {
+                bar < "default bar contents"
+            }
+        };
+
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "dir"), "typechange blob->tree");
         Ok(())
     })
 }
