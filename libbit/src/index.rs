@@ -161,15 +161,6 @@ impl<'rcx> BitIndex<'rcx> {
         Ok(())
     }
 
-    pub(crate) fn unlink_and_remove_blob(
-        &mut self,
-        (path, stage): (BitPath, MergeStage),
-    ) -> BitResult<()> {
-        std::fs::remove_file(self.repo.to_absolute_path(&path))?;
-        self.remove_entry((path, stage));
-        Ok(())
-    }
-
     pub(crate) fn write_and_add_blob(&mut self, entry: BitIndexEntry) -> BitResult<()> {
         debug_assert!(entry.oid.is_known());
         entry.write_to_disk(self.repo)?;

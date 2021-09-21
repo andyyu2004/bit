@@ -634,12 +634,6 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    pub(crate) fn rmdir(self, path: impl AsRef<Path>) -> BitResult<()> {
-        let path = self.to_absolute_path(path.as_ref());
-        std::fs::remove_dir(path).with_context(|| anyhow!("failed to rmdir `{}`", path))
-    }
-
-    #[inline]
     pub(crate) fn touch(self, path: impl AsRef<Path>) -> BitResult<std::fs::File> {
         let path = self.to_absolute_path(path.as_ref());
         std::fs::create_dir_all(path.parent().unwrap())?;

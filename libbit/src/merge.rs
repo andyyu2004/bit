@@ -80,8 +80,6 @@ struct MergeCtxt<'rcx> {
     their_head_ref: BitRef,
     their_head: Oid,
     opts: MergeOpts,
-    deferred_rmdirs: Vec<BitPath>,
-    deferred_writes: Vec<BitIndexEntry>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -104,15 +102,7 @@ impl<'rcx> MergeCtxt<'rcx> {
     fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
         let their_head = repo.fully_resolve_ref(their_head_ref)?;
         let their_head_desc = their_head_ref.short();
-        Ok(Self {
-            repo,
-            their_head_ref,
-            their_head,
-            their_head_desc,
-            opts,
-            deferred_rmdirs: Default::default(),
-            deferred_writes: Default::default(),
-        })
+        Ok(Self { repo, their_head_ref, their_head, their_head_desc, opts })
     }
 
     fn merge_base_recursive(
@@ -231,16 +221,6 @@ impl<'rcx> MergeCtxt<'rcx> {
         let walk =
             repo.walk_tree_iterators([Box::new(base_iter), Box::new(a_iter), Box::new(b_iter)]);
         walk.for_each(|[base, a, b]| self.merge_entries(base, a, b))?;
-
-        for rmdir in std::mem::take(&mut self.deferred_rmdirs) {
-            repo.rmdir(rmdir)?;
-        }
-
-        let mut index = repo.index_mut()?;
-        for entry in std::mem::take(&mut self.deferred_writes) {
-            entry.write_to_disk(repo)?;
-            index.add_entry(entry)?;
-        }
         Ok(())
     }
 
@@ -450,8 +430,6 @@ impl<'rcx> MergeCtxt<'rcx> {
                 index.remove_directory(path)?;
                 repo.rmdir_all(path)?;
             }
-            (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::DeletedBlob(entry)) =>
-                index.unlink_and_remove_blob(entry.key())?,
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::ModifiedBlob(theirs)) =>
                 index.write_and_add_blob(theirs)?,
             (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::BlobToTree(tree)) => {
@@ -470,8 +448,15 @@ impl<'rcx> MergeCtxt<'rcx> {
             (MergeDiffEntry::DeletedTree(entry), MergeDiffEntry::DeletedTree(_)) =>
                 index.remove_directory(entry.path())?,
             (MergeDiffEntry::UnmodifiedTree(ours), MergeDiffEntry::TreeToBlob(theirs)) => {
-                self.deferred_rmdirs.push(ours.path());
-                self.deferred_writes.push(theirs);
+                repo.rmdir_all(ours.path())?;
+                theirs.write_to_disk(repo)?;
+                index.add_entry(theirs)?;
+            }
+            (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::DeletedBlob(theirs)) => {
+                // The path might already be deleted due to the case above removing the entire directory
+                // We handle this by just ignoring the error (not perfect but should be practically fine)
+                let _ = repo.rm(theirs.path());
+                index.remove_entry(theirs.key());
             }
             (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::TreeToBlob(theirs)) => {
                 theirs.write_to_disk(repo)?;
