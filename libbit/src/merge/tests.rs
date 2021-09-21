@@ -472,7 +472,7 @@ fn test_merge_tree_into_modified_file() -> BitResult<()> {
 }
 
 #[test]
-fn test_merge_unmodified_blob_into_tree() -> BitResult<()> {
+fn test_merge_unmodified_blob_into_blob_into_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let ours = commit! {
             foo {
@@ -481,6 +481,23 @@ fn test_merge_unmodified_blob_into_tree() -> BitResult<()> {
         };
         let theirs = commit! {
             foo < "default foo contents"
+        };
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_blob_into_tree_into_unmodified_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo < "default foo contents"
+        };
+        let theirs = commit! {
+            foo {
+                bar < "bar contents"
+            }
         };
         repo.three_way_merge(ours, theirs)?;
         assert_eq!(cat!(repo: "foo/bar"), "bar contents");
@@ -798,6 +815,130 @@ fn test_merge_unmodified_tree_into_tree_to_blob() -> BitResult<()> {
 
         repo.three_way_merge(ours, theirs)?;
         assert_eq!(cat!(repo: "dir"), "typechange blob->tree");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_tree_to_blob_into_deleted_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {};
+        let theirs = commit! {
+            dir < "dir contents"
+        };
+
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "dir"), "dir contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_deleted_tree_into_tree_to_blob() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {
+            dir < "dir contents"
+        };
+        let theirs = commit! {};
+
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "dir"), "dir contents");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_blob_to_tree_into_blob_to_tree_no_conflict() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo {
+                bar < "bar"
+            }
+        };
+
+        let theirs = commit! {
+            foo {
+                baz < "baz"
+            }
+        };
+
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "foo/bar"), "bar");
+        assert_eq!(cat!(repo: "foo/baz"), "baz");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_blob_to_tree_into_blob_to_tree_with_conflict() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            foo {
+                bar < "bar"
+            }
+        };
+
+        let theirs = commit! {
+            foo {
+                bar {
+                    baz < "baz"
+                }
+            }
+        };
+
+        let merge_conflict =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        let mut conflicts = merge_conflict.conflicts.into_iter();
+        assert_eq!(
+            conflicts.next().unwrap(),
+            Conflict::new_with_type(p!("foo/bar"), ConflictType::AddedByUs)
+        );
+        assert_eq!(cat!(repo: "foo/bar~HEAD"), "bar");
+        assert_eq!(cat!(repo: "foo/bar/baz"), "baz");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_tree_to_blob_into_tree_to_blob_with_conflict() -> BitResult<()> {
+    BitRepo::with_minimal_repo_with_dir(|repo| {
+        let ours = commit! {
+            dir < "dir"
+        };
+
+        let theirs = commit! {
+            dir < "conflict"
+        };
+
+        let merge_conflict =
+            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
+        assert_eq!(
+            merge_conflict.conflicts[0],
+            Conflict::new_with_type(p!("dir"), ConflictType::BothAdded)
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn test_merge_both_created_tree() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            dir {
+                foo < "foo"
+            }
+        };
+
+        let theirs = commit! {
+            dir {
+                foo < "foo"
+                bar < "bar"
+            }
+        };
+
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "dir/foo"), "foo");
+        assert_eq!(cat!(repo: "dir/bar"), "bar");
         Ok(())
     })
 }

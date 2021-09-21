@@ -235,6 +235,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         for rmdir in std::mem::take(&mut self.deferred_rmdirs) {
             repo.rmdir(rmdir)?;
         }
+
         let mut index = repo.index_mut()?;
         for entry in std::mem::take(&mut self.deferred_writes) {
             entry.write_to_disk(repo)?;
@@ -444,16 +445,6 @@ impl<'rcx> MergeCtxt<'rcx> {
                 index.add_conflicted_entry(ours, MergeStage::Ours)?;
                 self.mv_our_conflicted(ours.path())?;
             }
-            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::ModifiedTree(_))
-            | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
-            | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::ModifiedTree(_))
-            | (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(_))
-            | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
-            | (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::DeletedBlob(_))
-            | (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::UnmodifiedBlob(_))
-            | (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::BlobToTree(_))
-            | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_))
-            | (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
             (MergeDiffEntry::UnmodifiedTree(tree), MergeDiffEntry::DeletedTree(_)) => {
                 let path = tree.path();
                 index.remove_directory(path)?;
@@ -482,13 +473,27 @@ impl<'rcx> MergeCtxt<'rcx> {
                 self.deferred_rmdirs.push(ours.path());
                 self.deferred_writes.push(theirs);
             }
-            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
-            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
-            (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedTree(_)) => todo!(),
-            (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::UnmodifiedBlob(_)) => {}
-            (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::BlobToTree(_)) => todo!(),
-            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::DeletedTree(_)) => todo!(),
-            (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::TreeToBlob(_)) => todo!(),
+            (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::TreeToBlob(theirs)) => {
+                theirs.write_to_disk(repo)?;
+                index.add_entry(theirs)?;
+            }
+            (MergeDiffEntry::TreeToBlob(ours), MergeDiffEntry::TreeToBlob(theirs)) =>
+                three_way_merge(None, ours, theirs)?,
+            (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::ModifiedTree(_))
+            | (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedTree(_))
+            | (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::UnmodifiedBlob(_))
+            | (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::BlobToTree(_))
+            | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
+            | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::ModifiedTree(_))
+            | (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::ModifiedTree(_))
+            | (MergeDiffEntry::UnmodifiedTree(_), MergeDiffEntry::UnmodifiedTree(_))
+            | (MergeDiffEntry::BlobToTree(_), MergeDiffEntry::DeletedBlob(_))
+            | (MergeDiffEntry::UnmodifiedBlob(_), MergeDiffEntry::UnmodifiedBlob(_))
+            | (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::BlobToTree(_))
+            | (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::DeletedTree(_))
+            | (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::UnmodifiedTree(_))
+            | (MergeDiffEntry::TreeToBlob(_), MergeDiffEntry::DeletedTree(_))
+            | (MergeDiffEntry::DeletedTree(_), MergeDiffEntry::UnmodifiedTree(_)) => {}
             _ => unreachable!("the remaining cases should be impossible"),
         }
 
