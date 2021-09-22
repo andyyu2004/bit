@@ -1009,7 +1009,32 @@ fn test_conflicts_with_untracked() -> BitResult<()> {
 }
 
 #[test]
-fn test_conflicts_with_staged_changes() -> BitResult<()> {
+fn test_merge_disallowed_with_staged_changes() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            dir {
+                foo < "foo original"
+            }
+        };
+
+        let theirs = commit! {
+            whatever
+        };
+
+        repo.setup_three_way_merge(ours, theirs)?;
+        modify!(repo: "dir/foo" < "updated in index");
+        bit_add!(repo: "dir/foo");
+
+        let conflicts = bit_merge!(repo: "theirs").unwrap_err().try_into_merge_conflict()?;
+        let mut uncommitted = conflicts.uncommitted.into_iter();
+        assert_eq!(uncommitted.next().unwrap(), p!("dir/foo"));
+        assert_eq!(cat!(repo: "dir/foo"), "updated in index");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_conflicts_with_unstaged_changes() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let ours = commit! {
             dir {
@@ -1026,6 +1051,7 @@ fn test_conflicts_with_staged_changes() -> BitResult<()> {
         let mut uncommitted = conflicts.uncommitted.into_iter();
         assert_eq!(uncommitted.next().unwrap(), p!("dir/foo"));
         assert_eq!(cat!(repo: "dir/foo"), "foo", "the file on disk should retain its original");
+        todo!("everything in this test case");
         Ok(())
     })
 }

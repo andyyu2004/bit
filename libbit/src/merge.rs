@@ -170,8 +170,23 @@ impl<'rcx> MergeCtxt<'rcx> {
         Ok(merge_commit)
     }
 
+    fn check_staged_changes(&mut self) -> BitResult<()> {
+        let diff = self.repo.diff_head_index(Pathspec::MATCH_ALL)?;
+        self.uncommitted.extend(diff.iter_paths());
+        Ok(())
+    }
+
+    // most of these checks can probably be relaxed but it's unclear whether it's worth the effort
+    fn pre_merge_checks(&mut self) -> BitResult<()> {
+        self.check_staged_changes()?;
+        Ok(())
+    }
+
     pub fn merge(mut self) -> BitResult<MergeResults> {
         debug!("MergeCtxt::merge()");
+
+        self.pre_merge_checks()?;
+
         let repo = self.repo;
         let their_head = self.their_head;
         let our_head = repo.fully_resolve_head()?;
@@ -194,14 +209,16 @@ impl<'rcx> MergeCtxt<'rcx> {
         self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
 
         if !self.uncommitted.is_empty() {
+            // restore index and worktree to inital pre-merge state
+            let iterator = self.initial_index_snapshot.index_tree_iter();
+            self.repo.checkout_iterator(iterator, CheckoutOpts::forced())?;
+            **self.repo.index_mut()? = self.initial_index_snapshot;
             bail!(BitError::MergeConflict(MergeConflicts { uncommitted: self.uncommitted }))
         }
 
         if repo.index()?.has_conflicts() {
             return Ok(MergeResults::Conflicts(repo.index()?.conflicts()));
         }
-
-        debug_assert!(repo.index_mut()?.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
 
         if !self.opts.no_commit {
             let message = self

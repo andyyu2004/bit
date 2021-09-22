@@ -107,13 +107,10 @@ impl<'rcx> BitRepo<'rcx> {
         opts: CheckoutOpts,
     ) -> BitResult<()> {
         let target_tree = treeish.treeish_oid(self)?;
-        let is_forced = opts.is_forced();
-        let baseline = self.head_tree_iter()?;
         let target = self.tree_iter(target_tree);
-        let worktree = self.index()?.worktree_tree_iter()?;
-        let migration = self.generate_migration(baseline, target, worktree, opts)?;
-        info!("{:#?}", migration);
-        self.apply_migration(&migration)?;
+
+        let is_forced = opts.is_forced();
+        self.checkout_iterator(target, opts)?;
 
         // if forced, then the worktree and index and target_tree should match exactly
         if is_forced {
@@ -123,6 +120,17 @@ impl<'rcx> BitRepo<'rcx> {
             index.update_cache_tree(target_tree)?;
         }
         Ok(())
+    }
+
+    pub fn checkout_iterator(
+        self,
+        target: impl BitTreeIterator,
+        opts: CheckoutOpts,
+    ) -> BitResult<()> {
+        let baseline = self.head_tree_iter()?;
+        let worktree = self.index()?.worktree_tree_iter()?;
+        let migration = self.generate_migration(baseline, target, worktree, opts)?;
+        self.apply_migration(&migration)
     }
 
     fn generate_migration(

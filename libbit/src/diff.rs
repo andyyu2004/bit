@@ -306,6 +306,14 @@ impl WorkspaceStatus {
     pub fn is_empty(&self) -> bool {
         self.new.is_empty() && self.deleted.is_empty() && self.modified.is_empty()
     }
+
+    pub fn iter_paths(&self) -> impl Iterator<Item = BitPath> + '_ {
+        self.deleted
+            .iter()
+            .map(BitEntry::path)
+            .chain(self.modified.iter().map(|(_, entry)| entry.path()))
+            .chain(self.deleted.iter().map(BitEntry::path))
+    }
 }
 
 pub struct EntryDiffIter<I> {
