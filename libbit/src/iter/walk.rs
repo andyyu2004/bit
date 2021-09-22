@@ -123,9 +123,6 @@ impl<'a, const N: usize> FallibleIterator for WalkTreeIterators<'a, N> {
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
-}
-
 pub struct WalkIterators<'a, const N: usize> {
     iterators: [Peekable<Box<dyn BitEntryIterator + 'a>>; N],
 }

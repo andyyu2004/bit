@@ -1002,3 +1002,28 @@ fn test_merge_both_created_tree() -> BitResult<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_merge_conflicts_with_untracked() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            dir {
+                foo < "foo"
+            }
+        };
+
+        let theirs = commit! {
+            conflict
+        };
+
+        repo.setup_three_way_merge(ours, theirs)?;
+
+        touch!(repo: "conflict" < "maybe we could special case where the contents are the same and not conflict?");
+        let merge_conflicts = bit_merge!(repo: "theirs").unwrap_err().try_into_merge_conflict()?;
+        assert!(merge_conflicts.conflicts.is_empty());
+        let mut uncommitted = merge_conflicts.uncommitted.into_iter();
+        assert_eq!(uncommitted.next().unwrap(), p!("conflict"));
+        assert_eq!(cat!(repo: "dir/foo"), "foo");
+        Ok(())
+    })
+}

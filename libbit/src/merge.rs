@@ -1,7 +1,7 @@
 use crate::checkout::CheckoutOpts;
 use crate::error::{BitError, BitResult};
 use crate::fs::UniquePath;
-use crate::index::{BitIndexEntry, Conflicts, MergeStage};
+use crate::index::{BitIndexEntry, BitIndexInner, Conflicts, MergeStage};
 use crate::iter::{BitEntry, BitIterator, BitTreeIterator};
 use crate::obj::{BitObject, Commit, CommitMessage, FileMode, Oid, TreeEntry};
 use crate::path::BitPath;
@@ -64,6 +64,8 @@ impl<'rcx> BitRepo<'rcx> {
 #[cfg_attr(test, derive(PartialEq))]
 pub struct MergeConflicts {
     pub conflicts: Conflicts,
+    /// Uncommitted changes that will be overwritten by merge
+    pub uncommitted: Vec<BitPath>,
 }
 
 impl Display for MergeConflicts {
@@ -80,6 +82,9 @@ struct MergeCtxt<'rcx> {
     their_head_ref: BitRef,
     their_head: Oid,
     opts: MergeOpts,
+    // The state of the index pre-merge
+    initial_index_snapshot: BitIndexInner,
+    uncommitted: Vec<BitPath>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -102,7 +107,15 @@ impl<'rcx> MergeCtxt<'rcx> {
     fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
         let their_head = repo.fully_resolve_ref(their_head_ref)?;
         let their_head_desc = their_head_ref.short();
-        Ok(Self { repo, their_head_ref, their_head, their_head_desc, opts })
+        Ok(Self {
+            repo,
+            their_head_ref,
+            their_head,
+            their_head_desc,
+            opts,
+            initial_index_snapshot: repo.index()?.clone(),
+            uncommitted: Default::default(),
+        })
     }
 
     fn merge_base_recursive(
@@ -169,8 +182,11 @@ impl<'rcx> MergeCtxt<'rcx> {
 
         self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
 
-        if repo.index()?.has_conflicts() {
-            bail!(BitError::MergeConflict(MergeConflicts { conflicts: repo.index()?.conflicts() }))
+        if repo.index()?.has_conflicts() || !self.uncommitted.is_empty() {
+            bail!(BitError::MergeConflict(MergeConflicts {
+                uncommitted: self.uncommitted,
+                conflicts: repo.index()?.conflicts(),
+            }))
         }
 
         debug_assert!(repo.index_mut()?.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
@@ -307,9 +323,18 @@ impl<'rcx> MergeCtxt<'rcx> {
 
     fn base_to_theirs_only(&mut self, base_to_theirs: MergeDiffEntry) -> BitResult<()> {
         info!("MergeCtxt::base_to_theirs_only(base_to_theirs: {:?})", base_to_theirs,);
+        let repo = self.repo;
         match base_to_theirs {
-            MergeDiffEntry::CreatedBlob(entry) => self.repo.index_mut()?.write_and_add_blob(entry),
-            MergeDiffEntry::CreatedTree(tree) => self.repo.mkdir(tree.path()),
+            MergeDiffEntry::CreatedBlob(entry) => {
+                // Its possible for there to be an untracked file that clashes with a new file in their HEAD
+                if repo.path_exists(entry.path())? {
+                    self.uncommitted.push(entry.path());
+                } else {
+                    repo.index_mut()?.write_and_add_blob(entry)?;
+                };
+                Ok(())
+            }
+            MergeDiffEntry::CreatedTree(tree) => repo.mkdir(tree.path()),
             _ => unreachable!(),
         }
     }
@@ -341,49 +366,52 @@ impl<'rcx> MergeCtxt<'rcx> {
         let repo = self.repo;
         let mut index = repo.index_mut()?;
 
-        let mut three_way_merge = |base: Option<BitIndexEntry>,
-                                   ours: BitIndexEntry,
-                                   theirs: BitIndexEntry| {
-            debug_assert_eq!(ours.path, theirs.path);
-            let path = ours.path;
+        let mut three_way_merge =
+            |base: Option<BitIndexEntry>, ours: BitIndexEntry, theirs: BitIndexEntry| {
+                debug_assert_eq!(ours.path, theirs.path);
+                let path = ours.path;
 
-            let base_bytes = match base {
-                Some(b) => b.read_to_bytes(repo)?,
-                None => Cow::Owned(vec![]),
-            };
+                let base_bytes = match base {
+                    Some(b) => b.read_to_bytes(repo)?,
+                    None => Cow::Owned(vec![]),
+                };
 
-            if ours.mode != theirs.mode {
-                todo!("mode conflict");
-            }
-
-            let full_path = repo.normalize_path(path.as_path())?;
-            let mut file = std::fs::OpenOptions::new().read(false).write(true).open(&full_path)?;
-            match xdiff::merge(
-                repo.config().conflict_style(),
-                "HEAD",
-                &self.their_head_desc,
-                &base_bytes,
-                &ours.read_to_bytes(repo)?,
-                &theirs.read_to_bytes(repo)?,
-            ) {
-                Ok(merged) => {
-                    // write the merged file to disk
-                    file.write_all(&merged)?;
-                    index.add_entry_from_path(&full_path)
+                if ours.mode != theirs.mode {
+                    todo!("mode conflict");
                 }
-                Err(conflicted) => {
-                    // write the conflicted file to disk
-                    file.write_all(&conflicted)?;
-                    if let Some(b) = base {
-                        index.add_conflicted_entry(b, MergeStage::Base)?;
+
+                let full_path = repo.normalize_path(path.as_path())?;
+                let mut file = std::fs::OpenOptions::new()
+                    .create(false)
+                    .read(false)
+                    .write(true)
+                    .open(&full_path)?;
+                match xdiff::merge(
+                    repo.config().conflict_style(),
+                    "HEAD",
+                    &self.their_head_desc,
+                    &base_bytes,
+                    &ours.read_to_bytes(repo)?,
+                    &theirs.read_to_bytes(repo)?,
+                ) {
+                    Ok(merged) => {
+                        // write the merged file to disk
+                        file.write_all(&merged)?;
+                        index.add_entry_from_path(&full_path)
                     }
-                    index.add_conflicted_entry(ours, MergeStage::Ours)?;
-                    index.add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                    Err(conflicted) => {
+                        // write the conflicted file to disk
+                        file.write_all(&conflicted)?;
+                        if let Some(b) = base {
+                            index.add_conflicted_entry(b, MergeStage::Base)?;
+                        }
+                        index.add_conflicted_entry(ours, MergeStage::Ours)?;
+                        index.add_conflicted_entry(theirs, MergeStage::Theirs)?;
 
-                    Ok(())
+                        Ok(())
+                    }
                 }
-            }
-        };
+            };
 
         match (base_to_ours, base_to_theirs) {
             (MergeDiffEntry::DeletedBlob(entry), MergeDiffEntry::DeletedBlob(_)) =>
@@ -416,7 +444,7 @@ impl<'rcx> MergeCtxt<'rcx> {
                 index.add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
                 index.add_conflicted_entry(ours, MergeStage::Ours)?;
                 self.mv_our_conflicted(ours.path())?;
-                repo.mkdir(tree.path())?;
+                repo.mkdir(tree.path())?
             }
             (MergeDiffEntry::BlobToTree(..), MergeDiffEntry::ModifiedBlob(theirs)) => {
                 index.add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
