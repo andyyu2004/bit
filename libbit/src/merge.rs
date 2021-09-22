@@ -170,6 +170,12 @@ impl<'rcx> MergeCtxt<'rcx> {
         Ok(merge_commit)
     }
 
+    fn check_unstaged_changes(&mut self) -> BitResult<()> {
+        let diff = self.repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
+        self.uncommitted.extend(diff.iter_paths());
+        Ok(())
+    }
+
     fn check_staged_changes(&mut self) -> BitResult<()> {
         let diff = self.repo.diff_head_index(Pathspec::MATCH_ALL)?;
         self.uncommitted.extend(diff.iter_paths());
@@ -177,7 +183,9 @@ impl<'rcx> MergeCtxt<'rcx> {
     }
 
     // most of these checks can probably be relaxed but it's unclear whether it's worth the effort
+    // we just disallow any unstaged and staged changes (but non-conflicting untracked is allowed)
     fn pre_merge_checks(&mut self) -> BitResult<()> {
+        self.check_unstaged_changes()?;
         self.check_staged_changes()?;
         Ok(())
     }
@@ -209,10 +217,10 @@ impl<'rcx> MergeCtxt<'rcx> {
         self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
 
         if !self.uncommitted.is_empty() {
-            // restore index and worktree to inital pre-merge state
-            let iterator = self.initial_index_snapshot.index_tree_iter();
-            self.repo.checkout_iterator(iterator, CheckoutOpts::forced())?;
-            **self.repo.index_mut()? = self.initial_index_snapshot;
+            // Restore index to pre-merge snapshot and check it out to also restore the worktree to inital pre-merge state
+            // We perform a safe checkout as we don't want to overwrite unstaged files
+            **self.repo.index_mut()? = self.initial_index_snapshot.clone();
+            self.repo.checkout_index(CheckoutOpts::default())?;
             bail!(BitError::MergeConflict(MergeConflicts { uncommitted: self.uncommitted }))
         }
 

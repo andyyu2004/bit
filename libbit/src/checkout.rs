@@ -122,6 +122,15 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(())
     }
 
+    pub fn checkout_index(self, opts: CheckoutOpts) -> BitResult<()> {
+        // TODO
+        // We need to clone the index to obtain an iterator avoid "concurrent" reads and writes
+        // as checkout uses the index to determine whether files have been modified etc
+        // This is pretty bad especially as the index can be pretty large
+        let cloned = self.index()?.clone();
+        self.checkout_iterator(cloned.index_tree_iter(), opts)
+    }
+
     pub fn checkout_iterator(
         self,
         target: impl BitTreeIterator,
