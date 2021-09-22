@@ -193,8 +193,7 @@ fn test_simple_merge() -> BitResult<()> {
 
         assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/b"));
 
-        let merge_conflict = bit_merge_expect_conflicts!(repo: "a");
-        let conflicts = merge_conflict.conflicts;
+        let conflicts = bit_merge!(repo: "a")?.into_conflicts();
         assert_eq!(conflicts.len(), 1);
         let conflict = &conflicts[0];
         assert_eq!(
@@ -223,8 +222,7 @@ fn test_merge_conflict_types() -> BitResult<()> {
         rm!(repo: "bar");
         bit_commit_all!(repo);
 
-        let merge_conflict = bit_merge_expect_conflicts!(repo: "master");
-        let conflicts = merge_conflict.conflicts;
+        let conflicts = bit_merge!(repo: "master")?.into_conflicts();
         assert_eq!(
             conflicts,
             vec![
@@ -424,9 +422,7 @@ fn test_merge_deleted_in_ours_and_modified_in_theirs() -> BitResult<()> {
         let theirs = commit! {
             foo < "modified"
         };
-        let merge_conflict =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let conflicts = merge_conflict.conflicts;
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
         assert_eq!(conflicts[0], Conflict::new_with_type(p!("foo"), ConflictType::DeleteModify));
         Ok(())
     })
@@ -439,9 +435,7 @@ fn test_merge_modified_in_ours_and_deleted_in_theirs() -> BitResult<()> {
             foo < "modified"
         };
         let theirs = commit! {};
-        let merge_conflict =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let conflicts = merge_conflict.conflicts;
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
         assert_eq!(conflicts[0], Conflict::new_with_type(p!("foo"), ConflictType::ModifyDelete));
         Ok(())
     })
@@ -488,9 +482,8 @@ fn test_merge_tree_into_modified_file() -> BitResult<()> {
                 bar < "bar contents"
             }
         };
-        let merge_conflicts =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("foo"), ConflictType::ModifyDelete)
@@ -579,9 +572,8 @@ fn test_merge_modified_file_into_tree() -> BitResult<()> {
         touch!(repo: "foo~theirs");
         touch!(repo: "foo~theirs_0");
         touch!(repo: "foo~theirs_2");
-        let merge_conflicts =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("foo"), ConflictType::DeleteModify)
@@ -601,9 +593,8 @@ fn test_merge_deleted_tree_into_modified_tree() -> BitResult<()> {
             }
         };
         let theirs = commit! {};
-        let merge_conflicts =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("dir/bar"), ConflictType::ModifyDelete)
@@ -622,9 +613,8 @@ fn test_merge_modified_tree_into_deleted_tree() -> BitResult<()> {
                 bar < "modified bar contents"
             }
         };
-        let merge_conflicts =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("dir/bar"), ConflictType::DeleteModify)
@@ -675,9 +665,8 @@ fn test_merge_tree_to_blob_into_modified_tree() -> BitResult<()> {
         let theirs = commit! {
             dir < "dir is now a file"
         };
-        let merge_conflicts =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("dir"), ConflictType::AddedByThem)
@@ -703,9 +692,8 @@ fn test_merge_modified_tree_into_tree_to_blob() -> BitResult<()> {
                 bar < "modified bar contents"
             }
         };
-        let merge_conflicts =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("dir"), ConflictType::AddedByUs)
@@ -804,9 +792,8 @@ fn test_merge_created_tree_into_created_blob() -> BitResult<()> {
         touch!(repo: "foo~HEAD_0" < "original foo~HEAD_0");
         touch!(repo: "foo~HEAD_1");
         touch!(repo: "foo~HEAD_2");
-        let merge_conflicts =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("foo"), ConflictType::AddedByUs)
@@ -829,9 +816,8 @@ fn test_merge_created_blob_into_created_tree() -> BitResult<()> {
             foo < "some foo contents"
         };
 
-        let merge_conflicts =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflicts.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("foo"), ConflictType::AddedByThem)
@@ -946,9 +932,8 @@ fn test_merge_blob_to_tree_into_blob_to_tree_with_conflict() -> BitResult<()> {
             }
         };
 
-        let merge_conflict =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        let mut conflicts = merge_conflict.conflicts.into_iter();
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        let mut conflicts = conflicts.into_iter();
         assert_eq!(
             conflicts.next().unwrap(),
             Conflict::new_with_type(p!("foo/bar"), ConflictType::AddedByUs)
@@ -970,12 +955,8 @@ fn test_merge_tree_to_blob_into_tree_to_blob_with_conflict() -> BitResult<()> {
             dir < "conflict"
         };
 
-        let merge_conflict =
-            repo.three_way_merge(ours, theirs).unwrap_err().try_into_merge_conflict()?;
-        assert_eq!(
-            merge_conflict.conflicts[0],
-            Conflict::new_with_type(p!("dir"), ConflictType::BothAdded)
-        );
+        let conflicts = repo.three_way_merge(ours, theirs)?.into_conflicts();
+        assert_eq!(conflicts[0], Conflict::new_with_type(p!("dir"), ConflictType::BothAdded));
         Ok(())
     })
 }
@@ -1004,7 +985,7 @@ fn test_merge_both_created_tree() -> BitResult<()> {
 }
 
 #[test]
-fn test_merge_conflicts_with_untracked() -> BitResult<()> {
+fn test_conflicts_with_untracked() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let ours = commit! {
             dir {
@@ -1019,11 +1000,32 @@ fn test_merge_conflicts_with_untracked() -> BitResult<()> {
         repo.setup_three_way_merge(ours, theirs)?;
 
         touch!(repo: "conflict" < "maybe we could special case where the contents are the same and not conflict?");
-        let merge_conflicts = bit_merge!(repo: "theirs").unwrap_err().try_into_merge_conflict()?;
-        assert!(merge_conflicts.conflicts.is_empty());
-        let mut uncommitted = merge_conflicts.uncommitted.into_iter();
+        let conflicts = bit_merge!(repo: "theirs").unwrap_err().try_into_merge_conflict()?;
+        let mut uncommitted = conflicts.uncommitted.into_iter();
         assert_eq!(uncommitted.next().unwrap(), p!("conflict"));
         assert_eq!(cat!(repo: "dir/foo"), "foo");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_conflicts_with_staged_changes() -> BitResult<()> {
+    BitRepo::with_minimal_repo(|repo| {
+        let ours = commit! {
+            dir {
+                foo < "foo"
+            }
+        };
+
+        let theirs = commit! {};
+
+        repo.setup_three_way_merge(ours, theirs)?;
+        modify!(repo: "dir/foo" < "updated in index");
+
+        let conflicts = bit_merge!(repo: "theirs").unwrap_err().try_into_merge_conflict()?;
+        let mut uncommitted = conflicts.uncommitted.into_iter();
+        assert_eq!(uncommitted.next().unwrap(), p!("dir/foo"));
+        assert_eq!(cat!(repo: "dir/foo"), "foo", "the file on disk should retain its original");
         Ok(())
     })
 }

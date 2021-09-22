@@ -218,13 +218,6 @@ macro_rules! bit_merge {
     }};
 }
 
-macro_rules! bit_merge_expect_conflicts {
-    ($repo:ident: $rev:expr) => {{
-        use $crate::error::BitErrorExt;
-        bit_merge!($repo: $rev).unwrap_err().try_into_merge_conflict().unwrap()
-    }};
-}
-
 macro_rules! bit_add_all {
     ($repo:expr) => {
         $repo.bit_add_all()?

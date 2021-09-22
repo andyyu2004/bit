@@ -39,6 +39,7 @@ impl Cmd for BitMergeCliOpts {
                 diff.print_change_summary()?;
             }
             MergeResults::Merge(_summary) => println!("todo merge message"),
+            MergeResults::Conflicts(_) => println!("todo print merge conflicts"),
         }
         Ok(())
     }

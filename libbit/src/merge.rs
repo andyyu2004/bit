@@ -60,17 +60,17 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
+/// The conflicts that prevent a merge from occurring (not the "merge conflicts")
 #[derive(Debug, Default)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct MergeConflicts {
-    pub conflicts: Conflicts,
     /// Uncommitted changes that will be overwritten by merge
     pub uncommitted: Vec<BitPath>,
 }
 
 impl Display for MergeConflicts {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        writeln!(f, "merge conflicts TODO formatting {:?}", self.conflicts)
+        writeln!(f, "merge conflicts TODO formatting {:?}", self.uncommitted)
     }
 }
 
@@ -93,11 +93,22 @@ pub enum MergeStrategy {
     Recursive,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum MergeResults {
     Null,
+    Conflicts(Conflicts),
     FastForward { from: Oid, to: Oid },
     Merge(MergeSummary),
+}
+
+impl MergeResults {
+    #[cfg(test)]
+    pub fn into_conflicts(self) -> Conflicts {
+        match self {
+            MergeResults::Conflicts(conflicts) => conflicts,
+            _ => panic!("expected merge to conflict"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,11 +193,12 @@ impl<'rcx> MergeCtxt<'rcx> {
 
         self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
 
-        if repo.index()?.has_conflicts() || !self.uncommitted.is_empty() {
-            bail!(BitError::MergeConflict(MergeConflicts {
-                uncommitted: self.uncommitted,
-                conflicts: repo.index()?.conflicts(),
-            }))
+        if !self.uncommitted.is_empty() {
+            bail!(BitError::MergeConflict(MergeConflicts { uncommitted: self.uncommitted }))
+        }
+
+        if repo.index()?.has_conflicts() {
+            return Ok(MergeResults::Conflicts(repo.index()?.conflicts()));
         }
 
         debug_assert!(repo.index_mut()?.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
