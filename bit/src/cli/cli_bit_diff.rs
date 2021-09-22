@@ -4,6 +4,7 @@ use libbit::error::BitResult;
 use libbit::pathspec::Pathspec;
 use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
+use libbit::xdiff::DiffFormatExt;
 use std::process::{Command, Stdio};
 
 #[derive(Clap, Debug, PartialEq)]
@@ -49,7 +50,7 @@ impl Cmd for BitDiffCliOpts {
         };
 
         if self.stat {
-            diff.format_diffstat_into(repo, std::io::stdout())?;
+            diff.print_diffstat(repo)?;
         } else {
             let mut pager = Command::new(&repo.config().pager()).stdin(Stdio::piped()).spawn()?;
             diff.format_diff_into(repo, pager.stdin.as_mut().unwrap())?;

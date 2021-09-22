@@ -13,7 +13,7 @@ use crate::rev::Revspec;
 use crate::time::Timespec;
 use fallible_iterator::{FallibleIterator, FallibleLendingIterator, Fuse, Peekable};
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum DiffEntry {
@@ -308,12 +308,64 @@ impl WorkspaceStatus {
     }
 }
 
-pub trait Diff {
-    fn apply_with<D: Differ>(&self, differ: &mut D) -> BitResult<()>;
+pub struct EntryDiffIter<I> {
+    iter: I,
+    queue: VecDeque<DiffEntry>,
 }
 
-impl Diff for WorkspaceStatus {
-    fn apply_with<D: Differ>(&self, differ: &mut D) -> BitResult<()> {
+impl<I> FallibleIterator for EntryDiffIter<I>
+where
+    for<'a> I: TreeDiffIterator<'a>,
+{
+    type Error = BitGenericError;
+    type Item = DiffEntry;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        let diff_entry = loop {
+            if let Some(diff_entry) = self.queue.pop_front() {
+                break diff_entry;
+            }
+
+            let tree_diff_entry = match self.iter.next()? {
+                Some(diff_entry) => diff_entry,
+                None => return Ok(None),
+            };
+
+            match tree_diff_entry {
+                TreeDiffEntry::DeletedBlob(deleted) => break DiffEntry::Deleted(deleted),
+                TreeDiffEntry::CreatedBlob(created) => break DiffEntry::Created(created),
+                TreeDiffEntry::ModifiedBlob(old, new) => break DiffEntry::Modified(old, new),
+                TreeDiffEntry::DeletedTree(entries) =>
+                    self.queue =
+                        entries.iter_files().map(|entry| Ok(DiffEntry::Deleted(entry))).collect()?,
+                TreeDiffEntry::CreatedTree(entries) =>
+                    self.queue =
+                        entries.iter_files().map(|entry| Ok(DiffEntry::Created(entry))).collect()?,
+                TreeDiffEntry::BlobToTree(blob, tree) => {
+                    self.queue =
+                        tree.iter_files().map(|entry| Ok(DiffEntry::Created(entry))).collect()?;
+                    self.queue.push_front(DiffEntry::Deleted(blob))
+                }
+                TreeDiffEntry::TreeToBlob(tree, blob) => {
+                    self.queue =
+                        tree.iter_files().map(|entry| Ok(DiffEntry::Deleted(entry))).collect()?;
+                    self.queue.push_back(DiffEntry::Created(blob))
+                }
+                TreeDiffEntry::MaybeModifiedTree(_)
+                | TreeDiffEntry::UnmodifiedBlob(_)
+                | TreeDiffEntry::UnmodifiedTree(_) => {}
+            }
+        };
+        Ok(Some(diff_entry))
+    }
+}
+
+pub trait Diff {
+    fn apply_with<D: Differ>(self, differ: &mut D) -> BitResult<()>;
+}
+
+impl<'a> Diff for &'a WorkspaceStatus {
+    fn apply_with<D: Differ>(self, differ: &mut D) -> BitResult<()> {
         for &deleted in self.deleted.iter() {
             differ.on_deleted(deleted)?;
         }
@@ -324,6 +376,19 @@ impl Diff for WorkspaceStatus {
             differ.on_created(new)?;
         }
         Ok(())
+    }
+}
+
+impl<I> Diff for EntryDiffIter<I>
+where
+    for<'a> I: TreeDiffIterator<'a>,
+{
+    fn apply_with<D: Differ>(self, differ: &mut D) -> BitResult<()> {
+        self.for_each(|diff_entry| match diff_entry {
+            DiffEntry::Deleted(deleted) => differ.on_deleted(deleted),
+            DiffEntry::Modified(old, new) => differ.on_modified(old, new),
+            DiffEntry::Created(new) => differ.on_created(new),
+        })
     }
 }
 

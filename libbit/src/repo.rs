@@ -623,8 +623,8 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    pub(crate) fn mkdir(self, path: BitPath) -> io::Result<()> {
-        std::fs::create_dir(self.to_absolute_path(path))
+    pub(crate) fn mkdir(self, path: BitPath) -> BitResult<()> {
+        Ok(std::fs::create_dir(self.to_absolute_path(path))?)
     }
 
     #[inline]

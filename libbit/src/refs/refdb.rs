@@ -264,7 +264,7 @@ impl Display for RefUpdateCause {
             RefUpdateCause::Reset { target } => write!(f, "reset: moving to `{}`", target),
             RefUpdateCause::Merge { to, strategy } => match strategy {
                 MergeStrategy::FastForward => write!(f, "merge `{}`: fast-forward", to),
-                MergeStrategy::Recursive => write!(f, "merge `{}`, recursive", to),
+                MergeStrategy::Recursive => write!(f, "merge `{}`: recursive", to),
             },
         }
     }

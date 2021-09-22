@@ -17,12 +17,34 @@ pub struct DiffFormatter<'rcx, W> {
     writer: W,
 }
 
+pub trait DiffFormatExt: Sized {
+    fn format_diffstat_into(self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()>;
+    fn format_diff_into(self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()>;
+
+    fn print_diffstat(self, repo: BitRepo<'_>) -> BitResult<()> {
+        self.format_diffstat_into(repo, std::io::stdout())
+    }
+}
+
 impl WorkspaceStatus {
-    pub fn format_diffstat_into(&self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()> {
+    pub fn print_change_summary(&self) -> BitResult<()> {
+        for created in &self.new {
+            println!("create mode {} {}", created.mode, created.path);
+        }
+
+        for deleted in &self.deleted {
+            println!("delete mode {} {}", deleted.mode, deleted.path);
+        }
+        Ok(())
+    }
+}
+
+impl<D: Diff> DiffFormatExt for D {
+    fn format_diffstat_into(self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()> {
         DiffStatFormatter::format_diffstat_into(repo, writer, self)
     }
 
-    pub fn format_diff_into(&self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()> {
+    fn format_diff_into(self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()> {
         DiffFormatter::format_diff_into(repo, writer, self)
     }
 }
@@ -32,11 +54,7 @@ impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
         Self { repo, writer }
     }
 
-    pub fn format_diff_into(
-        repo: BitRepo<'rcx>,
-        writer: W,
-        status: &WorkspaceStatus,
-    ) -> BitResult<()> {
+    pub fn format_diff_into(repo: BitRepo<'rcx>, writer: W, status: impl Diff) -> BitResult<()> {
         status.apply_with(&mut Self::new(repo, writer))
     }
 }
@@ -129,7 +147,7 @@ impl<'rcx, W: Write> DiffStatFormatter<'rcx, W> {
     pub fn format_diffstat_into(
         repo: BitRepo<'rcx>,
         writer: W,
-        status: &WorkspaceStatus,
+        status: impl Diff,
     ) -> BitResult<()> {
         let mut this = Self::new(repo, writer);
         status.apply_with(&mut this)?;

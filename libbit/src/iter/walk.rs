@@ -83,31 +83,35 @@ impl<'a, const N: usize> FallibleIterator for WalkTreeIterators<'a, N> {
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
         let next_entries = walk_common!(self);
 
-        // check if all entries are the same tree in which case we can step over the entire subtree
+        // Check if all entries are the same tree in which case we can step over the entire subtree
+        // However, we don't step over the subtree if it is the only tree
         // `flatten` essentially filters out all the Nones
-        let mut is_same_tree = true;
+        let mut should_step_over = true;
+        let mut count = 0;
         let mut oid = None;
+
         for entry in next_entries.iter().flatten() {
             if !entry.is_tree() {
-                is_same_tree = false;
+                should_step_over = false;
                 break;
             }
 
             match oid {
                 Some(oid) =>
                     if entry.oid() != oid {
-                        is_same_tree = false;
+                        should_step_over = false;
                         break;
                     },
                 None => oid = Some(entry.oid()),
             }
+            count += 1;
         }
 
         // Advance iterators that were used
         for (i, entry) in next_entries.iter().enumerate() {
             if entry.is_some() {
                 let iter = &mut self.iterators[i];
-                if is_same_tree {
+                if should_step_over && count > 1 {
                     iter.over()?;
                 } else {
                     iter.next()?;

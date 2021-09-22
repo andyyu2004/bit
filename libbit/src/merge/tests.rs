@@ -257,7 +257,7 @@ fn test_fast_forward_merge() -> BitResult<()> {
         bit_commit_all!(repo);
         bit_checkout!(repo: "master")?;
         let merge_results = bit_merge!(repo: "b")?;
-        assert_eq!(merge_results, MergeResults::FastForward { to: symbolic_ref!("refs/heads/b") });
+        assert!(matches!(merge_results, MergeResults::FastForward { .. }));
 
         // HEAD should not have moved
         assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/master"));
@@ -315,6 +315,36 @@ impl<'rcx> BitRepo<'rcx> {
         bit_reset!(self: --hard &rev!(base));
         self.three_way_merge(ours, theirs)
     }
+}
+
+#[test]
+fn test_merge_base_to_ours_only_with_dir() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let ours = commit! {
+            dir {
+                foo < "foo"
+            }
+        };
+        let theirs = commit! {};
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "dir/foo"), "foo");
+        Ok(())
+    })
+}
+
+#[test_env_log::test]
+fn test_merge_base_to_theirs_only_with_dir() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        let ours = commit! {};
+        let theirs = commit! {
+            dir {
+                foo < "foo"
+            }
+        };
+        repo.three_way_merge(ours, theirs)?;
+        assert_eq!(cat!(repo: "dir/foo"), "foo");
+        Ok(())
+    })
 }
 
 /// Test case where the file is present only in our head, not in base or other

@@ -4,6 +4,7 @@ use crate::repo::BitRepo;
 
 macro_rules! diff_unstaged {
     ($repo:ident) => {{
+        use $crate::xdiff::DiffFormatExt;
         let diff = $repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
         let mut output = vec![];
         diff.format_diff_into($repo, &mut output)?;
@@ -30,6 +31,7 @@ fn test_diff_format_unstaged_modifications() -> BitResult<()> {
 
 macro_rules! diff_staged {
     ($repo:ident) => {{
+        use $crate::xdiff::DiffFormatExt;
         let diff = $repo.diff_head_index(Pathspec::MATCH_ALL)?;
         let mut output = vec![];
         diff.format_diff_into($repo, &mut output)?;

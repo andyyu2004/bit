@@ -91,7 +91,7 @@ pub enum MergeStrategy {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MergeResults {
     Null,
-    FastForward { to: BitRef },
+    FastForward { from: Oid, to: Oid },
     Merge(MergeSummary),
 }
 
@@ -163,7 +163,7 @@ impl<'rcx> MergeCtxt<'rcx> {
             if !self.opts.no_ff && merge_base.oid() == our_head {
                 repo.checkout_tree_with_opts(their_head_commit, CheckoutOpts::default())?;
                 repo.update_current_ref_for_ff_merge(self.their_head_ref)?;
-                return Ok(MergeResults::FastForward { to: self.their_head_ref });
+                return Ok(MergeResults::FastForward { from: our_head, to: self.their_head });
             }
         }
 
@@ -279,6 +279,12 @@ impl<'rcx> MergeCtxt<'rcx> {
         ours: Option<BitIndexEntry>,
         theirs: Option<BitIndexEntry>,
     ) -> BitResult<()> {
+        info!(
+            "MergeCtxt::merge_entries(base: {:?}, ours: {:?}, theirs: {:?})",
+            base.map(TreeEntry::from),
+            ours.map(TreeEntry::from),
+            theirs.map(TreeEntry::from)
+        );
         let base_to_ours = self.diff_base_to_other(base, ours);
         let base_to_theirs = self.diff_base_to_other(base, theirs);
         match (base_to_ours, base_to_theirs) {
@@ -294,7 +300,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         info!("MergeCtxt::base_to_ours_only(base_to_ours: {:?})", base_to_ours);
         match base_to_ours {
             MergeDiffEntry::CreatedBlob(entry) => self.repo.index_mut()?.add_entry(entry),
-            MergeDiffEntry::CreatedTree(_) => todo!(),
+            MergeDiffEntry::CreatedTree(_) => Ok(()),
             _ => unreachable!(),
         }
     }
@@ -303,7 +309,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         info!("MergeCtxt::base_to_theirs_only(base_to_theirs: {:?})", base_to_theirs,);
         match base_to_theirs {
             MergeDiffEntry::CreatedBlob(entry) => self.repo.index_mut()?.write_and_add_blob(entry),
-            MergeDiffEntry::CreatedTree(_) => todo!(),
+            MergeDiffEntry::CreatedTree(tree) => self.repo.mkdir(tree.path()),
             _ => unreachable!(),
         }
     }

@@ -5,6 +5,7 @@ use crate::pathspec::Pathspec;
 use crate::peel::Peel;
 use crate::refs::{BitRef, RefUpdateCause, RefUpdateCommitKind, SymbolicRef};
 use crate::repo::BitRepo;
+use crate::xdiff::DiffFormatExt;
 use enumflags2::bitflags;
 use std::fmt::{self, Display, Formatter};
 
@@ -61,6 +62,7 @@ impl<'rcx> BitRepo<'rcx> {
 
         Ok(CommitSummary {
             status: self.diff_tree_to_tree(parent.unwrap_or(Oid::UNKNOWN), commit.tree)?,
+            repo: self,
             sym,
             commit,
         })
@@ -69,6 +71,7 @@ impl<'rcx> BitRepo<'rcx> {
 
 #[derive(Debug)]
 pub struct CommitSummary<'rcx> {
+    pub repo: BitRepo<'rcx>,
     /// the symbolic reference that was moved by this commit
     pub sym: SymbolicRef,
     /// the newly created commit object
@@ -85,17 +88,9 @@ impl Display for CommitSummary<'_> {
             writeln!(f, "[{} {}]", self.sym.short(), self.commit.oid().short())?;
         }
 
-        // TODO show full diffstat summary (deletions, insertions)
-        let files_changed = self.status.len();
-        writeln!(f, "{} file{} changed", files_changed, pluralize!(files_changed))?;
-
-        for created in &self.status.new {
-            writeln!(f, "create mode {} {}", created.mode, created.path)?;
-        }
-
-        for deleted in &self.status.deleted {
-            writeln!(f, "delete mode {} {}", deleted.mode, deleted.path)?;
-        }
+        // how to deal with error handling in display impls?
+        let _ = self.status.print_diffstat(self.repo);
+        let _ = self.status.print_change_summary();
 
         Ok(())
     }
