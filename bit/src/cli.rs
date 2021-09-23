@@ -10,6 +10,7 @@ mod cli_ls_files;
 mod cli_merge;
 mod cli_merge_base;
 mod cli_reflog;
+mod cli_remote;
 mod cli_reset;
 mod cli_revlist;
 mod cli_status;
@@ -48,6 +49,8 @@ use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
 use std::ffi::OsString;
 use std::path::PathBuf;
+
+use self::cli_remote::BitRemoteCliOpts;
 
 // experiment with changing structure of everything
 // more code should be in the binary
@@ -90,6 +93,7 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
         BitSubCmd::Merge(opts) => opts.exec(repo),
         BitSubCmd::MergeBase(opts) => opts.exec(repo),
         BitSubCmd::Reflog(opts) => opts.exec(repo),
+        BitSubCmd::Remote(opts) => opts.exec(repo),
         BitSubCmd::Reset(opts) => opts.exec(repo),
         BitSubCmd::Revlist(opts) => opts.exec(repo),
         BitSubCmd::Status(opts) => opts.exec(repo),
@@ -128,6 +132,7 @@ pub enum BitSubCmd {
     Merge(BitMergeCliOpts),
     MergeBase(BitMergeBaseCliOpts),
     Reflog(BitReflogCliOpts),
+    Remote(BitRemoteCliOpts),
     Reset(BitResetCliOpts),
     #[clap(name = "rev-list")]
     Revlist(BitRevlistCliOpts),

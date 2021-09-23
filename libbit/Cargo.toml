@@ -29,7 +29,6 @@ thiserror = "1.0"
 typed-arena = "2"
 terminal_size = "0.1"
 itertools = "0.10"
-git-config = "0.1.0"
 bitflags = "1.2.1"
 bumpalo = "3.6.1"
 ignore = "0.4.17"
@@ -46,12 +45,11 @@ indent_write = "2"
 rayon = "1.5"
 indexmap = "1.6.2"
 indexed_vec =  "1"
-jwalk = { git = "https://github.com/andyyu2004/jwalk" }
 flate2 = { version = "1.0.20", features = ["zlib-ng-compat"], default-features = false }
-# flate2 = { version = "1.0.20" }
 fallible-iterator = { git = "https://github.com/andyyu2004/rust-fallible-iterator" }
+jwalk = { git = "https://github.com/andyyu2004/jwalk" }
 diffy = { git = "https://github.com/andyyu2004/diffy" }
-
+git-config = { git = "https://github.com/andyyu2004/gitoxide" }
 bit_derive = { path = "../bit_derive" }
 
 [dev-dependencies]

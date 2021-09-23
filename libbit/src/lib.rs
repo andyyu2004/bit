@@ -101,6 +101,7 @@ mod lockfile;
 mod odb;
 mod pack;
 mod peel;
+mod remote;
 mod signature;
 mod time;
 mod tls;

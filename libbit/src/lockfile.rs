@@ -10,7 +10,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-const LOCK_FILE_EXT: &str = "lock";
+pub const LOCK_FILE_EXT: &str = "lock";
 
 bitflags! {
     pub struct LockfileFlags: u8 {

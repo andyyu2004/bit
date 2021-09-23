@@ -524,8 +524,7 @@ dependencies = [
 [[package]]
 name = "git-config"
 version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef7e745122db44c3a0fd566e22224ca4f0779112c83e840f7aab3fdde2b4d218"
+source = "git+https://github.com/andyyu2004/gitoxide#a8692e64aa75723c90599dee734b049640c8f5d5"
 dependencies = [
  "dirs",
  "memchr",
