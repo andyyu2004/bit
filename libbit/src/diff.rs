@@ -533,7 +533,7 @@ impl<'rcx> BitIndex<'rcx> {
             return Ok(Changed::Yes);
         }
 
-        if !idxe.mode_eq(&wte) {
+        if !idxe.mode_eq(wte) {
             debug!("{} changed: filemode {} -> {}", idxe.path, idxe.mode, wte.mode);
             return Ok(Changed::Yes);
         }

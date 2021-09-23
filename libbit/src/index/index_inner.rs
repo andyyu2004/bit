@@ -199,8 +199,7 @@ impl BitIndexInner {
                     ..(path.approximate_lexicographical_successor(), MergeStage::None),
             )
             .skip(1)
-            .position(|((p, _), _)| p.starts_with(path))
-            .is_some();
+            .any(|((p, _), _)| p.starts_with(path));
 
         if has_collision {
             self.remove_directory(path)?;

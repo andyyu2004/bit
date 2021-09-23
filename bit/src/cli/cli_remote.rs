@@ -1,5 +1,3 @@
-use crate::cli::cli_reflog::BitReflogShowOpts;
-
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
@@ -28,7 +26,7 @@ pub struct BitRemoteShowOpts {
 
 #[derive(Clap, Debug)]
 pub struct BitRemoteAddOpts {
-    remote: String,
+    name: String,
     url: String,
 }
 
@@ -41,7 +39,7 @@ impl Cmd for BitRemoteCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
         match self.subcmd {
             Some(subcmd) => match subcmd {
-                BitRemoteSubcommand::Add(opts) => todo!(),
+                BitRemoteSubcommand::Add(opts) => repo.add_remote(&opts.name, &opts.url),
                 BitRemoteSubcommand::Remove(_) => todo!(),
                 BitRemoteSubcommand::Show(show_opts) => show_opts.exec(repo),
             },

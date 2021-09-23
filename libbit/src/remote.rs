@@ -2,6 +2,7 @@ use crate::config::RemoteConfig;
 use crate::error::{BitGenericError, BitResult};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
+use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -34,7 +35,14 @@ impl FromStr for Refspec {
     }
 }
 
-pub type Remotes = Vec<Remote>;
+impl Display for Refspec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.forced {
+            write!(f, "+")?;
+        }
+        write!(f, "{}:{}", self.src, self.dst)
+    }
+}
 
 pub struct Remote {
     pub name: &'static str,
@@ -44,6 +52,11 @@ pub struct Remote {
 impl<'rcx> BitRepo<'rcx> {
     pub fn add_remote(self, name: &str, url: &str) -> BitResult<()> {
         let refspec = Refspec::default_fetch_for_remote(name);
+        self.with_raw_local_config(|config| {
+            config.set_subsection("remote", name, "url", url)?;
+            config.set_subsection("remote", name, "fetch", refspec)
+        })?;
+
         Ok(())
     }
 

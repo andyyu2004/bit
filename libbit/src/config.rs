@@ -1,5 +1,3 @@
-mod tests;
-
 use crate::error::BitResult;
 use crate::interner::Intern;
 use crate::merge::ConflictStyle;
@@ -23,7 +21,7 @@ pub trait Merge {
 
 impl<T> Merge for Option<T> {
     fn merge(&mut self, other: Self) {
-        if let None = self {
+        if self.is_none() {
             *self = other
         }
     }
@@ -211,8 +209,8 @@ impl BitConfigValue for String {
 
 impl BitConfigValue for i64 {
     fn parse(bytes: &[u8]) -> BitResult<Self> {
-        let i = Integer::try_from(bytes).unwrap_or_else(|err| {
-            panic!("failed to parse config value as integer `{}`", String::from_utf8_lossy(bytes))
+        let i = Integer::try_from(bytes).unwrap_or_else(|()| {
+            panic!("failed to parse config value as integer `{}`", String::from_utf8_lossy(bytes),)
         });
         Ok(i.value << i.suffix.map(|suffix| suffix.bitwise_offset()).unwrap_or(0))
     }
@@ -220,7 +218,7 @@ impl BitConfigValue for i64 {
 
 impl BitConfigValue for bool {
     fn parse(bytes: &[u8]) -> BitResult<Self> {
-        let b = Boolean::try_from(bytes).unwrap_or_else(|err| {
+        let b = Boolean::try_from(bytes).unwrap_or_else(|()| {
             panic!("failed to parse config value as boolean `{}`", String::from_utf8_lossy(bytes))
         });
         match b {
@@ -283,6 +281,38 @@ impl<'c> RawConfig<'c> {
         section.set(key.intern().into(), value.to_string().intern().as_bytes().into());
         Ok(())
     }
+
+    pub fn add_subsection(
+        &mut self,
+        section_name: &str,
+        subsection_name: &str,
+        key: &str,
+        value: impl ToString,
+    ) -> BitResult<()> {
+        let mut section = self
+            .inner
+            .new_section(section_name.intern(), Some(Cow::Borrowed(subsection_name.intern())));
+        section.set(key.intern().into(), value.to_string().intern().as_bytes().into());
+        Ok(())
+    }
+
+    /// Writes changes in memory but does not flush to disk
+    pub fn set_subsection(
+        &mut self,
+        section_name: &str,
+        subsection_name: &str,
+        key: &str,
+        value: impl ToString,
+    ) -> BitResult<()> {
+        let mut section = match self.inner.section_mut(section_name, Some(subsection_name)) {
+            Ok(section) => section,
+            Err(_) => self
+                .inner
+                .new_section(section_name.intern(), Some(Cow::Borrowed(subsection_name.intern()))),
+        };
+        section.set(key.intern().into(), value.to_string().intern().as_bytes().into());
+        Ok(())
+    }
 }
 
 // convenience wrapper
@@ -334,3 +364,6 @@ get_opt!(core.repositoryformatversion: i64);
 get_opt!(core.bare: bool);
 get_opt!(user.name: String);
 get_opt!(user.email: String);
+
+#[cfg(test)]
+mod tests;

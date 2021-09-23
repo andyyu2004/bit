@@ -379,12 +379,12 @@ impl<'rcx> MergeCtxt<'rcx> {
     fn write_their_conflicted(&mut self, theirs: &BitIndexEntry) -> BitResult<()> {
         let moved_path =
             UniquePath::new(self.repo, format!("{}~{}", theirs.path(), self.their_head_desc))?;
-        return theirs.write_to_disk_at(self.repo, moved_path);
+        theirs.write_to_disk_at(self.repo, moved_path)
     }
 
     fn mv_our_conflicted(&mut self, path: BitPath) -> BitResult<()> {
         let moved_path = UniquePath::new(self.repo, format!("{}~HEAD", path))?;
-        return self.repo.mv(path, moved_path);
+        self.repo.mv(path, moved_path)
     }
 
     fn merge_entry(

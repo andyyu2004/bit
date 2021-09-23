@@ -143,9 +143,9 @@ impl BitLooseObjDb {
         // that are slow enough to become a bottleneck
         // we don't need the validation as we know the exact format of what we are pushing on
         path.push('/');
-        path.push_str(&dir);
+        path.push_str(dir);
         path.push('/');
-        path.push_str(&file);
+        path.push_str(file);
         PathBuf::from(path)
     }
 
