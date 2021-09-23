@@ -1,3 +1,4 @@
+use crate::config::RemoteConfig;
 use crate::error::{BitGenericError, BitResult};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
@@ -33,10 +34,21 @@ impl FromStr for Refspec {
     }
 }
 
+pub type Remotes = Vec<Remote>;
+
+pub struct Remote {
+    pub name: &'static str,
+    pub config: RemoteConfig,
+}
+
 impl<'rcx> BitRepo<'rcx> {
-    pub fn add_remote(&self, name: &str, url: &str) -> BitResult<()> {
+    pub fn add_remote(self, name: &str, url: &str) -> BitResult<()> {
         let refspec = Refspec::default_fetch_for_remote(name);
         Ok(())
+    }
+
+    pub fn ls_remotes(self) -> impl Iterator<Item = Remote> + 'rcx {
+        self.remote_config().iter().map(|(name, config)| Remote { name, config: config.clone() })
     }
 }
 

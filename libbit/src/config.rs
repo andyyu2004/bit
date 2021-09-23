@@ -85,7 +85,7 @@ impl BitConfig {
 
 #[derive(Debug, PartialEq, Merge, Default)]
 pub struct RemotesConfig {
-    remotes: HashMap<&'static str, RemoteConfig>,
+    pub remotes: HashMap<&'static str, RemoteConfig>,
 }
 
 impl RemotesConfig {
@@ -102,10 +102,10 @@ impl RemotesConfig {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct RemoteConfig {
-    url: &'static str,
-    fetch: Refspec,
+    pub url: &'static str,
+    pub fetch: Refspec,
 }
 
 impl RemoteConfig {

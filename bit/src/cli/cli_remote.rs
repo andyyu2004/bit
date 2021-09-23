@@ -1,3 +1,5 @@
+use crate::cli::cli_reflog::BitReflogShowOpts;
+
 use super::Cmd;
 use clap::Clap;
 use libbit::error::BitResult;
@@ -19,10 +21,9 @@ pub enum BitRemoteSubcommand {
     Show(BitRemoteShowOpts),
 }
 
-#[derive(Clap, Debug)]
+#[derive(Clap, Default, Debug)]
 pub struct BitRemoteShowOpts {
-    #[clap(default_value = "HEAD")]
-    reference: BitRef,
+    name: Option<String>,
 }
 
 #[derive(Clap, Debug)]
@@ -42,9 +43,19 @@ impl Cmd for BitRemoteCliOpts {
             Some(subcmd) => match subcmd {
                 BitRemoteSubcommand::Add(opts) => todo!(),
                 BitRemoteSubcommand::Remove(_) => todo!(),
-                BitRemoteSubcommand::Show(_) => todo!(),
+                BitRemoteSubcommand::Show(show_opts) => show_opts.exec(repo),
             },
-            None => todo!("default command to show"),
+            None => BitRemoteShowOpts::default().exec(repo),
         }
+    }
+}
+
+impl Cmd for BitRemoteShowOpts {
+    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+        match self.name {
+            Some(_) => todo!(),
+            None => repo.ls_remotes().for_each(|remote| println!("{}", remote.name)),
+        }
+        Ok(())
     }
 }

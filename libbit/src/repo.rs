@@ -1,5 +1,5 @@
 use crate::cache::{BitObjCache, VirtualOdb};
-use crate::config::BitConfig;
+use crate::config::{BitConfig, RemoteConfig};
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
@@ -14,6 +14,7 @@ use crate::tls;
 use anyhow::Context;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -194,6 +195,16 @@ impl<'rcx> BitRepo<'rcx> {
         } else {
             RepoState::None
         }
+    }
+
+    #[inline]
+    pub fn config(self) -> &'rcx BitConfig {
+        self.rcx.config()
+    }
+
+    #[inline]
+    pub fn remote_config(self) -> &'rcx HashMap<&'static str, RemoteConfig> {
+        &self.rcx.config().remote.remotes
     }
 
     /// returns `None` if the reference does not yet exist
