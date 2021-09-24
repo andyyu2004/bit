@@ -44,6 +44,7 @@ impl Display for Refspec {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Remote {
     pub name: &'static str,
     pub config: RemoteConfig,
@@ -53,9 +54,18 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn add_remote(self, name: &str, url: &str) -> BitResult<()> {
         let refspec = Refspec::default_fetch_for_remote(name);
         self.with_raw_local_config(|config| {
+            ensure!(!config.subsection_exists("remote", name), "remote `{}` already exists", name);
             config.set_subsection("remote", name, "url", url)?;
             config.set_subsection("remote", name, "fetch", refspec)
         })?;
+
+        Ok(())
+    }
+
+    pub fn remove_remote(self, name: &str) -> BitResult<()> {
+        if !self.with_raw_local_config(|config| Ok(config.remove_subsection("remote", name)))? {
+            bail!("remote `{}` does not exist", name)
+        };
 
         Ok(())
     }

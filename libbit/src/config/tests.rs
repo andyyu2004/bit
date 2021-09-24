@@ -1,4 +1,53 @@
 use super::*;
+use crate::remote::Remote;
+
+// We have to reenter the repository so we see the refreshed configuration
+// The current configuration is not updated on change for now
+#[test]
+fn test_add_remote() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        assert!(repo.ls_remotes().next().is_none());
+        repo.add_remote("foo", "bar")?;
+        BitRepo::find(repo.workdir, |repo| {
+            let mut remotes = repo.ls_remotes();
+            assert_eq!(
+                remotes.next().unwrap(),
+                Remote {
+                    name: "foo",
+                    config: RemoteConfig {
+                        fetch: Refspec::default_fetch_for_remote("foo"),
+                        url: "bar"
+                    }
+                }
+            );
+            assert!(remotes.next().is_none());
+            Ok(())
+        })
+    })
+}
+
+#[test]
+fn test_remove_non_existent_remote() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        assert!(repo.ls_remotes().next().is_none());
+        repo.remove_remote("nonexistent").unwrap_err();
+        Ok(())
+    })
+}
+
+#[test_env_log::test]
+fn test_remove_remote() -> BitResult<()> {
+    BitRepo::with_empty_repo(|repo| {
+        assert!(repo.ls_remotes().next().is_none());
+        repo.add_remote("foo", "bar")?;
+        BitRepo::find(repo.workdir, |repo| repo.remove_remote("foo"))?;
+        BitRepo::find(repo.workdir, |repo| {
+            let mut remotes = repo.ls_remotes();
+            assert!(remotes.next().is_none());
+            Ok(())
+        })
+    })
+}
 
 #[test]
 fn test_config_parse_remotes() -> BitResult<()> {

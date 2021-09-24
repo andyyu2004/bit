@@ -15,7 +15,7 @@ pub struct BitRemoteCliOpts {
 #[derive(Clap, Debug)]
 pub enum BitRemoteSubcommand {
     Add(BitRemoteAddOpts),
-    Remove(BitRemoteAddOpts),
+    Remove(BitRemoteRemoveOpts),
     Show(BitRemoteShowOpts),
 }
 
@@ -32,7 +32,7 @@ pub struct BitRemoteAddOpts {
 
 #[derive(Clap, Debug)]
 pub struct BitRemoteRemoveOpts {
-    remote: String,
+    name: String,
 }
 
 impl Cmd for BitRemoteCliOpts {
@@ -40,7 +40,7 @@ impl Cmd for BitRemoteCliOpts {
         match self.subcmd {
             Some(subcmd) => match subcmd {
                 BitRemoteSubcommand::Add(opts) => repo.add_remote(&opts.name, &opts.url),
-                BitRemoteSubcommand::Remove(_) => todo!(),
+                BitRemoteSubcommand::Remove(opts) => repo.remove_remote(&opts.name),
                 BitRemoteSubcommand::Show(show_opts) => show_opts.exec(repo),
             },
             None => BitRemoteShowOpts::default().exec(repo),

@@ -4,7 +4,7 @@ use crate::merge::ConflictStyle;
 use crate::path::BitPath;
 use crate::remote::Refspec;
 use crate::repo::BitRepo;
-use git_config::file::{GitConfig, SectionBody};
+use git_config::file::{GitConfig, GitConfigError, SectionBody};
 use git_config::parser::Key;
 use git_config::values::{Boolean, Integer};
 use std::borrow::Cow;
@@ -180,15 +180,15 @@ pub struct RawConfig<'c> {
 impl<'rcx> BitRepo<'rcx> {
     /// Use this API for setting config values, otherwise use `.config()`
     /// The current repository config settings will NOT be refreshed
-    pub fn with_raw_local_config(
+    pub fn with_raw_local_config<R>(
         self,
-        f: impl FnOnce(&mut RawConfig<'_>) -> BitResult<()>,
-    ) -> BitResult<()> {
+        f: impl FnOnce(&mut RawConfig<'_>) -> BitResult<R>,
+    ) -> BitResult<R> {
         debug_assert!(self.config_path().try_exists()?);
         let mut config = RawConfig::open(self.config_path())?;
-        f(&mut config)?;
+        let r = f(&mut config)?;
         config.write()?;
-        Ok(())
+        Ok(r)
     }
 }
 
@@ -257,10 +257,12 @@ impl<'c> RawConfig<'c> {
 
     /// write the configuration to disk
     fn write(&self) -> BitResult<()> {
-        let inner = &self.inner;
-        let bytes: Vec<u8> = inner.into();
-        let mut file = File::with_options().write(true).open(&self.path)?;
+        debug!("Writing config to `{}`:\n{}", &self.path, self.inner.to_string());
+        let bytes = self.inner.to_string().into_bytes();
+        let mut file = File::create(self.path)?;
         file.write_all(&bytes)?;
+        file.flush()?;
+        file.sync_data()?;
         Ok(())
     }
 
@@ -294,6 +296,22 @@ impl<'c> RawConfig<'c> {
             .new_section(section_name.intern(), Some(Cow::Borrowed(subsection_name.intern())));
         section.set(key.intern().into(), value.to_string().intern().as_bytes().into());
         Ok(())
+    }
+
+    pub fn subsection_exists(&mut self, section_name: &str, subsection_name: &str) -> bool {
+        match self.inner.section(section_name, Some(subsection_name)) {
+            Ok(_) => true,
+            Err(err) => match err {
+                GitConfigError::SectionDoesNotExist(_)
+                | GitConfigError::SubSectionDoesNotExist(_) => false,
+                _ => unreachable!(),
+            },
+        }
+    }
+
+    /// Return whether the subsection existed
+    pub fn remove_subsection(&mut self, section_name: &str, subsection_name: &str) -> bool {
+        self.inner.remove_section(section_name, subsection_name).is_some()
     }
 
     /// Writes changes in memory but does not flush to disk

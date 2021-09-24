@@ -57,10 +57,10 @@ pub struct RepoCtxt<'rcx> {
     // shared (immutable) access to this struct
     pub workdir: BitPath,
     pub bitdir: BitPath,
-    config: BitConfig,
     config_filepath: BitPath,
     index_filepath: BitPath,
     arenas: Arenas<'rcx>,
+    config: BitConfig,
     obj_cache: RwLock<BitObjCache<'rcx>>,
     odb_cell: SyncOnceCell<BitObjDb>,
     refdb_cell: SyncOnceCell<BitRefDb<'rcx>>,

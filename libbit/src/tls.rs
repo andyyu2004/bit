@@ -12,7 +12,6 @@ pub(crate) fn enter_repo<'rcx, R>(
     f: impl FnOnce(BitRepo<'rcx>) -> BitResult<R>,
 ) -> BitResult<R> {
     REPO_CTXT.with(|ptr| {
-        assert_eq!(ptr.get(), 0, "nested repos?");
         ptr.set(rcx as *const _ as usize);
         let r = with_repo(f);
         ptr.set(0);
