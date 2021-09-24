@@ -1,28 +1,50 @@
 use crate::config::RemoteConfig;
 use crate::error::{BitGenericError, BitResult};
 use crate::path::BitPath;
+use crate::refs::SymbolicRef;
 use crate::repo::BitRepo;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Refspec {
+    /// The lhs of the `:` excluding the * if there is one
     src: BitPath,
+    /// The rhs of the `:` excluding the * if there is one
     dst: BitPath,
     forced: bool,
+    /// Whether both sides are globbed
+    glob: bool,
+}
+
+impl PartialEq for Refspec {
+    fn eq(&self, other: &Self) -> bool {
+        self.src == other.src && self.dst == other.dst && self.forced == other.forced
+    }
 }
 
 impl Refspec {
     pub fn default_fetch_for_remote(remote_name: &str) -> Self {
-        let src = BitPath::intern("refs/heads/*");
-        let dst = BitPath::intern(format!("refs/remotes/{}/*", remote_name));
-        Self { src, dst, forced: true }
+        let src = BitPath::intern("refs/heads/");
+        let dst = BitPath::intern(format!("refs/remotes/{}/", remote_name));
+        Self { src, dst, forced: true, glob: true }
+    }
+
+    /// Matches given `source` to `self.src` and returns the expanded destination if it matches
+    pub fn match_ref(&self, source: SymbolicRef) -> Option<BitPath> {
+        if self.glob {
+            let suffix = source.path().as_str().strip_prefix(self.src.as_str())?;
+            Some(BitPath::intern(format!("{}{}", self.dst, suffix)))
+        } else {
+            if source.path() == self.src { Some(self.dst) } else { None }
+        }
     }
 }
 
 impl FromStr for Refspec {
     type Err = BitGenericError;
 
+    // very rough implementation, doesn't capture full semantics of refspecs
     fn from_str(mut s: &str) -> BitResult<Self> {
         let forced = if &s[0..1] == "+" {
             s = &s[1..];
@@ -31,7 +53,20 @@ impl FromStr for Refspec {
             false
         };
         let (src, dst) = s.split_once(':').ok_or_else(|| anyhow!("missing `:` in refspec"))?;
-        Ok(Self { src: BitPath::intern(src), dst: BitPath::intern(dst), forced })
+        let (src, src_is_glob) = match src.strip_suffix('*') {
+            Some(stripped) => (stripped, true),
+            None => (src, false),
+        };
+        let (dst, dst_is_glob) = match dst.strip_suffix('*') {
+            Some(stripped) => (stripped, true),
+            None => (dst, false),
+        };
+        let glob = match (src_is_glob, dst_is_glob) {
+            (true, true) => true,
+            (false, false) => false,
+            _ => bail!("only one side of refspec is globbed"),
+        };
+        Ok(Self { src: BitPath::intern(src), dst: BitPath::intern(dst), forced, glob })
     }
 }
 
