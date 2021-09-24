@@ -12,6 +12,7 @@ use crate::rev::Revspec;
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
+use bit_ds::sync::OneThread;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -59,7 +60,7 @@ pub struct RepoCtxt<'rcx> {
     pub bitdir: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
-    arenas: Arenas<'rcx>,
+    arenas: OneThread<Arenas<'rcx>>,
     config: BitConfig,
     obj_cache: RwLock<BitObjCache<'rcx>>,
     odb_cell: SyncOnceCell<BitObjDb>,
@@ -83,7 +84,7 @@ impl<'rcx> RepoCtxt<'rcx> {
             bitdir,
             index_filepath,
             config,
-            arenas: Default::default(),
+            arenas: OneThread::new(Default::default()),
             odb_cell: Default::default(),
             index_cell: Default::default(),
             obj_cache: Default::default(),

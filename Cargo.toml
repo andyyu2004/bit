@@ -2,9 +2,11 @@
 members = [
     "bit",
     "bit-upload-pack",
+    "bit-ds",
     "bit-protocol",
     "bit-derive",
     "libbit",
+    "libbit-upload-pack",
 ]
 
 [profile.release]

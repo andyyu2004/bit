@@ -1,8 +1,11 @@
 use crate::config::RemoteConfig;
 use crate::error::{BitGenericError, BitResult};
+use crate::interner::Intern;
 use crate::path::BitPath;
 use crate::refs::SymbolicRef;
 use crate::repo::BitRepo;
+use crate::transport::{FileTransport, Transport};
+use git_url_parse::{GitUrl, Scheme};
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
@@ -82,7 +85,14 @@ impl Display for Refspec {
 #[derive(Debug, PartialEq)]
 pub struct Remote {
     pub name: &'static str,
-    pub config: RemoteConfig,
+    pub url: GitUrl,
+    pub fetch: Refspec,
+}
+
+impl Remote {
+    fn from_config(name: &'static str, config: RemoteConfig) -> Self {
+        Self { name, url: config.url, fetch: config.fetch }
+    }
 }
 
 impl<'rcx> BitRepo<'rcx> {
@@ -105,8 +115,30 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(())
     }
 
+    pub fn get_remote(self, name: &str) -> BitResult<Remote> {
+        self.remote_config()
+            .get(name)
+            .map(|config| Remote::from_config(name.intern(), config.clone()))
+            .ok_or_else(|| anyhow!("remote `{}` does not exist", name))
+    }
+
+    pub async fn fetch(self, name: &str) -> BitResult<()> {
+        let remote = self.get_remote(name)?;
+        self.fetch_remote(remote).await
+    }
+
+    pub async fn fetch_remote(self, remote: Remote) -> BitResult<()> {
+        match remote.url.scheme {
+            Scheme::Ssh => todo!("todo ssh"),
+            Scheme::File => FileTransport::new(&remote)?.fetch(self).await,
+            Scheme::Https => todo!("todo https"),
+            Scheme::Unspecified => todo!("unspecified url scheme for remote"),
+            _ => bail!("unsupported scheme `{}`", remote.url.scheme),
+        }
+    }
+
     pub fn ls_remotes(self) -> impl Iterator<Item = Remote> + 'rcx {
-        self.remote_config().iter().map(|(name, config)| Remote { name, config: config.clone() })
+        self.remote_config().iter().map(|(name, config)| Remote::from_config(name, config.clone()))
     }
 }
 

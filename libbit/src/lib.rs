@@ -27,6 +27,9 @@
 extern crate self as libbit;
 
 #[macro_use]
+extern crate async_trait;
+
+#[macro_use]
 extern crate smallvec;
 
 #[cfg(test)]
@@ -61,6 +64,7 @@ pub mod test_utils;
 mod cache;
 mod fs;
 mod graph;
+mod transport;
 
 #[macro_use]
 extern crate log;

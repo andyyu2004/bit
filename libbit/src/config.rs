@@ -7,6 +7,7 @@ use crate::repo::BitRepo;
 use git_config::file::{GitConfig, GitConfigError, SectionBody};
 use git_config::parser::Key;
 use git_config::values::{Boolean, Integer};
+use git_url_parse::GitUrl;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -102,7 +103,7 @@ impl RemotesConfig {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct RemoteConfig {
-    pub url: &'static str,
+    pub url: GitUrl,
     pub fetch: Refspec,
 }
 
@@ -201,6 +202,13 @@ impl BitConfigValue for &'static str {
         Ok(std::str::from_utf8(bytes)?.intern())
     }
 }
+
+impl BitConfigValue for GitUrl {
+    fn parse(bytes: &[u8]) -> BitResult<Self> {
+        Ok(GitUrl::parse(std::str::from_utf8(bytes)?)?)
+    }
+}
+
 impl BitConfigValue for String {
     fn parse(bytes: &[u8]) -> BitResult<Self> {
         Ok(String::from_utf8(bytes.to_owned())?)

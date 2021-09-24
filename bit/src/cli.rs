@@ -5,6 +5,7 @@ mod cli_checkout;
 mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
+mod cli_fetch;
 mod cli_log;
 mod cli_ls_files;
 mod cli_merge;
@@ -50,6 +51,7 @@ use libbit::rev::Revspec;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use self::cli_fetch::BitFetchCliOpts;
 use self::cli_remote::BitRemoteCliOpts;
 
 // experiment with changing structure of everything
@@ -87,6 +89,7 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
             repo.bit_commit_tree(opts.tree, opts.parents.into_iter().collect(), opts.message),
         BitSubCmd::Commit(opts) => opts.exec(repo),
         BitSubCmd::Diff(opts) => opts.exec(repo),
+        BitSubCmd::Fetch(opts) => opts.exec(repo),
         BitSubCmd::HashObject(opts) => repo.bit_hash_object(opts.into()),
         BitSubCmd::Log(opts) => opts.exec(repo),
         BitSubCmd::LsFiles(opts) => repo.bit_ls_files(opts.into()),
@@ -125,6 +128,7 @@ pub enum BitSubCmd {
     Config(BitConfigCliOpts),
     Commit(BitCommitCliOpts),
     Diff(BitDiffCliOpts),
+    Fetch(BitFetchCliOpts),
     HashObject(BitHashObjectCliOpts),
     Init(BitInitCliOpts),
     Log(BitLogCliOpts),

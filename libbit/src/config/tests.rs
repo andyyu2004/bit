@@ -14,10 +14,8 @@ fn test_add_remote() -> BitResult<()> {
                 remotes.next().unwrap(),
                 Remote {
                     name: "foo",
-                    config: RemoteConfig {
-                        fetch: Refspec::default_fetch_for_remote("foo"),
-                        url: "bar"
-                    }
+                    fetch: Refspec::default_fetch_for_remote("foo"),
+                    url: GitUrl::parse("bar")?,
                 }
             );
             assert!(remotes.next().is_none());
@@ -75,11 +73,11 @@ fn test_config_parse_remotes() -> BitResult<()> {
         RemotesConfig {
             remotes: hashmap! {
                 "origin" => RemoteConfig {
-                    url: "git@github.com:andyyu2004/bit",
+                    url: GitUrl::parse("git@github.com:andyyu2004/bit")?,
                     fetch: "+refs/heads/*:refs/remotes/origin/*".parse()?,
                 },
                 "gitlab" => RemoteConfig {
-                    url: "git@gitlab.com:andyyu2004/bit",
+                    url: GitUrl::parse("git@gitlab.com:andyyu2004/bit")?,
                     fetch: "+refs/heads/*:refs/remotes/origin/*".parse()?,
                 }
             }
