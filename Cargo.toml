@@ -6,7 +6,6 @@ members = [
     "bit-protocol",
     "bit-derive",
     "libbit",
-    "libbit-upload-pack",
 ]
 
 [profile.release]

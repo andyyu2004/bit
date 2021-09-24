@@ -95,6 +95,7 @@ pub mod reset;
 pub mod rev;
 pub mod serialize;
 pub mod status;
+pub mod upload_pack;
 pub mod xdiff;
 
 mod core;

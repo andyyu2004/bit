@@ -5,8 +5,6 @@ edition = "2021"
 
 [dependencies]
 clap = "3.0.0-beta.2"
-tokio = { version = "1", features = ["io-std", "io-util", "macros", "rt-multi-thread"] }
-anyhow = "1"
 libbit = { path = "../libbit" }
-libbit-upload-pack = { path = "../libbit-upload-pack" }
+tokio = { version = "1", features = ["io-std"] }
 
