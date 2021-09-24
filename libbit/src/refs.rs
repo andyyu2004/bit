@@ -170,6 +170,10 @@ impl SymbolicRef {
         matches!(self.kind, SymbolicRefKind::Remote)
     }
 
+    pub fn is_local(&self) -> bool {
+        !self.is_remote()
+    }
+
     pub fn path(&self) -> BitPath {
         self.path
     }

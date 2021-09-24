@@ -3,6 +3,7 @@ name = "bit"
 version = "0.1.0"
 authors = ["Andy Yu <andyyu2004@gmail.com>"]
 edition = "2018"
+default-run = "bit"
 
 [dependencies]
 libbit = { path = "../libbit" }

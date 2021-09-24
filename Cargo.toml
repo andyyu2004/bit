@@ -1,7 +1,9 @@
 [workspace]
 members = [
     "bit",
-    "bit_derive",
+    "bit-upload-pack",
+    "bit-protocol",
+    "bit-derive",
     "libbit",
 ]
 

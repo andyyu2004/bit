@@ -50,7 +50,7 @@ fallible-iterator = { git = "https://github.com/andyyu2004/rust-fallible-iterato
 jwalk = { git = "https://github.com/andyyu2004/jwalk" }
 diffy = { git = "https://github.com/andyyu2004/diffy" }
 git-config = { git = "https://github.com/andyyu2004/gitoxide" }
-bit_derive = { path = "../bit_derive" }
+bit-derive = { path = "../bit-derive" }
 
 [dev-dependencies]
 quickcheck = "1"
