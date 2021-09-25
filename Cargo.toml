@@ -3,7 +3,6 @@ members = [
     "bit",
     "bit-upload-pack",
     "bit-ds",
-    "bit-protocol",
     "bit-derive",
     "libbit",
 ]

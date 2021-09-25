@@ -1,5 +1,6 @@
 #![deny(rust_2018_idioms)]
 #![feature(result_copied)]
+#![feature(async_closure)]
 #![feature(path_try_exists)]
 #![feature(generic_associated_types)]
 #![feature(btree_drain_filter)]
@@ -64,6 +65,7 @@ pub mod test_utils;
 mod cache;
 mod fs;
 mod graph;
+mod protocol;
 mod transport;
 
 #[macro_use]

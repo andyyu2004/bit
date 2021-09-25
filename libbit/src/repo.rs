@@ -1,6 +1,6 @@
 use crate::cache::{BitObjCache, VirtualOdb};
 use crate::config::{BitConfig, RemoteConfig};
-use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
+use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult};
 use crate::index::BitIndex;
 use crate::io::ReadExt;
 use crate::merge::MergeStrategy;
@@ -18,6 +18,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
+use std::future::Future;
 use std::io::{self, Write};
 use std::lazy::SyncOnceCell;
 use std::ops::Deref;
@@ -155,6 +156,13 @@ impl<'rcx> RepoCtxt<'rcx> {
         f(BitRepo { rcx: self })
     }
 
+    pub async fn with_async<F, R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> F) -> R
+    where
+        F: Future<Output = R>,
+    {
+        f(BitRepo { rcx: self }).await
+    }
+
     /// Enter the repository context for a "transaction".
     /// If any fatal error occurs during the closure, then writes to the index are rolled back.
     /// This should generally be used as the entry point to accessing the repository
@@ -162,14 +170,28 @@ impl<'rcx> RepoCtxt<'rcx> {
         tls::enter_repo(self, |repo| match f(repo) {
             Ok(r) => Ok(r),
             Err(err) => {
-                // This is definitely pretty dodgy and subtle way to handle rolling back.
-                // It's currently here to guard against the MergeConflict error from rolling back the index
-                if err.is_fatal() && repo.index_cell.get().is_some() {
+                if repo.index_cell.get().is_some() {
                     repo.index_lock()?.write().rollback();
                 }
                 Err(err)
             }
         })
+    }
+
+    pub async fn enter_async<F, R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> F) -> BitResult<R>
+    where
+        F: Future<Output = BitResult<R>>,
+    {
+        self.with_async(async move |repo| match f(repo).await {
+            Ok(r) => Ok(r),
+            Err(err) => {
+                if repo.index_cell.get().is_some() {
+                    repo.index_lock()?.write().rollback();
+                }
+                Err(err)
+            }
+        })
+        .await
     }
 
     #[inline]

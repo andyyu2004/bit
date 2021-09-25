@@ -130,7 +130,7 @@ impl<'rcx> BitRepo<'rcx> {
     pub async fn fetch_remote(self, remote: Remote) -> BitResult<()> {
         match remote.url.scheme {
             Scheme::Ssh => todo!("todo ssh"),
-            Scheme::File => FileTransport::new(&remote)?.fetch(self).await,
+            Scheme::File => FileTransport::new(self, remote).await?.fetch(self).await,
             Scheme::Https => todo!("todo https"),
             Scheme::Unspecified => todo!("unspecified url scheme for remote"),
             _ => bail!("unsupported scheme `{}`", remote.url.scheme),

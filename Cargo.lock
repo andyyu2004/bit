@@ -110,10 +110,6 @@ name = "bit-ds"
 version = "0.1.0"
 
 [[package]]
-name = "bit-protocol"
-version = "0.1.0"
-
-[[package]]
 name = "bit-upload-pack"
 version = "0.1.0"
 dependencies = [

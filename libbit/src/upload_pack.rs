@@ -1,7 +1,7 @@
+use crate::protocol::{BitProtocolRead, BitProtocolWrite};
 use anyhow::Result;
-use libbit::refs::SymbolicRef;
 use libbit::repo::BitRepo;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io;
 
 // https://github.com/git/git/blob/master/Documentation/technical/protocol-common.txt
 pub struct UploadPack<'rcx, R, W> {
@@ -30,8 +30,8 @@ const CAPABILITIES: &[&str] = &[
 
 impl<'rcx, R, W> UploadPack<'rcx, R, W>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: BitProtocolRead,
+    W: BitProtocolWrite,
 {
     pub fn new(repo: BitRepo<'rcx>, reader: R, writer: W) -> Self {
         Self { repo, reader, writer }
@@ -40,11 +40,12 @@ where
     #[tokio::main]
     pub async fn run(&mut self) -> Result<()> {
         self.write_ref_discovery().await?;
-        let bytes = self.recv().await?;
-        if bytes.is_empty() {
-            return Ok(());
+        loop {
+            let bytes = self.reader.recv_packet().await?;
+            if bytes.is_empty() {
+                return Ok(());
+            }
         }
-        Ok(())
     }
 
     // Reference Discovery
@@ -86,47 +87,21 @@ where
         // The ord impl for refs is tailored for other purposes (i.e. remotes before heads in bit log)
         refs.sort_by_key(|r| r.path());
         for (i, r) in refs.into_iter().enumerate() {
-            let oid = repo.fully_resolve_ref(r)?;
+            let oid = match repo.try_fully_resolve_ref(r)? {
+                Some(oid) => oid,
+                None => continue,
+            };
             if i == 0 {
-                assert_eq!(r, SymbolicRef::HEAD);
                 self.write(format!("{} {}\0{}\n", oid, r.path(), CAPABILITIES.join(" "))).await?;
                 continue;
             }
             self.write(format!("{} {}\n", oid, r.path()).as_bytes()).await?;
         }
-        self.write_flush().await
+        Ok(self.writer.write_flush_packet().await?)
     }
 
     #[inline]
-    async fn write_flush(&mut self) -> Result<()> {
-        self.writer.write_all(b"0000").await?;
-        Ok(self.writer.flush().await?)
-    }
-
-    #[inline]
-    async fn write(&mut self, bytes: impl AsRef<[u8]>) -> Result<()> {
-        self.write_internal(bytes.as_ref()).await
-    }
-
-    async fn write_internal(&mut self, bytes: &[u8]) -> Result<()> {
-        assert!(bytes.len() < u16::MAX as usize);
-        let length = format!("{:04x}", 4 + bytes.len());
-        debug_assert_eq!(length.len(), 4);
-        self.writer.write_all(&length.as_bytes()).await?;
-        self.writer.write_all(bytes).await?;
-        Ok(())
-    }
-
-    async fn recv(&mut self) -> Result<Vec<u8>> {
-        let mut buf = [0; 4];
-        assert_eq!(self.reader.read_exact(&mut buf).await?, buf.len());
-        let n = usize::from_str_radix(std::str::from_utf8(&buf)?, 16)?;
-        if n == 0 {
-            // recv flush packet
-            return Ok(vec![]);
-        }
-        let mut contents = Vec::with_capacity(n);
-        assert_eq!(self.reader.read_exact(&mut contents).await?, contents.len());
-        Ok(contents)
+    async fn write(&mut self, bytes: impl AsRef<[u8]>) -> io::Result<()> {
+        self.writer.write_packet(bytes.as_ref()).await
     }
 }
