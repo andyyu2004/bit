@@ -1,3 +1,7 @@
+#![feature(backtrace)]
+
+use std::backtrace::BacktraceStatus;
+
 mod cli;
 mod util;
 
@@ -16,6 +20,10 @@ pub fn main() -> ! {
     env_logger::builder().parse_env("BIT_LOG").init();
     if let Err(err) = cli::run(std::env::args_os()) {
         eprintln!("{}", err);
+        let backtrace = err.backtrace();
+        if backtrace.status() == BacktraceStatus::Captured {
+            println!("{}", backtrace);
+        }
         std::process::exit(1)
     } else {
         std::process::exit(0)

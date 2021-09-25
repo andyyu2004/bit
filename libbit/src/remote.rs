@@ -1,11 +1,13 @@
 use crate::config::RemoteConfig;
 use crate::error::{BitGenericError, BitResult};
 use crate::interner::Intern;
+use crate::obj::Oid;
 use crate::path::BitPath;
-use crate::refs::SymbolicRef;
+use crate::refs::{BitRef, RefUpdateCause, SymbolicRef};
 use crate::repo::BitRepo;
 use crate::transport::{FileTransport, Transport};
 use git_url_parse::{GitUrl, Scheme};
+use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
@@ -34,13 +36,14 @@ impl Refspec {
     }
 
     /// Matches given `source` to `self.src` and returns the expanded destination if it matches
-    pub fn match_ref(&self, source: SymbolicRef) -> Option<BitPath> {
-        if self.glob {
+    pub fn match_ref(&self, source: SymbolicRef) -> Option<SymbolicRef> {
+        let path = if self.glob {
             let suffix = source.path().as_str().strip_prefix(self.src.as_str())?;
             Some(BitPath::intern(format!("{}{}", self.dst, suffix)))
         } else {
             if source.path() == self.src { Some(self.dst) } else { None }
-        }
+        }?;
+        Some(SymbolicRef::new(path))
     }
 }
 
@@ -130,7 +133,7 @@ impl<'rcx> BitRepo<'rcx> {
     pub async fn fetch_remote(self, remote: Remote) -> BitResult<()> {
         match remote.url.scheme {
             Scheme::Ssh => todo!("todo ssh"),
-            Scheme::File => FileTransport::new(self, remote).await?.fetch(self).await,
+            Scheme::File => FileTransport::new(self, &remote.url).await?.fetch(self, &remote).await,
             Scheme::Https => todo!("todo https"),
             Scheme::Unspecified => todo!("unspecified url scheme for remote"),
             _ => bail!("unsupported scheme `{}`", remote.url.scheme),

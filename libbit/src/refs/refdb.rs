@@ -247,7 +247,8 @@ pub enum RefUpdateCause {
     Commit { subject: String, kind: RefUpdateCommitKind },
     Checkout { from: BitRef, to: BitRef },
     Reset { target: BitRef },
-    Merge { to: BitRef, strategy: MergeStrategy },
+    Merge { theirs: BitRef, strategy: MergeStrategy },
+    Fetch { to: BitRef },
 }
 
 impl Display for RefUpdateCause {
@@ -262,10 +263,11 @@ impl Display for RefUpdateCause {
             RefUpdateCause::Checkout { from, to } =>
                 write!(f, "checkout: moving from `{}` to `{}`", from, to),
             RefUpdateCause::Reset { target } => write!(f, "reset: moving to `{}`", target),
-            RefUpdateCause::Merge { to, strategy } => match strategy {
-                MergeStrategy::FastForward => write!(f, "merge `{}`: fast-forward", to),
-                MergeStrategy::Recursive => write!(f, "merge `{}`: recursive", to),
+            RefUpdateCause::Merge { theirs, strategy } => match strategy {
+                MergeStrategy::FastForward => write!(f, "merge `{}`: fast-forward", theirs),
+                MergeStrategy::Recursive => write!(f, "merge `{}`: recursive", theirs),
             },
+            RefUpdateCause::Fetch { to: _ } => write!(f, "fetch"),
         }
     }
 }

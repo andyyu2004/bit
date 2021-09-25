@@ -43,7 +43,7 @@ fn test_match_refspec() -> BitResult<()> {
     let refspec = "+refs/heads/master:refs/remotes/origin/master".parse::<Refspec>()?;
     assert_eq!(
         refspec.match_ref(symbolic!("refs/heads/master")),
-        Some(p!("refs/remotes/origin/master"))
+        Some(symbolic!("refs/remotes/origin/master"))
     );
 
     assert_eq!(refspec.match_ref(symbolic!("refs/heads/other")), None,);
@@ -51,15 +51,15 @@ fn test_match_refspec() -> BitResult<()> {
     let refspec = "+refs/heads/*:refs/remotes/origin/*".parse::<Refspec>()?;
     assert_eq!(
         refspec.match_ref(symbolic!("refs/heads/master")),
-        Some(p!("refs/remotes/origin/master"))
+        Some(symbolic!("refs/remotes/origin/master"))
     );
     assert_eq!(
         refspec.match_ref(symbolic!("refs/heads/mybranch")),
-        Some(p!("refs/remotes/origin/mybranch"))
+        Some(symbolic!("refs/remotes/origin/mybranch"))
     );
     assert_eq!(
         refspec.match_ref(symbolic!("refs/heads/local/mybranch")),
-        Some(p!("refs/remotes/origin/local/mybranch"))
+        Some(symbolic!("refs/remotes/origin/local/mybranch"))
     );
     assert_eq!(refspec.match_ref(symbolic!("refs/bad/master")), None,);
     Ok(())

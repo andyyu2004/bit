@@ -1,6 +1,7 @@
 use super::*;
 use crate::path;
 use crate::upload_pack::UploadPack;
+use git_url_parse::GitUrl;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::thread::JoinHandle;
@@ -13,11 +14,11 @@ pub struct FileTransport<'rcx> {
 }
 
 impl<'rcx> FileTransport<'rcx> {
-    pub async fn new(repo: BitRepo<'rcx>, remote: Remote) -> BitResult<FileTransport<'rcx>> {
+    pub async fn new(repo: BitRepo<'rcx>, url: &GitUrl) -> BitResult<FileTransport<'rcx>> {
         let (client, server) = tokio::io::duplex(64);
         let (server_read, server_write) = tokio::io::split(server);
         // doing a preemptive `find` on the current thread just to check the repo exists
-        let path = path::normalize(&repo.to_absolute_path(remote.url.path));
+        let path = path::normalize(&repo.to_absolute_path(&url.path));
         BitRepo::find(&path, |_| Ok(()))?;
         let handle = std::thread::spawn(move || {
             BitRepo::find(path, |repo| UploadPack::new(repo, server_read, server_write).run())

@@ -478,21 +478,24 @@ impl<'rcx> BitRepo<'rcx> {
         self.update_current_ref(oid, RefUpdateCause::Reset { target })
     }
 
-    pub(crate) fn update_current_ref_for_ff_merge(self, to: impl Into<BitRef>) -> BitResult<()> {
-        let to = to.into();
-        let oid = self.fully_resolve_ref(to)?;
+    pub(crate) fn update_current_ref_for_ff_merge(
+        self,
+        theirs: impl Into<BitRef>,
+    ) -> BitResult<()> {
+        let theirs = theirs.into();
+        let oid = self.fully_resolve_ref(theirs)?;
         self.update_current_ref(
             oid,
-            RefUpdateCause::Merge { to, strategy: MergeStrategy::FastForward },
+            RefUpdateCause::Merge { theirs, strategy: MergeStrategy::FastForward },
         )
     }
 
-    pub(crate) fn update_current_ref_for_merge(self, to: impl Into<BitRef>) -> BitResult<()> {
-        let to = to.into();
-        let oid = self.fully_resolve_ref(to)?;
+    pub(crate) fn update_current_ref_for_merge(self, theirs: impl Into<BitRef>) -> BitResult<()> {
+        let theirs = theirs.into();
+        let oid = self.fully_resolve_ref(theirs)?;
         self.update_current_ref(
             oid,
-            RefUpdateCause::Merge { to, strategy: MergeStrategy::Recursive },
+            RefUpdateCause::Merge { theirs, strategy: MergeStrategy::Recursive },
         )
     }
 
