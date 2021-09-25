@@ -1,11 +1,57 @@
 use crate::error::BitResult;
-use crate::obj::{BitObjKind, BitObject, FileMode, Oid, TreeEntry};
+use crate::graph::{Dag, DagBuilder, DagNode, Node};
+use crate::obj::{BitObjKind, BitObject, CommitMessage, FileMode, Oid, TreeEntry};
 use crate::path::BitPath;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
+use fallible_iterator::FallibleIterator;
 use rand::Rng;
+use rustc_hash::FxHashMap;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
+
+impl DagBuilder {
+    pub fn apply_to_repo(&self, repo: BitRepo<'_>) -> BitResult<FxHashMap<Node, Oid>> {
+        CommitGraphBuilder::new(repo).apply(self)
+    }
+}
+
+pub struct CommitGraphBuilder<'rcx> {
+    repo: BitRepo<'rcx>,
+}
+
+impl<'rcx> CommitGraphBuilder<'rcx> {
+    pub fn new(repo: BitRepo<'rcx>) -> Self {
+        Self { repo }
+    }
+
+    /// write all commits represented in `dag` to the repository
+    /// returning the commits created in order of the dag nodes
+    pub fn apply(self, dag: &DagBuilder) -> BitResult<FxHashMap<Node, Oid>> {
+        // mapping from node to it's commit oid
+        let mut commits = FxHashMap::<Node, Oid>::default();
+
+        dag.reverse_topological()?.for_each(|node| {
+            let node_data = dag.node_data(node);
+            let parents = node_data.adjacent().into_iter().map(|parent| commits[&parent]).collect();
+
+            let message = CommitMessage {
+                subject: "generated commit".to_owned(),
+                message: generate_random_string(0..100),
+            };
+
+            let tree = match node_data.tree {
+                Some(tree) => tree,
+                None => self.repo.write_tree()?,
+            };
+            let commit = self.repo.write_commit(tree, parents, message)?;
+            commits.insert(node, commit);
+            Ok(())
+        })?;
+
+        Ok(commits)
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum DebugTreeEntry {

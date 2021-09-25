@@ -4,46 +4,9 @@ use crate::index::{Conflict, ConflictType};
 use crate::merge::MergeResults;
 use crate::obj::{BitObject, CommitMessage, Oid, Treeish};
 use crate::repo::BitRepo;
-use crate::test_utils::generate_random_string;
+use crate::test_utils::{generate_random_string, CommitGraphBuilder};
 use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashMap;
-
-struct CommitGraphBuilder<'rcx> {
-    repo: BitRepo<'rcx>,
-}
-
-impl<'rcx> CommitGraphBuilder<'rcx> {
-    pub fn new(repo: BitRepo<'rcx>) -> Self {
-        Self { repo }
-    }
-
-    /// write all commits represented in `dag` to the repository
-    /// returning the commits created in order of the dag nodes
-    pub fn apply(self, dag: &DagBuilder) -> BitResult<FxHashMap<Node, Oid>> {
-        // mapping from node to it's commit oid
-        let mut commits = FxHashMap::<Node, Oid>::default();
-
-        dag.reverse_topological()?.for_each(|node| {
-            let node_data = dag.node_data(node);
-            let parents = node_data.adjacent().into_iter().map(|parent| commits[&parent]).collect();
-
-            let message = CommitMessage {
-                subject: "generated commit".to_owned(),
-                message: generate_random_string(0..100),
-            };
-
-            let tree = match node_data.tree {
-                Some(tree) => tree,
-                None => self.repo.write_tree()?,
-            };
-            let commit = self.repo.write_commit(tree, parents, message)?;
-            commits.insert(node, commit);
-            Ok(())
-        })?;
-
-        Ok(commits)
-    }
-}
 
 /// a - b  - c - i - j
 ///     \       /
@@ -68,7 +31,7 @@ fn test_best_common_ancestors() -> BitResult<()> {
             (d, b),
         ]);
 
-        let commit_oids = CommitGraphBuilder::new(repo).apply(&dag)?;
+        let commit_oids = dag.apply_to_repo(repo)?;
 
         let a = commit_oids[&h];
         let b = commit_oids[&j];
@@ -111,7 +74,7 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
         let [a, b, c, d] = dag.mk_nodes_with_trees([tree, tree, tree, tree]);
         dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
 
-        let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
+        let commits = dag.apply_to_repo(repo)?;
 
         bit_reset!(repo: --hard rev!(commits[&c]));
         assert_eq!(cat!(repo: "foo"), "foo contents");
@@ -160,7 +123,7 @@ fn test_nontrivial_criss_cross_merge() -> BitResult<()> {
         let [o, a, b, c, d] = dag.mk_nodes_with_trees([tree_o, tree_a, tree_b, tree_c, tree_d]);
         dag.add_parents([(a, o), (b, o), (c, a), (c, b), (d, a), (d, b)]);
 
-        let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
+        let commits = dag.apply_to_repo(repo)?;
 
         bit_reset!(repo: --hard rev!(commits[&c]));
         bit_branch!(repo: "d" @ rev!(commits[&d]));

@@ -18,6 +18,10 @@ use std::str::FromStr;
 //   | <partial-oid>
 //   | <rev>^<n>?
 //   | <rev>~<n>?
+//   | ..<rev>
+//   | <rev>..
+//   | <rev>..<rev>
+//   | <rev>...<rev>
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParsedRevspec {
     Ref(BitRef),
@@ -28,9 +32,14 @@ pub enum ParsedRevspec {
     Parent(Box<ParsedRevspec>, usize),
     /// ~<n>
     Ancestor(Box<ParsedRevspec>, usize),
+    /// <rev>..<rev>
+    /// Open ranges default to HEAD
+    Range(Box<ParsedRevspec>, Box<ParsedRevspec>),
     /// <rev>@{<n>}
     Reflog(Box<ParsedRevspec>, usize),
 }
+
+pub enum RevisionRange {}
 
 impl<'rcx> BitRepo<'rcx> {
     // A hack to make this work for `bit cat-file` without weakening the checks for refs to be pointer to commits in `refdb`
@@ -109,6 +118,7 @@ impl<'rcx> BitRepo<'rcx> {
                 self.resolve_rev_internal(inner).and_then(|r| get_nth_parent(r, n)),
             ParsedRevspec::Ancestor(ref rev, n) =>
                 (0..n).try_fold(self.resolve_rev_internal(rev)?, |oid, _| get_first_parent(oid)),
+            ParsedRevspec::Range(_, _) => todo!(),
             ParsedRevspec::Reflog(ref inner, n) => match self.resolve_rev_internal(inner)? {
                 BitRef::Direct(..) =>
                     bail!("can't use reflog revision syntax on a direct reference"),
@@ -147,6 +157,7 @@ impl Display for ParsedRevspec {
                     write!(f, "{}~{}", rev, n)
                 },
             ParsedRevspec::Reflog(rev, n) => write!(f, "{}@{{{}}}", rev, n),
+            ParsedRevspec::Range(from, to) => write!(f, "{}..{}", from, to),
         }
     }
 }

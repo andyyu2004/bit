@@ -11,16 +11,6 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::ops::Deref;
 
-#[derive(Debug, Clone)]
-pub struct RevWalk<'rcx> {
-    repo: BitRepo<'rcx>,
-    // map of commit oid to their flags
-    // I suppose this field name should be doubly plural
-    flags: FxHashMap<Oid, CommitNodeFlags>,
-    pqueue: BinaryHeap<CommitNode<'rcx>>,
-    index: usize,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 struct CommitNode<'rcx> {
     commit: &'rcx Commit<'rcx>,
@@ -73,6 +63,7 @@ bitflags! {
     struct CommitNodeFlags: u8 {
         const YIELDED = 1 << 1;
         const ENQUEUED = 1 << 2;
+        const UNINTERESTING = 1 << 3;
     }
 }
 
@@ -119,6 +110,77 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
+#[derive(Debug)]
+pub struct RevwalkBuilder<'rcx> {
+    repo: BitRepo<'rcx>,
+    roots: SmallVec<[&'rcx Commit<'rcx>; 2]>,
+    exclude: SmallVec<[&'rcx Commit<'rcx>; 2]>,
+}
+
+impl<'rcx> RevwalkBuilder<'rcx> {
+    pub fn new(repo: BitRepo<'rcx>) -> Self {
+        Self { repo, roots: Default::default(), exclude: Default::default() }
+    }
+
+    pub fn excluding(mut self, exclude: SmallVec<[&'rcx Commit<'rcx>; 2]>) -> Self {
+        self.exclude = exclude;
+        self
+    }
+
+    pub fn excluding_revisions<'a>(
+        mut self,
+        exclude: impl IntoIterator<Item = &'a Revspec>,
+    ) -> BitResult<Self> {
+        self.exclude = exclude
+            .into_iter()
+            .map(|rev| self.repo.fully_resolve_rev(rev)?.peel(self.repo))
+            .collect::<Result<SmallVec<_>, _>>()?;
+        Ok(self)
+    }
+
+    pub fn root_revisions<'a>(
+        mut self,
+        revspecs: impl IntoIterator<Item = &'a Revspec>,
+    ) -> BitResult<Self> {
+        self.roots = revspecs
+            .into_iter()
+            .map(|rev| self.repo.fully_resolve_rev(rev)?.peel(self.repo))
+            .collect::<Result<SmallVec<_>, _>>()?;
+        Ok(self)
+    }
+
+    pub fn roots(mut self, roots: SmallVec<[&'rcx Commit<'rcx>; 2]>) -> Self {
+        self.roots = roots;
+        self
+    }
+
+    pub fn build(self) -> RevWalk<'rcx> {
+        assert!(!self.roots.is_empty());
+        let mut this = RevWalk {
+            repo: self.roots[0].owner(),
+            flags: Default::default(),
+            pqueue: Default::default(),
+            index: 0,
+        };
+
+        self.exclude.into_iter().for_each(|commit| {
+            this.enqueue_commit_with_flags(commit, CommitNodeFlags::UNINTERESTING)
+        });
+        self.roots.into_iter().for_each(|commit| this.enqueue_commit(commit));
+        this
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RevWalk<'rcx> {
+    repo: BitRepo<'rcx>,
+    // map of commit oid to their flags
+    // I suppose this field name should be doubly plural
+    flags: FxHashMap<Oid, CommitNodeFlags>,
+    pqueue: BinaryHeap<CommitNode<'rcx>>,
+    index: usize,
+}
+
 impl<'rcx> RevWalk<'rcx> {
     pub fn new(roots: SmallVec<[&'rcx Commit<'rcx>; 2]>) -> Self {
         debug_assert!(!roots.is_empty());
@@ -143,14 +205,28 @@ impl<'rcx> RevWalk<'rcx> {
         CommitNode { commit, index: self.next_index() }
     }
 
-    pub fn enqueue_commit(&mut self, commit: &'rcx Commit<'rcx>) {
+    fn enqueue_commit_with_flags(
+        &mut self,
+        commit: &'rcx Commit<'rcx>,
+        init_flags: CommitNodeFlags,
+    ) {
         let flags = self.flags.entry(commit.oid()).or_default();
         if flags.intersects(CommitNodeFlags::ENQUEUED | CommitNodeFlags::YIELDED) {
             return;
         }
-        flags.insert(CommitNodeFlags::ENQUEUED);
+        flags.insert(init_flags | CommitNodeFlags::ENQUEUED);
         let node = self.mk_node(commit);
         self.pqueue.push(node)
+    }
+
+    pub fn enqueue_commit(&mut self, commit: &'rcx Commit<'rcx>) {
+        self.enqueue_commit_with_flags(commit, CommitNodeFlags::default())
+    }
+
+    fn mark_parents_uninteresting(&mut self, node: &CommitNode<'rcx>) {
+        for &parent in &node.parents {
+            self.flags.entry(parent).or_default().insert(CommitNodeFlags::UNINTERESTING)
+        }
     }
 
     pub fn walk_revspecs(repo: BitRepo<'rcx>, revspecs: &[&Revspec]) -> BitResult<Self> {
@@ -175,6 +251,12 @@ impl<'rcx> RevWalk<'rcx> {
         ensure!(!roots.is_empty());
         Ok(Self::new(roots))
     }
+
+    fn still_interesting(&self) -> bool {
+        self.pqueue
+            .iter()
+            .any(|node| !self.flags[&node.oid()].contains(CommitNodeFlags::UNINTERESTING))
+    }
 }
 
 /// yields all commits reachable from the roots in reverse chronological order
@@ -184,17 +266,25 @@ impl<'rcx> FallibleIterator for RevWalk<'rcx> {
     type Item = &'rcx Commit<'rcx>;
 
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
-        let node = match self.pqueue.pop() {
-            Some(node) => node,
-            None => return Ok(None),
-        };
+        while self.still_interesting() {
+            let node = match self.pqueue.pop() {
+                Some(node) => node,
+                None => return Ok(None),
+            };
 
-        for &parent in &node.parents {
-            self.enqueue_commit(self.repo.read_obj(parent)?.into_commit());
+            for &parent in &node.parents {
+                self.enqueue_commit(self.repo.read_obj(parent)?.into_commit());
+            }
+
+            let flags = self.flags.entry(node.oid()).or_default();
+            flags.insert(CommitNodeFlags::YIELDED);
+
+            if flags.contains(CommitNodeFlags::UNINTERESTING) {
+                self.mark_parents_uninteresting(&node);
+            } else {
+                return Ok(Some(node.commit));
+            }
         }
-
-        self.flags.entry(node.oid()).or_default().insert(CommitNodeFlags::YIELDED);
-
-        Ok(Some(node.commit))
+        Ok(None)
     }
 }
