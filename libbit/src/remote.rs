@@ -1,13 +1,12 @@
 use crate::config::RemoteConfig;
 use crate::error::{BitGenericError, BitResult};
 use crate::interner::Intern;
-use crate::obj::Oid;
 use crate::path::BitPath;
-use crate::refs::{BitRef, RefUpdateCause, SymbolicRef};
+use crate::refs::SymbolicRef;
 use crate::repo::BitRepo;
-use crate::transport::{FileTransport, Transport};
+use crate::transport::{FileTransport, SshTransport, Transport};
 use git_url_parse::{GitUrl, Scheme};
-use std::collections::HashMap;
+use openssh::Session;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
@@ -132,7 +131,13 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub async fn fetch_remote(self, remote: Remote) -> BitResult<()> {
         match remote.url.scheme {
-            Scheme::Ssh => todo!("todo ssh"),
+            Scheme::Ssh => {
+                let url = &remote.url;
+                let dst = format!("{}@{}", url.user.as_ref().unwrap(), url.host.as_ref().unwrap());
+                let session = Session::connect(dst, openssh::KnownHosts::Add).await?;
+                let mut transport = SshTransport::new(self, &session, url).await?;
+                transport.fetch(self, &remote).await
+            }
             Scheme::File => FileTransport::new(self, &remote.url).await?.fetch(self, &remote).await,
             Scheme::Https => todo!("todo https"),
             Scheme::Unspecified => todo!("unspecified url scheme for remote"),

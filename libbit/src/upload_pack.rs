@@ -1,6 +1,9 @@
+use crate::error::BitGenericError;
+use crate::obj::Oid;
 use crate::protocol::{BitProtocolRead, BitProtocolWrite};
 use anyhow::Result;
 use libbit::repo::BitRepo;
+use std::str::FromStr;
 use tokio::io;
 
 // https://github.com/git/git/blob/master/Documentation/technical/protocol-common.txt
@@ -10,22 +13,24 @@ pub struct UploadPack<'rcx, R, W> {
     writer: W,
 }
 
+// TODO
 const CAPABILITIES: &[&str] = &[
-    "multi_ack",
-    "thin-pack",
-    "side-band",
-    "side-band-64k",
-    "ofs-delta",
-    "shallow",
-    "deepen-since",
-    "deepen-not",
-    "deepen-relative",
-    "no-progress",
-    "include-tag",
-    "multi_ack_detailed",
-    "symref=HEAD:refs/heads/remote",
-    "object-format=sha1",
-    "agent=bit",
+    // "multi_ack",
+    // "thin-pack",
+    // "side-band",
+    // "side-band-64k",
+    // "ofs-delta",
+    // "shallow",
+    // "deepen-since",
+    // "deepen-not",
+    // "deepen-relative",
+    // "no-progress",
+    // "include-tag",
+    // "multi_ack_detailed",
+    // // TODO this one needs to actually read HEAD
+    // "symref=HEAD:refs/heads/remote",
+    // "object-format=sha1",
+    // "agent=bit",
 ];
 
 impl<'rcx, R, W> UploadPack<'rcx, R, W>
@@ -40,12 +45,42 @@ where
     #[tokio::main]
     pub async fn run(&mut self) -> Result<()> {
         self.write_ref_discovery().await?;
-        loop {
-            let bytes = self.reader.recv_packet().await?;
-            if bytes.is_empty() {
-                return Ok(());
-            }
+        let wanted = self.recv_wanted().await?;
+        if wanted.is_empty() {
+            return Ok(());
         }
+        let has = self.recv_has().await?;
+        dbg!(wanted);
+        dbg!(has);
+        Ok(())
+    }
+
+    fn parse_cmd_line<T>(&mut self, cmd: &str, packet: &[u8]) -> Result<T>
+    where
+        T: FromStr<Err = BitGenericError>,
+    {
+        let s = std::str::from_utf8(&packet)?;
+        let (c, oid) = s.split_once(' ').ok_or_else(|| anyhow!("bad `{}` line", cmd))?;
+        ensure_eq!(c, cmd);
+        oid.parse()
+    }
+
+    async fn recv_wanted(&mut self) -> Result<Vec<Oid>> {
+        self.reader
+            .recv_message()
+            .await?
+            .iter()
+            .map(|packet| self.parse_cmd_line("want", packet))
+            .collect()
+    }
+
+    async fn recv_has(&mut self) -> Result<Vec<Oid>> {
+        self.reader
+            .recv_message()
+            .await?
+            .iter()
+            .map(|packet| self.parse_cmd_line("have", packet))
+            .collect()
     }
 
     // Reference Discovery

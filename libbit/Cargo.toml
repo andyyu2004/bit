@@ -47,6 +47,7 @@ indexmap = "1.6.2"
 indexed_vec =  "1"
 git-url-parse = "0.3"
 async-trait = "0.1.51"
+openssh = "0.8"
 flate2 = { version = "1.0.20", features = ["zlib-ng-compat"], default-features = false }
 fallible-iterator = { git = "https://github.com/andyyu2004/rust-fallible-iterator" }
 jwalk = { git = "https://github.com/andyyu2004/jwalk" }

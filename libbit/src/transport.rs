@@ -16,22 +16,53 @@ use crate::repo::BitRepo;
 #[async_trait]
 pub trait Transport: BitProtocolRead + BitProtocolWrite {
     async fn fetch(&mut self, repo: BitRepo<'_>, remote: &Remote) -> BitResult<()> {
-        let refs = self.parse_initial().await?;
-        self.negotiate_packs(repo).await?;
-        let remote_mapping =
-            refs.into_iter().filter_map(|(sym, oid)| Some((remote.fetch.match_ref(sym)?, oid)));
-        for (remote, oid) in remote_mapping {
+        let refs = self.parse_ref_discovery().await?;
+        let remote_mapping = refs
+            .into_iter()
+            .filter_map(|(sym, oid)| Some((remote.fetch.match_ref(sym)?, oid)))
+            .collect::<HashMap<_, _>>();
+        self.negotiate_packs(repo, &remote_mapping).await?;
+
+        for (&remote, &oid) in &remote_mapping {
             let to = BitRef::Direct(oid);
             repo.update_ref(remote, to, RefUpdateCause::Fetch { to })?;
         }
-        panic!();
+        Ok(())
     }
 
-    async fn negotiate_packs(&mut self, repo: BitRepo<'_>) -> BitResult<()> {
-        todo!()
+    async fn negotiate_packs(
+        &mut self,
+        repo: BitRepo<'_>,
+        remote_mapping: &HashMap<SymbolicRef, Oid>,
+    ) -> BitResult<()> {
+        let mut wanted = vec![];
+        for (&remote, &remote_oid) in remote_mapping {
+            let local_oid = repo.try_fully_resolve_ref(remote)?.unwrap_or(Oid::UNKNOWN);
+            if local_oid == remote_oid {
+                continue;
+            }
+            wanted.push(local_oid);
+        }
+
+        for &oid in &wanted {
+            self.want(oid).await?;
+        }
+        self.write_flush_packet().await?;
+
+        if wanted.is_empty() {
+            return Ok(());
+        }
+
+        // let has = repo.revwalk();
+
+        // for &oid in &has {
+        //     self.have(oid).await?;
+        // }
+        self.write_flush_packet().await?;
+        Ok(())
     }
 
-    async fn parse_initial(&mut self) -> BitResult<HashMap<SymbolicRef, Oid>> {
+    async fn parse_ref_discovery(&mut self) -> BitResult<HashMap<SymbolicRef, Oid>> {
         let mut mapping = HashMap::new();
 
         let packet = self.recv_packet().await?;

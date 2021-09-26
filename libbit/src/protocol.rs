@@ -18,11 +18,12 @@ pub trait BitProtocolRead: AsyncRead + Unpin + Send {
         Ok(contents)
     }
 
-    async fn recv_packets(&mut self) -> BitResult<Vec<Vec<u8>>> {
+    /// Receive a message which is a collection of packets deliminated by a flush packet.
+    async fn recv_message(&mut self) -> BitResult<Vec<Vec<u8>>> {
         let mut packets = vec![];
         loop {
             let packet = self.recv_packet().await?;
-            if packet.is_empty() {
+            if packet.is_empty() || packet == b"done" {
                 break Ok(packets);
             }
             packets.push(packet);

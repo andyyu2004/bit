@@ -1,3 +1,72 @@
+use super::*;
+use crate::repo::BitRepo;
+use git_url_parse::GitUrl;
+use openssh::{RemoteChild, Session};
+use std::pin::Pin;
+use std::process::Stdio;
+use std::task::{Context, Poll};
+use tokio::io::{self, AsyncRead, AsyncWrite, ReadBuf};
+use tokio::process::{ChildStderr, ChildStdin, ChildStdout};
 
+pub struct SshTransport<'rcx, 's> {
+    repo: BitRepo<'rcx>,
+    child: RemoteChild<'s>,
+    stdin: ChildStdin,
+    stdout: ChildStdout,
+    stderr: ChildStderr,
+}
 
-pub struct SshTransport {}
+impl<'rcx, 's> SshTransport<'rcx, 's> {
+    pub async fn new(
+        repo: BitRepo<'rcx>,
+        session: &'s Session,
+        url: &GitUrl,
+    ) -> BitResult<SshTransport<'rcx, 's>> {
+        let mut child = session
+            .command("git-upload-pack")
+            .arg(&url.path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let stdin = child.stdin().take().unwrap();
+        let stdout = child.stdout().take().unwrap();
+        let stderr = child.stderr().take().unwrap();
+        Ok(Self { repo, child, stdin, stdout, stderr })
+    }
+}
+
+#[async_trait]
+impl Transport for SshTransport<'_, '_> {
+}
+
+impl AsyncRead for SshTransport<'_, '_> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.stdout).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for SshTransport<'_, '_> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.stdin).poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.stdin).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), std::io::Error>> {
+        Pin::new(&mut self.stdin).poll_shutdown(cx)
+    }
+}

@@ -1,12 +1,10 @@
 use crate::error::{BitErrorExt, BitResult};
-use crate::graph::{Dag, DagBuilder, DagNode, Node};
+use crate::graph::DagBuilder;
 use crate::index::{Conflict, ConflictType};
 use crate::merge::MergeResults;
-use crate::obj::{BitObject, CommitMessage, Oid, Treeish};
+use crate::obj::{BitObject, Oid, Treeish};
 use crate::repo::BitRepo;
-use crate::test_utils::{generate_random_string, CommitGraphBuilder};
-use fallible_iterator::FallibleIterator;
-use rustc_hash::FxHashMap;
+use crate::test_utils::CommitGraphBuilder;
 
 /// a - b  - c - i - j
 ///     \       /
