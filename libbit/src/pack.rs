@@ -15,6 +15,7 @@ use std::io::{BufRead, BufReader, Read, SeekFrom};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
+pub const PACK_SIGNATURE: &[u8; 4] = b"PACK";
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
 const FANOUT_ENTRYC: usize = 256;
 const FANOUT_ENTRY_SIZE: u64 = 4;
@@ -463,7 +464,7 @@ impl From<BitPackObjHeader> for BitObjHeader {
 impl Packfile {
     fn parse_header(mut reader: impl BufRead) -> BitResult<u32> {
         let sig = reader.read_array::<u8, 4>()?;
-        ensure_eq!(&sig, b"PACK", "invalid packfile header");
+        ensure_eq!(&sig, PACK_SIGNATURE, "invalid packfile signature");
         let version = reader.read_u32()?;
         ensure_eq!(version, 2, "invalid packfile version `{}`", version);
         Ok(reader.read_u32()?)

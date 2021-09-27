@@ -108,16 +108,20 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn revwalk(self, revspecs: &[&Revspec]) -> BitResult<RevWalk<'rcx>> {
         RevWalk::walk_revspecs(self, revspecs)
     }
+
+    pub fn revwalk_builder(self) -> RevWalkBuilder<'rcx> {
+        RevWalkBuilder::new(self)
+    }
 }
 
 #[derive(Debug)]
-pub struct RevwalkBuilder<'rcx> {
+pub struct RevWalkBuilder<'rcx> {
     repo: BitRepo<'rcx>,
     roots: SmallVec<[&'rcx Commit<'rcx>; 2]>,
     exclude: SmallVec<[&'rcx Commit<'rcx>; 2]>,
 }
 
-impl<'rcx> RevwalkBuilder<'rcx> {
+impl<'rcx> RevWalkBuilder<'rcx> {
     pub fn new(repo: BitRepo<'rcx>) -> Self {
         Self { repo, roots: Default::default(), exclude: Default::default() }
     }
@@ -146,6 +150,17 @@ impl<'rcx> RevwalkBuilder<'rcx> {
             .into_iter()
             .map(|rev| self.repo.fully_resolve_rev(rev)?.peel(self.repo))
             .collect::<Result<SmallVec<_>, _>>()?;
+        Ok(self)
+    }
+
+    pub fn roots_iter<T: Peel<'rcx, Peeled = &'rcx Commit<'rcx>>>(
+        mut self,
+        roots: impl IntoIterator<Item = T>,
+    ) -> BitResult<Self> {
+        self.roots = roots
+            .into_iter()
+            .map(|commit| commit.peel(self.repo))
+            .collect::<BitResult<SmallVec<_>>>()?;
         Ok(self)
     }
 

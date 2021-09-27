@@ -2,15 +2,19 @@ use super::*;
 use crate::path;
 use crate::upload_pack::UploadPack;
 use git_url_parse::GitUrl;
+use pin_project_lite::pin_project;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::thread::JoinHandle;
-use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
+use tokio::io::{self, AsyncBufRead, AsyncRead, AsyncWrite, BufReader, DuplexStream, ReadBuf};
 
-pub struct FileTransport<'rcx> {
-    repo: BitRepo<'rcx>,
-    handle: JoinHandle<BitResult<()>>,
-    client: DuplexStream,
+pin_project! {
+    pub struct FileTransport<'rcx> {
+        repo: BitRepo<'rcx>,
+        handle: JoinHandle<BitResult<()>>,
+        #[pin]
+        client: BufReader<DuplexStream>,
+    }
 }
 
 impl<'rcx> FileTransport<'rcx> {
@@ -21,14 +25,26 @@ impl<'rcx> FileTransport<'rcx> {
         let path = path::normalize(&repo.to_absolute_path(&url.path));
         BitRepo::find(&path, |_| Ok(()))?;
         let handle = std::thread::spawn(move || {
-            BitRepo::find(path, |repo| UploadPack::new(repo, server_read, server_write).run())
+            BitRepo::find(path, |repo| {
+                UploadPack::new(repo, BufReader::new(server_read), server_write).run()
+            })
         });
-        Ok(Self { repo, handle, client })
+        Ok(Self { repo, handle, client: BufReader::new(client) })
     }
 }
 
 #[async_trait]
 impl Transport for FileTransport<'_> {
+}
+
+impl AsyncBufRead for FileTransport<'_> {
+    fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<&[u8]>> {
+        self.project().client.poll_fill_buf(cx)
+    }
+
+    fn consume(self: Pin<&mut Self>, amt: usize) {
+        self.project().client.consume(amt)
+    }
 }
 
 impl AsyncRead for FileTransport<'_> {

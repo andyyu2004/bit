@@ -1,5 +1,4 @@
 use super::*;
-use crate::graph::DagBuilder;
 use crate::obj::BitObject;
 use fallible_iterator::FallibleIterator;
 
@@ -77,7 +76,8 @@ fn test_revwalk_with_exclude() -> BitResult<()> {
         //  988788c B
         //  f8103f9 A
         //  c1bc532 init output from `git rev-list master`
-        let revwalk = RevwalkBuilder::new(repo)
+        let revwalk = repo
+            .revwalk_builder()
             .root_revisions(Some(&rev!("master")))?
             .excluding_revisions(Some(&rev!("some-branch")))?
             .build();
@@ -93,7 +93,8 @@ fn test_revwalk_with_exclude() -> BitResult<()> {
         ];
         assert_eq!(&oids[..], expected);
 
-        let revwalk = RevwalkBuilder::new(repo)
+        let revwalk = repo
+            .revwalk_builder()
             .root_revisions(Some(&rev!("some-branch")))?
             .excluding_revisions(Some(&rev!("master")))?
             .build();

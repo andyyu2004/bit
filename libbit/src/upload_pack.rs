@@ -13,6 +13,9 @@ pub struct UploadPack<'rcx, R, W> {
     writer: W,
 }
 
+// TODO on error send an error line
+//   error-line     =  PKT-LINE("ERR" SP explanation-text)
+
 // TODO
 const CAPABILITIES: &[&str] = &[
     // "multi_ack",

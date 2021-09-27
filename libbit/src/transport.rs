@@ -3,31 +3,47 @@ mod ssh;
 
 use std::collections::HashMap;
 
+use fallible_iterator::FallibleIterator;
 pub use file::*;
 pub use ssh::*;
 
 use crate::error::BitResult;
-use crate::obj::Oid;
-use crate::protocol::{BitProtocolRead, BitProtocolWrite};
+use crate::obj::{BitObject, Oid};
+use crate::protocol::{BitProtocolRead, BitProtocolWrite, Capabilities, Capability};
 use crate::refs::{BitRef, RefUpdateCause, SymbolicRef};
 use crate::remote::Remote;
 use crate::repo::BitRepo;
 
+pub const MULTI_ACK_BATCH_SIZE: usize = 32;
+
 #[async_trait]
 pub trait Transport: BitProtocolRead + BitProtocolWrite {
     async fn fetch(&mut self, repo: BitRepo<'_>, remote: &Remote) -> BitResult<()> {
-        let refs = self.parse_ref_discovery().await?;
+        let (refs, capabilities) = self.parse_ref_discovery_and_capabilities().await?;
+
+        ensure!(
+            capabilities.contains(&Capability::MultiAckDetailed),
+            "require `multi_ack_detailed` capability"
+        );
+        ensure!(
+            capabilities.contains(&Capability::SideBand64k),
+            "require `side-band-64k` capability"
+        );
+        ensure!(capabilities.contains(&Capability::OfsDelta), "require `ofs-delta` capability");
+
         let remote_mapping = refs
             .into_iter()
             .filter_map(|(sym, oid)| Some((remote.fetch.match_ref(sym)?, oid)))
             .collect::<HashMap<_, _>>();
         self.negotiate_packs(repo, &remote_mapping).await?;
 
-        for (&remote, &oid) in &remote_mapping {
-            let to = BitRef::Direct(oid);
-            repo.update_ref(remote, to, RefUpdateCause::Fetch { to })?;
-        }
-        Ok(())
+        todo!();
+        // TODO check the refspec for forcedness before updating: create a function `try_update_remote_ref`
+        // for (&remote, &oid) in &remote_mapping {
+        //     let to = BitRef::Direct(oid);
+        //     repo.update_ref(remote, to, RefUpdateCause::Fetch { to })?;
+        // }
+        // Ok(())
     }
 
     async fn negotiate_packs(
@@ -36,16 +52,28 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
         remote_mapping: &HashMap<SymbolicRef, Oid>,
     ) -> BitResult<()> {
         let mut wanted = vec![];
+        let mut local_tips = vec![];
         for (&remote, &remote_oid) in remote_mapping {
-            let local_oid = repo.try_fully_resolve_ref(remote)?.unwrap_or(Oid::UNKNOWN);
-            if local_oid == remote_oid {
+            let local_oid = repo.try_fully_resolve_ref(remote)?;
+            if local_oid == Some(remote_oid) {
                 continue;
             }
-            wanted.push(local_oid);
+            wanted.push(remote_oid);
+            if let Some(local_oid) = local_oid {
+                local_tips.push(local_oid)
+            }
         }
 
-        for &oid in &wanted {
-            self.want(oid).await?;
+        for (i, &oid) in wanted.iter().enumerate() {
+            if i == 0 {
+                let capabilities =
+                    [Capability::MultiAckDetailed, Capability::OfsDelta, Capability::SideBand64k]
+                        .map(|cap| cap.to_string())
+                        .join(" ");
+                self.write_packet(format!("want {} {}\n", oid, capabilities).as_bytes()).await?;
+            } else {
+                self.want(oid).await?;
+            }
         }
         self.write_flush_packet().await?;
 
@@ -53,22 +81,53 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
             return Ok(());
         }
 
-        // let has = repo.revwalk();
+        let mut walk = repo.revwalk_builder().roots_iter(local_tips)?.build();
+        'outer: loop {
+            // TODO exit early when "ready" whatever that means
+            for _ in 0..MULTI_ACK_BATCH_SIZE {
+                let next_commit = match walk.next()? {
+                    Some(commit) => commit,
+                    None => break 'outer,
+                };
+                self.have(next_commit.oid()).await?;
+            }
 
-        // for &oid in &has {
-        //     self.have(oid).await?;
-        // }
-        self.write_flush_packet().await?;
+            // TODO same as above
+            break self.done().await?;
+            // TODO handle ack/nak/error response to our done
+        }
+
+        loop {
+            let packet = self.recv_packet().await?;
+            let s = std::str::from_utf8(&packet)?;
+            if s.starts_with("ACK") {
+                if s.ends_with("common\n") || s.ends_with("ready\n") || s.ends_with("continue\n") {
+                    continue;
+                }
+                // found the final ack?
+                break;
+            } else {
+                todo!()
+            }
+        }
+        self.recv_pack().await?;
+        panic!();
         Ok(())
     }
 
-    async fn parse_ref_discovery(&mut self) -> BitResult<HashMap<SymbolicRef, Oid>> {
+    async fn parse_ref_discovery_and_capabilities(
+        &mut self,
+    ) -> BitResult<(HashMap<SymbolicRef, Oid>, Capabilities)> {
         let mut mapping = HashMap::new();
 
         let packet = self.recv_packet().await?;
         let mut iter = packet.split(|&byte| byte == 0x00);
         let ref_line = iter.next().ok_or_else(|| anyhow!("malformed first line"))?;
-        let _capabilities = iter.next().ok_or_else(|| anyhow!("malformed first line"))?;
+        let capabilities = iter.next().ok_or_else(|| anyhow!("malformed first line"))?;
+        let parsed_capabilities = capabilities
+            .split(|&b| b == b' ')
+            .map(|bytes| Ok(std::str::from_utf8(bytes)?.trim_end().parse()?))
+            .collect::<BitResult<Capabilities>>()?;
         ensure!(iter.next().is_none());
 
         let (oid, sym) = parse_ref_line(ref_line)?;
@@ -77,7 +136,7 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
         loop {
             let packet = self.recv_packet().await?;
             if packet.is_empty() {
-                break Ok(mapping);
+                break Ok((mapping, parsed_capabilities));
             }
             let (oid, sym) = parse_ref_line(&packet)?;
             mapping.insert(sym, oid);

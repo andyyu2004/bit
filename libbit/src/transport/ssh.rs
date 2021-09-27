@@ -2,18 +2,22 @@ use super::*;
 use crate::repo::BitRepo;
 use git_url_parse::GitUrl;
 use openssh::{RemoteChild, Session};
+use pin_project_lite::pin_project;
 use std::pin::Pin;
 use std::process::Stdio;
 use std::task::{Context, Poll};
-use tokio::io::{self, AsyncRead, AsyncWrite, ReadBuf};
+use tokio::io::{self, AsyncBufRead, AsyncRead, AsyncWrite, BufReader, ReadBuf};
 use tokio::process::{ChildStderr, ChildStdin, ChildStdout};
 
-pub struct SshTransport<'rcx, 's> {
-    repo: BitRepo<'rcx>,
-    child: RemoteChild<'s>,
-    stdin: ChildStdin,
-    stdout: ChildStdout,
-    stderr: ChildStderr,
+pin_project! {
+    pub struct SshTransport<'rcx, 's> {
+        repo: BitRepo<'rcx>,
+        child: RemoteChild<'s>,
+        stdin: ChildStdin,
+        #[pin]
+        stdout: BufReader<ChildStdout>,
+        stderr: BufReader<ChildStderr>,
+    }
 }
 
 impl<'rcx, 's> SshTransport<'rcx, 's> {
@@ -30,14 +34,24 @@ impl<'rcx, 's> SshTransport<'rcx, 's> {
             .stderr(Stdio::piped())
             .spawn()?;
         let stdin = child.stdin().take().unwrap();
-        let stdout = child.stdout().take().unwrap();
-        let stderr = child.stderr().take().unwrap();
+        let stdout = BufReader::new(child.stdout().take().unwrap());
+        let stderr = BufReader::new(child.stderr().take().unwrap());
         Ok(Self { repo, child, stdin, stdout, stderr })
     }
 }
 
 #[async_trait]
 impl Transport for SshTransport<'_, '_> {
+}
+
+impl AsyncBufRead for SshTransport<'_, '_> {
+    fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<&[u8]>> {
+        self.project().stdout.poll_fill_buf(cx)
+    }
+
+    fn consume(self: Pin<&mut Self>, amt: usize) {
+        self.project().stdout.consume(amt)
+    }
 }
 
 impl AsyncRead for SshTransport<'_, '_> {
