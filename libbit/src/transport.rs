@@ -10,7 +10,7 @@ pub use ssh::*;
 use crate::error::BitResult;
 use crate::obj::{BitObject, Oid};
 use crate::protocol::{BitProtocolRead, BitProtocolWrite, Capabilities, Capability};
-use crate::refs::{BitRef, RefUpdateCause, SymbolicRef};
+use crate::refs::SymbolicRef;
 use crate::remote::Remote;
 use crate::repo::BitRepo;
 
@@ -110,7 +110,7 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
                 todo!()
             }
         }
-        self.recv_pack().await?;
+        self.recv_pack(repo).await?;
         panic!();
         Ok(())
     }

@@ -1,11 +1,13 @@
 use crate::error::BitResult;
 use crate::obj::Oid;
-use crate::pack::PACK_SIGNATURE;
+use crate::pack::PackWriter;
 use crate::refs::SymbolicRef;
+use crate::repo::BitRepo;
 use async_trait::async_trait;
 use parse_display::{Display, FromStr};
 use std::collections::HashSet;
-use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{self, AsyncBufRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::select;
 
 pub type Capabilities = HashSet<Capability>;
 
@@ -67,37 +69,46 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
     }
 
     /// Assumes `side-band-64k` capability
-    async fn recv_pack(&mut self) -> BitResult<()> {
+    async fn recv_pack(&mut self, repo: BitRepo<'_>) -> BitResult<()> {
+        // We're only using one direction of the duplex stream
+        // Don't really care about the max buffer size so giving it 1GiB
+        let (reader, mut writer) = tokio::io::duplex(1024_000_000);
+
+        // SAFETY
+        // We are awaiting the async closure at the end of the function so `repo`
+        // will still definitely be valid
+        // There are some caveats regarding async cancellation so this is not entirely safe
+        // I'm unsure of a better way to do this though
+        let static_repo: BitRepo<'static> = unsafe { std::mem::transmute(repo) };
+        let pack_writer = PackWriter::new(static_repo, BufReader::new(reader)).await?;
+        let mut handle = tokio::spawn(pack_writer.read_pack());
         loop {
             let mut length = [0; 4];
             assert_eq!(self.read_exact(&mut length).await?, 4);
             let n = usize::from_str_radix(std::str::from_utf8(&length[..4])?, 16)?;
             if n == 0 {
-                return Ok(());
+                break;
             }
             let mut sideband = 0;
             assert_eq!(self.read_exact(std::slice::from_mut(&mut sideband)).await?, 1);
             let packet = self.read_contents_with_parsed_len(n - 1).await?;
             match sideband {
-                SIDEBAND_DATA => {}
+                SIDEBAND_DATA => select! {
+                    // We keep checking the status of the handle in case it has errored early
+                    // in which case we want to return or otherwise we will get blocked forever
+                    // waiting for the pipe to have space
+                    res = &mut handle => res??,
+                    res = writer.write(&packet) => {
+                        res?;
+                    },
+                },
                 SIDEBAND_PROGRESS => eprintln!("{}", std::str::from_utf8(&packet)?),
-                SIDEBAND_ERROR => panic!(),
+                SIDEBAND_ERROR => todo!(),
                 _ => bail!("invalid sideband byte `{:x}`", sideband),
             }
         }
-    }
-
-    /// Ignore packets until the PACK signature is found
-    async fn recv_pack_signature(&mut self) -> BitResult<()> {
-        loop {
-            let mut buf = [0; 4];
-            assert_eq!(self.read_exact(&mut buf).await?, 4);
-            if &buf == PACK_SIGNATURE {
-                dbg!("found pack");
-                return Ok(());
-            }
-            self.read_contents(buf).await?;
-        }
+        handle.await??;
+        Ok(())
     }
 
     /// Receive a message which is a collection of packets deliminated by a flush packet.

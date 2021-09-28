@@ -4,6 +4,7 @@ use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{self, *};
 use crate::pack::Pack;
 use crate::path::BitPath;
+use crate::repo::BIT_PACK_OBJECTS_PATH;
 use arrayvec::ArrayVec;
 use fallible_iterator::FallibleIterator;
 use flate2::read::ZlibDecoder;
@@ -26,6 +27,9 @@ macro_rules! process {
         }
     };
 }
+
+pub const PACK_EXT: &str = "pack";
+pub const PACK_IDX_EXT: &str = "idx";
 
 pub struct BitObjDb {
     // backends will be searched in order
@@ -242,7 +246,7 @@ struct BitPackedObjDb {
 
 impl BitPackedObjDb {
     pub fn new(objects_path: BitPath) -> BitResult<Self> {
-        let pack_dir = objects_path.join("pack");
+        let pack_dir = objects_path.join(BIT_PACK_OBJECTS_PATH);
         let packs = Default::default();
 
         if !pack_dir.try_exists()? {
@@ -252,11 +256,11 @@ impl BitPackedObjDb {
         for entry in std::fs::read_dir(pack_dir)? {
             let entry = entry?;
             let pack_path = entry.path();
-            if pack_path.extension() != Some("pack".as_ref()) {
+            if pack_path.extension() != Some(PACK_EXT.as_ref()) {
                 continue;
             }
 
-            let idx = pack_path.with_extension("idx");
+            let idx = pack_path.with_extension(PACK_IDX_EXT);
             ensure!(
                 idx.try_exists()?,
                 "packfile `{}` is missing a corresponding index file",

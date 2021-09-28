@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use typed_arena::Arena as TypedArena;
 
+pub const BIT_PACK_OBJECTS_PATH: &str = "pack";
 pub const BIT_INDEX_FILE_PATH: &str = "index";
 pub const BIT_HEAD_FILE_PATH: &str = "HEAD";
 pub const BIT_CONFIG_FILE_PATH: &str = "config";
@@ -517,7 +518,17 @@ impl<'rcx> BitRepo<'rcx> {
     // this method must be private to avoid people writing directly the odb directly bypassing the `virtual_write` checks
     #[inline]
     fn odb(&self) -> BitResult<&BitObjDb> {
-        self.odb_cell.get_or_try_init(|| BitObjDb::new(self.bitdir.join(BIT_OBJECTS_DIR_PATH)))
+        self.odb_cell.get_or_try_init(|| BitObjDb::new(self.objects_dir()))
+    }
+
+    #[inline]
+    fn objects_dir(&self) -> BitPath {
+        self.bitdir.join(BIT_OBJECTS_DIR_PATH)
+    }
+
+    #[inline]
+    pub(crate) fn pack_objects_dir(&self) -> BitPath {
+        self.objects_dir().join(BIT_PACK_OBJECTS_PATH)
     }
 
     fn virtual_odb(self) -> &'rcx VirtualOdb<'rcx> {

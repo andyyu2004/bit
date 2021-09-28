@@ -55,7 +55,8 @@ fallible-iterator = { git = "https://github.com/andyyu2004/rust-fallible-iterato
 jwalk = { git = "https://github.com/andyyu2004/jwalk" }
 diffy = { git = "https://github.com/andyyu2004/diffy" }
 git-config = { git = "https://github.com/andyyu2004/gitoxide" }
-tokio = { version = "1", features = ["io-std", "process", "io-util", "macros", "rt-multi-thread"] }
+async-scoped = { version = "0.7", features = ["tokio"] }
+tokio = { version = "1", features = ["io-std", "process", "io-util", "macros", "rt-multi-thread", "fs", "sync"] }
 bit-derive = { path = "../bit-derive" }
 bit-ds = { path = "../bit-ds" }
 

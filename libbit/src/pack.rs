@@ -1,9 +1,13 @@
+mod indexer;
+
+use self::indexer::PackIndexer;
 use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::hash::{MakeHash, SHA1Hash, OID_SIZE};
-use crate::io::{BufReadExt, BufReadExtSized, BufferedFileStream, HashReader, ReadExt};
+use crate::io::*;
 use crate::iter::BitIterator;
 use crate::obj::*;
+use crate::repo::BitRepo;
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -410,8 +414,6 @@ impl Deserialize for PackIndex {
     }
 }
 
-pub struct Packfile {}
-
 impl PackIndex {
     fn parse_header(mut reader: impl BufRead) -> BitResult<()> {
         let magic = reader.read_u32()?;
@@ -461,20 +463,18 @@ impl From<BitPackObjHeader> for BitObjHeader {
     }
 }
 
-impl Packfile {
+impl<R: BufReadSeek> PackfileReader<R> {
+    pub fn new(mut reader: R) -> BitResult<Self> {
+        let _n = Self::parse_header(&mut reader)?;
+        Ok(Self { reader })
+    }
+
     fn parse_header(mut reader: impl BufRead) -> BitResult<u32> {
         let sig = reader.read_array::<u8, 4>()?;
         ensure_eq!(&sig, PACK_SIGNATURE, "invalid packfile signature");
         let version = reader.read_u32()?;
         ensure_eq!(version, 2, "invalid packfile version `{}`", version);
         Ok(reader.read_u32()?)
-    }
-}
-
-impl<R: BufReadSeek> PackfileReader<R> {
-    pub fn new(mut reader: R) -> BitResult<Self> {
-        let _n = Packfile::parse_header(&mut reader)?;
-        Ok(Self { reader })
     }
 
     // 3 bits object type
@@ -533,6 +533,28 @@ impl<R> Deref for PackfileReader<R> {
 impl<R> DerefMut for PackfileReader<R> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.reader
+    }
+}
+
+pub struct PackWriter<'rcx, R> {
+    repo: BitRepo<'rcx>,
+    indexer: PackIndexer<R, tokio::fs::File>,
+}
+
+impl<'rcx, R: tokio::io::AsyncBufRead + Unpin> PackWriter<'rcx, R> {
+    pub async fn new(repo: BitRepo<'rcx>, reader: R) -> BitResult<PackWriter<'rcx, R>> {
+        let tmp_path = tempfile::NamedTempFile::new_in(repo.pack_objects_dir())?.into_temp_path();
+        let output_file = tokio::fs::File::create(&tmp_path).await?;
+        let indexer = PackIndexer::new(reader, output_file);
+        Ok(Self { repo, indexer })
+    }
+
+    pub async fn read_pack(mut self) -> BitResult<()> {
+        self.indexer.read_pack().await
+    }
+
+    pub async fn commit(&mut self) -> BitResult<()> {
+        self.indexer.commit().await
     }
 }
 
