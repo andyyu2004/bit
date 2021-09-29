@@ -6,6 +6,7 @@ use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
 use pin_project_lite::pin_project;
+use rustc_hex::ToHex;
 use sha1::Digest;
 use std::ffi::OsStr;
 use std::fmt::Display;
@@ -263,8 +264,8 @@ impl<R: BufRead> BufReadExtSized for R {
 }
 
 pub trait BufReadExt: BufRead {
-    fn as_zlib_decode_stream(&mut self) -> BufReader<flate2::bufread::ZlibDecoder<&mut Self>> {
-        BufReader::new(flate2::bufread::ZlibDecoder::new(self))
+    fn as_zlib_decode_stream(&mut self) -> flate2::bufread::ZlibDecoder<&mut Self> {
+        flate2::bufread::ZlibDecoder::new(self)
     }
 
     /// read the bytes upto `sep` parsing as a base10 ascii numberj
@@ -361,22 +362,25 @@ pub trait WriteExt: Write {
 impl<W: Write + ?Sized> WriteExt for W {
 }
 
-pub(crate) struct HashReader<'a, D> {
-    reader: &'a mut dyn BufRead,
+/// Wraps a reader and whenever read is called on R, it is used to update the hasher.
+pub(crate) struct HashReader<D, R> {
     hasher: D,
+    reader: R,
 }
 
-impl<'a, D: Digest> BufRead for HashReader<'a, D> {
+impl<D: Digest, R: BufRead> BufRead for HashReader<D, R> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         self.reader.fill_buf()
     }
 
     fn consume(&mut self, amt: usize) {
+        let buf = self.reader.fill_buf().expect("hopefully in any normal usage, fill_buf is called before consume and so is essentially infallible");
+        self.hasher.update(&buf[..amt]);
         self.reader.consume(amt)
     }
 }
 
-impl<'a, D: Digest> Read for HashReader<'a, D> {
+impl<D: Digest, R: Read> Read for HashReader<D, R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n = self.reader.read(buf)?;
         self.hasher.update(&buf[..n]);
@@ -384,14 +388,14 @@ impl<'a, D: Digest> Read for HashReader<'a, D> {
     }
 }
 
-impl<'a, D: Digest> HashReader<'a, D> {
-    pub fn new(reader: &'a mut dyn BufRead) -> Self {
+impl<D: Digest, R: Read> HashReader<D, R> {
+    pub fn new(reader: R) -> Self {
         Self { reader, hasher: D::new() }
     }
 }
 
-impl<'a> HashReader<'a, sha1::Sha1> {
-    pub fn new_sha1(reader: &'a mut dyn BufRead) -> Self {
+impl<R: Read> HashReader<sha1::Sha1, R> {
+    pub fn new_sha1(reader: R) -> Self {
         Self::new(reader)
     }
 
@@ -429,9 +433,10 @@ impl<W: Write> HashWriter<sha1::Sha1, W> {
         Self::new(writer)
     }
 
-    pub fn write_hash(mut self) -> io::Result<()> {
+    pub fn write_hash(mut self) -> io::Result<SHA1Hash> {
         let hash = SHA1Hash::from(self.hasher.finalize());
-        self.writer.write_oid(hash)
+        self.writer.write_oid(hash)?;
+        Ok(hash)
     }
 }
 

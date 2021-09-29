@@ -1,4 +1,7 @@
 mod indexer;
+mod writer;
+
+pub(crate) use self::writer::PackWriter;
 
 use self::indexer::PackIndexer;
 use crate::delta::Delta;
@@ -386,11 +389,11 @@ impl<R> DerefMut for PackIndexReader<R> {
 }
 
 impl Deserialize for PackIndex {
-    fn deserialize(mut reader: impl BufRead) -> BitResult<Self>
+    fn deserialize(reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
-        let mut r = HashReader::new_sha1(&mut reader);
+        let mut r = HashReader::new_sha1(reader);
         Self::parse_header(&mut r)?;
         let fanout = r.read_array::<u32, FANOUT_ENTRYC>()?;
         // the last value of the layer 1 fanout table is the number of
@@ -425,7 +428,8 @@ impl PackIndex {
 }
 
 pub struct PackfileReader<R> {
-    reader: R,
+    pub(crate) reader: R,
+    objectc: u32,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
@@ -436,6 +440,12 @@ enum BitPackObjType {
     Tag      = 4,
     OfsDelta = 6,
     RefDelta = 7,
+}
+
+impl BitPackObjType {
+    pub fn try_from_u8(ty: u8) -> BitResult<Self> {
+        BitPackObjType::from_u8(ty).ok_or_else(|| anyhow!("invalid bit pack object type"))
+    }
 }
 
 impl From<BitPackObjType> for BitObjType {
@@ -463,10 +473,10 @@ impl From<BitPackObjHeader> for BitObjHeader {
     }
 }
 
-impl<R: BufReadSeek> PackfileReader<R> {
+impl<R: BufRead> PackfileReader<R> {
     pub fn new(mut reader: R) -> BitResult<Self> {
-        let _n = Self::parse_header(&mut reader)?;
-        Ok(Self { reader })
+        let objectc = Self::parse_header(&mut reader)?;
+        Ok(Self { reader, objectc })
     }
 
     fn parse_header(mut reader: impl BufRead) -> BitResult<u32> {
@@ -485,20 +495,12 @@ impl<R: BufReadSeek> PackfileReader<R> {
     #[inline]
     fn read_pack_obj_header(&mut self) -> BitResult<BitPackObjHeader> {
         let (ty, size) = self.read_le_varint_with_shift(3)?;
-        let obj_type = BitPackObjType::from_u8(ty).expect("invalid bit object type");
+        let obj_type = BitPackObjType::try_from_u8(ty)?;
         Ok(BitPackObjHeader { obj_type, size })
     }
 
-    /// seek to `offset` and read pack object header
-    #[inline]
-    fn read_header_from_offset(&mut self, offset: u64) -> BitResult<BitPackObjHeader> {
-        self.seek(SeekFrom::Start(offset))?;
-        self.read_pack_obj_header()
-    }
-
-    pub fn read_obj_from_offset_raw(&mut self, offset: u64) -> BitResult<BitPackObjRawKind> {
-        trace!("read_obj_from_offset_raw(offset: {})", offset);
-        let BitPackObjHeader { obj_type, size } = self.read_header_from_offset(offset)?;
+    fn read_pack_obj(&mut self) -> BitResult<BitPackObjRawKind> {
+        let BitPackObjHeader { obj_type, size } = self.read_pack_obj_header()?;
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
         // we so we have to treat them a bit differently
@@ -522,6 +524,21 @@ impl<R: BufReadSeek> PackfileReader<R> {
     }
 }
 
+impl<R: BufReadSeek> PackfileReader<R> {
+    /// seek to `offset` and read pack object header
+    #[inline]
+    fn read_header_from_offset(&mut self, offset: u64) -> BitResult<BitPackObjHeader> {
+        self.seek(SeekFrom::Start(offset))?;
+        self.read_pack_obj_header()
+    }
+
+    pub fn read_obj_from_offset_raw(&mut self, offset: u64) -> BitResult<BitPackObjRawKind> {
+        trace!("read_obj_from_offset_raw(offset: {})", offset);
+        self.seek(SeekFrom::Start(offset))?;
+        self.read_pack_obj()
+    }
+}
+
 impl<R> Deref for PackfileReader<R> {
     type Target = R;
 
@@ -533,28 +550,6 @@ impl<R> Deref for PackfileReader<R> {
 impl<R> DerefMut for PackfileReader<R> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.reader
-    }
-}
-
-pub struct PackWriter<'rcx, R> {
-    repo: BitRepo<'rcx>,
-    indexer: PackIndexer<R, tokio::fs::File>,
-}
-
-impl<'rcx, R: tokio::io::AsyncBufRead + Unpin> PackWriter<'rcx, R> {
-    pub async fn new(repo: BitRepo<'rcx>, reader: R) -> BitResult<PackWriter<'rcx, R>> {
-        let tmp_path = tempfile::NamedTempFile::new_in(repo.pack_objects_dir())?.into_temp_path();
-        let output_file = tokio::fs::File::create(&tmp_path).await?;
-        let indexer = PackIndexer::new(reader, output_file);
-        Ok(Self { repo, indexer })
-    }
-
-    pub async fn read_pack(mut self) -> BitResult<()> {
-        self.indexer.read_pack().await
-    }
-
-    pub async fn commit(&mut self) -> BitResult<()> {
-        self.indexer.commit().await
     }
 }
 

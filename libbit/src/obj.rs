@@ -9,11 +9,12 @@ mod tree;
 pub use blob::*;
 pub use commit::*;
 pub use obj_id::*;
+use sha1::{Digest, Sha1};
 pub use tag::*;
 pub use tree::*;
 
 use crate::error::{BitGenericError, BitResult};
-use crate::hash;
+use crate::hash::{self, SHA1Hash};
 use crate::io::BufReadExt;
 use crate::repo::BitRepo;
 use crate::serialize::{DeserializeSized, Serialize};
@@ -29,6 +30,15 @@ use std::str::FromStr;
 pub struct BitPackObjRaw {
     pub obj_type: BitObjType,
     pub bytes: Vec<u8>,
+}
+
+impl BitPackObjRaw {
+    fn hash(&self) -> Oid {
+        let mut hasher = Sha1::new();
+        hasher.update(format!("{} {}\0", self.obj_type, self.bytes.len()));
+        hasher.update(&self.bytes);
+        SHA1Hash::new(hasher.finalize().into())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -294,11 +304,10 @@ pub trait WritableObject: Serialize + Send + Sync {
 
     /// serialize objects with the header of `<type> <size>\0`
     fn serialize_with_headers(&self) -> BitResult<Vec<u8>> {
-        let mut buf = vec![];
-        write!(buf, "{} ", self.obj_ty())?;
         let mut bytes = vec![];
         self.serialize(&mut bytes)?;
-        write!(buf, "{}\0", bytes.len())?;
+        let mut buf = vec![];
+        write!(buf, "{} {}\0", self.obj_ty(), bytes.len())?;
         buf.extend_from_slice(&bytes);
         Ok(buf)
     }

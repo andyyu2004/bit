@@ -7,7 +7,7 @@ use std::io::BufReader;
 fn test_hash_reader_generates_correct_hash() -> BitResult<()> {
     let original_bytes = include_bytes!("../../tests/files/mediumindex") as &[u8];
     let mut reader = BufReader::new(original_bytes);
-    let mut hash_reader = HashReader::new_sha1(&mut reader);
+    let mut hash_reader = HashReader::new_sha1(reader);
     let bytes = hash_reader.read_to_vec()?;
     assert_eq!(bytes, original_bytes);
 

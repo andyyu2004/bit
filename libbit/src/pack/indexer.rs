@@ -1,38 +1,59 @@
+use super::PackfileReader;
 use crate::error::BitResult;
-use crate::io::AsyncHashWriter;
-use crate::pack::PACK_SIGNATURE;
-use sha1::Sha1;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use crate::io::{BufReadExt, HashReader, ReadExt};
+use crate::obj::Oid;
+use crate::repo::BitRepo;
+use sha1::{Digest, Sha1};
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::path::Path;
 
-pub(super) struct PackIndexer<R, W> {
-    writer: AsyncHashWriter<Sha1, W>,
-    reader: R,
-}
-
-impl<R, W> PackIndexer<R, W>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-{
-    pub fn new(reader: R, writer: W) -> Self {
-        let writer = AsyncHashWriter::new_sha1(writer);
-        Self { reader, writer }
-    }
-
-    pub async fn read_pack(&mut self) -> BitResult<()> {
-        let pack_size = self.parse_packfile_header().await?;
+impl<'rcx> BitRepo<'rcx> {
+    /// Builds a pack index file (<name>.idx) from the specified `<name>.pack` file.
+    pub fn index_pack(self, path: impl AsRef<Path>) -> BitResult<()> {
+        dbg!(path.as_ref());
+        let reader = BufReader::new(File::open(&path)?);
+        let indexer = PackIndexer::new(self, reader)?;
+        indexer.index_pack()?;
+        // removing for now
+        std::fs::remove_file(&path)?;
         todo!()
     }
+}
 
-    async fn parse_packfile_header(&mut self) -> BitResult<u32> {
-        let sig = self.reader.read_u32().await?.to_be_bytes();
-        ensure_eq!(&sig, PACK_SIGNATURE, "invalid packfile signature");
-        let version = self.reader.read_u32().await?;
-        ensure_eq!(version, 2, "invalid packfile version `{}`", version);
-        Ok(self.reader.read_u32().await?)
+pub(super) struct PackIndexer<'rcx, R> {
+    repo: BitRepo<'rcx>,
+    pack_reader: PackfileReader<HashReader<Sha1, R>>,
+}
+
+impl<'rcx, R: BufRead> PackIndexer<'rcx, R> {
+    pub fn new(repo: BitRepo<'rcx>, reader: R) -> BitResult<Self> {
+        let hash_reader = HashReader::new_sha1(reader);
+        Ok(Self { repo, pack_reader: PackfileReader::new(hash_reader)? })
     }
 
-    pub async fn commit(&mut self) -> BitResult<()> {
+    pub fn index_pack(mut self) -> BitResult<()> {
+        for i in 0..self.pack_reader.objectc {
+            print!("\r{}", i);
+            let raw_pack_obj = self.pack_reader.read_pack_obj()?;
+            dbg!(raw_pack_obj);
+        }
+
+        let mut reader = self.pack_reader.reader;
+        let actual_hash = reader.finalize_sha1_hash();
+        let expected_hash = reader.read_oid()?;
+        assert!(reader.is_at_eof()?);
+        ensure_eq!(
+            expected_hash,
+            actual_hash,
+            "corrupted packfile: expected hash of `{}` found `{}`",
+            expected_hash,
+            actual_hash
+        );
+        Ok(())
+    }
+
+    pub fn commit(&mut self) -> BitResult<()> {
         // rename the tmp file etc
         todo!()
     }

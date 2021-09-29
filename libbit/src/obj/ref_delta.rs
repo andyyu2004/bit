@@ -24,7 +24,8 @@ impl DeserializeSized for RefDelta {
         Self: Sized,
     {
         let _base_oid = reader.read_oid()?;
-        let _delta = Delta::deserialize_sized(&mut reader.as_zlib_decode_stream(), delta_size)?;
+        let _delta =
+            Delta::deserialize_sized_unbuffered(&mut reader.as_zlib_decode_stream(), delta_size)?;
         todo!()
         // let obj = BitObjCached::new(BitObjType::RefDelta);
         // Ok(Self { obj, base_oid, delta })

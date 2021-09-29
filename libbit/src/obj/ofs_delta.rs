@@ -24,7 +24,8 @@ impl DeserializeSized for OfsDelta {
         Self: Sized,
     {
         let _offset = reader.read_offset()?;
-        let _delta = Delta::deserialize_sized(&mut reader.as_zlib_decode_stream(), delta_size)?;
+        let _delta =
+            Delta::deserialize_sized_unbuffered(&mut reader.as_zlib_decode_stream(), delta_size)?;
         todo!()
         // let obj = BitObjCached::new(BitObjType::OfsDelta);
         // Ok(Self { obj, offset, delta })

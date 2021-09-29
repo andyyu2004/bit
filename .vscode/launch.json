@@ -18,7 +18,7 @@
       // "sourceLanguages": ["rust"],
       "cwd": "${workspaceFolder}/bit/tests/repos/foo",
       // "cwd": "/home/andyyu/dev/random",
-      "args": ["cat-file", "-p", "bc01ca0"]
+      "args": ["-C", "/home/andy/dev/c/libgit2", "fetch"]
     }
     // {
     //   "type": "lldb",
