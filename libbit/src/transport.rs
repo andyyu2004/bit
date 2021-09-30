@@ -10,7 +10,7 @@ pub use ssh::*;
 use crate::error::BitResult;
 use crate::obj::{BitObject, Oid};
 use crate::protocol::{BitProtocolRead, BitProtocolWrite, Capabilities, Capability};
-use crate::refs::SymbolicRef;
+use crate::refs::{BitRef, RefUpdateCause, SymbolicRef};
 use crate::remote::Remote;
 use crate::repo::BitRepo;
 
@@ -37,13 +37,12 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
             .collect::<HashMap<_, _>>();
         self.negotiate_packs(repo, &remote_mapping).await?;
 
-        todo!();
         // TODO check the refspec for forcedness before updating: create a function `try_update_remote_ref`
-        // for (&remote, &oid) in &remote_mapping {
-        //     let to = BitRef::Direct(oid);
-        //     repo.update_ref(remote, to, RefUpdateCause::Fetch { to })?;
-        // }
-        // Ok(())
+        for (&remote, &oid) in &remote_mapping {
+            let to = BitRef::Direct(oid);
+            repo.update_ref_for_fetch(remote, to)?;
+        }
+        Ok(())
     }
 
     async fn negotiate_packs(
@@ -81,13 +80,14 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
             return Ok(());
         }
 
+        // TODO case when local_tips is empty goes a bit wrong
         let mut walk = repo.revwalk_builder().roots_iter(local_tips)?.build();
-        'outer: loop {
+        loop {
             // TODO exit early when "ready" whatever that means
             for _ in 0..MULTI_ACK_BATCH_SIZE {
                 let next_commit = match walk.next()? {
                     Some(commit) => commit,
-                    None => break 'outer,
+                    None => break,
                 };
                 self.have(next_commit.oid()).await?;
             }
@@ -107,11 +107,11 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
                 // found the final ack?
                 break;
             } else {
-                todo!()
+                // TODO probably a NAK
+                todo!("recv {}", s);
             }
         }
         self.recv_pack(repo).await?;
-        panic!();
         Ok(())
     }
 

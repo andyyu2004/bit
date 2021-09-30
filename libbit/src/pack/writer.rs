@@ -1,3 +1,4 @@
+use super::PACK_EXT;
 use crate::error::BitResult;
 use crate::repo::BitRepo;
 use pin_project_lite::pin_project;
@@ -21,7 +22,7 @@ impl PackWriter {
     pub async fn new(repo: BitRepo<'_>) -> BitResult<Self> {
         let mut path =
             tempfile::NamedTempFile::new_in(repo.pack_objects_dir())?.into_temp_path().keep()?;
-        path.set_extension("pack");
+        path.set_extension(PACK_EXT);
         let file = BufWriter::new(File::create(&path).await?);
         Ok(Self { file, path })
     }

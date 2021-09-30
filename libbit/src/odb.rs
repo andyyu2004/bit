@@ -2,7 +2,7 @@ use crate::error::{BitError, BitResult, BitResultExt};
 use crate::iter::DirIter;
 use crate::lockfile::{Lockfile, LockfileFlags};
 use crate::obj::{self, *};
-use crate::pack::Pack;
+use crate::pack::{Pack, PACK_EXT, PACK_IDX_EXT};
 use crate::path::BitPath;
 use crate::repo::BIT_PACK_OBJECTS_PATH;
 use arrayvec::ArrayVec;
@@ -27,9 +27,6 @@ macro_rules! process {
         }
     };
 }
-
-pub const PACK_EXT: &str = "pack";
-pub const PACK_IDX_EXT: &str = "idx";
 
 pub struct BitObjDb {
     // backends will be searched in order

@@ -3,6 +3,7 @@ use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::signature::{BitEpochTime, BitSignature, BitTime, BitTimeZoneOffset};
 use lazy_static::lazy_static;
+use quickcheck::Arbitrary;
 use std::io::Cursor;
 use std::str::FromStr;
 
@@ -22,6 +23,26 @@ impl Pack {
         let raw = self.read_obj_raw(oid)?;
         BitObjKind::from_raw_pack_obj(repo, oid, raw)
     }
+}
+
+impl Arbitrary for PackIndex {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        let mut oids = Vec::<Oid>::arbitrary(g);
+        oids.sort();
+        let mut offsets = Vec::with_capacity(oids.len());
+        let mut crcs = Vec::with_capacity(oids.len());
+        for _ in 0..oids.len() {
+            offsets.push(Arbitrary::arbitrary(g));
+            crcs.push(Arbitrary::arbitrary(g));
+        }
+        let fanout = Self::build_fanout(&oids);
+        Self { oids, fanout, crcs, offsets, pack_hash: Oid::UNKNOWN }
+    }
+}
+
+#[quickcheck]
+fn test_serde_pack_index(pack_index: PackIndex) -> BitResult<()> {
+    test_serde!(pack_index)
 }
 
 #[test]

@@ -2,8 +2,9 @@ use crate::error::BitGenericError;
 use crate::obj::Oid;
 use rustc_hash::FxHasher;
 use rustc_hex::{FromHex, ToHex};
+use sha1::digest::consts::U4;
 use sha1::digest::Output;
-use sha1::{Digest, Sha1};
+use sha1::{digest, Digest, Sha1};
 use std::convert::TryInto;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::Hasher;
@@ -101,6 +102,36 @@ impl FromStr for SHA1Hash {
 impl AsRef<[u8]> for SHA1Hash {
     fn as_ref(&self) -> &[u8] {
         &self.0
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct Crc32 {
+    crc: crc32fast::Hasher,
+}
+
+impl digest::Update for Crc32 {
+    fn update(&mut self, data: impl AsRef<[u8]>) {
+        self.crc.update(data.as_ref())
+    }
+}
+
+impl digest::Reset for Crc32 {
+    fn reset(&mut self) {
+        self.crc.reset()
+    }
+}
+
+impl digest::FixedOutput for Crc32 {
+    type OutputSize = U4;
+
+    fn finalize_into(self, out: &mut digest::Output<Self>) {
+        *out = digest::Output::<Self>::clone_from_slice(&self.crc.finalize().to_be_bytes())
+    }
+
+    fn finalize_into_reset(&mut self, out: &mut digest::Output<Self>) {
+        *out = digest::Output::<Self>::clone_from_slice(&self.crc.clone().finalize().to_be_bytes());
+        self.crc.reset()
     }
 }
 

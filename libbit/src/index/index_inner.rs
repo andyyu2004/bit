@@ -276,10 +276,9 @@ impl Serialize for BitIndexInner {
             hash_writer.write_with_size(reuc)?;
         }
 
-        // can't unwrap as `hash_writer` doesn't implement Debug
         match hash_writer.into_inner() {
             Ok(writer) => writer.write_hash()?,
-            Err(..) => panic!(),
+            Err(..) => bail!("hash writer flush failed while writing index"),
         };
         Ok(())
     }

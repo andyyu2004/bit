@@ -473,6 +473,16 @@ impl<'rcx> BitRepo<'rcx> {
         }
     }
 
+    pub(crate) fn update_ref_for_fetch(
+        self,
+        sym: SymbolicRef,
+        to: impl Into<BitRef>,
+    ) -> BitResult<()> {
+        let to = to.into();
+        let oid = self.fully_resolve_ref(to)?;
+        self.update_ref(sym, oid, RefUpdateCause::Fetch { to })
+    }
+
     pub(crate) fn update_current_ref_for_reset(self, target: impl Into<BitRef>) -> BitResult<()> {
         let target = target.into();
         let oid = self.fully_resolve_ref(target)?;

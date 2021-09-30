@@ -1,15 +1,15 @@
 use crate::error::BitGenericError;
-use crate::hash::SHA1Hash;
+use crate::hash::{Crc32, SHA1Hash};
 use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
 use pin_project_lite::pin_project;
-use rustc_hex::ToHex;
 use sha1::Digest;
+use std::convert::TryInto;
 use std::ffi::OsStr;
-use std::fmt::Display;
+use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
@@ -225,6 +225,24 @@ impl Serialize for Vec<u8> {
     }
 }
 
+impl Serialize for u32 {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        Ok(writer.write_u32(*self)?)
+    }
+}
+
+impl Serialize for u64 {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        Ok(writer.write_u64(*self)?)
+    }
+}
+
+impl Serialize for Oid {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        Ok(writer.write_oid(*self)?)
+    }
+}
+
 impl Serialize for [u8] {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         Ok(writer.write_all(self)?)
@@ -362,10 +380,20 @@ pub trait WriteExt: Write {
 impl<W: Write + ?Sized> WriteExt for W {
 }
 
+pub trait WriteExtSized: Write + Sized {
+    fn write_iter<S: Serialize>(&mut self, iter: impl IntoIterator<Item = S>) -> BitResult<()> {
+        iter.into_iter().try_for_each(|x| x.serialize(self))
+    }
+}
+
+impl<W: Write> WriteExtSized for W {
+}
+
 /// Wraps a reader and whenever read is called on R, it is used to update the hasher.
 pub(crate) struct HashReader<D, R> {
     hasher: D,
     reader: R,
+    bytes_hashed: usize,
 }
 
 impl<D: Digest, R: BufRead> BufRead for HashReader<D, R> {
@@ -376,6 +404,7 @@ impl<D: Digest, R: BufRead> BufRead for HashReader<D, R> {
     fn consume(&mut self, amt: usize) {
         let buf = self.reader.fill_buf().expect("hopefully in any normal usage, fill_buf is called before consume and so is essentially infallible");
         self.hasher.update(&buf[..amt]);
+        self.bytes_hashed += amt;
         self.reader.consume(amt)
     }
 }
@@ -384,13 +413,32 @@ impl<D: Digest, R: Read> Read for HashReader<D, R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n = self.reader.read(buf)?;
         self.hasher.update(&buf[..n]);
+        self.bytes_hashed += n;
         Ok(n)
     }
 }
 
 impl<D: Digest, R: Read> HashReader<D, R> {
     pub fn new(reader: R) -> Self {
-        Self { reader, hasher: D::new() }
+        Self { reader, hasher: D::new(), bytes_hashed: 0 }
+    }
+
+    pub fn bytes_hashed(&self) -> usize {
+        self.bytes_hashed
+    }
+
+    pub fn finalize(&mut self) -> sha1::digest::Output<D> {
+        self.hasher.finalize_reset()
+    }
+}
+
+impl<R: Read> HashReader<Crc32, R> {
+    pub fn new_crc32(reader: R) -> Self {
+        Self::new(reader)
+    }
+
+    pub fn finalize_crc(&mut self) -> u32 {
+        u32::from_be_bytes(self.hasher.finalize_reset().try_into().unwrap())
     }
 }
 
@@ -399,7 +447,7 @@ impl<R: Read> HashReader<sha1::Sha1, R> {
         Self::new(reader)
     }
 
-    pub fn finalize_sha1_hash(&mut self) -> SHA1Hash {
+    pub fn finalize_sha1(&mut self) -> SHA1Hash {
         SHA1Hash::from(self.hasher.finalize_reset())
     }
 }
@@ -408,6 +456,12 @@ impl<R: Read> HashReader<sha1::Sha1, R> {
 pub(crate) struct HashWriter<D, W> {
     writer: W,
     hasher: D,
+}
+
+impl<D, W> Debug for HashWriter<D, W> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HashWriter").finish()
+    }
 }
 
 impl<D: Digest, W: Write> Write for HashWriter<D, W> {

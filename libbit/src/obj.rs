@@ -33,7 +33,7 @@ pub struct BitPackObjRaw {
 }
 
 impl BitPackObjRaw {
-    fn hash(&self) -> Oid {
+    pub fn oid(&self) -> Oid {
         let mut hasher = Sha1::new();
         hasher.update(format!("{} {}\0", self.obj_type, self.bytes.len()));
         hasher.update(&self.bytes);

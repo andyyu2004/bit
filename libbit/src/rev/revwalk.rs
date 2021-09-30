@@ -170,9 +170,8 @@ impl<'rcx> RevWalkBuilder<'rcx> {
     }
 
     pub fn build(self) -> RevWalk<'rcx> {
-        assert!(!self.roots.is_empty());
         let mut this = RevWalk {
-            repo: self.roots[0].owner(),
+            repo: self.repo,
             flags: Default::default(),
             pqueue: Default::default(),
             index: 0,

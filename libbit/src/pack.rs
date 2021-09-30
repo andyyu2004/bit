@@ -3,26 +3,26 @@ mod writer;
 
 pub(crate) use self::writer::PackWriter;
 
-use self::indexer::PackIndexer;
 use crate::delta::Delta;
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult, BitResultExt};
 use crate::hash::{MakeHash, SHA1Hash, OID_SIZE};
 use crate::io::*;
 use crate::iter::BitIterator;
 use crate::obj::*;
-use crate::repo::BitRepo;
-use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized};
+use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized, Serialize};
 use fallible_iterator::FallibleIterator;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rustc_hash::FxHashMap;
 use std::collections::hash_map::RawEntryMut;
 use std::fmt::{self, Debug, Formatter};
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, SeekFrom};
+use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
 pub const PACK_SIGNATURE: &[u8; 4] = b"PACK";
+pub const PACK_EXT: &str = "pack";
+pub const PACK_IDX_EXT: &str = "idx";
 const PACK_IDX_MAGIC: u32 = 0xff744f63;
 const FANOUT_ENTRYC: usize = 256;
 const FANOUT_ENTRY_SIZE: u64 = 4;
@@ -35,6 +35,11 @@ const EXT_OFFSET_SIZE: u64 = 8;
 const MAX_OFFSET: u64 = 0x7fffffff;
 
 impl BitPackObjRaw {
+    fn expand_with_delta_bytes(&self, delta_bytes: &[u8]) -> BitResult<Self> {
+        let delta = Delta::deserialize_from_slice(&delta_bytes)?;
+        self.expand_with_delta(&delta)
+    }
+
     fn expand_with_delta(&self, delta: &Delta) -> BitResult<Self> {
         trace!("BitObjRaw::expand_with_delta(..)");
         //? is it guaranteed that the (expanded) base of a delta is of the same type?
@@ -145,8 +150,7 @@ impl Pack {
         };
 
         trace!("expand_raw_obj:base={:?}; delta_len={}", base, delta_bytes.len());
-        let delta = Delta::deserialize_from_slice(&delta_bytes[..])?;
-        base.expand_with_delta(&delta)
+        base.expand_with_delta_bytes(&delta_bytes)
     }
 
     /// returns fully expanded raw object at offset
@@ -203,13 +207,27 @@ impl Pack {
 
 #[allow(unused)]
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone, PartialEq))]
 pub struct PackIndex {
     /// layer 1 of the fanout table
     fanout: [u32; FANOUT_ENTRYC],
-    hashes: Vec<Oid>,
+    oids: Vec<Oid>,
     crcs: Vec<u32>,
     offsets: Vec<u32>,
     pack_hash: SHA1Hash,
+}
+
+impl PackIndex {
+    fn build_fanout(oids: &[Oid]) -> [u32; FANOUT_ENTRYC] {
+        let mut fanout = [0; FANOUT_ENTRYC];
+        for oid in oids {
+            fanout[oid[0] as usize] += 1;
+        }
+        for i in 1..FANOUT_ENTRYC {
+            fanout[i] += fanout[i - 1];
+        }
+        fanout
+    }
 }
 
 pub struct PackIndexReader<R> {
@@ -388,6 +406,25 @@ impl<R> DerefMut for PackIndexReader<R> {
     }
 }
 
+impl Serialize for PackIndex {
+    fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
+        let mut writer = BufWriter::new(HashWriter::new_sha1(writer));
+        writer.write_u32(PACK_IDX_MAGIC)?;
+        writer.write_u32(2)?;
+        writer.write_iter(&self.fanout)?;
+        writer.write_iter(&self.oids)?;
+        writer.write_iter(&self.crcs)?;
+        writer.write_iter(&self.offsets)?;
+        writer.write_oid(self.pack_hash)?;
+
+        match writer.into_inner() {
+            Ok(writer) => writer.write_hash()?,
+            Err(..) => bail!("hash writer flush failed while writing pack index"),
+        };
+        Ok(())
+    }
+}
+
 impl Deserialize for PackIndex {
     fn deserialize(reader: impl BufRead) -> BitResult<Self>
     where
@@ -399,8 +436,8 @@ impl Deserialize for PackIndex {
         // the last value of the layer 1 fanout table is the number of
         // hashes we expect as it is cumulative
         let n = fanout[FANOUT_ENTRYC - 1] as usize;
-        let hashes = r.read_vec(n)?;
-        debug_assert!(hashes.is_sorted());
+        let oids = r.read_vec(n)?;
+        debug_assert!(oids.is_sorted());
 
         let crcs = r.read_vec::<u32>(n)?;
         let offsets = r.read_vec::<u32>(n)?;
@@ -408,12 +445,12 @@ impl Deserialize for PackIndex {
         // TODO 8-byte offsets for large packfiles
         // let big_offsets = todo!();
         let pack_hash = r.read_oid()?;
-        let hash = r.finalize_sha1_hash();
+        let hash = r.finalize_sha1();
         let idx_hash = r.read_oid()?;
 
         ensure_eq!(idx_hash, hash);
         assert!(r.is_at_eof()?, "todo parse level 5 fanout for large indexes");
-        Ok(Self { fanout, hashes, crcs, offsets, pack_hash })
+        Ok(Self { fanout, oids, crcs, offsets, pack_hash })
     }
 }
 
@@ -504,22 +541,58 @@ impl<R: BufRead> PackfileReader<R> {
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
         // we so we have to treat them a bit differently
+        let raw = match obj_type {
+            BitPackObjType::Commit
+            | BitPackObjType::Tree
+            | BitPackObjType::Blob
+            | BitPackObjType::Tag => BitPackObjRawKind::Raw(BitPackObjRaw {
+                obj_type: BitObjType::from(obj_type),
+                bytes: self.as_zlib_decode_stream().take(size).read_to_vec()?,
+            }),
+            BitPackObjType::OfsDelta => BitPackObjRawKind::Ofs(
+                self.read_offset()?,
+                self.as_zlib_decode_stream().take(size).read_to_vec()?,
+            ),
+            BitPackObjType::RefDelta => BitPackObjRawKind::Ref(
+                self.read_oid()?,
+                self.as_zlib_decode_stream().take(size).read_to_vec()?,
+            ),
+        };
+        Ok(raw)
+    }
+
+    fn crc_zlib(&mut self, size: u64) -> BitResult<(u32, Vec<u8>)> {
+        let mut stream = HashReader::new_crc32(self.as_zlib_decode_stream()).take(size);
+        let bytes = stream.read_to_vec()?;
+        let crc = stream.into_inner().finalize_crc();
+        Ok((crc, bytes))
+    }
+
+    /// Read the pack object also calculating the crc32 of the compressed data
+    fn read_pack_obj_with_crc(&mut self) -> BitResult<(u32, BitPackObjRawKind)> {
+        let BitPackObjHeader { obj_type, size } = self.read_pack_obj_header()?;
         match obj_type {
             BitPackObjType::Commit
             | BitPackObjType::Tree
             | BitPackObjType::Blob
-            | BitPackObjType::Tag => Ok(BitPackObjRawKind::Raw(BitPackObjRaw {
-                obj_type: BitObjType::from(obj_type),
-                bytes: self.as_zlib_decode_stream().take(size).read_to_vec()?,
-            })),
-            BitPackObjType::OfsDelta => Ok(BitPackObjRawKind::Ofs(
-                self.read_offset()?,
-                self.as_zlib_decode_stream().take(size).read_to_vec()?,
-            )),
-            BitPackObjType::RefDelta => Ok(BitPackObjRawKind::Ref(
-                self.read_oid()?,
-                self.as_zlib_decode_stream().take(size).read_to_vec()?,
-            )),
+            | BitPackObjType::Tag => {
+                let obj_type = BitObjType::from(obj_type);
+                let (crc, bytes) = self.crc_zlib(size)?;
+                let raw = BitPackObjRawKind::Raw(BitPackObjRaw { obj_type, bytes });
+                Ok((crc, raw))
+            }
+            BitPackObjType::OfsDelta => {
+                let offset = self.read_offset()?;
+                let (crc, bytes) = self.crc_zlib(size)?;
+                let raw = BitPackObjRawKind::Ofs(offset, bytes);
+                Ok((crc, raw))
+            }
+            BitPackObjType::RefDelta => {
+                let oid = self.read_oid()?;
+                let (crc, bytes) = self.crc_zlib(size)?;
+                let raw = BitPackObjRawKind::Ref(oid, bytes);
+                Ok((crc, raw))
+            }
         }
     }
 }

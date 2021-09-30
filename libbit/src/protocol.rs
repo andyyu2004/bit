@@ -93,6 +93,7 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
         }
         writer.flush().await?;
         repo.index_pack(writer.path)?;
+        // TODO move these packs to the proper path?
         Ok(())
     }
 
