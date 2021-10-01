@@ -309,12 +309,12 @@ impl Deserialize for BitIndexInner {
 
         let tree_cache = extensions
             .remove(BIT_INDEX_TREECACHE_SIG)
-            .map(|ext| BitTreeCache::deserialize_unbuffered(&ext.data[..]))
+            .map(|ext| BitTreeCache::deserialize(&ext.data[..]))
             .transpose()?;
 
         let reuc = extensions
             .remove(BIT_INDEX_REUC_SIG)
-            .map(|ext| BitReuc::deserialize_unbuffered(&ext.data[..]))
+            .map(|ext| BitReuc::deserialize(&ext.data[..]))
             .transpose()?;
 
         debug_assert!(

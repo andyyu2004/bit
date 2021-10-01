@@ -49,7 +49,7 @@ fn test_serde_pack_index(pack_index: PackIndex) -> BitResult<()> {
 #[test]
 fn test_deserialize_pack_idx_is_ok() -> BitResult<()> {
     let bytes = include_bytes!("../../tests/files/pack.idx") as &[u8];
-    let _pack_idx = PackIndex::deserialize_unbuffered(bytes)?;
+    let _pack_idx = PackIndex::deserialize(bytes)?;
     Ok(())
 }
 
@@ -411,7 +411,7 @@ fn test_packed_header_is_expanded() -> BitResult<()> {
 #[test]
 fn test_pack_index_deserialize_then_reserialize() -> BitResult<()> {
     let bytes = &include_bytes!("../../tests/files/pack.idx")[..];
-    let pack_index = PackIndex::deserialize_unbuffered(bytes)?;
+    let pack_index = PackIndex::deserialize(bytes)?;
     let mut buf = vec![];
     pack_index.serialize(&mut buf)?;
     assert_eq!(buf, bytes);
@@ -421,9 +421,9 @@ fn test_pack_index_deserialize_then_reserialize() -> BitResult<()> {
 #[test]
 fn test_pack_index_generation() -> BitResult<()> {
     let expected_pack_index =
-        PackIndex::deserialize_unbuffered(&include_bytes!("../../tests/files/pack.idx")[..])?;
+        PackIndex::deserialize(BufReader::new(&include_bytes!("../../tests/files/pack.idx")[..]))?;
     let pack_bytes = &include_bytes!("../../tests/files/pack.pack")[..];
-    let indexer = PackIndexer::new(pack_bytes)?;
+    let indexer = PackIndexer::new(BufReader::new(pack_bytes))?;
     let pack_index = indexer.index_pack()?;
     assert_eq!(expected_pack_index, pack_index);
     Ok(())
@@ -432,7 +432,7 @@ fn test_pack_index_generation() -> BitResult<()> {
 #[test]
 fn test_read_entire_pack_with_index_by_offset() -> BitResult<()> {
     let pack_index =
-        PackIndex::deserialize_unbuffered(&include_bytes!("../../tests/files/pack.idx")[..])?;
+        PackIndex::deserialize(BufReader::new(&include_bytes!("../../tests/files/pack.idx")[..]))?;
     let mut pack = pack()?;
     for offset in pack_index.offsets {
         pack.read_obj_raw_at(offset as u64)?;
@@ -443,10 +443,36 @@ fn test_read_entire_pack_with_index_by_offset() -> BitResult<()> {
 #[test]
 fn test_read_entire_pack_with_index_by_oid() -> BitResult<()> {
     let pack_index =
-        PackIndex::deserialize_unbuffered(&include_bytes!("../../tests/files/pack.idx")[..])?;
+        PackIndex::deserialize(BufReader::new(&include_bytes!("../../tests/files/pack.idx")[..]))?;
     let mut pack = pack()?;
     for oid in pack_index.oids {
         pack.read_obj_raw(oid)?;
     }
+    Ok(())
+}
+
+#[test]
+fn test_read_problematic_pack_unbuffered() -> BitResult<()> {
+    let pack_bytes = &include_bytes!("../../tests/files/lg2fetchpack")[..];
+    let mut reader = PackfileReader::new(pack_bytes)?;
+    for _ in 0..reader.objectc {
+        reader.read_pack_obj_with_crc()?;
+    }
+
+    let indexer = PackIndexer::new(pack_bytes)?;
+    indexer.index_pack()?;
+    Ok(())
+}
+
+#[test]
+fn test_read_problematic_pack_buffered() -> BitResult<()> {
+    let pack_bytes = &include_bytes!("../../tests/files/lg2fetchpack")[..];
+    let mut reader = PackfileReader::new(BufReader::new(pack_bytes))?;
+    for _ in 0..reader.objectc {
+        reader.read_pack_obj_with_crc()?;
+    }
+
+    let indexer = PackIndexer::new(BufReader::new(pack_bytes))?;
+    indexer.index_pack()?;
     Ok(())
 }

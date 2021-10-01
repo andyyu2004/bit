@@ -519,6 +519,16 @@ version = "0.2.0"
 source = "git+https://github.com/andyyu2004/rust-fallible-iterator#cb3d16a5f5fc1a0a6858e6e81b211152793b5c92"
 
 [[package]]
+name = "filebuffer"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b41bfe1d74263ea9d084be951077614b3b98b4e59a9dafab1467645a9e52305"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -870,6 +880,7 @@ dependencies = [
  "enumflags2",
  "env_logger",
  "fallible-iterator",
+ "filebuffer",
  "flate2",
  "fs_extra",
  "git-config",
