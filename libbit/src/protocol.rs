@@ -6,11 +6,7 @@ use crate::repo::BitRepo;
 use async_trait::async_trait;
 use parse_display::{Display, FromStr};
 use std::collections::HashSet;
-use std::future::Future;
-use std::io::Write;
-use std::pin::Pin;
-use tokio::io::{self, AsyncBufRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::select;
+use tokio::io::{self, AsyncBufRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub type Capabilities = HashSet<Capability>;
 

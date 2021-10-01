@@ -1,4 +1,5 @@
 use super::*;
+use crate::pack::indexer::PackIndexer;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use crate::signature::{BitEpochTime, BitSignature, BitTime, BitTimeZoneOffset};
@@ -388,6 +389,14 @@ fn test_pack_idx_find_oid_offset_end() -> BitResult<()> {
     Ok(())
 }
 
+#[test]
+fn read_pack_read_zero_size_obj() -> BitResult<()> {
+    let mut pack = pack()?;
+    let blob = pack.read_obj_raw(Oid::EMPTY_BLOB)?;
+    assert_eq!(blob, BitPackObjRaw { obj_type: BitObjType::Blob, bytes: vec![] });
+    Ok(())
+}
+
 // this is actually a delta (ofs) of a tree, check that the type is expanded to the actual type
 // and the size remains the type of the expanded tree
 #[test]
@@ -396,5 +405,48 @@ fn test_packed_header_is_expanded() -> BitResult<()> {
     let header = pack.read_obj_header("2a09245f13365a5d812a9d463595d815062b7d42".into())?;
     assert_eq!(header.obj_type, BitObjType::Tree);
     assert_eq!(header.size, 138);
+    Ok(())
+}
+
+#[test]
+fn test_pack_index_deserialize_then_reserialize() -> BitResult<()> {
+    let bytes = &include_bytes!("../../tests/files/pack.idx")[..];
+    let pack_index = PackIndex::deserialize_unbuffered(bytes)?;
+    let mut buf = vec![];
+    pack_index.serialize(&mut buf)?;
+    assert_eq!(buf, bytes);
+    Ok(())
+}
+
+#[test]
+fn test_pack_index_generation() -> BitResult<()> {
+    let expected_pack_index =
+        PackIndex::deserialize_unbuffered(&include_bytes!("../../tests/files/pack.idx")[..])?;
+    let pack_bytes = &include_bytes!("../../tests/files/pack.pack")[..];
+    let indexer = PackIndexer::new(pack_bytes)?;
+    let pack_index = indexer.index_pack()?;
+    assert_eq!(expected_pack_index, pack_index);
+    Ok(())
+}
+
+#[test]
+fn test_read_entire_pack_with_index_by_offset() -> BitResult<()> {
+    let pack_index =
+        PackIndex::deserialize_unbuffered(&include_bytes!("../../tests/files/pack.idx")[..])?;
+    let mut pack = pack()?;
+    for offset in pack_index.offsets {
+        pack.read_obj_raw_at(offset as u64)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn test_read_entire_pack_with_index_by_oid() -> BitResult<()> {
+    let pack_index =
+        PackIndex::deserialize_unbuffered(&include_bytes!("../../tests/files/pack.idx")[..])?;
+    let mut pack = pack()?;
+    for oid in pack_index.oids {
+        pack.read_obj_raw(oid)?;
+    }
     Ok(())
 }

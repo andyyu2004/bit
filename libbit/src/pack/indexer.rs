@@ -19,7 +19,7 @@ impl<'rcx> BitRepo<'rcx> {
         let path = path.as_ref();
         dbg!(&path);
         let reader = BufReader::new(File::open(&path)?);
-        let indexer = PackIndexer::new(self, reader)?;
+        let indexer = PackIndexer::new(reader)?;
         let pack_index = indexer.index_pack()?;
         let mut pack_index_file = File::create(path.with_extension(PACK_IDX_EXT))?;
         pack_index.serialize(&mut pack_index_file)?;
@@ -27,8 +27,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
-pub(super) struct PackIndexer<'rcx, R> {
-    repo: BitRepo<'rcx>,
+pub(crate) struct PackIndexer<R> {
     pack_reader: PackfileReader<HashReader<Sha1, R>>,
     raw_objects: FxHashMap<u64, BitPackObjRaw>,
     oid_to_offset: FxHashMap<Oid, u64>,
@@ -36,11 +35,10 @@ pub(super) struct PackIndexer<'rcx, R> {
     sorted: BTreeMap<Oid, (u64, u32)>,
 }
 
-impl<'rcx, R: BufRead> PackIndexer<'rcx, R> {
-    pub fn new(repo: BitRepo<'rcx>, reader: R) -> BitResult<Self> {
+impl<R: BufRead> PackIndexer<R> {
+    pub fn new(reader: R) -> BitResult<Self> {
         let hash_reader = HashReader::new_sha1(reader);
         Ok(Self {
-            repo,
             pack_reader: PackfileReader::new(hash_reader)?,
             raw_objects: Default::default(),
             oid_to_offset: Default::default(),
@@ -93,10 +91,5 @@ impl<'rcx, R: BufRead> PackIndexer<'rcx, R> {
         };
         let base = &self.raw_objects[&offset];
         base.expand_with_delta_bytes(&delta)
-    }
-
-    pub fn commit(&mut self) -> BitResult<()> {
-        // rename the tmp file etc
-        todo!()
     }
 }

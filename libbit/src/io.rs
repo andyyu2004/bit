@@ -427,8 +427,8 @@ impl<D: Digest, R: Read> HashReader<D, R> {
         self.bytes_hashed
     }
 
-    pub fn finalize(&mut self) -> sha1::digest::Output<D> {
-        self.hasher.finalize_reset()
+    pub fn into_inner(self) -> R {
+        self.reader
     }
 }
 

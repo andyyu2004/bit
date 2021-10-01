@@ -10,7 +10,7 @@ pub use ssh::*;
 use crate::error::BitResult;
 use crate::obj::{BitObject, Oid};
 use crate::protocol::{BitProtocolRead, BitProtocolWrite, Capabilities, Capability};
-use crate::refs::{BitRef, RefUpdateCause, SymbolicRef};
+use crate::refs::{BitRef, SymbolicRef};
 use crate::remote::Remote;
 use crate::repo::BitRepo;
 
@@ -54,12 +54,11 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
         let mut local_tips = vec![];
         for (&remote, &remote_oid) in remote_mapping {
             let local_oid = repo.try_fully_resolve_ref(remote)?;
-            if local_oid == Some(remote_oid) {
-                continue;
-            }
-            wanted.push(remote_oid);
             if let Some(local_oid) = local_oid {
                 local_tips.push(local_oid)
+            }
+            if local_oid != Some(remote_oid) {
+                wanted.push(remote_oid);
             }
         }
 
@@ -80,7 +79,6 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
             return Ok(());
         }
 
-        // TODO case when local_tips is empty goes a bit wrong
         let mut walk = repo.revwalk_builder().roots_iter(local_tips)?.build();
         loop {
             // TODO exit early when "ready" whatever that means
