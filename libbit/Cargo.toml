@@ -4,7 +4,7 @@ edition = "2021"
 name = "libbit"
 version = "0.1.0"
 
-[features]
+# [features]
 # use_nsec = []
 
 [dependencies]

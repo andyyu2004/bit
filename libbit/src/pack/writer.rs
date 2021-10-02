@@ -22,6 +22,7 @@ impl PackWriter {
     pub async fn new(repo: BitRepo<'_>) -> BitResult<Self> {
         let mut path =
             tempfile::NamedTempFile::new_in(repo.pack_objects_dir())?.into_temp_path().keep()?;
+        dbg!(&path);
         path.set_extension(PACK_EXT);
         let file = BufWriter::new(File::create(&path).await?);
         Ok(Self { file, path })

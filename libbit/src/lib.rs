@@ -99,6 +99,8 @@ pub mod reset;
 pub mod rev;
 pub mod serialize;
 pub mod status;
+
+pub mod remote;
 pub mod upload_pack;
 pub mod xdiff;
 
@@ -109,7 +111,6 @@ mod io;
 mod lockfile;
 mod odb;
 mod peel;
-mod remote;
 mod signature;
 mod time;
 mod tls;

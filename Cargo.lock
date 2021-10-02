@@ -101,6 +101,7 @@ dependencies = [
  "assert_cmd",
  "clap 3.0.0-beta.4",
  "env_logger",
+ "git-url-parse",
  "libbit",
  "owo-colors",
  "pretty_assertions",

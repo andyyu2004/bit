@@ -10,6 +10,8 @@ use openssh::Session;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
+pub const DEFAULT_REMOTE: &str = "origin";
+
 #[derive(Debug, Clone)]
 pub struct Refspec {
     /// The lhs of the `:` excluding the * if there is one
@@ -80,7 +82,11 @@ impl Display for Refspec {
         if self.forced {
             write!(f, "+")?;
         }
-        write!(f, "{}:{}", self.src, self.dst)
+        if self.glob {
+            write!(f, "{}*:{}*", self.src, self.dst)
+        } else {
+            write!(f, "{}:{}", self.src, self.dst)
+        }
     }
 }
 

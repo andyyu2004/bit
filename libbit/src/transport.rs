@@ -1,9 +1,6 @@
 mod file;
 mod ssh;
 
-use std::collections::HashMap;
-
-use fallible_iterator::FallibleIterator;
 pub use file::*;
 pub use ssh::*;
 
@@ -13,6 +10,8 @@ use crate::protocol::{BitProtocolRead, BitProtocolWrite, Capabilities, Capabilit
 use crate::refs::{BitRef, SymbolicRef};
 use crate::remote::Remote;
 use crate::repo::BitRepo;
+use fallible_iterator::FallibleIterator;
+use std::collections::HashMap;
 
 pub const MULTI_ACK_BATCH_SIZE: usize = 32;
 
@@ -80,35 +79,49 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
         }
 
         let mut walk = repo.revwalk_builder().roots_iter(local_tips)?.build();
-        loop {
+        'outer: loop {
             // TODO exit early when "ready" whatever that means
             for _ in 0..MULTI_ACK_BATCH_SIZE {
                 let next_commit = match walk.next()? {
                     Some(commit) => commit,
-                    None => break,
+                    None => {
+                        self.write_flush_packet().await?;
+                        break 'outer;
+                    }
                 };
                 self.have(next_commit.oid()).await?;
             }
-
-            // TODO same as above
-            break self.done().await?;
-            // TODO handle ack/nak/error response to our done
+            self.write_flush_packet().await?;
         }
 
+        // consume all the incoming NAK/ACK
         loop {
             let packet = self.recv_packet().await?;
             let s = std::str::from_utf8(&packet)?;
+            let s = s.trim_end();
             if s.starts_with("ACK") {
-                if s.ends_with("common\n") || s.ends_with("ready\n") || s.ends_with("continue\n") {
+                if s.ends_with("common") || s.ends_with("ready") || s.ends_with("continue") {
                     continue;
                 }
                 // found the final ack?
                 break;
             } else {
-                // TODO probably a NAK
+                // TODO there might be more than one nak?
+                if s.starts_with("NAK") {
+                    break;
+                }
                 todo!("recv {}", s);
             }
         }
+
+        // Send a done
+        self.done().await?;
+        // Consume the final ack/nak
+        match &self.recv_packet().await?[..] {
+            b"ACK\n" | b"NAK\n" => {}
+            _ => todo!(),
+        };
+
         self.recv_pack(repo).await?;
         Ok(())
     }

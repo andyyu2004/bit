@@ -2,6 +2,7 @@ mod cli_add;
 mod cli_bit_diff;
 mod cli_branch;
 mod cli_checkout;
+mod cli_clone;
 mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
@@ -52,6 +53,7 @@ use libbit::rev::Revspec;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use self::cli_clone::BitCloneCliOpts;
 use self::cli_fetch::BitFetchCliOpts;
 use self::cli_index_pack::BitIndexPackCliOpts;
 use self::cli_remote::BitRemoteCliOpts;
@@ -66,14 +68,16 @@ pub trait Cmd {
 
 pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitResult<()> {
     let opts = BitCliOpts::parse_from(args);
-    let BitCliOpts { subcmd, root_path } = opts;
+    let BitCliOpts { subcmd, base_path } = opts;
     match subcmd {
-        BitSubCmd::Init(opts) => return BitRepo::init(root_path.join(&opts.path)),
+        BitSubCmd::Clone(opts) => return opts.exec(&base_path),
+        BitSubCmd::Init(opts) => return BitRepo::init(base_path.join(&opts.path)),
         BitSubCmd::IndexPack(opts) => return opts.exec(),
         _ => (),
     }
 
-    BitRepo::find(root_path, |repo| match subcmd {
+    BitRepo::find(base_path, |repo| match subcmd {
+        BitSubCmd::Clone(..) => unreachable!(),
         BitSubCmd::Init(..) => unreachable!(),
         BitSubCmd::IndexPack(..) => unreachable!(),
         // TODO the real behaviour is more complex than this
@@ -119,7 +123,7 @@ pub struct BitCliOpts {
     #[clap(subcommand)]
     pub subcmd: BitSubCmd,
     #[clap(short = 'C', default_value = ".")]
-    pub root_path: PathBuf,
+    pub base_path: PathBuf,
 }
 
 #[derive(Clap, Debug)]
@@ -128,6 +132,7 @@ pub enum BitSubCmd {
     Branch(BitBranchCliOpts),
     CatFile(BitCatFileCliOpts),
     Checkout(BitCheckoutCliOpts),
+    Clone(BitCloneCliOpts),
     CommitTree(BitCommitTreeCliOpts),
     Config(BitConfigCliOpts),
     Commit(BitCommitCliOpts),

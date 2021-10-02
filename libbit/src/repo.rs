@@ -260,12 +260,11 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     /// initialize a repository and use it in the closure
-    // testing convenience function
-    #[cfg(test)]
     pub fn init_load<R>(
         path: impl AsRef<Path>,
         f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
+        let path = path.as_ref();
         Self::init(&path)?;
         RepoCtxt::load(&path)?.enter(f)
     }
@@ -369,6 +368,7 @@ impl<'rcx> BitRepo<'rcx> {
 
         RepoCtxt::new(workdir, bitdir, config_filepath)?.with(|repo| {
             repo.mk_bitdir("objects")?;
+            repo.mk_bitdir("objects/pack")?;
             repo.mk_bitdir("refs/tags")?;
             repo.mk_bitdir("refs/heads")?;
 
