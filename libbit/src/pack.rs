@@ -50,13 +50,13 @@ impl BitPackObjRaw {
 }
 
 // all the bytes of the delta in `Self::Ofs` and `Self::Ref` should be zlib-inflated already
-pub enum BitPackObjRawKind {
+pub enum BitPackObjRawDeltified {
     Raw(BitPackObjRaw),
     Ofs(u64, Vec<u8>),
     Ref(Oid, Vec<u8>),
 }
 
-impl Debug for BitPackObjRawKind {
+impl Debug for BitPackObjRawDeltified {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Raw(raw) => write!(f, "BitObjRawKind::Raw({:?})", raw),
@@ -139,15 +139,15 @@ impl Pack {
 
     pub fn expand_raw_obj(
         &mut self,
-        raw_kind: BitPackObjRawKind,
+        raw_kind: BitPackObjRawDeltified,
         base_offset: u64,
     ) -> BitResult<BitPackObjRaw> {
         trace!("expand_raw_obj(raw_kind: {:?}, base_offset: {})", raw_kind, base_offset);
         let (base, delta_bytes) = match raw_kind {
-            BitPackObjRawKind::Raw(raw) => return Ok(raw),
-            BitPackObjRawKind::Ofs(offset, delta) =>
+            BitPackObjRawDeltified::Raw(raw) => return Ok(raw),
+            BitPackObjRawDeltified::Ofs(offset, delta) =>
                 (self.read_obj_raw_at(base_offset - offset)?, delta),
-            BitPackObjRawKind::Ref(base_oid, delta) => (self.read_obj_raw(base_oid)?, delta),
+            BitPackObjRawDeltified::Ref(base_oid, delta) => (self.read_obj_raw(base_oid)?, delta),
         };
 
         trace!("expand_raw_obj:base={:?}; delta_len={}", base, delta_bytes.len());
@@ -537,7 +537,7 @@ impl<R: BufRead> PackfileReader<R> {
         Ok(BitPackObjHeader { obj_type, size })
     }
 
-    fn read_pack_obj(&mut self) -> BitResult<BitPackObjRawKind> {
+    fn read_pack_obj(&mut self) -> BitResult<BitPackObjRawDeltified> {
         let BitPackObjHeader { obj_type, size } = self.read_pack_obj_header()?;
         // the delta types have only the delta compressed but the size/baseoid is not,
         // the 4 base object types have all their data compressed
@@ -546,15 +546,15 @@ impl<R: BufRead> PackfileReader<R> {
             BitPackObjType::Commit
             | BitPackObjType::Tree
             | BitPackObjType::Blob
-            | BitPackObjType::Tag => BitPackObjRawKind::Raw(BitPackObjRaw {
+            | BitPackObjType::Tag => BitPackObjRawDeltified::Raw(BitPackObjRaw {
                 obj_type: BitObjType::from(obj_type),
                 bytes: self.as_zlib_decode_stream().take(size).read_to_vec()?,
             }),
-            BitPackObjType::OfsDelta => BitPackObjRawKind::Ofs(
+            BitPackObjType::OfsDelta => BitPackObjRawDeltified::Ofs(
                 self.read_offset()?,
                 self.as_zlib_decode_stream().take(size).read_to_vec()?,
             ),
-            BitPackObjType::RefDelta => BitPackObjRawKind::Ref(
+            BitPackObjType::RefDelta => BitPackObjRawDeltified::Ref(
                 self.read_oid()?,
                 self.as_zlib_decode_stream().take(size).read_to_vec()?,
             ),
@@ -591,7 +591,7 @@ impl<R: BufRead> PackfileReader<R> {
     }
 
     /// Read the pack object also calculating the crc32 of the compressed data
-    fn read_pack_obj_with_crc(&mut self) -> BitResult<(u32, BitPackObjRawKind)> {
+    fn read_pack_obj_with_crc(&mut self) -> BitResult<(u32, BitPackObjRawDeltified)> {
         self.with_crc32(|this| this.read_pack_obj())
     }
 }
@@ -604,7 +604,7 @@ impl<R: BufReadSeek> PackfileReader<R> {
         self.read_pack_obj_header()
     }
 
-    pub fn read_obj_from_offset_raw(&mut self, offset: u64) -> BitResult<BitPackObjRawKind> {
+    pub fn read_obj_from_offset_raw(&mut self, offset: u64) -> BitResult<BitPackObjRawDeltified> {
         trace!("read_obj_from_offset_raw(offset: {})", offset);
         self.seek(SeekFrom::Start(offset))?;
         self.read_pack_obj()

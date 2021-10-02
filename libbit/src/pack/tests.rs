@@ -422,8 +422,8 @@ fn test_pack_index_deserialize_then_reserialize() -> BitResult<()> {
 fn test_pack_index_generation() -> BitResult<()> {
     let expected_pack_index =
         PackIndex::deserialize(BufReader::new(&include_bytes!("../../tests/files/pack.idx")[..]))?;
-    let pack_bytes = &include_bytes!("../../tests/files/pack.pack")[..];
-    let indexer = PackIndexer::new(BufReader::new(pack_bytes))?;
+    let pack_reader = FileBufferReader::new(test_files_dir!("pack.pack"))?;
+    let indexer = PackIndexer::new(pack_reader)?;
     let pack_index = indexer.index_pack()?;
     assert_eq!(expected_pack_index, pack_index);
     Ok(())
@@ -466,13 +466,14 @@ fn test_read_problematic_pack_unbuffered() -> BitResult<()> {
 
 #[test]
 fn test_read_problematic_pack_buffered() -> BitResult<()> {
-    let pack_bytes = &include_bytes!("../../tests/files/lg2fetchpack")[..];
-    let mut reader = PackfileReader::new(BufReader::new(pack_bytes))?;
+    let pack = FileBufferReader::new(test_files_dir!("lg2fetchpack"))?;
+    let mut reader = PackfileReader::new(pack)?;
     for _ in 0..reader.objectc {
         reader.read_pack_obj_with_crc()?;
     }
 
-    let indexer = PackIndexer::new(BufReader::new(pack_bytes))?;
+    let pack = FileBufferReader::new(test_files_dir!("lg2fetchpack"))?;
+    let indexer = PackIndexer::new(pack)?;
     indexer.index_pack()?;
     Ok(())
 }

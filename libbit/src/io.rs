@@ -5,6 +5,7 @@ use crate::path::BitPath;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
+use filebuffer::FileBuffer;
 use pin_project_lite::pin_project;
 use sha1::Digest;
 use std::convert::TryInto;
@@ -14,6 +15,7 @@ use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
 use std::os::unix::prelude::OsStrExt;
+use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::task::{Context, Poll};
@@ -491,6 +493,44 @@ impl<W: Write> HashWriter<sha1::Sha1, W> {
         let hash = SHA1Hash::from(self.hasher.finalize());
         self.writer.write_oid(hash)?;
         Ok(hash)
+    }
+}
+
+/// Wrapper around [filebuffer::FileBuffer] that provides [Read] and [BufRead] implementations
+pub struct FileBufferReader {
+    buffer: FileBuffer,
+    offset: usize,
+    buf_size: usize,
+}
+
+const DEFAULT_BUF_SIZE: usize = 8 * 1024;
+
+impl FileBufferReader {
+    pub fn new(path: impl AsRef<Path>) -> BitResult<Self> {
+        Ok(Self { buffer: FileBuffer::open(path)?, offset: 0, buf_size: DEFAULT_BUF_SIZE })
+    }
+
+    fn as_partial_slice(&self) -> &[u8] {
+        let upper = std::cmp::min(self.offset + self.buf_size, self.buffer.len());
+        &self.buffer[self.offset..upper]
+    }
+}
+
+impl Read for FileBufferReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.as_partial_slice().read(buf)?;
+        self.consume(n);
+        Ok(n)
+    }
+}
+
+impl BufRead for FileBufferReader {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        Ok(self.as_partial_slice())
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.offset += amt;
     }
 }
 

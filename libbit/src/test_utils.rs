@@ -397,6 +397,15 @@ macro_rules! rm {
     };
 }
 
+macro_rules! test_files_dir {
+    () => {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/files")
+    };
+    ($path:expr) => {
+        test_files_dir!().join($path)
+    };
+}
+
 // absolute path to the tests directory
 macro_rules! tests_dir {
     () => {

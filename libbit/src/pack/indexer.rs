@@ -1,15 +1,14 @@
-use super::{BitPackObjRawKind, PackfileReader};
+use super::*;
 use crate::error::BitResult;
 use crate::io::{BufReadExt, HashReader, ReadExt};
 use crate::obj::{BitPackObjRaw, Oid};
-use crate::pack::{PackIndex, MAX_OFFSET, PACK_IDX_EXT};
 use crate::repo::BitRepo;
 use crate::serialize::Serialize;
 use rustc_hash::FxHashMap;
 use sha1::Sha1;
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::path::Path;
 
 impl<'rcx> BitRepo<'rcx> {
@@ -18,7 +17,7 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn index_pack(self, path: impl AsRef<Path>) -> BitResult<()> {
         let path = path.as_ref();
         dbg!(&path);
-        let reader = BufReader::new(File::open(&path)?);
+        let reader = FileBufferReader::new(path)?;
         let indexer = PackIndexer::new(reader)?;
         let pack_index = indexer.index_pack()?;
         let mut pack_index_file = File::create(path.with_extension(PACK_IDX_EXT))?;
@@ -36,7 +35,10 @@ pub(crate) struct PackIndexer<R> {
 }
 
 impl<R: BufRead> PackIndexer<R> {
-    pub fn new(reader: R) -> BitResult<Self> {
+    // Marking this as crate private now to avoid triggering the bug where someone passes in
+    // BufReader<R>. Instead they must access this through `repo.index_pack` which uses the
+    // `FileBufferReader` instance.
+    pub(crate) fn new(reader: R) -> BitResult<Self> {
         let hash_reader = HashReader::new_sha1(reader);
         Ok(Self {
             pack_reader: PackfileReader::new(hash_reader)?,
@@ -46,7 +48,7 @@ impl<R: BufRead> PackIndexer<R> {
         })
     }
 
-    pub fn index_pack(mut self) -> BitResult<PackIndex> {
+    pub(crate) fn index_pack(mut self) -> BitResult<PackIndex> {
         for _ in 0..self.pack_reader.objectc {
             let offset = self.pack_reader.bytes_hashed() as u64;
             let (crc, raw_pack_obj_kind) = self.pack_reader.read_pack_obj_with_crc()?;
@@ -83,11 +85,15 @@ impl<R: BufRead> PackIndexer<R> {
         Ok(PackIndex { fanout, oids, crcs, offsets, pack_hash })
     }
 
-    fn expand_obj(&mut self, obj: BitPackObjRawKind, base_offset: u64) -> BitResult<BitPackObjRaw> {
+    fn expand_obj(
+        &mut self,
+        obj: BitPackObjRawDeltified,
+        base_offset: u64,
+    ) -> BitResult<BitPackObjRaw> {
         let (offset, delta) = match obj {
-            BitPackObjRawKind::Raw(raw) => return Ok(raw),
-            BitPackObjRawKind::Ofs(offset, delta) => (base_offset - offset, delta),
-            BitPackObjRawKind::Ref(base_oid, delta) => (self.oid_to_offset[&base_oid], delta),
+            BitPackObjRawDeltified::Raw(raw) => return Ok(raw),
+            BitPackObjRawDeltified::Ofs(offset, delta) => (base_offset - offset, delta),
+            BitPackObjRawDeltified::Ref(base_oid, delta) => (self.oid_to_offset[&base_oid], delta),
         };
         let base = &self.raw_objects[&offset];
         base.expand_with_delta_bytes(&delta)
