@@ -11,7 +11,7 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use parking_lot::RwLock;
-use smallvec::SmallVec;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
@@ -88,6 +88,10 @@ impl BitObjDbBackend for BitObjDb {
         })
     }
 
+    fn refresh(&self) -> BitResult<()> {
+        self.backends.iter().try_for_each(|backend| backend.refresh())
+    }
+
     fn exists(&self, id: BitId) -> BitResult<bool> {
         Ok(self.backends.iter().any(|backend| backend.exists(id).unwrap_or_default()))
     }
@@ -102,6 +106,7 @@ pub trait BitObjDbBackend: Send + Sync {
     // this method should NOT return an error if no candidates are found,
     // but instead represent that as an empty list of candidates
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>>;
+    fn refresh(&self) -> BitResult<()>;
 
     fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
         trace!("expand_prefix(prefix: {})", prefix);
@@ -234,59 +239,31 @@ impl BitObjDbBackend for BitLooseObjDb {
             })
             .collect::<Vec<_>>()
     }
+
+    fn refresh(&self) -> BitResult<()> {
+        Ok(())
+    }
 }
 
 struct BitPackedObjDb {
-    /// [(packfile, idxfile)]
-    packs: RwLock<SmallVec<[Pack; 1]>>,
+    objects_path: BitPath,
+    /// { packfile-path -> (packfile, idxfile) }
+    packs: RwLock<HashMap<BitPath, Pack>>,
 }
 
 impl BitPackedObjDb {
     pub fn new(objects_path: BitPath) -> BitResult<Self> {
-        let pack_dir = objects_path.join(BIT_PACK_OBJECTS_PATH);
-        let packs = Default::default();
-
-        if !pack_dir.try_exists()? {
-            return Ok(Self { packs });
-        }
-
-        for entry in std::fs::read_dir(pack_dir)? {
-            let entry = entry?;
-            let pack_path = entry.path();
-            if pack_path.extension() != Some(PACK_EXT.as_ref()) {
-                continue;
-            }
-
-            let idx = pack_path.with_extension(PACK_IDX_EXT);
-            ensure!(
-                idx.try_exists()?,
-                "packfile `{}` is missing a corresponding index file",
-                pack_path.display()
-            );
-            packs.write().push(Pack::new(pack_path, idx)?);
-        }
-
-        Ok(Self { packs })
+        let this = Self { objects_path, packs: Default::default() };
+        this.refresh()?;
+        Ok(this)
     }
 
     fn read_raw_pack_obj(&self, oid: Oid) -> BitResult<BitPackObjRaw> {
         trace!("BitPackedObjDb::read_raw(id: {})", oid);
-        for pack in self.packs.write().iter_mut() {
+        for pack in self.packs.write().values_mut() {
             process!(pack.read_obj_raw(oid));
         }
         bail!(BitError::ObjectNotFound(oid.into()))
-
-        // the issue with the following is that we lose the real error and we just assume it's an object not found error
-        // match self
-        //     .packs
-        //     .write()
-        //     .par_iter_mut()
-        //     .flat_map(|pack| pack.read_obj_raw(oid))
-        //     .find_any(|_| true)
-        // {
-        //     Some(raw) => Ok(raw),
-        //     None => bail!(BitError::ObjectNotFound(oid.into())),
-        // }
     }
 }
 
@@ -299,7 +276,7 @@ impl BitObjDbBackend for BitPackedObjDb {
 
     fn read_header(&self, id: BitId) -> BitResult<BitObjHeader> {
         let oid = self.expand_id(id)?;
-        for pack in self.packs.write().iter_mut() {
+        for pack in self.packs.write().values_mut() {
             process!(pack.read_obj_header(oid));
         }
         bail!(BitError::ObjectNotFound(id))
@@ -311,19 +288,50 @@ impl BitObjDbBackend for BitPackedObjDb {
 
     fn exists(&self, id: BitId) -> BitResult<bool> {
         let oid = self.expand_id(id)?;
-        Ok(self.packs.write().iter_mut().any(|pack| pack.obj_exists(oid).unwrap_or_default()))
+        Ok(self.packs.write().values_mut().any(|pack| pack.obj_exists(oid).unwrap_or_default()))
     }
 
     fn prefix_candidates(&self, prefix: PartialOid) -> BitResult<Vec<Oid>> {
         Ok(self
             .packs
             .write()
-            .iter_mut()
+            .values_mut()
             .map(|pack| pack.prefix_matches(prefix))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .flatten()
             .collect())
+    }
+
+    fn refresh(&self) -> BitResult<()> {
+        let pack_dir = self.objects_path.join(BIT_PACK_OBJECTS_PATH);
+
+        if !pack_dir.try_exists()? {
+            return Ok(());
+        }
+
+        let mut packs = self.packs.write();
+
+        for entry in std::fs::read_dir(pack_dir)? {
+            let entry = entry?;
+            let pack_path = entry.path();
+            if pack_path.extension() != Some(PACK_EXT.as_ref())
+                || packs.contains_key(pack_path.as_path())
+            {
+                continue;
+            }
+
+            let idx = pack_path.with_extension(PACK_IDX_EXT);
+            ensure!(
+                idx.try_exists()?,
+                "packfile `{}` is missing a corresponding index file",
+                pack_path.display()
+            );
+            let pack_path = BitPath::intern(pack_path);
+            packs.insert(pack_path, Pack::new(pack_path, idx)?);
+        }
+
+        Ok(())
     }
 }
 

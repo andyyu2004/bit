@@ -1,5 +1,6 @@
 use crate::error::BitResult;
 use crate::peel::Peel;
+use crate::refs::BitRef;
 use crate::repo::{BitRepo, RepoState};
 use crate::rev::Revspec;
 
@@ -17,13 +18,17 @@ impl Default for ResetKind {
 }
 
 impl<'rcx> BitRepo<'rcx> {
+    pub fn reset_revision(self, revision: &Revspec, kind: ResetKind) -> BitResult<()> {
+        let target = self.resolve_rev(revision)?;
+        self.reset(target, kind)
+    }
+
     /// Set the current branch to point at the specified commit_oid `target`
     /// and set the working tree/index to match depending on the reset kind.
     /// [ResetKind::Soft] does only the above.
     /// [ResetKind::Mixed] does a `soft` reset and also makes the index match the target tree
     /// [ResetKind::Hard] does a `mixed` reset and the working tree will match the target tree
-    pub fn reset(self, revision: &Revspec, kind: ResetKind) -> BitResult<()> {
-        let target = self.resolve_rev(revision)?;
+    pub fn reset(self, target: BitRef, kind: ResetKind) -> BitResult<()> {
         if self.repo_state() == RepoState::Merging {
             bail!("cannot perform reset when repository is in the middle of a merge")
         }

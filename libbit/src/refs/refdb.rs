@@ -5,7 +5,6 @@ use crate::merge::MergeStrategy;
 use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
-use crate::rev::Revspec;
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use std::collections::BTreeSet;
@@ -54,8 +53,8 @@ pub type Refs = BTreeSet<SymbolicRef>;
 // objects for validation but both refdb and odb are owned by the repo so not sure if this is feasible
 pub trait BitRefDbBackend<'rcx> {
     fn repo(&self) -> BitRepo<'rcx>;
-    /// Create a bit branch from a revision
-    fn create_branch(&self, sym: SymbolicRef, from: &Revspec) -> BitResult<()>;
+    /// Create a bit branch from a reference
+    fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()>;
     /// read the reference pointed to by `sym` and returns the validated reference
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef>;
     // may implicitly create the ref
@@ -138,18 +137,13 @@ impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
         self.repo
     }
 
-    fn create_branch(&self, sym: SymbolicRef, from_rev: &Revspec) -> BitResult<()> {
+    fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
         if self.exists(sym)? {
             bail!("a reference `{}` already exists", sym);
         }
 
-        let repo = self.repo();
-        let reference = repo.resolve_rev(from_rev)?;
-        match repo.try_fully_resolve_ref(reference)? {
-            Some(oid) => {
-                let from = BitRef::Direct(oid);
-                self.update(sym, from, RefUpdateCause::NewBranch { from: reference })
-            }
+        match self.repo.try_fully_resolve_ref(from)? {
+            Some(oid) => self.update(sym, BitRef::Direct(oid), RefUpdateCause::NewBranch { from }),
             // The following handles the case where `HEAD` points to an empty branch
             // i.e. on an empty repository and `HEAD -> heads/refs/master`.
             // All creating a new branch does is change the content of head

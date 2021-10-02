@@ -212,11 +212,11 @@ impl Pack {
 #[cfg_attr(test, derive(Clone, PartialEq))]
 pub struct PackIndex {
     /// layer 1 of the fanout table
-    fanout: [u32; FANOUT_ENTRYC],
-    oids: Vec<Oid>,
-    crcs: Vec<u32>,
-    offsets: Vec<u32>,
-    pack_hash: SHA1Hash,
+    pub fanout: [u32; FANOUT_ENTRYC],
+    pub oids: Vec<Oid>,
+    pub crcs: Vec<u32>,
+    pub offsets: Vec<u32>,
+    pub pack_hash: SHA1Hash,
 }
 
 impl PackIndex {

@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::obj::Oid;
-use crate::pack::{PackIndexer, PackWriter};
+use crate::pack::{PackIndexer, PackWriter, PACK_EXT, PACK_IDX_EXT};
 use crate::refs::SymbolicRef;
 use crate::repo::BitRepo;
 use async_trait::async_trait;
@@ -88,8 +88,17 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
             }
         }
         writer.flush().await?;
-        PackIndexer::write_pack_index(writer.path, Default::default())?;
-        // TODO move these packs to the proper path?
+
+        let pack_index = PackIndexer::write_pack_index(&writer.path, Default::default())?;
+        std::fs::rename(
+            &writer.path,
+            writer.path.with_file_name(format!("pack-{}.{}", pack_index.pack_hash, PACK_EXT)),
+        )?;
+        std::fs::rename(
+            &writer.path.with_extension(PACK_IDX_EXT),
+            writer.path.with_file_name(format!("pack-{}.{}", pack_index.pack_hash, PACK_IDX_EXT)),
+        )?;
+        repo.refresh_odb()?;
         Ok(())
     }
 

@@ -31,7 +31,7 @@ impl Cmd for BitResetCliOpts {
             ResetKind::Mixed
         };
 
-        repo.reset(&self.target, kind)?;
+        repo.reset_revision(&self.target, kind)?;
         println!("HEAD is now at `{}`", repo.resolve_head()?);
         Ok(())
     }

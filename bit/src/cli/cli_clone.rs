@@ -1,8 +1,11 @@
 use clap::Clap;
 use git_url_parse::GitUrl;
 use libbit::error::BitResult;
+use libbit::path::BitPath;
+use libbit::refs::{BitRef, SymbolicRef};
 use libbit::remote::DEFAULT_REMOTE;
 use libbit::repo::BitRepo;
+use libbit::reset::ResetKind;
 use std::path::{Path, PathBuf};
 
 #[derive(Clap, Debug)]
@@ -35,5 +38,8 @@ impl BitCloneCliOpts {
 #[tokio::main]
 async fn clone_async(repo: BitRepo<'_>) -> BitResult<()> {
     repo.fetch(DEFAULT_REMOTE).await?;
+    // TODO get the actual branch to checkout using the symref capability
+    let r = BitRef::Symbolic(SymbolicRef::new(BitPath::intern("origin/master")));
+    repo.reset(r, ResetKind::Hard)?;
     Ok(())
 }

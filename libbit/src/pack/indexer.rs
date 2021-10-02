@@ -25,9 +25,8 @@ pub struct IndexPackOpts {
 impl PackIndexer<FileBufferReader> {
     /// Builds a pack index file (<name>.idx) from the specified `<name>.pack` file.
     /// Overwrites any existing file at the output path
-    pub fn write_pack_index(path: impl AsRef<Path>, opts: IndexPackOpts) -> BitResult<()> {
+    pub fn write_pack_index(path: impl AsRef<Path>, opts: IndexPackOpts) -> BitResult<PackIndex> {
         let path = path.as_ref();
-        dbg!(&path);
         let reader = FileBufferReader::new(path)?;
         let indexer = PackIndexer::new(reader)?;
         let pack_index = indexer.index_pack()?;
@@ -38,7 +37,7 @@ impl PackIndexer<FileBufferReader> {
             None => path.with_extension(PACK_IDX_EXT),
         };
         tmp_file.persist(index_file_path)?;
-        Ok(())
+        Ok(pack_index)
     }
 }
 

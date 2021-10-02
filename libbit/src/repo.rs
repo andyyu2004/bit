@@ -8,7 +8,6 @@ use crate::obj::*;
 use crate::odb::{BitObjDb, BitObjDbBackend};
 use crate::path::{self, BitPath};
 use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, Refs, SymbolicRef};
-use crate::rev::Revspec;
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
@@ -448,7 +447,7 @@ impl<'rcx> BitRepo<'rcx> {
         self.refdb()?.validate(reference.into())
     }
 
-    pub fn create_branch(self, sym: SymbolicRef, from: &Revspec) -> BitResult<()> {
+    pub fn create_branch(self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
         self.refdb()?.create_branch(sym, from)
     }
@@ -554,6 +553,10 @@ impl<'rcx> BitRepo<'rcx> {
             // is there even an easy way to cache this write without just deserializing it from scratch essentially?
             self.odb()?.write(obj)
         }
+    }
+
+    pub fn refresh_odb(self) -> BitResult<()> {
+        self.odb()?.refresh()
     }
 
     pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
