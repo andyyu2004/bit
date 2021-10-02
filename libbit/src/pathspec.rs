@@ -5,7 +5,6 @@ use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use itertools::Itertools;
-use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::path::Path;
 use std::str::FromStr;

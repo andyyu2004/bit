@@ -19,7 +19,6 @@ use crate::io::BufReadExt;
 use crate::repo::BitRepo;
 use crate::serialize::{DeserializeSized, Serialize};
 use num_enum::TryFromPrimitive;
-use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
 use std::io::{BufRead, BufReader, Cursor, Write};

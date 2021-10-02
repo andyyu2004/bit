@@ -2,31 +2,14 @@ use super::*;
 use crate::error::BitResult;
 use crate::io::{BufReadExt, HashReader, ReadExt};
 use crate::obj::{BitPackObjRaw, Oid};
-use crate::repo::BitRepo;
 use crate::serialize::Serialize;
 use rustc_hash::FxHashMap;
 use sha1::Sha1;
 use std::collections::BTreeMap;
-use std::fs::File;
 use std::io::BufRead;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-impl<'rcx> BitRepo<'rcx> {
-    /// Builds a pack index file (<name>.idx) from the specified `<name>.pack` file.
-    /// Overwrites any existing file at the output path
-    pub fn index_pack(self, path: impl AsRef<Path>) -> BitResult<()> {
-        let path = path.as_ref();
-        dbg!(&path);
-        let reader = FileBufferReader::new(path)?;
-        let indexer = PackIndexer::new(reader)?;
-        let pack_index = indexer.index_pack()?;
-        let mut pack_index_file = File::create(path.with_extension(PACK_IDX_EXT))?;
-        pack_index.serialize(&mut pack_index_file)?;
-        Ok(())
-    }
-}
-
-pub(crate) struct PackIndexer<R> {
+pub struct PackIndexer<R> {
     pack_reader: PackfileReader<HashReader<Sha1, R>>,
     raw_objects: FxHashMap<u64, BitPackObjRaw>,
     oid_to_offset: FxHashMap<Oid, u64>,
@@ -34,10 +17,33 @@ pub(crate) struct PackIndexer<R> {
     sorted: BTreeMap<Oid, (u64, u32)>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct IndexPackOpts {
+    pub index_file_path: Option<PathBuf>,
+}
+
+impl PackIndexer<FileBufferReader> {
+    /// Builds a pack index file (<name>.idx) from the specified `<name>.pack` file.
+    /// Overwrites any existing file at the output path
+    pub fn write_pack_index(path: impl AsRef<Path>, opts: IndexPackOpts) -> BitResult<()> {
+        let path = path.as_ref();
+        dbg!(&path);
+        let reader = FileBufferReader::new(path)?;
+        let indexer = PackIndexer::new(reader)?;
+        let pack_index = indexer.index_pack()?;
+        let mut tmp_file = tempfile::NamedTempFile::new_in(path.parent().unwrap())?;
+        pack_index.serialize(&mut tmp_file)?;
+        let index_file_path = match opts.index_file_path {
+            Some(path) => path,
+            None => path.with_extension(PACK_IDX_EXT),
+        };
+        tmp_file.persist(index_file_path)?;
+        Ok(())
+    }
+}
+
 impl<R: BufRead> PackIndexer<R> {
-    // Marking this as crate private now to avoid triggering the bug where someone passes in
-    // BufReader<R>. Instead they must access this through `repo.index_pack` which uses the
-    // `FileBufferReader` instance.
+    /// Marking this as crate private now to avoid triggering the bug where someone passes in
     pub(crate) fn new(reader: R) -> BitResult<Self> {
         let hash_reader = HashReader::new_sha1(reader);
         Ok(Self {
@@ -48,14 +54,16 @@ impl<R: BufRead> PackIndexer<R> {
         })
     }
 
+    /// TODO parallelize
     pub(crate) fn index_pack(mut self) -> BitResult<PackIndex> {
+        let n = self.pack_reader.objectc as usize;
         for _ in 0..self.pack_reader.objectc {
             let offset = self.pack_reader.bytes_hashed() as u64;
-            let (crc, raw_pack_obj_kind) = self.pack_reader.read_pack_obj_with_crc()?;
-            let raw_pack_obj = self.expand_obj(raw_pack_obj_kind, offset)?;
+            let (crc, deltified) = self.pack_reader.read_pack_obj_with_crc()?;
+            let raw_pack_obj = self.expand_deltas(deltified, offset)?;
             let oid = raw_pack_obj.oid();
-            self.raw_objects.insert(offset, raw_pack_obj);
             self.oid_to_offset.insert(oid, offset);
+            self.raw_objects.insert(offset, raw_pack_obj);
             self.sorted.insert(oid, (offset, crc));
         }
 
@@ -71,7 +79,6 @@ impl<R: BufRead> PackIndexer<R> {
             pack_hash
         );
 
-        let n = self.pack_reader.objectc as usize;
         let mut oids = Vec::with_capacity(n);
         let mut offsets = Vec::with_capacity(n);
         let mut crcs = Vec::with_capacity(n);
@@ -85,7 +92,7 @@ impl<R: BufRead> PackIndexer<R> {
         Ok(PackIndex { fanout, oids, crcs, offsets, pack_hash })
     }
 
-    fn expand_obj(
+    fn expand_deltas(
         &mut self,
         obj: BitPackObjRawDeltified,
         base_offset: u64,

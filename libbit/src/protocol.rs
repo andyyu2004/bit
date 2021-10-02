@@ -1,6 +1,6 @@
 use crate::error::BitResult;
 use crate::obj::Oid;
-use crate::pack::PackWriter;
+use crate::pack::{PackIndexer, PackWriter};
 use crate::refs::SymbolicRef;
 use crate::repo::BitRepo;
 use async_trait::async_trait;
@@ -88,7 +88,7 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
             }
         }
         writer.flush().await?;
-        repo.index_pack(writer.path)?;
+        PackIndexer::write_pack_index(writer.path, Default::default())?;
         // TODO move these packs to the proper path?
         Ok(())
     }

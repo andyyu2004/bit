@@ -27,7 +27,6 @@ use itertools::Itertools;
 use num_enum::TryFromPrimitive;
 use sha1::Digest;
 use std::collections::{BTreeMap, HashMap};
-use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::io::{prelude::*, BufReader};
 use std::ops::{Deref, DerefMut};

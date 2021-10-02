@@ -1,7 +1,6 @@
 use clap::Clap;
 use libbit::cmd::{BitUpdateIndexOpts, CacheInfo};
 use libbit::error::BitGenericError;
-use std::convert::TryInto;
 
 #[derive(Clap, Debug)]
 pub struct BitUpdateIndexCliOpts {

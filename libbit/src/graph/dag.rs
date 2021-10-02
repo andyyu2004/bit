@@ -127,7 +127,8 @@ impl<'rcx> DagBuilder {
     }
 
     pub fn mk_nodes_with_trees<const N: usize>(&mut self, trees: [Oid; N]) -> [Node; N] {
-        std::array::IntoIter::new(trees)
+        trees
+            .into_iter()
             .map(|tree| self.mk_node(Some(tree)))
             .collect::<ArrayVec<_, N>>()
             .into_inner()

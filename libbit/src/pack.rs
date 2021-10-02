@@ -1,6 +1,7 @@
 mod indexer;
 mod writer;
 
+pub use self::indexer::{IndexPackOpts, PackIndexer};
 pub(crate) use self::writer::PackWriter;
 
 use crate::delta::Delta;

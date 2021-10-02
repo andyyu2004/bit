@@ -1,8 +1,6 @@
-# cargo-features = ["edition2021"]
-
 [package]
 authors = ["Andy Yu <andyyu2004@gmail.com>"]
-edition = "2018"
+edition = "2021"
 name = "libbit"
 version = "0.1.0"
 

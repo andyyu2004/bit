@@ -6,6 +6,7 @@ mod cli_commit;
 mod cli_commit_tree;
 mod cli_config;
 mod cli_fetch;
+mod cli_index_pack;
 mod cli_log;
 mod cli_ls_files;
 mod cli_merge;
@@ -52,6 +53,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use self::cli_fetch::BitFetchCliOpts;
+use self::cli_index_pack::BitIndexPackCliOpts;
 use self::cli_remote::BitRemoteCliOpts;
 
 // experiment with changing structure of everything
@@ -65,13 +67,15 @@ pub trait Cmd {
 pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitResult<()> {
     let opts = BitCliOpts::parse_from(args);
     let BitCliOpts { subcmd, root_path } = opts;
-    if let BitSubCmd::Init(subcmd) = &subcmd {
-        BitRepo::init(root_path.join(&subcmd.path))?;
-        return Ok(());
+    match subcmd {
+        BitSubCmd::Init(opts) => return BitRepo::init(root_path.join(&opts.path)),
+        BitSubCmd::IndexPack(opts) => return opts.exec(),
+        _ => (),
     }
 
     BitRepo::find(root_path, |repo| match subcmd {
         BitSubCmd::Init(..) => unreachable!(),
+        BitSubCmd::IndexPack(..) => unreachable!(),
         // TODO the real behaviour is more complex than this
         BitSubCmd::Add(opts) =>
             if opts.dryrun {
@@ -98,7 +102,7 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
         BitSubCmd::Reflog(opts) => opts.exec(repo),
         BitSubCmd::Remote(opts) => opts.exec(repo),
         BitSubCmd::Reset(opts) => opts.exec(repo),
-        BitSubCmd::Revlist(opts) => opts.exec(repo),
+        BitSubCmd::RevList(opts) => opts.exec(repo),
         BitSubCmd::Status(opts) => opts.exec(repo),
         BitSubCmd::Switch(opts) => opts.exec(repo),
         BitSubCmd::UpdateIndex(opts) => {
@@ -130,6 +134,7 @@ pub enum BitSubCmd {
     Diff(BitDiffCliOpts),
     Fetch(BitFetchCliOpts),
     HashObject(BitHashObjectCliOpts),
+    IndexPack(BitIndexPackCliOpts),
     Init(BitInitCliOpts),
     Log(BitLogCliOpts),
     LsFiles(BitLsFilesCliOpts),
@@ -138,8 +143,7 @@ pub enum BitSubCmd {
     Reflog(BitReflogCliOpts),
     Remote(BitRemoteCliOpts),
     Reset(BitResetCliOpts),
-    #[clap(name = "rev-list")]
-    Revlist(BitRevlistCliOpts),
+    RevList(BitRevlistCliOpts),
     Status(BitStatusCliOpts),
     Switch(BitSwitchCliOpts),
     UpdateIndex(BitUpdateIndexCliOpts),
