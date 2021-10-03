@@ -1,79 +1,79 @@
 use super::*;
 use crate::path;
-use crate::upload_pack::UploadPack;
 use git_url_parse::GitUrl;
 use pin_project_lite::pin_project;
 use std::pin::Pin;
+use std::process::Stdio;
 use std::task::{Context, Poll};
-use std::thread::JoinHandle;
-use tokio::io::{self, AsyncBufRead, AsyncRead, AsyncWrite, BufReader, DuplexStream, ReadBuf};
+use tokio::io::{self, AsyncBufRead, AsyncRead, AsyncWrite, BufReader, ReadBuf};
+use tokio::process::{ChildStdin, ChildStdout, Command};
 
 pin_project! {
-    pub struct FileTransport<'rcx> {
-        repo: BitRepo<'rcx>,
-        handle: JoinHandle<BitResult<()>>,
+    pub struct FileTransport {
         #[pin]
-        client: BufReader<DuplexStream>,
+        stdin: ChildStdin,
+        #[pin]
+        stdout: BufReader<ChildStdout>,
     }
 }
 
-impl<'rcx> FileTransport<'rcx> {
-    pub async fn new(repo: BitRepo<'rcx>, url: &GitUrl) -> BitResult<FileTransport<'rcx>> {
-        let (client, server) = tokio::io::duplex(64);
-        let (server_read, server_write) = tokio::io::split(server);
-        // doing a preemptive `find` on the current thread just to check the repo exists
+impl FileTransport {
+    pub async fn new(repo: BitRepo<'_>, url: &GitUrl) -> BitResult<Self> {
         let path = path::normalize(&repo.to_absolute_path(&url.path));
-        BitRepo::find(&path, |_| Ok(()))?;
-        let handle = std::thread::spawn(move || {
-            BitRepo::find(path, |repo| {
-                UploadPack::new(repo, BufReader::new(server_read), server_write).run()
-            })
-        });
-        Ok(Self { repo, handle, client: BufReader::new(client) })
+        let mut child = Command::new("git-upload-pack")
+            .arg(&path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        let stdin = child.stdin.take().unwrap();
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+
+        Ok(Self { stdin, stdout })
     }
 }
 
 #[async_trait]
-impl Transport for FileTransport<'_> {
+impl Transport for FileTransport {
 }
 
-impl AsyncBufRead for FileTransport<'_> {
+impl AsyncBufRead for FileTransport {
     fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<&[u8]>> {
-        self.project().client.poll_fill_buf(cx)
+        self.project().stdout.poll_fill_buf(cx)
     }
 
     fn consume(self: Pin<&mut Self>, amt: usize) {
-        self.project().client.consume(amt)
+        self.project().stdout.consume(amt)
     }
 }
 
-impl AsyncRead for FileTransport<'_> {
+impl AsyncRead for FileTransport {
     fn poll_read(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.client).poll_read(cx, buf)
+        self.project().stdout.poll_read(cx, buf)
     }
 }
 
-impl AsyncWrite for FileTransport<'_> {
+impl AsyncWrite for FileTransport {
     fn poll_write(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.client).poll_write(cx, buf)
+        self.project().stdin.poll_write(cx, buf)
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.client).poll_flush(cx)
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.project().stdin.poll_flush(cx)
     }
 
     fn poll_shutdown(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
-        Pin::new(&mut self.client).poll_shutdown(cx)
+        self.project().stdin.poll_shutdown(cx)
     }
 }

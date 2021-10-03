@@ -128,6 +128,11 @@ impl<'rcx> BitRepo<'rcx> {
             .ok_or_else(|| anyhow!("remote `{}` does not exist", name))
     }
 
+    #[tokio::main]
+    pub async fn fetch_blocking(self, name: &str) -> BitResult<()> {
+        self.fetch(name).await
+    }
+
     pub async fn fetch(self, name: &str) -> BitResult<()> {
         let remote = self.get_remote(name)?;
         self.fetch_remote(remote).await

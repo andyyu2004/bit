@@ -132,14 +132,16 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
         let mut mapping = HashMap::new();
 
         let packet = self.recv_packet().await?;
-        let mut iter = packet.split(|&byte| byte == 0x00);
-        let ref_line = iter.next().ok_or_else(|| anyhow!("malformed first line"))?;
-        let capabilities = iter.next().ok_or_else(|| anyhow!("malformed first line"))?;
+        let s = std::str::from_utf8(&packet)?;
+        let (ref_line, capabilities) =
+            s.split_once('\0').ok_or_else(|| anyhow!("malformed first line"))?;
+        let capabilities = capabilities.trim_end();
         let parsed_capabilities = capabilities
-            .split(|&b| b == b' ')
-            .map(|bytes| Ok(std::str::from_utf8(bytes)?.trim_end().parse()?))
+            .split_ascii_whitespace()
+            .map(|capability| {
+                capability.parse().or_else(|_| bail!("unknown capability `{}`", capability))
+            })
             .collect::<BitResult<Capabilities>>()?;
-        ensure!(iter.next().is_none());
 
         let (oid, sym) = parse_ref_line(ref_line)?;
         mapping.insert(sym, oid);
@@ -149,14 +151,13 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
             if packet.is_empty() {
                 break Ok((mapping, parsed_capabilities));
             }
-            let (oid, sym) = parse_ref_line(&packet)?;
+            let (oid, sym) = parse_ref_line(std::str::from_utf8(&packet)?)?;
             mapping.insert(sym, oid);
         }
     }
 }
 
-fn parse_ref_line(bytes: &[u8]) -> BitResult<(Oid, SymbolicRef)> {
-    let s = std::str::from_utf8(bytes)?;
+fn parse_ref_line(s: &str) -> BitResult<(Oid, SymbolicRef)> {
     let (oid, sym) = s.split_once(' ').ok_or_else(|| anyhow!("malformed ref line"))?;
     Ok((oid.parse()?, sym.parse()?))
 }

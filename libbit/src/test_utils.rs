@@ -419,6 +419,7 @@ macro_rules! tests_dir {
 macro_rules! repos_dir {
     () => {{ tests_dir!("repos") }};
     ($path:expr) => {{
+        #[derive(Debug)]
         struct DropPath(std::path::PathBuf);
 
         impl AsRef<std::path::Path> for DropPath {
@@ -450,7 +451,12 @@ macro_rules! repos_dir {
 
         fs_extra::dir::copy(path, &tmpdir, &fs_extra::dir::CopyOptions::default())
             .expect("repo copy failed");
-        DropPath(tmpdir.into_path().join($path))
+        let workdir = tmpdir.into_path().join($path);
+        // We store the git repository under .bit in the tests directory (which we do support)
+        // But sometimes we want to use git-upload-pack etc so we just move it for compantibility
+        std::fs::rename(workdir.join(".bit"), workdir.join(".git"))
+            .expect(".bit -> .git rename failed");
+        DropPath(workdir)
     }};
 }
 
