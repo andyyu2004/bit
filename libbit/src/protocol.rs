@@ -70,6 +70,7 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
     /// Assumes `side-band-64k` capability
     async fn recv_pack(&mut self, repo: BitRepo<'_>) -> BitResult<()> {
         let mut writer = PackWriter::new(repo).await?;
+        let mut first_data_packet = true;
         loop {
             let mut length = [0; 4];
             assert_eq!(self.read_exact(&mut length).await?, 4);
@@ -79,10 +80,16 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
             }
             let mut sideband = 0;
             assert_eq!(self.read_exact(std::slice::from_mut(&mut sideband)).await?, 1);
-            let packet = self.read_contents_with_parsed_len(n - 1).await?;
+            let data = self.read_contents_with_parsed_len(n - 1).await?;
             match sideband {
-                SIDEBAND_DATA => writer.write_all(&packet).await?,
-                SIDEBAND_PROGRESS => eprint!("{}", std::str::from_utf8(&packet)?),
+                SIDEBAND_DATA => {
+                    if first_data_packet {
+                        assert_eq!(b"PACK", &data[0..4]);
+                        first_data_packet = false;
+                    }
+                    writer.write_all(&data).await?
+                }
+                SIDEBAND_PROGRESS => eprint!("{}", std::str::from_utf8(&data)?),
                 SIDEBAND_ERROR => todo!(),
                 _ => bail!("invalid sideband byte `{:x}`", sideband),
             }

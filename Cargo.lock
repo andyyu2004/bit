@@ -884,6 +884,7 @@ dependencies = [
  "filebuffer",
  "flate2",
  "fs_extra",
+ "futures",
  "git-config",
  "git-url-parse",
  "hex",

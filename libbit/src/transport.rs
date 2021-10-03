@@ -3,6 +3,7 @@ mod ssh;
 
 pub use file::*;
 pub use ssh::*;
+use tokio::io::AsyncBufReadExt;
 
 use crate::error::BitResult;
 use crate::obj::{BitObject, Oid};
@@ -11,7 +12,9 @@ use crate::refs::{BitRef, SymbolicRef};
 use crate::remote::Remote;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
+use futures::poll;
 use std::collections::HashMap;
+use std::task::Poll;
 
 pub const MULTI_ACK_BATCH_SIZE: usize = 32;
 
@@ -86,41 +89,51 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
                     Some(commit) => commit,
                     None => {
                         self.write_flush_packet().await?;
+                        self.recv_packet().await?;
                         break 'outer;
                     }
                 };
                 self.have(next_commit.oid()).await?;
             }
             self.write_flush_packet().await?;
+            self.recv_packet().await?;
         }
 
-        // consume all the incoming NAK/ACK
+        // read everything available in the reader
         loop {
-            let packet = self.recv_packet().await?;
-            let s = std::str::from_utf8(&packet)?;
-            let s = s.trim_end();
-            if s.starts_with("ACK") {
-                if s.ends_with("common") || s.ends_with("ready") || s.ends_with("continue") {
-                    continue;
+            match poll!(Box::pin(self.fill_buf())) {
+                Poll::Ready(buf) => {
+                    let len = buf?.len();
+                    if len == 0 {
+                        break;
+                    }
+                    self.consume(len);
                 }
-                // found the final ack?
-                break;
-            } else {
-                // TODO there might be more than one nak?
-                if s.starts_with("NAK") {
-                    break;
-                }
-                todo!("recv {}", s);
+                Poll::Pending => break,
             }
         }
 
-        // Send a done
+        // Then, send a done
         self.done().await?;
-        // Consume the final ack/nak
-        match &self.recv_packet().await?[..] {
-            b"ACK\n" | b"NAK\n" => {}
-            _ => todo!(),
-        };
+
+        // Consume the final ack/nak and any other remaining things
+        loop {
+            let packet = self.recv_packet().await?;
+            let s = std::str::from_utf8(&packet)?;
+            match s.trim_end() {
+                // I think we can only have one remaining NAK at most at this point
+                // as we consumed everything before sending the done
+                "NAK" => break,
+                s if s.starts_with("ACK") =>
+                    if s.ends_with("common") || s.ends_with("ready") || s.ends_with("continue") {
+                        continue;
+                    } else {
+                        // found the final ack?
+                        break;
+                    },
+                s => todo!("unexpected packet: {}", s),
+            };
+        }
 
         self.recv_pack(repo).await?;
         Ok(())

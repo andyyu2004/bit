@@ -51,6 +51,7 @@ parse-display = "0.5.1"
 crc32fast = "1.2.1"
 take_mut = "0.2"
 filebuffer = "0.4.0"
+futures = { version = "0.3.17", features = ["async-await"], default-features = false }
 flate2 = { version = "1.0.20", features = ["zlib-ng-compat"], default-features = false }
 fallible-iterator = { git = "https://github.com/andyyu2004/rust-fallible-iterator" }
 jwalk = { git = "https://github.com/andyyu2004/jwalk" }
