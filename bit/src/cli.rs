@@ -8,6 +8,7 @@ mod cli_commit_tree;
 mod cli_config;
 mod cli_fetch;
 mod cli_index_pack;
+mod cli_init;
 mod cli_log;
 mod cli_ls_files;
 mod cli_merge;
@@ -56,6 +57,7 @@ use std::path::PathBuf;
 use self::cli_clone::BitCloneCliOpts;
 use self::cli_fetch::BitFetchCliOpts;
 use self::cli_index_pack::BitIndexPackCliOpts;
+use self::cli_init::BitInitCliOpts;
 use self::cli_remote::BitRemoteCliOpts;
 
 // experiment with changing structure of everything
@@ -71,7 +73,7 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
     let BitCliOpts { subcmd, base_path } = opts;
     match subcmd {
         BitSubCmd::Clone(opts) => return opts.exec(&base_path),
-        BitSubCmd::Init(opts) => return BitRepo::init(base_path.join(&opts.path)),
+        BitSubCmd::Init(opts) => return opts.exec(&base_path),
         BitSubCmd::IndexPack(opts) => return opts.exec(),
         _ => (),
     }
@@ -153,19 +155,6 @@ pub enum BitSubCmd {
     Switch(BitSwitchCliOpts),
     UpdateIndex(BitUpdateIndexCliOpts),
     WriteTree,
-}
-
-#[derive(Clap, Debug)]
-pub struct BitInitCliOpts {
-    #[clap(default_value = ".")]
-    pub path: PathBuf,
-}
-
-impl Into<BitInitOpts> for BitInitCliOpts {
-    fn into(self) -> BitInitOpts {
-        let Self { path } = self;
-        BitInitOpts { path }
-    }
 }
 
 // bit hash-object [-w] [-t TYPE] PATH

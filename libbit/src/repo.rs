@@ -344,7 +344,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     // returns unit as we don't want anyone accessing the repo directly like this
-    pub fn init(path: impl AsRef<Path>) -> BitResult<()> {
+    pub fn init(path: impl AsRef<Path>) -> BitResult<InitSummary> {
         let workdir = path.as_ref().canonicalize()?;
 
         if workdir.is_file() {
@@ -357,8 +357,7 @@ impl<'rcx> BitRepo<'rcx> {
 
         if bitdir.try_exists()? {
             // reinitializing doesn't really do anything currently
-            println!("reinitialized existing bit repository in `{}`", workdir.display());
-            return Ok(());
+            return Ok(InitSummary::Reinit);
         }
 
         std::fs::create_dir(&bitdir)?;
@@ -387,8 +386,7 @@ impl<'rcx> BitRepo<'rcx> {
                 config.set("core", "filemode", true)
             })?;
 
-            println!("initialized empty bit repository in `{}`", repo.workdir.display());
-            Ok(())
+            Ok(InitSummary::Init)
         })
     }
 
@@ -730,6 +728,12 @@ impl<'rcx> BitRepo<'rcx> {
     pub(crate) fn mk_bitfile(self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.bitdir.join(path))
     }
+}
+
+#[derive(Debug)]
+pub enum InitSummary {
+    Init,
+    Reinit,
 }
 
 impl Debug for BitRepo<'_> {
