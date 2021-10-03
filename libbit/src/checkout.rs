@@ -216,7 +216,9 @@ impl<'rcx> BitRepo<'rcx> {
                 file.set_permissions(Permissions::from_mode(create.mode.as_u32()))?;
             }
 
-            index.add_entry(BitIndexEntry::from_absolute_path(self, &path)?)?;
+            let mut index_entry = BitIndexEntry::from_absolute_path(self, &path)?;
+            index_entry.oid = create.oid;
+            index.add_entry(index_entry)?;
         }
         Ok(())
     }
