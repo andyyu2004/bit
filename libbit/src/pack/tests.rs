@@ -458,7 +458,12 @@ fn test_read_problematic_pack_unbuffered() -> BitResult<()> {
     for _ in 0..reader.objectc {
         reader.read_pack_obj_with_crc()?;
     }
+    Ok(())
+}
 
+#[test]
+fn test_index_problematic_pack_unbuffered() -> BitResult<()> {
+    let pack_bytes = &include_bytes!("../../tests/files/lg2fetchpack")[..];
     let indexer = PackIndexer::new(pack_bytes)?;
     indexer.index_pack()?;
     Ok(())
@@ -471,8 +476,26 @@ fn test_read_problematic_pack_buffered() -> BitResult<()> {
     for _ in 0..reader.objectc {
         reader.read_pack_obj_with_crc()?;
     }
+    Ok(())
+}
 
+#[test]
+fn test_index_problematic_pack_buffered() -> BitResult<()> {
     let pack = FileBufferReader::new(test_files_dir!("lg2fetchpack"))?;
+    let indexer = PackIndexer::new(pack)?;
+    indexer.index_pack()?;
+    Ok(())
+}
+
+#[test]
+fn test_index_another_problematic_pack() -> BitResult<()> {
+    // This packfile was failing to be indexed even after changing the reader to
+    // filebuffereader (with the same issue of zlib not consuming enough bytes)
+    // This started working after my manual implementation of `inflate` rather
+    // than using flate2's reader. No idea why still.
+    let pack = FileBufferReader::new(test_files_dir!(
+        "pack-3640c9d02957287e06be3baea0b5d014dee2830e.pack"
+    ))?;
     let indexer = PackIndexer::new(pack)?;
     indexer.index_pack()?;
     Ok(())

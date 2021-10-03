@@ -332,7 +332,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         ours: Option<BitIndexEntry>,
         theirs: Option<BitIndexEntry>,
     ) -> BitResult<()> {
-        info!(
+        debug!(
             "MergeCtxt::merge_entries(base: {:?}, ours: {:?}, theirs: {:?})",
             base.map(TreeEntry::from),
             ours.map(TreeEntry::from),
@@ -350,7 +350,7 @@ impl<'rcx> MergeCtxt<'rcx> {
     }
 
     fn base_to_ours_only(&mut self, base_to_ours: MergeDiffEntry) -> BitResult<()> {
-        info!("MergeCtxt::base_to_ours_only(base_to_ours: {:?})", base_to_ours);
+        debug!("MergeCtxt::base_to_ours_only(base_to_ours: {:?})", base_to_ours);
         match base_to_ours {
             MergeDiffEntry::CreatedBlob(entry) => self.repo.index_mut()?.add_entry(entry),
             MergeDiffEntry::CreatedTree(_) => Ok(()),
@@ -359,7 +359,7 @@ impl<'rcx> MergeCtxt<'rcx> {
     }
 
     fn base_to_theirs_only(&mut self, base_to_theirs: MergeDiffEntry) -> BitResult<()> {
-        info!("MergeCtxt::base_to_theirs_only(base_to_theirs: {:?})", base_to_theirs,);
+        debug!("MergeCtxt::base_to_theirs_only(base_to_theirs: {:?})", base_to_theirs,);
         let repo = self.repo;
         match base_to_theirs {
             MergeDiffEntry::CreatedBlob(entry) => {
@@ -393,7 +393,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         base_to_ours: MergeDiffEntry,
         base_to_theirs: MergeDiffEntry,
     ) -> BitResult<()> {
-        info!(
+        debug!(
             "MergeCtxt::merge_entries(base: {:?}, ours: {:?}, theirs: {:?})",
             base.as_ref().map(TreeEntry::from),
             base_to_ours,

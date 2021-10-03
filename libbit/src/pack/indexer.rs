@@ -20,6 +20,7 @@ pub struct PackIndexer<R> {
 #[derive(Debug, Clone, Default)]
 pub struct IndexPackOpts {
     pub index_file_path: Option<PathBuf>,
+    pub verbose: bool,
 }
 
 impl PackIndexer<FileBufferReader> {
@@ -56,11 +57,19 @@ impl<R: BufRead> PackIndexer<R> {
     /// TODO parallelize
     pub(crate) fn index_pack(mut self) -> BitResult<PackIndex> {
         let n = self.pack_reader.objectc as usize;
-        for _ in 0..self.pack_reader.objectc {
+        for i in 0..self.pack_reader.objectc {
             let offset = self.pack_reader.bytes_hashed() as u64;
             let (crc, deltified) = self.pack_reader.read_pack_obj_with_crc()?;
             let raw_pack_obj = self.expand_deltas(deltified, offset)?;
             let oid = raw_pack_obj.oid();
+            info!(
+                "{} {}  offset: {} size: {} (i: {})",
+                oid,
+                raw_pack_obj.obj_type,
+                offset,
+                raw_pack_obj.bytes.len(),
+                i
+            );
             self.oid_to_offset.insert(oid, offset);
             self.raw_objects.insert(offset, raw_pack_obj);
             self.sorted.insert(oid, (offset, crc));

@@ -326,7 +326,7 @@ impl<'rcx> CheckoutCtxt<'rcx> {
         diff_iter.for_each(|diff_entry| {
             loop {
                 let worktree_entry = worktree.peek()?;
-                info!(
+                debug!(
                     "CheckoutCtxt::generate({:#?}, {:#?})",
                     diff_entry,
                     worktree_entry.map(|entry| TreeEntry::from(entry))

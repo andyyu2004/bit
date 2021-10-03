@@ -12,12 +12,13 @@ use crate::iter::BitIterator;
 use crate::obj::*;
 use crate::serialize::{BufReadSeek, Deserialize, DeserializeSized, Serialize};
 use fallible_iterator::FallibleIterator;
+use flate2::{Decompress, FlushDecompress};
 use num_traits::{FromPrimitive, ToPrimitive};
 use rustc_hash::FxHashMap;
 use std::collections::hash_map::RawEntryMut;
 use std::fmt::{self, Debug, Formatter};
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Read, SeekFrom, Write};
+use std::io::{BufRead, BufReader, BufWriter, SeekFrom, Write};
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
@@ -538,6 +539,26 @@ impl<R: BufRead> PackfileReader<R> {
         Ok(BitPackObjHeader { obj_type, size })
     }
 
+    fn inflate(&mut self, size: u64) -> BitResult<Vec<u8>> {
+        let mut decompressor = Decompress::new(true);
+        let mut output = Vec::with_capacity(size as usize);
+        loop {
+            let input = self.fill_buf()?;
+            let at_eof = input.is_empty();
+            let in_so_far = decompressor.total_in();
+            let flush = if at_eof { FlushDecompress::Finish } else { FlushDecompress::None };
+            let status = decompressor.decompress_vec(input, &mut output, flush)?;
+            let consumed = decompressor.total_in() - in_so_far;
+            self.consume(consumed as usize);
+            match status {
+                flate2::Status::Ok | flate2::Status::BufError => continue,
+                flate2::Status::StreamEnd => break,
+            }
+        }
+        assert_eq!(output.len() as u64, size);
+        Ok(output)
+    }
+
     fn read_pack_obj(&mut self) -> BitResult<BitPackObjRawDeltified> {
         let BitPackObjHeader { obj_type, size } = self.read_pack_obj_header()?;
         // the delta types have only the delta compressed but the size/baseoid is not,
@@ -549,24 +570,13 @@ impl<R: BufRead> PackfileReader<R> {
             | BitPackObjType::Blob
             | BitPackObjType::Tag => BitPackObjRawDeltified::Raw(BitPackObjRaw {
                 obj_type: BitObjType::from(obj_type),
-                bytes: self.as_zlib_decode_stream().take(size).read_to_vec()?,
+                bytes: self.inflate(size)?,
             }),
-            BitPackObjType::OfsDelta => BitPackObjRawDeltified::Ofs(
-                self.read_offset()?,
-                self.as_zlib_decode_stream().take(size).read_to_vec()?,
-            ),
-            BitPackObjType::RefDelta => BitPackObjRawDeltified::Ref(
-                self.read_oid()?,
-                self.as_zlib_decode_stream().take(size).read_to_vec()?,
-            ),
+            BitPackObjType::OfsDelta =>
+                BitPackObjRawDeltified::Ofs(self.read_offset()?, self.inflate(size)?),
+            BitPackObjType::RefDelta =>
+                BitPackObjRawDeltified::Ref(self.read_oid()?, self.inflate(size)?),
         };
-
-        // This is turbo hacky!
-        // There is this stupid case where size is zero and then `take` above will not call into the zlib reader at all.
-        // 8 seems to be the magic number to consume here (our test packfile has an example of this and will fail without this check)
-        if size == 0 {
-            self.reader.consume(8);
-        }
 
         Ok(raw)
     }

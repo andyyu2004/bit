@@ -11,12 +11,15 @@ pub struct BitIndexPackCliOpts {
     index_file: Option<PathBuf>,
     /// Path of the pack-file
     path: PathBuf,
+    #[clap(short = 'v')]
+    verbose: bool,
 }
 
 impl BitIndexPackCliOpts {
     pub fn exec(self) -> BitResult<()> {
-        let opts = IndexPackOpts { index_file_path: self.index_file };
-        PackIndexer::write_pack_index(&self.path, opts)?;
+        let Self { path, index_file, verbose } = self;
+        let opts = IndexPackOpts { index_file_path: index_file, verbose };
+        PackIndexer::write_pack_index(&path, opts)?;
         Ok(())
     }
 }
