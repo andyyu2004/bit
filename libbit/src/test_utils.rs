@@ -238,15 +238,15 @@ macro_rules! bit_branch {
 macro_rules! bit_reset {
     ($repo:ident: --soft $rev:expr) => {{
         let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
-        $repo.reset(&revision, $crate::reset::ResetKind::Soft)?;
+        $repo.reset_revision(&revision, $crate::reset::ResetKind::Soft)?;
     }};
     ($repo:ident: --hard $rev:expr) => {{
         let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
-        $repo.reset(&revision, $crate::reset::ResetKind::Hard)?;
+        $repo.reset_revision(&revision, $crate::reset::ResetKind::Hard)?;
     }};
     ($repo:ident: $rev:expr) => {{
         let revision = $rev.to_string().parse::<$crate::rev::Revspec>()?;
-        $repo.reset(&revision, $crate::reset::ResetKind::Mixed)?;
+        $repo.reset_revision(&revision, $crate::reset::ResetKind::Mixed)?;
     }};
 }
 
@@ -468,12 +468,6 @@ macro_rules! symbolic_ref {
         use std::str::FromStr;
         $crate::refs::BitRef::Symbolic(symbolic!($sym))
     }};
-}
-
-macro_rules! HEAD {
-    () => {
-        &rev!("HEAD")
-    };
 }
 
 #[macro_export]

@@ -8,19 +8,17 @@ fn test_add_remote() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         assert!(repo.ls_remotes().next().is_none());
         repo.add_remote("foo", "bar")?;
-        BitRepo::find(repo.workdir, |repo| {
-            let mut remotes = repo.ls_remotes();
-            assert_eq!(
-                remotes.next().unwrap(),
-                Remote {
-                    name: "foo",
-                    fetch: Refspec::default_fetch_for_remote("foo"),
-                    url: GitUrl::parse("bar")?,
-                }
-            );
-            assert!(remotes.next().is_none());
-            Ok(())
-        })
+        let mut remotes = repo.ls_remotes();
+        assert_eq!(
+            remotes.next().unwrap(),
+            Remote {
+                name: "foo",
+                fetch: Refspec::default_fetch_for_remote("foo"),
+                url: GitUrl::parse("bar")?,
+            }
+        );
+        assert!(remotes.next().is_none());
+        Ok(())
     })
 }
 
@@ -38,12 +36,10 @@ fn test_remove_remote() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         assert!(repo.ls_remotes().next().is_none());
         repo.add_remote("foo", "bar")?;
-        BitRepo::find(repo.workdir, |repo| repo.remove_remote("foo"))?;
-        BitRepo::find(repo.workdir, |repo| {
-            let mut remotes = repo.ls_remotes();
-            assert!(remotes.next().is_none());
-            Ok(())
-        })
+        repo.remove_remote("foo")?;
+        let mut remotes = repo.ls_remotes();
+        assert!(remotes.next().is_none());
+        Ok(())
     })
 }
 

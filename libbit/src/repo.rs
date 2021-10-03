@@ -226,8 +226,8 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    pub fn remote_config(self) -> &'rcx HashMap<&'static str, RemoteConfig> {
-        &self.rcx.config().remote.remotes
+    pub fn remote_config(self) -> HashMap<&'static str, RemoteConfig> {
+        self.rcx.config().remote_config().remotes
     }
 
     /// returns `None` if the reference does not yet exist

@@ -83,3 +83,7 @@ fn test_match_refspec() -> BitResult<()> {
     assert_eq!(refspec.match_ref(symbolic!("refs/bad/master")), None,);
     Ok(())
 }
+
+// #[test]
+// fn test_fetch() -> BitResult<()> {
+// }

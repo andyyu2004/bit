@@ -109,17 +109,15 @@ impl<'rcx> BitRepo<'rcx> {
         self.with_raw_local_config(|config| {
             ensure!(!config.subsection_exists("remote", name), "remote `{}` already exists", name);
             config.set_subsection("remote", name, "url", url)?;
-            config.set_subsection("remote", name, "fetch", refspec)
-        })?;
-
-        Ok(())
+            config.set_subsection("remote", name, "fetch", refspec)?;
+            Ok(())
+        })
     }
 
     pub fn remove_remote(self, name: &str) -> BitResult<()> {
         if !self.with_raw_local_config(|config| Ok(config.remove_subsection("remote", name)))? {
             bail!("remote `{}` does not exist", name)
         };
-
         Ok(())
     }
 
@@ -152,7 +150,9 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn ls_remotes(self) -> impl Iterator<Item = Remote> + 'rcx {
-        self.remote_config().iter().map(|(name, config)| Remote::from_config(name, config.clone()))
+        self.remote_config()
+            .into_iter()
+            .map(|(name, config)| Remote::from_config(name, config.clone()))
     }
 }
 

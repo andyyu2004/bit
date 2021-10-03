@@ -6,7 +6,6 @@ use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
 use filebuffer::FileBuffer;
-use pin_project_lite::pin_project;
 use sha1::Digest;
 use std::convert::TryInto;
 use std::ffi::OsStr;
@@ -16,10 +15,7 @@ use std::io::{self, prelude::*, BufReader};
 use std::mem::MaybeUninit;
 use std::os::unix::prelude::OsStrExt;
 use std::path::Path;
-use std::pin::Pin;
 use std::str::FromStr;
-use std::task::{Context, Poll};
-use tokio::io::AsyncWrite;
 
 pub type BufferedFileStream = std::io::BufReader<File>;
 
@@ -531,45 +527,6 @@ impl BufRead for FileBufferReader {
 
     fn consume(&mut self, amt: usize) {
         self.offset += amt;
-    }
-}
-
-pin_project! {
-    pub(crate) struct AsyncHashWriter<D, W> {
-        #[pin]
-        writer: W,
-        hasher: D,
-    }
-
-}
-
-impl<W: AsyncWrite> AsyncHashWriter<sha1::Sha1, W> {
-    pub fn new_sha1(writer: W) -> Self {
-        Self { writer, hasher: sha1::Sha1::new() }
-    }
-}
-
-impl<D: Digest, W: AsyncWrite> AsyncWrite for AsyncHashWriter<D, W> {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize, io::Error>> {
-        let this = self.project();
-        let n = match this.writer.poll_write(cx, buf)? {
-            Poll::Ready(n) => n,
-            Poll::Pending => return Poll::Pending,
-        };
-        this.hasher.update(&buf[..n]);
-        Poll::Ready(Ok(n))
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        self.project().writer.poll_flush(cx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        self.project().writer.poll_shutdown(cx)
     }
 }
 

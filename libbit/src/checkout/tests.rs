@@ -23,7 +23,7 @@ fn test_simple_checkout_rm_rf() -> BitResult<()> {
 #[test]
 fn test_checkout_remote_branch_leads_to_detached_head() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        repo.create_branch(symbolic!("refs/remotes/origin/master"), HEAD!())?;
+        repo.create_branch(symbolic!("refs/remotes/origin/master"), BitRef::HEAD)?;
         bit_checkout!(repo: "origin/master")?;
         assert!(repo.is_head_detached()?);
         Ok(())

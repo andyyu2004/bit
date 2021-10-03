@@ -8,6 +8,7 @@ use git_config::file::{GitConfig, GitConfigError, SectionBody};
 use git_config::parser::Key;
 use git_config::values::{Boolean, Integer};
 use git_url_parse::GitUrl;
+use parking_lot::{RwLock, RwLockReadGuard};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -35,8 +36,14 @@ impl<K: Eq + std::hash::Hash, V> Merge for HashMap<K, V> {
     }
 }
 
-#[derive(Debug, Merge, Default)]
+#[derive(Debug)]
 pub struct BitConfig {
+    local_path: BitPath,
+    pub(crate) inner: RwLock<BitConfigInner>,
+}
+
+#[derive(Debug, Merge, Default)]
+pub struct BitConfigInner {
     pub(crate) core: CoreConfig,
     pub(crate) user: UserConfig,
     pub(crate) merge: MergeConfig,
@@ -44,6 +51,26 @@ pub struct BitConfig {
 }
 
 impl BitConfig {
+    pub fn init(local_path: BitPath) -> BitResult<Self> {
+        let inner = RwLock::new(BitConfigInner::init(local_path)?);
+        Ok(Self { local_path, inner })
+    }
+
+    pub fn remote_config(&self) -> RemotesConfig {
+        self.read().remote.clone()
+    }
+
+    pub fn refresh(&self) -> BitResult<()> {
+        *self.inner.write() = BitConfigInner::init(self.local_path)?;
+        Ok(())
+    }
+
+    fn read(&self) -> RwLockReadGuard<'_, BitConfigInner> {
+        self.inner.read()
+    }
+}
+
+impl BitConfigInner {
     fn open(path: BitPath) -> BitResult<Self> {
         Self::from_gitconfig(&mut RawConfig::open(path)?)
     }
@@ -74,15 +101,15 @@ impl BitConfig {
             config_paths.push(BitPath::intern(home.join(".gitconfig")));
         }
 
-        let mut config = BitConfig::default();
+        let mut config = BitConfigInner::default();
         for path in config_paths.into_iter().filter(|path| path.exists()) {
-            config.merge(BitConfig::open(path)?);
+            config.merge(Self::open(path)?);
         }
         Ok(config)
     }
 }
 
-#[derive(Debug, PartialEq, Merge, Default)]
+#[derive(Debug, PartialEq, Merge, Clone, Default)]
 pub struct RemotesConfig {
     pub remotes: HashMap<&'static str, RemoteConfig>,
 }
@@ -180,7 +207,6 @@ pub struct RawConfig<'c> {
 
 impl<'rcx> BitRepo<'rcx> {
     /// Use this API for setting config values, otherwise use `.config()`
-    /// The current repository config settings will NOT be refreshed
     pub fn with_raw_local_config<R>(
         self,
         f: impl FnOnce(&mut RawConfig<'_>) -> BitResult<R>,
@@ -189,6 +215,7 @@ impl<'rcx> BitRepo<'rcx> {
         let mut config = RawConfig::open(self.config_path())?;
         let r = f(&mut config)?;
         config.write()?;
+        self.config().refresh()?;
         Ok(r)
     }
 }
@@ -365,7 +392,7 @@ macro_rules! get_opt {
     ($section:ident.$field:ident:$ty:ty) => {
         impl BitConfig {
             pub fn $field(&self) -> Option<$ty> {
-                self.$section.$field.clone()
+                self.read().$section.$field.clone()
             }
         }
     };
@@ -375,7 +402,7 @@ macro_rules! get {
     ($section:ident.$field:ident:$ty:ty, $default:expr) => {
         impl BitConfig {
             pub fn $field(&self) -> $ty {
-                self.$section.$field.clone().unwrap_or($default)
+                self.read().$section.$field.clone().unwrap_or($default)
             }
         }
     };
@@ -386,8 +413,8 @@ get!(core.pager: String, "less".to_owned());
 
 get!(merge.conflict_style: ConflictStyle, ConflictStyle::Merge);
 
-get_opt!(core.repositoryformatversion: i64);
 get_opt!(core.bare: bool);
+get_opt!(core.repositoryformatversion: i64);
 get_opt!(user.name: String);
 get_opt!(user.email: String);
 
