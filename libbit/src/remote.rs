@@ -117,6 +117,7 @@ impl Remote {
 
 #[derive(Debug, PartialEq)]
 pub enum FetchStatus {
+    EmptyRemote,
     UpToDate,
     NotUpToDate,
 }
@@ -126,6 +127,10 @@ pub struct FetchSummary {
     /// The branch that HEAD is pointing to
     pub head_symref: Option<SymbolicRef>,
     pub status: FetchStatus,
+}
+
+impl FetchSummary {
+    pub const EMPTY_REMOTE: Self = Self { head_symref: None, status: FetchStatus::EmptyRemote };
 }
 
 impl<'rcx> BitRepo<'rcx> {
@@ -158,9 +163,12 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub async fn clone_origin(self) -> BitResult<()> {
         let remote = self.get_remote(DEFAULT_REMOTE)?;
-        let FetchSummary { head_symref, .. } = self.fetch_remote(&remote).await?;
-        let refspec = remote.fetch;
+        let FetchSummary { head_symref, status } = self.fetch_remote(&remote).await?;
+        if status == FetchStatus::EmptyRemote {
+            return Ok(());
+        }
 
+        let refspec = remote.fetch;
         // TODO probably need to be a bit smarter than just defaulting to master
         let local = head_symref.unwrap_or(SymbolicRef::MASTER);
         let remote = refspec.match_ref(local).expect(

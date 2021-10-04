@@ -30,6 +30,14 @@ fn test_clone() -> BitResult<()> {
 }
 
 #[test]
+fn test_clone_empty_repo() -> BitResult<()> {
+    let remote = tempfile::tempdir()?;
+    let local = tempfile::tempdir()?;
+    BitRepo::init(remote.path())?;
+    BitRepo::clone_blocking(local.path(), remote.path().to_str().unwrap())
+}
+
+#[test]
 fn test_clone_dont_cleanup_existing_directory_on_failure() -> BitResult<()> {
     let tmpdir = tempfile::tempdir()?;
     BitRepo::clone_blocking(tmpdir.path(), "/dev/null").unwrap_err();

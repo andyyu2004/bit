@@ -26,6 +26,9 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
         }
 
         let (refs, capabilities) = self.parse_ref_discovery_and_capabilities().await?;
+        if refs.is_empty() {
+            return Ok(FetchSummary::EMPTY_REMOTE);
+        }
 
         ensure!(
             capabilities.contains(&Capability::MultiAckDetailed),
@@ -153,9 +156,14 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
     async fn parse_ref_discovery_and_capabilities(
         &mut self,
     ) -> BitResult<(HashMap<SymbolicRef, Oid>, Capabilities)> {
+        let packet = self.recv_packet().await?;
         let mut mapping = HashMap::new();
 
-        let packet = self.recv_packet().await?;
+        // if we are cloning an empty repository, `git-upload-pack` just sends a flush
+        if packet.is_empty() {
+            return Ok((mapping, Capabilities::default()));
+        }
+
         let s = std::str::from_utf8(&packet)?;
         let (ref_line, capabilities) =
             s.split_once('\0').ok_or_else(|| anyhow!("malformed first line"))?;
