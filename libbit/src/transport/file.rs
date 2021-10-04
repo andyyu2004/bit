@@ -24,6 +24,7 @@ impl FileTransport {
             .arg(&path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()?;
 
         let stdin = child.stdin.take().unwrap();

@@ -83,7 +83,7 @@ thread_local! {
     static INTERNER: RefCell<Interner> = RefCell::new(Interner::prefill(prefill! {
         EMPTY => "",
         HEAD => "HEAD",
-        MASTER => "master",
+        MASTER => "refs/heads/master",
         MERGE_HEAD => "MERGE_HEAD",
         DOT_GIT => ".git",
         DOT_BIT => ".bit",

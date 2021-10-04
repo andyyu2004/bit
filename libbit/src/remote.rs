@@ -145,7 +145,7 @@ impl<'rcx> BitRepo<'rcx> {
         })
         .or_else(|err| {
             if !exists {
-                std::fs::remove_dir(&into)?;
+                std::fs::remove_dir_all(&into)?;
             }
             Err(err)
         })

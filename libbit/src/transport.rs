@@ -21,6 +21,10 @@ pub const MULTI_ACK_BATCH_SIZE: usize = 32;
 #[async_trait]
 pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
     async fn fetch(&mut self, repo: BitRepo<'_>, remote: &Remote) -> BitResult<FetchSummary> {
+        if self.fill_buf().await?.is_empty() {
+            bail!("could not read from remote repository")
+        }
+
         let (refs, capabilities) = self.parse_ref_discovery_and_capabilities().await?;
 
         ensure!(
