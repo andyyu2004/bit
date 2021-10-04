@@ -28,7 +28,11 @@ impl<'rcx> BitRepo<'rcx> {
     /// [ResetKind::Soft] does only the above.
     /// [ResetKind::Mixed] does a `soft` reset and also makes the index match the target tree
     /// [ResetKind::Hard] does a `mixed` reset and the working tree will match the target tree
-    pub fn reset(self, target: BitRef, kind: ResetKind) -> BitResult<()> {
+    pub fn reset(self, target: impl Into<BitRef>, kind: ResetKind) -> BitResult<()> {
+        self.reset_internal(target.into(), kind)
+    }
+
+    pub fn reset_internal(self, target: BitRef, kind: ResetKind) -> BitResult<()> {
         if self.repo_state() == RepoState::Merging {
             bail!("cannot perform reset when repository is in the middle of a merge")
         }

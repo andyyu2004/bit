@@ -416,6 +416,8 @@ macro_rules! tests_dir {
     };
 }
 
+/// Return a temporary path to a copy of the test repository.
+/// It will be deleted when the returned path is dropped so be wary of the lifetime of the returned value!
 macro_rules! repos_dir {
     () => {{ tests_dir!("repos") }};
     ($path:expr) => {{
@@ -425,6 +427,12 @@ macro_rules! repos_dir {
         impl AsRef<std::path::Path> for DropPath {
             fn as_ref(&self) -> &std::path::Path {
                 &self
+            }
+        }
+
+        impl AsRef<str> for DropPath {
+            fn as_ref(&self) -> &str {
+                self.to_str().unwrap()
             }
         }
 

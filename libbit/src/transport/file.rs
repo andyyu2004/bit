@@ -34,7 +34,7 @@ impl FileTransport {
 }
 
 #[async_trait]
-impl Transport for FileTransport {
+impl ProtocolTransport for FileTransport {
 }
 
 impl AsyncBufRead for FileTransport {

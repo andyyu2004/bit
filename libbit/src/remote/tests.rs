@@ -83,12 +83,3 @@ fn test_match_refspec() -> BitResult<()> {
     assert_eq!(refspec.match_ref(symbolic!("refs/bad/master")), None,);
     Ok(())
 }
-
-#[test]
-fn test_fetch() -> BitResult<()> {
-    BitRepo::with_empty_repo(|repo| {
-        let remote_path = repos_dir!("logic");
-        repo.add_remote("origin", remote_path.to_str().unwrap())?;
-        repo.fetch_blocking("origin")
-    })
-}

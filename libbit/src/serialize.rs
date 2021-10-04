@@ -51,7 +51,7 @@ pub trait DeserializeSized {
     where
         Self: Sized,
     {
-        Self::deserialize_sized_unbuffered(slice, slice.len() as u64)
+        Self::deserialize_sized(slice, slice.len() as u64)
     }
 
     fn deserialize_sized_unbuffered(reader: impl Read, size: u64) -> BitResult<Self>

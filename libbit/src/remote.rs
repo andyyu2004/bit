@@ -2,12 +2,14 @@ use crate::config::RemoteConfig;
 use crate::error::{BitGenericError, BitResult};
 use crate::interner::Intern;
 use crate::path::BitPath;
-use crate::refs::SymbolicRef;
+use crate::refs::{BitRef, SymbolicRef};
 use crate::repo::BitRepo;
-use crate::transport::{FileTransport, SshTransport, Transport};
+use crate::reset::ResetKind;
+use crate::transport::{FileTransport, ProtocolTransport, SshTransport};
 use git_url_parse::{GitUrl, Scheme};
 use openssh::Session;
 use std::fmt::{self, Display, Formatter};
+use std::path::Path;
 use std::str::FromStr;
 
 pub const DEFAULT_REMOTE: &str = "origin";
@@ -34,6 +36,16 @@ impl Refspec {
         let src = BitPath::intern("refs/heads/");
         let dst = BitPath::intern(format!("refs/remotes/{}/", remote_name));
         Self { src, dst, forced: true, glob: true }
+    }
+
+    fn reverse(&self) -> Self {
+        let &Self { src, dst, forced, glob } = self;
+        Self { src: dst, dst: src, forced, glob }
+    }
+
+    /// Matches given `dst` to `self.dst` and returns the expanded source if it matches
+    pub fn reverse_match_ref(&self, dst: SymbolicRef) -> Option<SymbolicRef> {
+        self.reverse().match_ref(dst)
     }
 
     /// Matches given `source` to `self.src` and returns the expanded destination if it matches
@@ -103,12 +115,67 @@ impl Remote {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum FetchStatus {
+    UpToDate,
+    NotUpToDate,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FetchSummary {
+    /// The branch that HEAD is pointing to
+    pub head_symref: Option<SymbolicRef>,
+    pub status: FetchStatus,
+}
+
 impl<'rcx> BitRepo<'rcx> {
-    pub fn add_remote(self, name: &str, url: &str) -> BitResult<()> {
+    pub fn clone_blocking(into: impl AsRef<Path>, url: impl AsRef<str>) -> BitResult<()> {
+        let into = into.as_ref();
+        let exists = into.exists();
+        if exists {
+            ensure!(into.is_dir(), "file exists at clone path");
+            ensure!(into.read_dir()?.next().is_none(), "cannot clone into non-empty directory");
+        } else {
+            std::fs::create_dir(&into)?;
+        }
+
+        Self::init_load(&into, |repo| {
+            repo.add_remote(DEFAULT_REMOTE, url)?;
+            repo.clone_origin_blocking()
+        })
+        .or_else(|err| {
+            if !exists {
+                std::fs::remove_dir(&into)?;
+            }
+            Err(err)
+        })
+    }
+
+    #[tokio::main]
+    pub async fn clone_origin_blocking(self) -> BitResult<()> {
+        self.clone_origin().await
+    }
+
+    pub async fn clone_origin(self) -> BitResult<()> {
+        let remote = self.get_remote(DEFAULT_REMOTE)?;
+        let FetchSummary { head_symref, .. } = self.fetch_remote(&remote).await?;
+        let refspec = remote.fetch;
+
+        // TODO probably need to be a bit smarter than just defaulting to master
+        let local = head_symref.unwrap_or(SymbolicRef::MASTER);
+        let remote = refspec.match_ref(local).expect(
+            "todo this case where the branch remotes HEAD points to is not part of our refspec",
+        );
+        self.create_branch(local, BitRef::HEAD)?;
+        self.reset(remote, ResetKind::Hard)?;
+        Ok(())
+    }
+
+    pub fn add_remote(self, name: &str, url: impl AsRef<str>) -> BitResult<()> {
         let refspec = Refspec::default_fetch_for_remote(name);
         self.with_raw_local_config(|config| {
             ensure!(!config.subsection_exists("remote", name), "remote `{}` already exists", name);
-            config.set_subsection("remote", name, "url", url)?;
+            config.set_subsection("remote", name, "url", url.as_ref())?;
             config.set_subsection("remote", name, "fetch", refspec)?;
             Ok(())
         })
@@ -129,16 +196,16 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[tokio::main]
-    pub async fn fetch_blocking(self, name: &str) -> BitResult<()> {
+    pub async fn fetch_blocking(self, name: &str) -> BitResult<FetchSummary> {
         self.fetch(name).await
     }
 
-    pub async fn fetch(self, name: &str) -> BitResult<()> {
+    pub async fn fetch(self, name: &str) -> BitResult<FetchSummary> {
         let remote = self.get_remote(name)?;
-        self.fetch_remote(remote).await
+        self.fetch_remote(&remote).await
     }
 
-    pub async fn fetch_remote(self, remote: Remote) -> BitResult<()> {
+    pub async fn fetch_remote(self, remote: &Remote) -> BitResult<FetchSummary> {
         match remote.url.scheme {
             Scheme::Ssh => {
                 let url = &remote.url;
@@ -147,7 +214,7 @@ impl<'rcx> BitRepo<'rcx> {
                 let mut transport = SshTransport::new(self, &session, url).await?;
                 transport.fetch(self, &remote).await
             }
-            Scheme::File => FileTransport::new(self, &remote.url).await?.fetch(self, &remote).await,
+            Scheme::File => FileTransport::new(self, &remote.url).await?.fetch(self, remote).await,
             Scheme::Https => todo!("todo https"),
             Scheme::Unspecified => todo!("unspecified url scheme for remote"),
             _ => bail!("unsupported scheme `{}`", remote.url.scheme),
@@ -161,5 +228,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
+#[cfg(test)]
+mod clone_tests;
 #[cfg(test)]
 mod tests;

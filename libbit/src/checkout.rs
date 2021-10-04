@@ -115,8 +115,8 @@ impl<'rcx> BitRepo<'rcx> {
         // if forced, then the worktree and index and target_tree should match exactly
         if is_forced {
             let mut index = self.index_mut()?;
-            debug_assert!(dbg!(index.diff_tree(target_tree, Pathspec::MATCH_ALL)?).is_empty());
-            debug_assert!(dbg!(index.diff_worktree(Pathspec::MATCH_ALL)?).is_empty());
+            debug_assert!(index.diff_tree(target_tree, Pathspec::MATCH_ALL)?.is_empty());
+            debug_assert!(index.diff_worktree(Pathspec::MATCH_ALL)?.is_empty());
             index.update_cache_tree(target_tree)?;
         }
         Ok(())

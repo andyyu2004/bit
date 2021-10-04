@@ -23,6 +23,8 @@ pub enum Capability {
     MultiAckDetailed,
     #[display("agent={0}")]
     Agent(String),
+    /// The rhs is always a symbolic reference.
+    /// If the remote is in detached HEAD then this capability is not sent
     #[display("symref={0}:{1}")]
     Symref(SymbolicRef, SymbolicRef),
     #[display("side-band-64k")]

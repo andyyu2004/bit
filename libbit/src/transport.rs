@@ -9,7 +9,7 @@ use crate::error::BitResult;
 use crate::obj::{BitObject, Oid};
 use crate::protocol::{BitProtocolRead, BitProtocolWrite, Capabilities, Capability};
 use crate::refs::{BitRef, SymbolicRef};
-use crate::remote::Remote;
+use crate::remote::{FetchStatus, FetchSummary, Remote};
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 use futures::poll;
@@ -19,8 +19,8 @@ use std::task::Poll;
 pub const MULTI_ACK_BATCH_SIZE: usize = 32;
 
 #[async_trait]
-pub trait Transport: BitProtocolRead + BitProtocolWrite {
-    async fn fetch(&mut self, repo: BitRepo<'_>, remote: &Remote) -> BitResult<()> {
+pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
+    async fn fetch(&mut self, repo: BitRepo<'_>, remote: &Remote) -> BitResult<FetchSummary> {
         let (refs, capabilities) = self.parse_ref_discovery_and_capabilities().await?;
 
         ensure!(
@@ -37,21 +37,28 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
             .into_iter()
             .filter_map(|(sym, oid)| Some((remote.fetch.match_ref(sym)?, oid)))
             .collect::<HashMap<_, _>>();
-        self.negotiate_packs(repo, &remote_mapping).await?;
+
+        let fetch_status = self.negotiate_packs(repo, &remote_mapping).await?;
 
         // TODO check the refspec for forcedness before updating: create a function `try_update_remote_ref`
         for (&remote, &oid) in &remote_mapping {
             let to = BitRef::Direct(oid);
             repo.update_ref_for_fetch(remote, to)?;
         }
-        Ok(())
+
+        let head_symref = capabilities.iter().find_map(|cap| match cap {
+            &Capability::Symref(head, sym) if head == SymbolicRef::HEAD => Some(sym),
+            _ => None,
+        });
+
+        Ok(FetchSummary { head_symref, status: fetch_status })
     }
 
     async fn negotiate_packs(
         &mut self,
         repo: BitRepo<'_>,
         remote_mapping: &HashMap<SymbolicRef, Oid>,
-    ) -> BitResult<()> {
+    ) -> BitResult<FetchStatus> {
         let mut wanted = vec![];
         let mut local_tips = vec![];
         for (&remote, &remote_oid) in remote_mapping {
@@ -62,6 +69,10 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
             if local_oid != Some(remote_oid) {
                 wanted.push(remote_oid);
             }
+        }
+
+        if wanted.is_empty() {
+            return Ok(FetchStatus::UpToDate);
         }
 
         for (i, &oid) in wanted.iter().enumerate() {
@@ -76,10 +87,6 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
             }
         }
         self.write_flush_packet().await?;
-
-        if wanted.is_empty() {
-            return Ok(());
-        }
 
         let mut walk = repo.revwalk_builder().roots_iter(local_tips)?.build();
         'outer: loop {
@@ -136,7 +143,7 @@ pub trait Transport: BitProtocolRead + BitProtocolWrite {
         }
 
         self.recv_pack(repo).await?;
-        Ok(())
+        Ok(FetchStatus::NotUpToDate)
     }
 
     async fn parse_ref_discovery_and_capabilities(

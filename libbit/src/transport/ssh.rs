@@ -41,7 +41,7 @@ impl<'rcx, 's> SshTransport<'rcx, 's> {
 }
 
 #[async_trait]
-impl Transport for SshTransport<'_, '_> {
+impl ProtocolTransport for SshTransport<'_, '_> {
 }
 
 impl AsyncBufRead for SshTransport<'_, '_> {
