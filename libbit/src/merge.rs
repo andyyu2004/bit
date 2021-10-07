@@ -19,6 +19,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::Write;
+use std::ops::Deref;
 
 pub type ConflictStyle = diffy::ConflictStyle;
 
@@ -55,6 +56,15 @@ impl<'rcx> BitRepo<'rcx> {
         MergeCtxt::new(self, their_head_ref, opts)?.merge()
     }
 
+    pub fn merge_with_base(
+        self,
+        their_head_ref: BitRef,
+        base: Option<&'rcx Commit<'rcx>>,
+        opts: MergeOpts,
+    ) -> BitResult<MergeResults> {
+        MergeCtxt::new(self, their_head_ref, opts)?.merge_with_base(base)
+    }
+
     pub fn merge_rev(self, their_head: &Revspec, opts: MergeOpts) -> BitResult<MergeResults> {
         self.merge(self.resolve_rev(their_head)?, opts)
     }
@@ -80,11 +90,22 @@ struct MergeCtxt<'rcx> {
     // description of `their_head`
     their_head_desc: String,
     their_head_ref: BitRef,
+    their_head_commit: &'rcx Commit<'rcx>,
     their_head: Oid,
     opts: MergeOpts,
     // The state of the index pre-merge
     initial_index_snapshot: BitIndexInner,
     uncommitted: Vec<BitPath>,
+    our_head: Oid,
+    our_head_commit: &'rcx Commit<'rcx>,
+}
+
+impl<'rcx> Deref for MergeCtxt<'rcx> {
+    type Target = BitRepo<'rcx>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.repo
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -116,13 +137,21 @@ pub struct MergeSummary {}
 
 impl<'rcx> MergeCtxt<'rcx> {
     fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
+        let our_head = repo.fully_resolve_head()?;
+        let our_head_commit = our_head.peel(repo)?;
+
         let their_head = repo.fully_resolve_ref(their_head_ref)?;
         let their_head_desc = their_head_ref.short();
+        let their_head_commit = their_head.peel(repo)?;
+
         Ok(Self {
             repo,
+            our_head,
+            our_head_commit,
             their_head_ref,
             their_head,
             their_head_desc,
+            their_head_commit,
             opts,
             initial_index_snapshot: repo.index()?.clone(),
             uncommitted: Default::default(),
@@ -192,29 +221,31 @@ impl<'rcx> MergeCtxt<'rcx> {
 
     pub fn merge(mut self) -> BitResult<MergeResults> {
         debug!("MergeCtxt::merge()");
+        let merge_base = self.merge_base_recursive(self.our_head_commit, self.their_head_commit)?;
+        self.merge_with_base(merge_base)
+    }
+
+    pub fn merge_with_base(
+        mut self,
+        merge_base: Option<&'rcx Commit<'rcx>>,
+    ) -> BitResult<MergeResults> {
+        debug!("MergeCtxt::merge_with_base(merge_base: {:?})", merge_base.map(|b| b.oid()));
 
         self.pre_merge_checks()?;
-
-        let repo = self.repo;
-        let their_head = self.their_head;
-        let our_head = repo.fully_resolve_head()?;
-        let our_head_commit = our_head.peel(repo)?;
-        let their_head_commit = their_head.peel(repo)?;
-        let merge_base = self.merge_base_recursive(our_head_commit, their_head_commit)?;
 
         if let Some(merge_base) = merge_base {
             if merge_base.oid() == self.their_head {
                 return Ok(MergeResults::Null);
             }
 
-            if !self.opts.no_ff && merge_base.oid() == our_head {
-                repo.checkout_tree_with_opts(their_head_commit, CheckoutOpts::default())?;
-                repo.update_current_ref_for_ff_merge(self.their_head_ref)?;
-                return Ok(MergeResults::FastForward { from: our_head, to: self.their_head });
+            if !self.opts.no_ff && merge_base.oid() == self.our_head {
+                self.checkout_tree_with_opts(self.their_head_commit, CheckoutOpts::default())?;
+                self.update_current_ref_for_ff_merge(self.their_head_ref)?;
+                return Ok(MergeResults::FastForward { from: self.our_head, to: self.their_head });
             }
         }
 
-        self.merge_commits(merge_base, our_head_commit, their_head_commit)?;
+        self.merge_commits(merge_base, self.our_head_commit, self.their_head_commit)?;
 
         if !self.uncommitted.is_empty() {
             // Restore index to pre-merge snapshot and check it out to also restore the worktree to inital pre-merge state
@@ -224,8 +255,8 @@ impl<'rcx> MergeCtxt<'rcx> {
             bail!(BitError::MergeConflict(MergeConflicts { uncommitted: self.uncommitted }))
         }
 
-        if repo.index()?.has_conflicts() {
-            return Ok(MergeResults::Conflicts(repo.index()?.conflicts()));
+        if self.index()?.has_conflicts() {
+            return Ok(MergeResults::Conflicts(self.index()?.conflicts()));
         }
 
         if !self.opts.no_commit {
@@ -233,16 +264,16 @@ impl<'rcx> MergeCtxt<'rcx> {
                 .opts
                 .no_edit
                 .then(|| format!("Merge commit `{}` into HEAD", self.their_head_ref));
-            let merged_tree = repo.index_mut()?.write_tree()?;
+            let merged_tree = self.index_mut()?.write_tree()?;
             let merge_commit = self.repo.commit_tree(
                 merged_tree,
                 // ordering is significant here for `--first-parent`
                 // i.e. the first parent should always be our head
-                smallvec![our_head, their_head],
+                smallvec![self.our_head, self.their_head],
                 message,
             )?;
 
-            repo.update_current_ref_for_merge(merge_commit)?;
+            self.update_current_ref_for_merge(merge_commit)?;
         }
 
         Ok(MergeResults::Merge(MergeSummary {}))
@@ -254,12 +285,15 @@ impl<'rcx> MergeCtxt<'rcx> {
         our_head_commit: &'rcx Commit<'rcx>,
         their_head_commit: &'rcx Commit<'rcx>,
     ) -> BitResult<()> {
-        let repo = self.repo;
         let merge_base_tree = merge_base.map(|c| c.tree_oid()).unwrap_or(Oid::UNKNOWN);
+        self.merge_trees(merge_base_tree, our_head_commit.tree_oid(), their_head_commit.tree_oid())
+    }
+
+    pub fn merge_trees(&mut self, base_tree: Oid, our_tree: Oid, their_tree: Oid) -> BitResult<()> {
         self.merge_from_iterators(
-            repo.tree_iter(merge_base_tree),
-            repo.tree_iter(our_head_commit.tree_oid()),
-            repo.tree_iter(their_head_commit.tree_oid()),
+            self.tree_iter(base_tree),
+            self.tree_iter(our_tree),
+            self.tree_iter(their_tree),
         )
     }
 

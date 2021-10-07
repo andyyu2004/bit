@@ -2,6 +2,7 @@ mod cli_add;
 mod cli_bit_diff;
 mod cli_branch;
 mod cli_checkout;
+mod cli_cherrypick;
 mod cli_clone;
 mod cli_commit;
 mod cli_commit_tree;
@@ -54,6 +55,7 @@ use libbit::rev::Revspec;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use self::cli_cherrypick::BitCherryPickCliOpts;
 use self::cli_clone::BitCloneCliOpts;
 use self::cli_fetch::BitFetchCliOpts;
 use self::cli_index_pack::BitIndexPackCliOpts;
@@ -94,6 +96,7 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
         BitSubCmd::Branch(opts) => opts.exec(repo),
         BitSubCmd::CatFile(opts) => repo.bit_cat_file(opts.into()),
         BitSubCmd::Checkout(opts) => opts.exec(repo),
+        BitSubCmd::CherryPick(opts) => opts.exec(repo),
         BitSubCmd::Config(opts) => opts.execute(repo),
         BitSubCmd::CommitTree(opts) =>
             repo.bit_commit_tree(opts.tree, opts.parents.into_iter().collect(), opts.message),
@@ -134,6 +137,7 @@ pub enum BitSubCmd {
     Branch(BitBranchCliOpts),
     CatFile(BitCatFileCliOpts),
     Checkout(BitCheckoutCliOpts),
+    CherryPick(BitCherryPickCliOpts),
     Clone(BitCloneCliOpts),
     CommitTree(BitCommitTreeCliOpts),
     Config(BitConfigCliOpts),

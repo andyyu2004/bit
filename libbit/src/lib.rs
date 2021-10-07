@@ -64,6 +64,7 @@ extern crate anyhow;
 #[macro_use]
 pub mod test_utils;
 mod cache;
+mod cherrypick;
 mod fs;
 mod graph;
 mod protocol;
