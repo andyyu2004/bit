@@ -53,7 +53,8 @@ pub type Refs = BTreeSet<SymbolicRef>;
 // objects for validation but both refdb and odb are owned by the repo so not sure if this is feasible
 pub trait BitRefDbBackend<'rcx> {
     fn repo(&self) -> BitRepo<'rcx>;
-    /// Create a bit branch from a reference
+    /// Create a bit branch from a reference.
+    /// This method must gracefully handle the case where `from` does not fully resolve.
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()>;
     /// read the reference pointed to by `sym` and returns the validated reference
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef>;

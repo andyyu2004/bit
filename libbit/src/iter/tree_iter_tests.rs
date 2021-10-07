@@ -301,7 +301,6 @@ fn test_index_tree_iterator_on_logic_repo_index() -> BitResult<()> {
         // we just look inside the logic-ir directory to make this test more manageable
         let pathspec = "logic-ir".parse::<Pathspec>()?;
         let mut iter = pathspec.match_tree_iter(index.index_tree_iter());
-        dbg!(index.entries().keys().map(|(entry, _)| entry).collect::<Vec<_>>());
         check_next!(iter.next() => "logic-ir":FileMode::TREE);
         check_next!(iter.next() => "logic-ir/Cargo.toml":FileMode::REG);
         check_next!(iter.next() => "logic-ir/src":FileMode::TREE);

@@ -38,6 +38,18 @@ fn test_clone_empty_repo() -> BitResult<()> {
 }
 
 #[test]
+fn test_clone_repo_head_on_non_master() -> BitResult<()> {
+    let remote_path = repos_dir!("head-on-main-not-master");
+    let local = tempfile::tempdir()?;
+    BitRepo::init(&remote_path)?;
+    BitRepo::clone_blocking(local.path(), &remote_path)?;
+    BitRepo::find(&local, |repo| {
+        assert_eq!(repo.read_head()?, symbolic_ref!("refs/heads/main"));
+        Ok(())
+    })
+}
+
+#[test]
 fn test_clone_dont_cleanup_existing_directory_on_failure() -> BitResult<()> {
     let tmpdir = tempfile::tempdir()?;
     BitRepo::clone_blocking(tmpdir.path(), "/dev/null").unwrap_err();

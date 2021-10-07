@@ -164,17 +164,19 @@ impl<'rcx> BitRepo<'rcx> {
     pub async fn clone_origin(self) -> BitResult<()> {
         let remote = self.get_remote(DEFAULT_REMOTE)?;
         let FetchSummary { head_symref, status } = self.fetch_remote(&remote).await?;
-        if status == FetchStatus::EmptyRemote {
-            return Ok(());
-        }
 
         let refspec = remote.fetch;
         // TODO probably need to be a bit smarter than just defaulting to master
         let local = head_symref.unwrap_or(SymbolicRef::MASTER);
+        dbg!(local);
         let remote = refspec.match_ref(local).expect(
             "todo this case where the branch remotes HEAD points to is not part of our refspec",
         );
         self.create_branch(local, BitRef::HEAD)?;
+
+        if status == FetchStatus::EmptyRemote {
+            return Ok(());
+        }
         self.reset(remote, ResetKind::Hard)?;
         Ok(())
     }
