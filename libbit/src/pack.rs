@@ -174,6 +174,7 @@ impl Pack {
     pub fn read_obj_raw(&mut self, oid: Oid) -> BitResult<BitPackObjRaw> {
         trace!("read_obj_raw(oid: {})", oid);
         let offset = self.obj_offset(oid)?;
+        trace!("read_obj_raw(oid: {}): found object at offset `{}`)", oid, offset);
         let raw = self.read_obj_raw_at(offset)?;
         Ok(raw)
     }

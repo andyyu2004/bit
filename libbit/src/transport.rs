@@ -3,7 +3,6 @@ mod ssh;
 
 pub use file::*;
 pub use ssh::*;
-use tokio::io::AsyncBufReadExt;
 
 use crate::error::BitResult;
 use crate::obj::{BitObject, Oid};
@@ -12,9 +11,8 @@ use crate::refs::{BitRef, SymbolicRef};
 use crate::remote::{FetchStatus, FetchSummary, Remote};
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
-use futures::poll;
 use std::collections::HashMap;
-use std::task::Poll;
+use tokio::io::AsyncBufReadExt;
 
 pub const MULTI_ACK_BATCH_SIZE: usize = 32;
 
@@ -113,42 +111,7 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
             self.recv_packet().await?;
         }
 
-        // read everything available in the reader
-        loop {
-            match poll!(Box::pin(self.fill_buf())) {
-                Poll::Ready(buf) => {
-                    let len = buf?.len();
-                    if len == 0 {
-                        break;
-                    }
-                    self.consume(len);
-                }
-                Poll::Pending => break,
-            }
-        }
-
-        // Then, send a done
         self.done().await?;
-
-        // Consume the final ack/nak and any other remaining things
-        loop {
-            let packet = self.recv_packet().await?;
-            let s = std::str::from_utf8(&packet)?;
-            match s.trim_end() {
-                // I think we can only have one remaining NAK at most at this point
-                // as we consumed everything before sending the done
-                "NAK" => break,
-                s if s.starts_with("ACK") =>
-                    if s.ends_with("common") || s.ends_with("ready") || s.ends_with("continue") {
-                        continue;
-                    } else {
-                        // found the final ack?
-                        break;
-                    },
-                s => todo!("unexpected packet: {}", s),
-            };
-        }
-
         self.recv_pack(repo).await?;
         Ok(FetchStatus::NotUpToDate)
     }

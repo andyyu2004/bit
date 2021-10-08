@@ -558,6 +558,8 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
+        let id = id.into();
+        trace!("BitRepo::read_obj(id: {})", id);
         let oid = self.expand_id(id)?;
         if oid == Oid::EMPTY_TREE {
             Ok(BitObjKind::Tree(Tree::empty(self)))
@@ -589,7 +591,7 @@ impl<'rcx> BitRepo<'rcx> {
 
     pub fn ensure_obj_exists(self, id: impl Into<BitId>) -> BitResult<()> {
         let id = id.into();
-        ensure!(self.odb()?.exists(id)?, BitError::ObjectNotFound(id));
+        ensure!(self.obj_exists(id)?, BitError::ObjectNotFound(id));
         Ok(())
     }
 

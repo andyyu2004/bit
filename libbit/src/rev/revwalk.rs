@@ -287,7 +287,7 @@ impl<'rcx> FallibleIterator for RevWalk<'rcx> {
             };
 
             for &parent in &node.parents {
-                self.enqueue_commit(self.repo.read_obj(parent)?.into_commit());
+                self.enqueue_commit(self.repo.read_obj_commit(parent)?);
             }
 
             let flags = self.flags.entry(node.oid()).or_default();

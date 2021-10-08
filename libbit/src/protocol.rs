@@ -69,32 +69,35 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
         Ok(contents)
     }
 
-    /// Assumes `side-band-64k` capability
+    /// Start receiving the pack file in protocol v1.
+    /// This will consume any remaining ACK/NAK.
+    /// Assumes `side-band-64k` capability.
     async fn recv_pack(&mut self, repo: BitRepo<'_>) -> BitResult<()> {
         let mut writer = PackWriter::new(repo).await?;
-        let mut first_data_packet = true;
+        let mut packet = self.recv_packet().await?;
+
         loop {
-            let mut length = [0; 4];
-            assert_eq!(self.read_exact(&mut length).await?, 4);
-            let n = usize::from_str_radix(std::str::from_utf8(&length[..4])?, 16)?;
-            if n == 0 {
+            match std::str::from_utf8(&packet) {
+                Ok(s) if s.starts_with("ACK") || s.starts_with("NAK") =>
+                    packet = self.recv_packet().await?,
+                _ => break,
+            }
+        }
+
+        loop {
+            if packet.is_empty() {
                 break;
             }
-            let mut sideband = 0;
-            assert_eq!(self.read_exact(std::slice::from_mut(&mut sideband)).await?, 1);
-            let data = self.read_contents_with_parsed_len(n - 1).await?;
-            match sideband {
-                SIDEBAND_DATA => {
-                    if first_data_packet {
-                        assert_eq!(b"PACK", &data[0..4]);
-                        first_data_packet = false;
-                    }
-                    writer.write_all(&data).await?
-                }
+
+            let (sideband, data) = packet[..].split_first().unwrap();
+            match *sideband {
+                SIDEBAND_DATA => writer.write_all(&data).await?,
                 SIDEBAND_PROGRESS => eprint!("{}", std::str::from_utf8(&data)?),
                 SIDEBAND_ERROR => todo!(),
                 _ => bail!("invalid sideband byte `{:x}`", sideband),
             }
+
+            packet = self.recv_packet().await?;
         }
         writer.flush().await?;
 
@@ -107,6 +110,8 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
             &writer.path.with_extension(PACK_IDX_EXT),
             writer.path.with_file_name(format!("pack-{}.{}", pack_index.pack_hash, PACK_IDX_EXT)),
         )?;
+
+        // Refresh pack odb to include the newly written pack
         repo.refresh_odb()?;
         Ok(())
     }

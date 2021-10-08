@@ -16,13 +16,10 @@ impl Cmd for BitRevlistCliOpts {
     fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
         let revisions = self.revisions.iter().collect::<Vec<_>>();
         let revwalk = repo.revwalk(&revisions)?;
-        revwalk
-            .for_each(|commit| {
-                println!("{}", commit.oid());
-                Ok(())
-            })
-            .unwrap();
-        Ok(())
+        revwalk.for_each(|commit| {
+            println!("{}", commit.oid());
+            Ok(())
+        })
     }
 }
 
