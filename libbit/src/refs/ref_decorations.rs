@@ -13,6 +13,7 @@ impl SymbolicRef {
             SymbolicRefKind::Tag => todo!(),
             SymbolicRefKind::Remote => style.fg::<Red>(),
             SymbolicRefKind::Unknown => unreachable!(),
+            SymbolicRefKind::Stash => todo!(),
         }
         .bold()
         .style(value)

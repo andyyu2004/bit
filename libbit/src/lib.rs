@@ -2,6 +2,7 @@
 #![feature(result_copied)]
 #![feature(async_closure)]
 #![feature(associated_type_bounds)]
+#![feature(iter_intersperse)]
 #![feature(path_try_exists)]
 #![feature(generic_associated_types)]
 #![feature(btree_drain_filter)]

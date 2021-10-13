@@ -115,6 +115,7 @@ pub enum SymbolicRefKind {
     Remote,
     Branch,
     Tag,
+    Stash,
     Unknown,
 }
 
@@ -160,6 +161,8 @@ impl SymbolicRef {
             SymbolicRefKind::Remote
         } else if path.starts_with(BitPath::REFS_TAGS) {
             SymbolicRefKind::Tag
+        } else if path == BitPath::REFS_STASH {
+            SymbolicRefKind::Stash
         } else {
             // unexpanded and unvalidated
             SymbolicRefKind::Unknown

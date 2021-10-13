@@ -1,4 +1,5 @@
 #![feature(backtrace)]
+#![feature(iter_intersperse)]
 
 use std::backtrace::BacktraceStatus;
 

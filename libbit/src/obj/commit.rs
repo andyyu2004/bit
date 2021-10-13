@@ -65,7 +65,6 @@ impl CommitMessage {
     }
 
     pub fn new(subject: String, message: String) -> BitResult<Self> {
-        ensure!(!subject.is_empty());
         Ok(Self { subject, message })
     }
 }
