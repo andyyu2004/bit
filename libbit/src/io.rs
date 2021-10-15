@@ -5,6 +5,7 @@ use crate::path::BitPath;
 use crate::serialize::Deserialize;
 use crate::time::Timespec;
 use crate::{error::BitResult, serialize::Serialize};
+use arrayvec::ArrayVec;
 use filebuffer::FileBuffer;
 use sha1::Digest;
 use std::convert::TryInto;
@@ -16,6 +17,7 @@ use std::mem::MaybeUninit;
 use std::os::unix::prelude::OsStrExt;
 use std::path::Path;
 use std::str::FromStr;
+use uninit::uninit_array;
 
 pub type BufferedFileStream = std::io::BufReader<File>;
 
@@ -251,16 +253,11 @@ impl Serialize for [u8] {
 // requires `Self: Sized`. Not entirely sure why atm.
 pub trait BufReadExtSized: BufRead + Sized {
     fn read_array<T: Deserialize, const N: usize>(&mut self) -> BitResult<[T; N]> {
-        // SAFETY? not sure
-        let mut xs: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
-        for i in 0..N {
-            xs[i] = MaybeUninit::new(T::deserialize(&mut *self)?);
+        let mut xs = ArrayVec::new();
+        for _ in 0..N {
+            xs.push(T::deserialize(&mut *self)?);
         }
-        // shouldn't be necessary to forget since everything is MaybeUninit in xs?
-        // std::mem::forget();
-        // can't transmute do to const generics atm even though
-        // https://github.com/rust-lang/rust/issues/61956
-        Ok(unsafe { std::mem::transmute_copy(&xs) })
+        Ok(unsafe { xs.into_inner_unchecked() })
     }
 
     fn read_type<T: Deserialize>(&mut self) -> BitResult<T> {
