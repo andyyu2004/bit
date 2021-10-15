@@ -13,11 +13,9 @@ use std::ffi::OsStr;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
-use std::mem::MaybeUninit;
 use std::os::unix::prelude::OsStrExt;
 use std::path::Path;
 use std::str::FromStr;
-use uninit::uninit_array;
 
 pub type BufferedFileStream = std::io::BufReader<File>;
 
