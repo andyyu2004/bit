@@ -1,11 +1,11 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::checkout::{CheckoutOpts, CheckoutStrategy};
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitCheckoutCliOpts {
     #[clap(default_value = "HEAD")]
     revision: Revspec,

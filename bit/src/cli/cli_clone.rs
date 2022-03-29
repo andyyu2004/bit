@@ -1,10 +1,10 @@
-use clap::Clap;
+use clap::Parser;
 use git_url_parse::GitUrl;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 use std::path::{Path, PathBuf};
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitCloneCliOpts {
     /// The repository to clone from
     url: String,

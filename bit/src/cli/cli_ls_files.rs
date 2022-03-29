@@ -1,7 +1,7 @@
-use clap::Clap;
+use clap::Parser;
 use libbit::cmd::BitLsFilesOpts;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitLsFilesCliOpts {
     #[clap(short = 's', long = "stage")]
     stage: bool,

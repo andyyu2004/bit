@@ -252,13 +252,14 @@ impl<'rcx> BitRepo<'rcx> {
         a: impl BitTreeIterator,
         b: impl BitTreeIterator,
     ) -> BitResult<bool> {
-        let mut diff_iter = self.tree_diff_iter(a, b);
-        diff_iter.into_iter().any(|entry| match entry {
-            TreeDiffEntry::MaybeModifiedTree(_)
-            | TreeDiffEntry::UnmodifiedBlob(_)
-            | TreeDiffEntry::UnmodifiedTree(_) => Ok(false),
-            _ => Ok(true),
-        })
+        todo!()
+        // let mut diff_iter = self.tree_diff_iter(a, b);
+        // diff_iter.into_iter().any(|entry| match entry {
+        //     TreeDiffEntry::MaybeModifiedTree(_)
+        //     | TreeDiffEntry::UnmodifiedBlob(_)
+        //     | TreeDiffEntry::UnmodifiedTree(_) => Ok(false),
+        //     _ => Ok(true),
+        // })
     }
 }
 

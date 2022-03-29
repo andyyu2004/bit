@@ -1,11 +1,11 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::checkout::CheckoutOpts;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
 
-#[derive(Clap, Debug, PartialEq)]
+#[derive(Parser, Debug, PartialEq)]
 pub struct BitSwitchCliOpts {
     #[clap(short = 'c', long = "create")]
     create: Option<String>,

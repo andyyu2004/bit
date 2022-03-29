@@ -1,9 +1,9 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitFetchCliOpts {
     remote: Option<String>,
 }

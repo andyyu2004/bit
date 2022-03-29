@@ -1,23 +1,23 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
 
 // default subcommand's are a bit awkward, not sure how to do this nicely
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitReflogCliOpts {
     reference: Option<BitRef>,
     #[clap(subcommand)]
     subcmd: Option<BitReflogSubcommand>,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub enum BitReflogSubcommand {
     Show(BitReflogShowOpts),
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitReflogShowOpts {
     #[clap(default_value = "HEAD")]
     reference: BitRef,

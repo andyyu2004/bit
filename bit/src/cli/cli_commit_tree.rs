@@ -1,7 +1,7 @@
-use clap::Clap;
+use clap::Parser;
 use libbit::obj::Oid;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitCommitTreeCliOpts {
     #[clap(short = 'm', long = "message")]
     pub message: Option<String>,

@@ -1,4 +1,4 @@
-use clap::Clap;
+use clap::Parser;
 use logic_engine::db::{Database, LogicDatabase, LoweringDatabase};
 use logic_error::LogicResult;
 use logic_ir::{tls, IRInterner};
@@ -6,7 +6,7 @@ use logic_parse::ast;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-#[derive(Debug, Clap)]
+#[derive(Debug, Parser)]
 struct Opts {
     path: Option<String>,
 }

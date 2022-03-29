@@ -1,5 +1,5 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::format::{Indentable, OwoColorize};
 use libbit::iter::FallibleIterator;
@@ -9,7 +9,7 @@ use libbit::rev::Revspec;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitLogCliOpts {
     #[clap(default_value = "HEAD")]
     revisions: Vec<Revspec>,

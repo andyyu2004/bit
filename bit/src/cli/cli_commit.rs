@@ -1,10 +1,10 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::commit::CommitOpts;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitCommitCliOpts {
     #[clap(short = 'm', long = "message")]
     pub message: Option<String>,

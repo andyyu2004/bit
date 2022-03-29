@@ -1,12 +1,12 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::merge::{MergeOpts, MergeResults};
 use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
 use libbit::xdiff::DiffFormatExt;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitMergeCliOpts {
     revision: Revspec,
     #[clap(long = "no-commit")]

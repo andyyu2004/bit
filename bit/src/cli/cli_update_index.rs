@@ -1,8 +1,8 @@
-use clap::Clap;
+use clap::Parser;
 use libbit::cmd::{BitUpdateIndexOpts, CacheInfo};
 use libbit::error::BitGenericError;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitUpdateIndexCliOpts {
     #[clap(long = "add")]
     add: bool,

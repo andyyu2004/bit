@@ -1,12 +1,12 @@
 use crate::cli::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 use libbit::reset::ResetKind;
 use libbit::rev::Revspec;
 
 // soft,mixed,hard all conflict with each other which I've declared in a circular manner for less noise
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitResetCliOpts {
     #[clap(default_value = "HEAD")]
     target: Revspec,

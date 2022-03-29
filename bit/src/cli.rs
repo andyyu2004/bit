@@ -29,7 +29,7 @@ mod cli_update_index;
 // - probably will make it such that libbit doesn't even expose full commands
 //   and be something more like libgit2
 
-use clap::{AppSettings, Clap};
+use clap::{AppSettings, Parser};
 use cli_add::BitAddCliOpts;
 use cli_bit_diff::BitDiffCliOpts;
 use cli_branch::*;
@@ -122,7 +122,7 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
     })
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 #[clap(author = "Andy Yu <andyyu2004@gmail.com>")]
 pub struct BitCliOpts {
     #[clap(subcommand)]
@@ -131,7 +131,7 @@ pub struct BitCliOpts {
     pub base_path: PathBuf,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub enum BitSubCmd {
     Add(BitAddCliOpts),
     Branch(BitBranchCliOpts),
@@ -162,7 +162,7 @@ pub enum BitSubCmd {
 }
 
 // bit hash-object [-w] [-t TYPE] PATH
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitHashObjectCliOpts {
     #[clap(short = 'w')]
     pub do_write: bool,
@@ -179,7 +179,7 @@ impl Into<BitHashObjectOpts> for BitHashObjectCliOpts {
 }
 
 // bit cat-file (-t | -s | -p | -e | <type>) <object>
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 #[clap(setting = AppSettings::AllowMissingPositional)]
 pub struct BitCatFileCliOpts {
     /// pretty print object

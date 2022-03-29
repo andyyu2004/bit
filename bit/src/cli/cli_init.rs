@@ -1,9 +1,9 @@
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::repo::{BitRepo, InitSummary};
 use std::path::{Path, PathBuf};
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitInitCliOpts {
     #[clap(default_value = ".")]
     pub path: PathBuf,

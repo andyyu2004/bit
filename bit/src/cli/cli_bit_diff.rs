@@ -1,5 +1,5 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::pathspec::Pathspec;
 use libbit::repo::BitRepo;
@@ -7,7 +7,7 @@ use libbit::rev::Revspec;
 use libbit::xdiff::DiffFormatExt;
 use std::process::{Command, Stdio};
 
-#[derive(Clap, Debug, PartialEq)]
+#[derive(Parser, Debug, PartialEq)]
 pub struct BitDiffCliOpts {
     #[clap(long = "stat")]
     stat: bool,

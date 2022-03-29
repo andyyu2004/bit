@@ -1,12 +1,12 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::iter::FallibleIterator;
 use libbit::obj::BitObject;
 use libbit::repo::BitRepo;
 use libbit::rev::Revspec;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitRevlistCliOpts {
     #[clap(required = true)]
     revisions: Vec<Revspec>,

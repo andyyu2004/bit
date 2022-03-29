@@ -1,11 +1,11 @@
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 use libbit::upload_pack::UploadPack;
 use std::path::PathBuf;
 use tokio::io::BufReader;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 struct Opts {
     path: PathBuf,
 }

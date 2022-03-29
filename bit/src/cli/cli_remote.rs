@@ -1,36 +1,36 @@
 use super::Cmd;
-use clap::Clap;
+use clap::Parser;
 use libbit::error::BitResult;
 use libbit::refs::BitRef;
 use libbit::repo::BitRepo;
 
 // default subcommand's are a bit awkward, not sure how to do this nicely
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitRemoteCliOpts {
     reference: Option<BitRef>,
     #[clap(subcommand)]
     subcmd: Option<BitRemoteSubcommand>,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub enum BitRemoteSubcommand {
     Add(BitRemoteAddOpts),
     Remove(BitRemoteRemoveOpts),
     Show(BitRemoteShowOpts),
 }
 
-#[derive(Clap, Default, Debug)]
+#[derive(Parser, Default, Debug)]
 pub struct BitRemoteShowOpts {
     name: Option<String>,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitRemoteAddOpts {
     name: String,
     url: String,
 }
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 pub struct BitRemoteRemoveOpts {
     name: String,
 }
