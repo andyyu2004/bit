@@ -18,10 +18,10 @@ pub struct DiffFormatter<W> {
 }
 
 pub trait DiffFormatExt: Sized {
-    fn format_diffstat_into(self, repo: BitRepo, writer: impl Write) -> BitResult<()>;
-    fn format_diff_into(self, repo: BitRepo, writer: impl Write) -> BitResult<()>;
+    fn format_diffstat_into(self, repo: &BitRepo, writer: impl Write) -> BitResult<()>;
+    fn format_diff_into(self, repo: &BitRepo, writer: impl Write) -> BitResult<()>;
 
-    fn print_diffstat(self, repo: BitRepo) -> BitResult<()> {
+    fn print_diffstat(self, repo: &BitRepo) -> BitResult<()> {
         self.format_diffstat_into(repo, std::io::stdout())
     }
 }
@@ -40,11 +40,11 @@ impl WorkspaceStatus {
 }
 
 impl<D: Diff> DiffFormatExt for D {
-    fn format_diffstat_into(self, repo: BitRepo, writer: impl Write) -> BitResult<()> {
+    fn format_diffstat_into(self, repo: &BitRepo, writer: impl Write) -> BitResult<()> {
         DiffStatFormatter::format_diffstat_into(repo, writer, self)
     }
 
-    fn format_diff_into(self, repo: BitRepo, writer: impl Write) -> BitResult<()> {
+    fn format_diff_into(self, repo: &BitRepo, writer: impl Write) -> BitResult<()> {
         DiffFormatter::format_diff_into(repo, writer, self)
     }
 }
@@ -54,8 +54,8 @@ impl<W: Write> DiffFormatter<W> {
         Self { repo, writer }
     }
 
-    pub fn format_diff_into(repo: BitRepo, writer: W, status: impl Diff) -> BitResult<()> {
-        status.apply_with(&mut Self::new(repo, writer))
+    pub fn format_diff_into(repo: &BitRepo, writer: W, status: impl Diff) -> BitResult<()> {
+        status.apply_with(&mut Self::new(repo.clone(), writer))
     }
 }
 

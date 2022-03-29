@@ -139,7 +139,7 @@ impl MutableCommit {
 
 impl BitRepo {
     fn mk_commit(
-        self,
+        &self,
         tree: Oid,
         parents: CommitParents,
         message: CommitMessage,
@@ -164,7 +164,7 @@ impl BitRepo {
 
     /// create and write commit to odb
     pub fn write_commit(
-        self,
+        &self,
         tree: Oid,
         parents: CommitParents,
         message: CommitMessage,
@@ -174,7 +174,7 @@ impl BitRepo {
     }
 
     pub fn virtual_write_commit(
-        self,
+        &self,
         tree: Oid,
         parents: CommitParents,
         message: CommitMessage,
@@ -185,7 +185,7 @@ impl BitRepo {
         })
     }
 
-    pub fn read_commit_msg(self) -> BitResult<CommitMessage> {
+    pub fn read_commit_msg(&self) -> BitResult<CommitMessage> {
         let editor = match std::env::var("EDITOR") {
             Ok(editor) => editor,
             Err(..) => bail!("$EDITOR variable not set"),

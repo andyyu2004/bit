@@ -501,7 +501,7 @@ impl BitRepo {
         )
     }
 
-    pub(crate) fn update_current_ref_for_merge(self, theirs: impl Into<BitRef>) -> BitResult<()> {
+    pub(crate) fn update_current_ref_for_merge(&self, theirs: impl Into<BitRef>) -> BitResult<()> {
         let theirs = theirs.into();
         let oid = self.fully_resolve_ref(theirs)?;
         self.update_current_ref(
@@ -510,7 +510,7 @@ impl BitRepo {
         )
     }
 
-    pub(crate) fn update_head_for_checkout(self, to: impl Into<BitRef>) -> BitResult<()> {
+    pub(crate) fn update_head_for_checkout(&self, to: impl Into<BitRef>) -> BitResult<()> {
         let to = to.into();
         self.update_head(to, RefUpdateCause::Checkout { from: self.read_head()?, to })
     }
@@ -518,7 +518,7 @@ impl BitRepo {
     /// Enter a section where writes don't persist to disk but only to the cache.
     /// Useful for ephemeral writes (such as virtual merge bases).
     /// Be careful as all writes and reads within the closure will be issued to the virtual odb
-    pub(crate) fn with_virtual_write<R>(self, f: impl FnOnce() -> R) -> R {
+    pub(crate) fn with_virtual_write<R>(&self, f: impl FnOnce() -> R) -> R {
         self.virtual_write.store(true, Ordering::Release);
         let ret = f();
         self.virtual_write.store(false, Ordering::Release);

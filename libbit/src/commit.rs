@@ -90,7 +90,7 @@ impl Display for CommitSummary {
         }
 
         // how to deal with error handling in display impls?
-        let _ = self.status.print_diffstat(self.repo);
+        let _ = self.status.print_diffstat(&self.repo);
         let _ = self.status.print_change_summary();
 
         Ok(())

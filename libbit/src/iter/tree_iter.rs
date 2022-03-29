@@ -258,7 +258,7 @@ where
 }
 
 impl BitRepo {
-    pub fn head_tree_iter(self) -> BitResult<impl BitTreeIterator> {
+    pub fn head_tree_iter(&self) -> BitResult<impl BitTreeIterator> {
         let oid = self.head_tree()?;
         Ok(self.tree_iter(oid))
     }
@@ -266,11 +266,11 @@ impl BitRepo {
     /// Return's tree iterator for a tree (or treeish object) with oid = `oid`
     /// It is valid to pass `Oid::UNKNOWN` which will represent an empty iterator which only yields the root
     // We can't use an `impl Treeish` here as the above case will not work
-    pub fn tree_iter(self, treeish_oid: Oid) -> TreeIter {
-        TreeIter::new(self, treeish_oid)
+    pub fn tree_iter(&self, treeish_oid: Oid) -> TreeIter {
+        TreeIter::new(self.clone(), treeish_oid)
     }
 
-    pub fn empty_tree_iter(self) -> impl BitTreeIterator {
+    pub fn empty_tree_iter(&self) -> impl BitTreeIterator {
         struct EmptyTreeIter;
         impl FallibleIterator for EmptyTreeIter {
             type Error = BitGenericError;

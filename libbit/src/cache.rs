@@ -12,7 +12,7 @@ pub struct BitObjCache {
 
 impl BitObjCache {
     pub(crate) fn get(&self, oid: Oid) -> BitObjKind {
-        self.objects[&oid]
+        self.objects[&oid].clone()
     }
 
     pub(crate) fn insert(&mut self, oid: Oid, obj: BitObjKind) {
@@ -24,11 +24,11 @@ impl BitObjCache {
         oid: Oid,
         f: impl FnOnce() -> BitResult<BitObjKind>,
     ) -> BitResult<BitObjKind> {
-        if let Some(&obj) = self.objects.get(&oid) {
-            Ok(obj)
+        if let Some(obj) = self.objects.get(&oid) {
+            Ok(obj.clone())
         } else {
             let obj = f()?;
-            self.objects.insert(oid, obj);
+            self.objects.insert(oid, obj.clone());
             Ok(obj)
         }
     }
@@ -50,7 +50,7 @@ impl VirtualOdb {
         // probably a better way?
         let (oid, bytes) = obj.hash_and_serialize()?;
         let raw = BitRawObj::from_stream(oid, Box::new(Cursor::new(bytes)))?;
-        let obj = BitObjKind::from_raw(self.repo, raw)?;
+        let obj = BitObjKind::from_raw(self.repo.clone(), raw)?;
         self.repo.cache().write().insert(oid, obj);
         Ok(oid)
     }

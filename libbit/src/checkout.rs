@@ -466,11 +466,13 @@ impl CheckoutCtxt {
             self.with_worktree_dir(worktree, diff_entry, worktree_entry)?
         } else {
             worktree.next()?;
-            let mut index = self.repo.index_mut()?;
+            // let mut index = self.repo.index_mut()?;
+            let worktree_entry_modified =
+                self.repo.index_mut()?.is_worktree_entry_modified(&mut worktree_entry)?;
             match diff_entry {
                 // case 9/case 10: B1 x B1|B2
                 TreeDiffEntry::DeletedBlob(entry) =>
-                    if index.is_worktree_entry_modified(&mut worktree_entry)? {
+                    if worktree_entry_modified {
                         // case 10: B1 x B2 | delete of modified blob (forceable)
                         cond!(self.opts.is_forced() => self.delete(worktree_entry); self.conflict(entry))
                     } else {
@@ -484,7 +486,7 @@ impl CheckoutCtxt {
                     cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry)),
                 // case 16/17/18: B1 B2 (B1|B2|B3)
                 TreeDiffEntry::ModifiedBlob(_, entry) =>
-                    if index.is_worktree_entry_modified(&mut worktree_entry)? {
+                    if worktree_entry_modified {
                         // case 17/case 18: B1 B2 (B2|B3)
                         cond!(self.opts.is_forced() => self.update(entry); self.conflict(entry))
                     } else {
@@ -503,7 +505,7 @@ impl CheckoutCtxt {
                     },
                 // case 14/case 15: B1 B1 B1/B2
                 TreeDiffEntry::UnmodifiedBlob(entry) =>
-                    if index.is_worktree_entry_modified(&mut worktree_entry)? {
+                    if worktree_entry_modified {
                         // case 15: B1 B1 B2 | locally modified file (dirty)
                         // change is only applied to index if forced
                         cond!(self.opts.is_forced() => self.update(entry))
@@ -532,7 +534,7 @@ impl CheckoutCtxt {
                     },
                 // case 22/case 23: B1 T1 B1/B2
                 TreeDiffEntry::BlobToTree(blob, tree) =>
-                    if index.is_worktree_entry_modified(&mut worktree_entry)? {
+                    if worktree_entry_modified {
                         // case 22
                         cond!(self.opts.is_forced() => self.blob_to_tree(blob, tree); self.conflict(worktree_entry))
                     } else {

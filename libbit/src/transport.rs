@@ -20,8 +20,6 @@ pub const MULTI_ACK_BATCH_SIZE: usize = 32;
 pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
     fn repo(&self) -> &BitRepo;
     async fn fetch(&mut self, remote: &Remote) -> BitResult<FetchSummary> {
-        let repo = self.repo();
-
         if self.fill_buf().await?.is_empty() {
             bail!("could not read from remote repository")
         }
@@ -51,7 +49,7 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
         // TODO check the refspec for forcedness before updating: create a function `try_update_remote_ref`
         for (&remote, &oid) in &remote_mapping {
             let to = BitRef::Direct(oid);
-            repo.update_ref_for_fetch(remote, to)?;
+            self.repo().update_ref_for_fetch(remote, to)?;
         }
 
         let head_symref = capabilities.iter().find_map(|cap| match cap {
@@ -66,11 +64,10 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
         &mut self,
         remote_mapping: &HashMap<SymbolicRef, Oid>,
     ) -> BitResult<FetchStatus> {
-        let repo = self.repo();
         let mut wanted = vec![];
         let mut local_tips = vec![];
         for (&remote, &remote_oid) in remote_mapping {
-            let local_oid = repo.try_fully_resolve_ref(remote)?;
+            let local_oid = self.repo().try_fully_resolve_ref(remote)?;
             if let Some(local_oid) = local_oid {
                 local_tips.push(local_oid)
             }
@@ -96,7 +93,7 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
         }
         self.write_flush_packet().await?;
 
-        let mut walk = repo.revwalk_builder().roots_iter(local_tips)?.build();
+        let mut walk = self.repo().revwalk_builder().roots_iter(local_tips)?.build();
         'outer: loop {
             // TODO exit early when "ready" whatever that means
             for _ in 0..MULTI_ACK_BATCH_SIZE {
@@ -115,6 +112,7 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
         }
 
         self.done().await?;
+        let repo = self.repo().clone();
         self.recv_pack(repo).await?;
         Ok(FetchStatus::NotUpToDate)
     }
