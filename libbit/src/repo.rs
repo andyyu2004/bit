@@ -699,7 +699,7 @@ impl<'rcx> BitRepo<'rcx> {
         let path = self.to_absolute_path(path.as_ref());
         debug_assert!(!path.try_exists()?);
         std::fs::create_dir_all(path.parent().unwrap())?;
-        std::fs::File::with_options()
+        std::fs::File::options()
             .create_new(true)
             .write(true)
             .read(false)

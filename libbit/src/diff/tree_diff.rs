@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::BitGenericError;
 use crate::iter::{BitIterator, IterKind};
-use crate::obj::FileMode;
+use crate::obj::{FileMode, TreeEntry};
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
 use std::fmt::{self, Debug, Formatter};
@@ -97,17 +97,57 @@ impl<'rcx, I: BitTreeIterator, J> TreeDiffIter<'rcx, I, J> {
     }
 }
 
-#[rustfmt::skip]
-pub trait TreeDiffIterator<'a> =
-    FallibleLendingIterator<Item<'a> = TreeDiffEntry<'a>, Error = BitGenericError>;
+fn k() {
+    let repo: BitRepo<'_> = todo!();
+    let iter = TreeDiffIter::new(
+        repo,
+        repo.empty_tree_iter(),
+        repo.empty_tree_iter(),
+        DiffOpts::default(),
+    );
+    f(iter)
+}
 
-impl<I, J> FallibleLendingIterator for TreeDiffIter<'_, I, J>
+fn f(iter: TreeDiffIter<'_, impl BitTreeIterator, impl BitTreeIterator>) {
+    x(iter)
+}
+
+fn x<'a>(i: impl TreeDiffIterator<'a>) {
+    fn f<'b>(entry: TreeDiffEntry<'b>) -> Result<(), BitGenericError> {
+        Ok(())
+    }
+    i.for_each(f).unwrap();
+}
+
+// fn hack<F: FnMut(TreeDiffEntry<'_>) -> Wrapper<'_,  () {}
+
+pub trait TreeDiffIterator<'a>:
+    FallibleLendingIterator<Item<'a> = TreeDiffEntry<'a>, Error = BitGenericError> + 'a
+{
+}
+
+impl<'a, I> TreeDiffIterator<'a> for I where
+    I: FallibleLendingIterator<Item<'a> = TreeDiffEntry<'a>, Error = BitGenericError> + 'a
+{
+}
+
+impl<'rcx, I, J> TreeDiffIter<'rcx, I, J>
+where
+    I: BitTreeIterator + 'rcx,
+    J: BitTreeIterator + 'rcx,
+{
+    pub fn into_iter(self) -> impl TreeDiffIterator<'rcx> {
+        self
+    }
+}
+
+impl<'rcx, I, J> FallibleLendingIterator for TreeDiffIter<'rcx, I, J>
 where
     I: BitTreeIterator,
     J: BitTreeIterator,
 {
     type Error = BitGenericError;
-    type Item<'a> = TreeDiffEntry<'a>;
+    type Item<'a> = TreeDiffEntry<'a> where Self: 'a;
 
     fn next(&mut self) -> Result<Option<Self::Item<'_>>, Self::Error> {
         loop {
@@ -291,17 +331,19 @@ pub trait TreeDiffer {
         new_iter: impl BitTreeIterator,
         opts: DiffOpts,
     ) -> BitResult<()> {
-        TreeDiffIter::new(repo, old_iter, new_iter, opts).for_each(|diff_entry| match diff_entry {
-            TreeDiffEntry::DeletedBlob(old) => self.deleted_blob(old),
-            TreeDiffEntry::CreatedBlob(new) => self.created_blob(new),
-            TreeDiffEntry::ModifiedBlob(old, new) => self.modified_blob(old, new),
-            TreeDiffEntry::DeletedTree(old_entries) => self.deleted_tree(old_entries),
-            TreeDiffEntry::CreatedTree(new_entries) => self.created_tree(new_entries),
-            TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
-            TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
-            TreeDiffEntry::MaybeModifiedTree(..) => Ok(()),
-            TreeDiffEntry::UnmodifiedBlob(..) | TreeDiffEntry::UnmodifiedTree(..) =>
-                panic!("included unmodified files when calculating a diff?"),
+        TreeDiffIter::new(repo, old_iter, new_iter, opts).into_iter().for_each(|diff_entry| {
+            match diff_entry {
+                TreeDiffEntry::DeletedBlob(old) => self.deleted_blob(old),
+                TreeDiffEntry::CreatedBlob(new) => self.created_blob(new),
+                TreeDiffEntry::ModifiedBlob(old, new) => self.modified_blob(old, new),
+                TreeDiffEntry::DeletedTree(old_entries) => self.deleted_tree(old_entries),
+                TreeDiffEntry::CreatedTree(new_entries) => self.created_tree(new_entries),
+                TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
+                TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
+                TreeDiffEntry::MaybeModifiedTree(..) => Ok(()),
+                TreeDiffEntry::UnmodifiedBlob(..) | TreeDiffEntry::UnmodifiedTree(..) =>
+                    panic!("included unmodified files when calculating a diff?"),
+            }
         })
     }
 

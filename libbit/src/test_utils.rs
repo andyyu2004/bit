@@ -330,7 +330,7 @@ macro_rules! modify {
     ($repo:ident: $path:literal < $content:expr) => {
         #[allow(unused_imports)]
         use std::io::prelude::*;
-        let mut file = std::fs::File::with_options()
+        let mut file = std::fs::File::options()
             .create(false)
             .read(false)
             .append(false)
@@ -342,20 +342,16 @@ macro_rules! modify {
     ($repo:ident: $path:literal << $content:expr) => {{
         #[allow(unused_imports)]
         use std::io::prelude::*;
-        let mut file = std::fs::File::with_options()
-            .read(false)
-            .append(true)
-            .open($repo.workdir.join($path))?;
+        let mut file =
+            std::fs::File::options().read(false).append(true).open($repo.workdir.join($path))?;
         file.write_all($content.as_ref())?;
         file.sync_all()?;
     }};
     ($repo:ident: $path:literal) => {
         #[allow(unused_imports)]
         use std::io::prelude::*;
-        let mut file = std::fs::File::with_options()
-            .read(false)
-            .write(true)
-            .open($repo.workdir.join($path))?;
+        let mut file =
+            std::fs::File::options().read(false).write(true).open($repo.workdir.join($path))?;
         file.write_all(random!().as_bytes())?;
         file.sync_all()?;
     };

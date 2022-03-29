@@ -204,7 +204,7 @@ impl<'rcx> BitRepo<'rcx> {
                 std::os::unix::fs::symlink(symlink_target, path)?;
             } else {
                 debug_assert!(create.mode.is_file());
-                let mut file = std::fs::File::with_options()
+                let mut file = std::fs::File::options()
                     .create_new(true)
                     .read(false)
                     .write(true)
@@ -323,7 +323,7 @@ impl<'rcx> CheckoutCtxt<'rcx> {
         let diff_iter =
             self.repo.tree_diff_iter_with_opts(baseline, target, DiffOpts::INCLUDE_UNMODIFIED);
 
-        diff_iter.for_each(|diff_entry| {
+        diff_iter.into_iter().for_each(|diff_entry| {
             loop {
                 let worktree_entry = worktree.peek()?;
                 debug!(

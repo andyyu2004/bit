@@ -62,8 +62,8 @@ impl Lockfile {
         path.parent().map(std::fs::create_dir_all).transpose()?;
         // read comments on `.create_new()` for more info
         let lockfile =
-            File::with_options().create_new(true).write(true).open(&lockfile_path).or_else(
-                |err| match err.kind() {
+            File::options().create_new(true).write(true).open(&lockfile_path).or_else(|err| {
+                match err.kind() {
                     io::ErrorKind::AlreadyExists => Err(err).with_context(|| {
                         format!(
                             "failed to lock file `{}` (`{}` already exists)",
@@ -73,8 +73,8 @@ impl Lockfile {
                     }),
                     _ => Err(err)
                         .with_context(|| format!("failed to create file `{}`", path.display())),
-                },
-            )?;
+                }
+            })?;
 
         let file = path.try_exists()?.then(|| File::open(path)).transpose()?;
 

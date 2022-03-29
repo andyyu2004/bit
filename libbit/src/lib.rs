@@ -1,5 +1,4 @@
 #![deny(rust_2018_idioms)]
-#![feature(result_copied)]
 #![feature(async_closure)]
 #![feature(associated_type_bounds)]
 #![feature(iter_intersperse)]
@@ -19,13 +18,10 @@
 #![feature(once_cell)]
 #![feature(bool_to_option)]
 #![feature(trait_alias)]
-#![feature(destructuring_assignment)]
 #![feature(type_name_of_val)]
 #![feature(map_first_last)]
 #![feature(is_sorted)]
-#![feature(cstring_from_vec_with_nul)]
 #![feature(array_methods)]
-#![feature(with_options)]
 
 extern crate self as libbit;
 
