@@ -11,7 +11,6 @@ use crate::rev::Revspec;
 use anyhow::Context;
 #[allow(unused_imports)]
 use fallible_iterator::{FallibleIterator, FallibleLendingIterator};
-use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs::Permissions;
 use std::io::Write;

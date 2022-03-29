@@ -157,11 +157,11 @@ impl BitRepo {
     }
 
     #[tokio::main]
-    pub async fn clone_origin_blocking(self) -> BitResult<()> {
+    pub async fn clone_origin_blocking(&self) -> BitResult<()> {
         self.clone_origin().await
     }
 
-    pub async fn clone_origin(self) -> BitResult<()> {
+    pub async fn clone_origin(&self) -> BitResult<()> {
         let remote = self.get_remote(DEFAULT_REMOTE)?;
         let FetchSummary { head_symref, status } = self.fetch_remote(&remote).await?;
 
@@ -181,7 +181,7 @@ impl BitRepo {
         Ok(())
     }
 
-    pub fn add_remote(self, name: &str, url: impl AsRef<str>) -> BitResult<()> {
+    pub fn add_remote(&self, name: &str, url: impl AsRef<str>) -> BitResult<()> {
         let refspec = Refspec::default_fetch_for_remote(name);
         self.with_raw_local_config(|config| {
             ensure!(!config.subsection_exists("remote", name), "remote `{}` already exists", name);
@@ -191,14 +191,14 @@ impl BitRepo {
         })
     }
 
-    pub fn remove_remote(self, name: &str) -> BitResult<()> {
+    pub fn remove_remote(&self, name: &str) -> BitResult<()> {
         if !self.with_raw_local_config(|config| Ok(config.remove_subsection("remote", name)))? {
             bail!("remote `{}` does not exist", name)
         };
         Ok(())
     }
 
-    pub fn get_remote(self, name: &str) -> BitResult<Remote> {
+    pub fn get_remote(&self, name: &str) -> BitResult<Remote> {
         self.remote_config()
             .get(name)
             .map(|config| Remote::from_config(name.intern(), config.clone()))
@@ -206,32 +206,32 @@ impl BitRepo {
     }
 
     #[tokio::main]
-    pub async fn fetch_blocking(self, name: &str) -> BitResult<FetchSummary> {
+    pub async fn fetch_blocking(&self, name: &str) -> BitResult<FetchSummary> {
         self.fetch(name).await
     }
 
-    pub async fn fetch(self, name: &str) -> BitResult<FetchSummary> {
+    pub async fn fetch(&self, name: &str) -> BitResult<FetchSummary> {
         let remote = self.get_remote(name)?;
         self.fetch_remote(&remote).await
     }
 
-    pub async fn fetch_remote(self, remote: &Remote) -> BitResult<FetchSummary> {
+    pub async fn fetch_remote(&self, remote: &Remote) -> BitResult<FetchSummary> {
         match remote.url.scheme {
             Scheme::Ssh => {
                 let url = &remote.url;
                 let dst = format!("{}@{}", url.user.as_ref().unwrap(), url.host.as_ref().unwrap());
                 let session = Session::connect(dst, openssh::KnownHosts::Add).await?;
-                let mut transport = SshTransport::new(self, &session, url).await?;
-                transport.fetch(self, &remote).await
+                let mut transport = SshTransport::new(self.clone(), &session, url).await?;
+                transport.fetch(remote).await
             }
-            Scheme::File => FileTransport::new(self, &remote.url).await?.fetch(self, remote).await,
+            Scheme::File => FileTransport::new(self, &remote.url).await?.fetch(remote).await,
             Scheme::Https => todo!("todo https"),
             Scheme::Unspecified => todo!("unspecified url scheme for remote"),
             _ => bail!("unsupported scheme `{}`", remote.url.scheme),
         }
     }
 
-    pub fn ls_remotes(self) -> impl Iterator<Item = Remote> {
+    pub fn ls_remotes(&self) -> impl Iterator<Item = Remote> {
         self.remote_config()
             .into_iter()
             .map(|(name, config)| Remote::from_config(name, config.clone()))

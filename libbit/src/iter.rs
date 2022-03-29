@@ -329,12 +329,12 @@ impl BitIndex {
 }
 
 impl BitRepo {
-    pub fn tree_entry_iter(self, oid: Oid) -> BitResult<impl BitEntryIterator> {
+    pub fn tree_entry_iter(&self, oid: Oid) -> BitResult<impl BitEntryIterator> {
         trace!("tree_entry_iter(oid: {})", oid);
-        Ok(TreeEntryIter::new(self, oid))
+        Ok(TreeEntryIter::new(self.clone(), oid))
     }
 
-    pub fn head_iter(self) -> BitResult<impl BitEntryIterator> {
+    pub fn head_iter(&self) -> BitResult<impl BitEntryIterator> {
         trace!("head_iter()");
         let oid = self.head_tree()?;
         self.tree_entry_iter(oid)

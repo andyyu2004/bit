@@ -42,6 +42,9 @@ impl<'s> SshTransport<'s> {
 
 #[async_trait]
 impl ProtocolTransport for SshTransport<'_> {
+    fn repo(&self) -> &BitRepo {
+        &self.repo
+    }
 }
 
 impl AsyncBufRead for SshTransport<'_> {

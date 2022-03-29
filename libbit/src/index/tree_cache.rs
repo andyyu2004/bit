@@ -113,7 +113,7 @@ impl BitTreeCache {
         let tree = treeish.treeish(repo)?;
         assert_eq!(self.path, BitPath::EMPTY);
         // we know the path of the root tree_cache is already correct as it's always just BitPath::EMPTY
-        self.update_internal(repo, tree)
+        self.update_internal(repo, &tree)
     }
 
     /// *NOTE* this method will not modify the tree_cache's path field, and so ensure the path is updated correctly
@@ -144,7 +144,7 @@ impl BitTreeCache {
                             child,
                             &mut Self::read_tree_internal(
                                 repo,
-                                repo.read_obj_tree(entry.oid)?,
+                                repo.read_obj_tree(entry.oid)?.as_ref(),
                                 entry.path
                             )?,
                             "child was not updated in-place correctly, it should match a fresh read"
@@ -171,7 +171,7 @@ impl BitTreeCache {
 
     pub fn read_tree(repo: BitRepo, treeish: impl Treeish) -> BitResult<Self> {
         let tree = treeish.treeish(repo)?;
-        Self::read_tree_internal(repo, tree, BitPath::EMPTY)
+        Self::read_tree_internal(repo, &tree, BitPath::EMPTY)
     }
 
     fn read_tree_internal(repo: BitRepo, tree: &Tree, path: BitPath) -> BitResult<Self> {
@@ -190,7 +190,7 @@ impl BitTreeCache {
                 FileMode::REG | FileMode::LINK | FileMode::EXEC => cache_tree.entry_count += 1,
                 FileMode::TREE => {
                     let subtree = repo.read_obj_tree(entry.oid)?;
-                    let child = Self::read_tree_internal(repo, subtree, entry.path)?;
+                    let child = Self::read_tree_internal(repo, &subtree, entry.path)?;
                     cache_tree.entry_count += child.entry_count;
                     cache_tree.children.insert(entry.path, child);
                 }

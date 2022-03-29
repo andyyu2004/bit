@@ -153,11 +153,11 @@ impl RepoCtxt {
         self.with(f)
     }
 
-    pub fn with<R>(&self, f: impl FnOnce(BitRepo) -> R) -> R {
+    pub fn with<R>(self: Arc<Self>, f: impl FnOnce(BitRepo) -> R) -> R {
         f(BitRepo { rcx: self })
     }
 
-    pub async fn with_async<F, R>(&self, f: impl FnOnce(BitRepo) -> F) -> R
+    pub async fn with_async<F, R>(self: Arc<Self>, f: impl FnOnce(BitRepo) -> F) -> R
     where
         F: Future<Output = R>,
     {
@@ -167,7 +167,7 @@ impl RepoCtxt {
     /// Enter the repository context for a "transaction".
     /// If any fatal error occurs during the closure, then writes to the index are rolled back.
     /// This should generally be used as the entry point to accessing the repository
-    pub fn enter<R>(&self, f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
+    pub fn enter<R>(self: Arc<Self>, f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         tls::enter_repo(self, |repo| match f(repo) {
             Ok(r) => Ok(r),
             Err(err) => {
@@ -179,7 +179,7 @@ impl RepoCtxt {
         })
     }
 
-    pub async fn enter_async<F, R>(&self, f: impl FnOnce(BitRepo) -> F) -> BitResult<R>
+    pub async fn enter_async<F, R>(self: Arc<Self>, f: impl FnOnce(BitRepo) -> F) -> BitResult<R>
     where
         F: Future<Output = BitResult<R>>,
     {
@@ -213,7 +213,7 @@ pub enum RepoState {
 }
 
 impl BitRepo {
-    pub fn repo_state(self) -> RepoState {
+    pub fn repo_state(&self) -> RepoState {
         if self.bitdir.join(BitPath::MERGE_HEAD).exists() {
             RepoState::Merging
         } else {
@@ -222,12 +222,12 @@ impl BitRepo {
     }
 
     #[inline]
-    pub fn config(self) -> Arc<BitConfig> {
+    pub fn config(&self) -> &BitConfig {
         self.rcx.config()
     }
 
     #[inline]
-    pub fn remote_config(self) -> HashMap<&'static str, RemoteConfig> {
+    pub fn remote_config(&self) -> HashMap<&'static str, RemoteConfig> {
         self.rcx.config().remote_config().remotes
     }
 
@@ -235,26 +235,26 @@ impl BitRepo {
     // don't think this can be written in terms of `fully_resolve_ref` below
     // if we were to do something like `fully_resolve_ref().ok()`, then all errors will result in None
     // which is not quite right
-    pub fn try_fully_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<Option<Oid>> {
+    pub fn try_fully_resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<Option<Oid>> {
         match self.resolve_ref(reference)? {
             BitRef::Direct(oid) => Ok(Some(oid)),
             _ => Ok(None),
         }
     }
 
-    pub fn partially_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+    pub fn partially_resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
         self.refdb()?.partially_resolve(reference.into())
     }
 
-    pub fn resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+    pub fn resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
         self.refdb()?.resolve(reference.into())
     }
 
-    pub fn fully_resolve_ref(self, reference: impl Into<BitRef>) -> BitResult<Oid> {
+    pub fn fully_resolve_ref(&self, reference: impl Into<BitRef>) -> BitResult<Oid> {
         self.refdb()?.fully_resolve(reference.into())
     }
 
-    pub fn default_signature(self) -> BitResult<BitSignature> {
+    pub fn default_signature(&self) -> BitResult<BitSignature> {
         todo!()
         // BitSignature { name: self.config, email: , time: () }
     }
@@ -289,32 +289,32 @@ impl BitRepo {
     // this is necessary as a lifetime hint as otherwise usages of &self.arenas have lifetime
     // tied to self rather than 'rcx
     #[inline]
-    fn arenas(self) -> Arc<Arenas> {
+    fn arenas(&self) -> Arc<Arenas> {
         &self.rcx.arenas
     }
 
     #[inline]
-    pub(crate) fn cache(self) -> Arc<RwLock<BitObjCache>> {
+    pub(crate) fn cache(&self) -> Arc<RwLock<BitObjCache>> {
         &self.rcx.obj_cache
     }
 
     #[inline]
-    pub(crate) fn alloc_commit(self, commit: Commit) -> Arc<Commit> {
+    pub(crate) fn alloc_commit(&self, commit: Commit) -> Arc<Commit> {
         self.arenas().commit_arena.alloc(commit)
     }
 
     #[inline]
-    pub(crate) fn alloc_tree(self, tree: Tree) -> Arc<Tree> {
+    pub(crate) fn alloc_tree(&self, tree: Tree) -> Arc<Tree> {
         self.arenas().tree_arena.alloc(tree)
     }
 
     #[inline]
-    pub(crate) fn alloc_blob(self, blob: Blob) -> Arc<Blob> {
+    pub(crate) fn alloc_blob(&self, blob: Blob) -> Arc<Blob> {
         self.arenas().blob_arena.alloc(blob)
     }
 
     #[inline]
-    pub(crate) fn alloc_tag(self, tag: Tag) -> Arc<Tag> {
+    pub(crate) fn alloc_tag(&self, tag: Tag) -> Arc<Tag> {
         self.arenas().tag_arena.alloc(tag)
     }
 
@@ -393,7 +393,7 @@ impl BitRepo {
 
     /// gets the oid of the tree belonging to the HEAD commit
     /// returns Oid::Unknown if there is no HEAD commit
-    pub fn head_tree(self) -> BitResult<Oid> {
+    pub fn head_tree(&self) -> BitResult<Oid> {
         match self.resolve_head()? {
             BitRef::Direct(oid) => oid,
             _ => return Ok(Oid::UNKNOWN),
@@ -402,13 +402,13 @@ impl BitRepo {
     }
 
     /// returns the resolved reference of HEAD
-    pub fn resolve_head(self) -> BitResult<BitRef> {
+    pub fn resolve_head(&self) -> BitResult<BitRef> {
         let head = self.read_head()?;
         self.resolve_ref(head)
     }
 
     /// returns the resolved oid of HEAD
-    pub fn fully_resolve_head(self) -> BitResult<Oid> {
+    pub fn fully_resolve_head(&self) -> BitResult<Oid> {
         let head = self.read_head()?;
         self.fully_resolve_ref(head)
     }
@@ -416,7 +416,7 @@ impl BitRepo {
     /// reads the contents of `HEAD`
     /// e.g. if `HEAD` -> `ref: refs/heads/master`
     /// then `BitRef::Symbolic(SymbolicRef("refs/heads/master"))` is returned`
-    pub fn read_head(self) -> BitResult<BitRef> {
+    pub fn read_head(&self) -> BitResult<BitRef> {
         // another pain point where we have to handle the case where HEAD points at a nonexistent ref
         // `refdb.read(sym)` validates the ref it reads so would fail as it doesn't exist so we just "catch"
         // the error and return that ref anyway
@@ -426,33 +426,33 @@ impl BitRepo {
         }
     }
 
-    pub fn ls_refs(self) -> BitResult<Refs> {
+    pub fn ls_refs(&self) -> BitResult<Refs> {
         self.refdb()?.ls_refs()
     }
 
-    pub fn is_head_detached(self) -> BitResult<bool> {
+    pub fn is_head_detached(&self) -> BitResult<bool> {
         Ok(self.read_head()?.is_direct())
     }
 
-    pub fn update_head(self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
+    pub fn update_head(&self, bitref: impl Into<BitRef>, cause: RefUpdateCause) -> BitResult<()> {
         self.update_ref(SymbolicRef::HEAD, bitref.into(), cause)
     }
 
-    pub fn read_ref(self, sym: SymbolicRef) -> BitResult<BitRef> {
+    pub fn read_ref(&self, sym: SymbolicRef) -> BitResult<BitRef> {
         self.refdb()?.read(sym)
     }
 
-    pub fn validate_ref(self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
+    pub fn validate_ref(&self, reference: impl Into<BitRef>) -> BitResult<BitRef> {
         self.refdb()?.validate(reference.into())
     }
 
-    pub fn create_branch(self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
+    pub fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
         // we fully resolve the reference to an oid and write that into the new branch file
         self.refdb()?.create_branch(sym, from)
     }
 
     pub fn update_ref(
-        self,
+        &self,
         sym: SymbolicRef,
         to: impl Into<BitRef>,
         cause: RefUpdateCause,
@@ -463,7 +463,7 @@ impl BitRepo {
     // Update the "current branch" to point at `target`.
     // If currently in detached head state, then HEAD will be updated.
     // Otherwise, the branch pointed to by HEAD will be updated.
-    pub fn update_current_ref(self, target: Oid, cause: RefUpdateCause) -> BitResult<()> {
+    pub fn update_current_ref(&self, target: Oid, cause: RefUpdateCause) -> BitResult<()> {
         // does not handle multiple level symrefs but unsure when they arise
         match self.read_head()? {
             BitRef::Direct(..) => self.update_ref(SymbolicRef::HEAD, target, cause),
@@ -472,7 +472,7 @@ impl BitRepo {
     }
 
     pub(crate) fn update_ref_for_fetch(
-        self,
+        &self,
         sym: SymbolicRef,
         to: impl Into<BitRef>,
     ) -> BitResult<()> {
@@ -481,14 +481,14 @@ impl BitRepo {
         self.update_ref(sym, oid, RefUpdateCause::Fetch { to })
     }
 
-    pub(crate) fn update_current_ref_for_reset(self, target: impl Into<BitRef>) -> BitResult<()> {
+    pub(crate) fn update_current_ref_for_reset(&self, target: impl Into<BitRef>) -> BitResult<()> {
         let target = target.into();
         let oid = self.fully_resolve_ref(target)?;
         self.update_current_ref(oid, RefUpdateCause::Reset { target })
     }
 
     pub(crate) fn update_current_ref_for_ff_merge(
-        self,
+        &self,
         theirs: impl Into<BitRef>,
     ) -> BitResult<()> {
         let theirs = theirs.into();

@@ -107,16 +107,6 @@ impl<'a, I> TreeDiffIterator<'a> for I where
 {
 }
 
-impl<I, J> TreeDiffIter<I, J>
-where
-    I: BitTreeIterator,
-    J: BitTreeIterator,
-{
-    pub fn into_iter(&self) -> impl TreeDiffIterator<'_> {
-        self
-    }
-}
-
 impl<I, J> FallibleLendingIterator for TreeDiffIter<I, J>
 where
     I: BitTreeIterator,

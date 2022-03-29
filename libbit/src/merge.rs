@@ -168,8 +168,8 @@ impl MergeCtxt {
         let merge_bases = our_head.find_merge_bases(their_head)?;
         match &merge_bases[..] {
             [] => Ok(None),
-            [merge_base] => Ok(Some(merge_base)),
-            [a, b] => Some(self.make_virtual_base(a, b)).transpose(),
+            [merge_base] => Ok(Some(merge_base.clone())),
+            [a, b] => Some(self.make_virtual_base(a.clone(), b.clone())).transpose(),
             _ => todo!("more than 2 merge bases"),
         }
     }
@@ -791,7 +791,7 @@ impl MergeBaseCtxt {
 }
 
 impl Commit {
-    fn find_merge_bases(&self, other: Arc<Commit>) -> BitResult<Vec<Arc<Commit>>> {
+    fn find_merge_bases(self: Arc<Self>, other: Arc<Commit>) -> BitResult<Vec<Arc<Commit>>> {
         MergeBaseCtxt {
             repo: self.owner(),
             candidates: Default::default(),
@@ -804,7 +804,7 @@ impl Commit {
 
     /// Returns lowest common ancestor found.
     /// If there are multiple candidates then the first is returned
-    pub fn find_merge_base(&self, other: Arc<Commit>) -> BitResult<Option<Arc<Commit>>> {
+    pub fn find_merge_base(self: Arc<Self>, other: Arc<Commit>) -> BitResult<Option<Arc<Commit>>> {
         let merge_bases = self.find_merge_bases(other)?;
         if merge_bases.is_empty() { Ok(None) } else { Ok(Some(merge_bases[0])) }
     }

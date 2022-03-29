@@ -36,6 +36,9 @@ impl FileTransport {
 
 #[async_trait]
 impl ProtocolTransport for FileTransport {
+    fn repo(&self) -> &BitRepo {
+        &self.repo
+    }
 }
 
 impl AsyncBufRead for FileTransport {
