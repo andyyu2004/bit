@@ -34,7 +34,7 @@ impl FallibleIterator for WorktreeTreeIter {
             }
             .into()
         } else {
-            BitIndexEntry::from_absolute_path(repo, &entry.path)?
+            BitIndexEntry::from_absolute_path(&repo, &entry.path)?
         };
         Ok(Some(index_entry))
     }

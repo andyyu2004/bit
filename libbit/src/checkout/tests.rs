@@ -70,7 +70,7 @@ fn test_safe_checkout_keeps_untracked() -> BitResult<()> {
 }
 
 // case 1 (forced)
-#[test_env_log::test]
+#[test_log::test]
 fn test_force_checkout_removes_untracked() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         touch!(repo: "untracked");
@@ -244,7 +244,7 @@ fn test_forced_checkout_add_tree_with_blob_conflict() -> BitResult<()> {
 }
 
 // case 7 (safe)
-#[test_env_log::test]
+#[test_log::test]
 fn test_safe_checkout_independently_added_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let target = commit! {
@@ -268,7 +268,7 @@ fn test_safe_checkout_independently_added_tree() -> BitResult<()> {
 }
 
 // case 7 (forced)
-#[test_env_log::test]
+#[test_log::test]
 fn test_force_checkout_independently_added_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         let target = commit! {
@@ -539,7 +539,7 @@ fn test_forced_checkout_update_to_modified_blob() -> BitResult<()> {
 }
 
 // case 19 (safe)
-#[test_env_log::test]
+#[test_log::test]
 fn test_safe_checkout_local_blob_to_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo(|repo| {
         rm!(repo: "foo");
@@ -969,7 +969,7 @@ fn test_safe_checkout_local_tree_to_blob() -> BitResult<()> {
 }
 
 // case 33 (forced)
-#[test_env_log::test]
+#[test_log::test]
 fn test_forced_checkout_local_tree_to_blob() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         rmdir!(repo: "dir");
@@ -1040,7 +1040,7 @@ fn test_force_checkout_update_locally_deleted_tree() -> BitResult<()> {
 }
 
 // case 36 (safe)
-#[test_env_log::test]
+#[test_log::test]
 fn test_safe_checkout_updated_tree_with_local_tree_to_blob_conflict() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         rmdir!(repo: "dir");
@@ -1058,7 +1058,7 @@ fn test_safe_checkout_updated_tree_with_local_tree_to_blob_conflict() -> BitResu
 }
 
 // case 36 (safe)
-#[test_env_log::test]
+#[test_log::test]
 fn test_force_checkout_updated_tree_with_local_tree_to_blob_conflict() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         rmdir!(repo: "dir");

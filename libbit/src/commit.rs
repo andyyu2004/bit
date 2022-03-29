@@ -45,7 +45,7 @@ impl BitRepo {
         }
 
         let commit_oid = self.commit_tree(tree, parent.into_iter().collect(), opts.message)?;
-        let commit = commit_oid.peel(self)?;
+        let commit = commit_oid.peel(&self)?;
 
         // TODO print status of commit
         // include initial commit if it is one

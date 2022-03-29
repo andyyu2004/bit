@@ -61,7 +61,7 @@ impl BitRepo {
     /// - updates the worktree to match the tree represented by the tree of the commit
     /// - moves HEAD to point at the branch/commit
     pub fn checkout_revision(
-        self,
+        &self,
         rev: &Revspec,
         opts: CheckoutOpts,
     ) -> BitResult<CheckoutSummary> {
@@ -70,7 +70,7 @@ impl BitRepo {
     }
 
     pub fn checkout(
-        self,
+        &self,
         reference: impl Into<BitRef>,
         opts: CheckoutOpts,
     ) -> BitResult<CheckoutSummary> {
@@ -89,11 +89,11 @@ impl BitRepo {
         Ok(CheckoutSummary { new_head })
     }
 
-    pub fn checkout_tree(self, treeish: impl Treeish) -> BitResult<()> {
+    pub fn checkout_tree(&self, treeish: impl Treeish) -> BitResult<()> {
         self.checkout_tree_with_opts(treeish, CheckoutOpts::default())
     }
 
-    pub fn force_checkout_tree(self, treeish: impl Treeish) -> BitResult<()> {
+    pub fn force_checkout_tree(&self, treeish: impl Treeish) -> BitResult<()> {
         self.checkout_tree_with_opts(treeish, CheckoutOpts::forced())
     }
 
@@ -101,7 +101,7 @@ impl BitRepo {
     // IMPORTANT
     // - Don't update HEAD before calling this as this does a diff relative to the current HEAD (for now)
     pub fn checkout_tree_with_opts(
-        self,
+        &self,
         treeish: impl Treeish,
         opts: CheckoutOpts,
     ) -> BitResult<()> {
@@ -121,7 +121,7 @@ impl BitRepo {
         Ok(())
     }
 
-    pub fn checkout_index(self, opts: CheckoutOpts) -> BitResult<()> {
+    pub fn checkout_index(&self, opts: CheckoutOpts) -> BitResult<()> {
         // TODO
         // We need to clone the index to obtain an iterator avoid "concurrent" reads and writes
         // as checkout uses the index to determine whether files have been modified etc
@@ -132,7 +132,7 @@ impl BitRepo {
     }
 
     pub fn checkout_iterator(
-        self,
+        &self,
         target: impl BitTreeIterator,
         opts: CheckoutOpts,
     ) -> BitResult<()> {
@@ -143,16 +143,16 @@ impl BitRepo {
     }
 
     fn generate_migration(
-        self,
+        &self,
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
         worktree: impl BitTreeIterator,
         opts: CheckoutOpts,
     ) -> BitResult<Migration> {
-        CheckoutCtxt::new(self, opts).generate(baseline, target, worktree)
+        CheckoutCtxt::new(self.clone(), opts).generate(baseline, target, worktree)
     }
 
-    fn apply_migration(self, migration: &Migration) -> BitResult<()> {
+    fn apply_migration(&self, migration: &Migration) -> BitResult<()> {
         let mut index = self.index_mut()?;
         migration.rmrfs.iter().try_for_each(|rmrf| {
             let path = self.to_absolute_path(&rmrf.path);
@@ -221,9 +221,6 @@ impl BitRepo {
         }
         Ok(())
     }
-}
-
-impl BitIndex {
 }
 
 #[derive(Default, Debug)]

@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::BitGenericError;
 use crate::iter::{BitIterator, IterKind};
-use crate::obj::{FileMode, TreeEntry};
+use crate::obj::FileMode;
 use fallible_iterator::FallibleLendingIterator;
 use std::cell::RefCell;
 use std::fmt::{self, Debug, Formatter};

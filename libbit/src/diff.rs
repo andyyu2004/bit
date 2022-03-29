@@ -150,7 +150,7 @@ where
 
 impl BitRepo {
     pub fn diff_treeish_index(
-        self,
+        &self,
         treeish: impl Treeish,
         pathspec: Pathspec,
     ) -> BitResult<WorkspaceStatus> {
@@ -158,7 +158,7 @@ impl BitRepo {
     }
 
     pub fn diff_ref_index(
-        self,
+        &self,
         reference: BitRef,
         pathspec: Pathspec,
     ) -> BitResult<WorkspaceStatus> {
@@ -172,35 +172,35 @@ impl BitRepo {
     }
 
     /// diff the tree belonging to the commit pointed to by `reference` with the index
-    pub fn diff_rev_index(self, rev: &Revspec, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+    pub fn diff_rev_index(&self, rev: &Revspec, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         let reference = self.resolve_rev(rev)?;
         self.diff_ref_index(reference, pathspec)
     }
 
-    pub fn diff_tree_worktree(self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+    pub fn diff_tree_worktree(&self, tree: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         let tree_iter = pathspec.match_tree_iter(self.tree_iter(tree));
         let worktree_iter = pathspec.match_tree_iter(self.index()?.worktree_tree_iter()?);
         self.diff_iterators(tree_iter, worktree_iter)
     }
 
-    pub fn diff_tree_index(self, treeish: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+    pub fn diff_tree_index(&self, treeish: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         self.index()?.diff_tree(treeish, pathspec)
     }
 
-    pub fn diff_index_worktree(self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+    pub fn diff_index_worktree(&self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         self.index_mut()?.diff_worktree(pathspec)
     }
 
-    pub fn diff_head_index(self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
+    pub fn diff_head_index(&self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         self.index()?.diff_head(pathspec)
     }
 
-    pub fn diff_tree_to_tree(self, a: Oid, b: Oid) -> BitResult<WorkspaceStatus> {
+    pub fn diff_tree_to_tree(&self, a: Oid, b: Oid) -> BitResult<WorkspaceStatus> {
         self.diff_iterators(self.tree_iter(a), self.tree_iter(b))
     }
 
     pub fn diff_tree_to_tree_with_opts(
-        self,
+        &self,
         a: Oid,
         b: Oid,
         opts: DiffOpts,
@@ -209,32 +209,32 @@ impl BitRepo {
     }
 
     pub fn tree_diff_iter<I: BitTreeIterator, J: BitTreeIterator>(
-        self,
+        &self,
         a: I,
         b: J,
     ) -> TreeDiffIter<I, J> {
         self.tree_diff_iter_with_opts(a, b, Default::default())
     }
 
-    pub fn tree_diff_iter_with_opts<I, J>(self, a: I, b: J, opts: DiffOpts) -> TreeDiffIter<I, J>
+    pub fn tree_diff_iter_with_opts<I, J>(&self, a: I, b: J, opts: DiffOpts) -> TreeDiffIter<I, J>
     where
         I: BitTreeIterator,
         J: BitTreeIterator,
     {
-        TreeDiffIter::new(self, a, b, opts)
+        TreeDiffIter::new(self.clone(), a, b, opts)
     }
 
     pub fn diff_iterators_with_opts(
-        self,
+        &self,
         a: impl BitTreeIterator,
         b: impl BitTreeIterator,
         opts: DiffOpts,
     ) -> BitResult<WorkspaceStatus> {
-        TreeStatusDiffer::default().build_diff(self, a, b, opts)
+        TreeStatusDiffer::default().build_diff(self.clone(), a, b, opts)
     }
 
     pub fn diff_iterators(
-        self,
+        &self,
         a: impl BitTreeIterator,
         b: impl BitTreeIterator,
     ) -> BitResult<WorkspaceStatus> {
@@ -243,7 +243,7 @@ impl BitRepo {
 
     /// Given two tree iterators, return whether the two trees are different
     pub fn trees_are_diff(
-        self,
+        &self,
         a: impl BitTreeIterator,
         b: impl BitTreeIterator,
     ) -> BitResult<bool> {

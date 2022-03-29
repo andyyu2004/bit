@@ -5,7 +5,7 @@ use fallible_iterator::FallibleIterator;
 #[test]
 fn test_revwalk_on_branch() -> BitResult<()> {
     BitRepo::find(repos_dir!("revwalk-test"), |repo| {
-        let revwalk = RevWalk::walk_revspec(repo, &rev!("master"))?;
+        let revwalk = RevWalk::walk_revspec(&repo, &rev!("master"))?;
         let oids = revwalk.map(|commit| Ok(commit.oid())).collect::<Vec<_>>()?;
 
         // output from `git rev-list master`
@@ -31,7 +31,7 @@ fn test_revwalk_on_branch() -> BitResult<()> {
 #[test]
 fn test_revwalk_on_multiple_branches() -> BitResult<()> {
     BitRepo::find(repos_dir!("revwalk-test"), |repo| {
-        let revwalk = RevWalk::walk_revspecs(repo, &[&rev!("master"), &rev!("some-branch")])?;
+        let revwalk = RevWalk::walk_revspecs(&repo, &[&rev!("master"), &rev!("some-branch")])?;
         let oids = revwalk.map(|commit| Ok(commit.oid())).collect::<Vec<_>>()?;
 
         // output from `git rev-list --all` on master

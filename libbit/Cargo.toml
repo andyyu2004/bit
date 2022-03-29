@@ -65,7 +65,7 @@ bit-ds = { path = "../bit-ds" }
 [dev-dependencies]
 quickcheck = "1"
 fs_extra = "1.2.0"
-test-env-log = "0.2"
+test-log = "0.2"
 quickcheck_macros = "1"
 env_logger = "0.8.3"
 rand = "0.8.3"

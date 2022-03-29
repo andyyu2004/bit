@@ -95,11 +95,11 @@ impl Display for CommitMessage {
 }
 
 impl Treeish for Arc<Commit> {
-    fn treeish(self, repo: BitRepo) -> BitResult<Arc<Tree>> {
+    fn treeish(self, repo: &BitRepo) -> BitResult<Arc<Tree>> {
         self.tree.treeish(repo)
     }
 
-    fn treeish_oid(&self, _repo: BitRepo) -> BitResult<Oid> {
+    fn treeish_oid(&self, _repo: &BitRepo) -> BitResult<Oid> {
         Ok(self.tree_oid())
     }
 }
@@ -379,7 +379,7 @@ impl Dag for Commit {
     type Nodes = SmallVec<[Oid; 2]>;
 
     fn node_data(&self, oid: Oid) -> BitResult<Self::NodeData> {
-        oid.peel(self.owner)
+        oid.peel(&self.owner)
     }
 
     fn nodes(&self) -> BitResult<Self::Nodes> {

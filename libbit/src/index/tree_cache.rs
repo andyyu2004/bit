@@ -109,7 +109,7 @@ impl BitTreeCache {
 
     // Update the tree_cache to match `treeish`
     // This should only be called on the root tree_cache
-    pub fn update(&mut self, repo: BitRepo, treeish: impl Treeish) -> BitResult<()> {
+    pub fn update(&mut self, repo: &BitRepo, treeish: impl Treeish) -> BitResult<()> {
         let tree = treeish.treeish(repo)?;
         assert_eq!(self.path, BitPath::EMPTY);
         // we know the path of the root tree_cache is already correct as it's always just BitPath::EMPTY
@@ -117,7 +117,7 @@ impl BitTreeCache {
     }
 
     /// *NOTE* this method will not modify the tree_cache's path field, and so ensure the path is updated correctly
-    fn update_internal(&mut self, repo: BitRepo, tree: &Tree) -> BitResult<()> {
+    fn update_internal(&mut self, repo: &BitRepo, tree: &Tree) -> BitResult<()> {
         self.tree_oid = tree.oid();
         // reset the `entry_count` and count again from zero
         self.entry_count = 0;
@@ -169,12 +169,12 @@ impl BitTreeCache {
         Ok(())
     }
 
-    pub fn read_tree(repo: BitRepo, treeish: impl Treeish) -> BitResult<Self> {
+    pub fn read_tree(repo: &BitRepo, treeish: impl Treeish) -> BitResult<Self> {
         let tree = treeish.treeish(repo)?;
         Self::read_tree_internal(repo, &tree, BitPath::EMPTY)
     }
 
-    fn read_tree_internal(repo: BitRepo, tree: &Tree, path: BitPath) -> BitResult<Self> {
+    fn read_tree_internal(repo: &BitRepo, tree: &Tree, path: BitPath) -> BitResult<Self> {
         let mut cache_tree = Self {
             tree_oid: tree.oid(),
             entry_count: 0,

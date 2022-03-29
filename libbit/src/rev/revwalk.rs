@@ -100,18 +100,18 @@ impl Ord for CommitNode {
 }
 
 impl Commit {
-    pub fn revwalk(&self) -> BitResult<RevWalk> {
+    pub fn revwalk(self: Arc<Self>) -> BitResult<RevWalk> {
         RevWalk::walk_commit(self)
     }
 }
 
 impl BitRepo {
-    pub fn revwalk(self, revspecs: &[&Revspec]) -> BitResult<RevWalk> {
+    pub fn revwalk(&self, revspecs: &[&Revspec]) -> BitResult<RevWalk> {
         RevWalk::walk_revspecs(self, revspecs)
     }
 
-    pub fn revwalk_builder(self) -> RevWalkBuilder {
-        RevWalkBuilder::new(self)
+    pub fn revwalk_builder(&self) -> RevWalkBuilder {
+        RevWalkBuilder::new(self.clone())
     }
 }
 
@@ -138,7 +138,7 @@ impl RevWalkBuilder {
     ) -> BitResult<Self> {
         self.exclude = exclude
             .into_iter()
-            .map(|rev| self.repo.fully_resolve_rev(rev)?.peel(self.repo))
+            .map(|rev| self.repo.fully_resolve_rev(rev)?.peel(&self.repo))
             .collect::<Result<SmallVec<_>, _>>()?;
         Ok(self)
     }
@@ -149,7 +149,7 @@ impl RevWalkBuilder {
     ) -> BitResult<Self> {
         self.roots = revspecs
             .into_iter()
-            .map(|rev| self.repo.fully_resolve_rev(rev)?.peel(self.repo))
+            .map(|rev| self.repo.fully_resolve_rev(rev)?.peel(&self.repo))
             .collect::<Result<SmallVec<_>, _>>()?;
         Ok(self)
     }
@@ -160,7 +160,7 @@ impl RevWalkBuilder {
     ) -> BitResult<Self> {
         self.roots = roots
             .into_iter()
-            .map(|commit| commit.peel(self.repo))
+            .map(|commit| commit.peel(&self.repo))
             .collect::<BitResult<SmallVec<_>>>()?;
         Ok(self)
     }
@@ -240,7 +240,7 @@ impl RevWalk {
         }
     }
 
-    pub fn walk_revspecs(repo: BitRepo, revspecs: &[&Revspec]) -> BitResult<Self> {
+    pub fn walk_revspecs(repo: &BitRepo, revspecs: &[&Revspec]) -> BitResult<Self> {
         let roots = revspecs
             .iter()
             .map(|&rev| repo.fully_resolve_rev(rev)?.peel(repo))
@@ -248,7 +248,7 @@ impl RevWalk {
         Ok(Self::new(roots))
     }
 
-    pub fn walk_revspec(repo: BitRepo, rev: &Revspec) -> BitResult<Self> {
+    pub fn walk_revspec(repo: &BitRepo, rev: &Revspec) -> BitResult<Self> {
         let root = repo.fully_resolve_rev(rev)?.peel(repo)?;
         Ok(Self::new(smallvec![root]))
     }

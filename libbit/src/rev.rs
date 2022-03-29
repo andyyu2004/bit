@@ -44,7 +44,7 @@ pub enum RevisionRange {}
 
 impl BitRepo {
     // A hack to make this work for `bit cat-file` without weakening the checks for refs to be pointer to commits in `refdb`
-    pub fn fully_resolve_rev_to_any(self, rev: &Revspec) -> BitResult<Oid> {
+    pub fn fully_resolve_rev_to_any(&self, rev: &Revspec) -> BitResult<Oid> {
         if let &ParsedRevspec::Ref(BitRef::Direct(oid)) = rev.parse(self)? {
             self.ensure_obj_exists(oid)?;
             Ok(oid)
@@ -54,26 +54,26 @@ impl BitRepo {
     }
 
     /// Resolve a revision to an oid
-    pub fn fully_resolve_rev(self, rev: &Revspec) -> BitResult<Oid> {
+    pub fn fully_resolve_rev(&self, rev: &Revspec) -> BitResult<Oid> {
         let reference = self.resolve_rev(rev)?;
         self.fully_resolve_ref(reference)
     }
 
-    pub fn try_fully_resolve_rev(self, rev: &Revspec) -> BitResult<Option<Oid>> {
+    pub fn try_fully_resolve_rev(&self, rev: &Revspec) -> BitResult<Option<Oid>> {
         let reference = self.resolve_rev(rev)?;
         self.try_fully_resolve_ref(reference)
     }
 
     /// resolve a revision to a reference (either a branch or a commit, never HEAD itself)
-    pub fn resolve_rev(self, rev: &Revspec) -> BitResult<BitRef> {
+    pub fn resolve_rev(&self, rev: &Revspec) -> BitResult<BitRef> {
         self.resolve_rev_internal(rev.parse(self)?)
     }
 
-    pub fn resolve_rev_to_commit(self, rev: &Revspec) -> BitResult<Arc<Commit>> {
+    pub fn resolve_rev_to_commit(&self, rev: &Revspec) -> BitResult<Arc<Commit>> {
         self.fully_resolve_rev(rev)?.peel(self)
     }
 
-    pub fn resolve_rev_to_branch(self, rev: &Revspec) -> BitResult<SymbolicRef> {
+    pub fn resolve_rev_to_branch(&self, rev: &Revspec) -> BitResult<SymbolicRef> {
         match self.resolve_rev(rev)? {
             BitRef::Direct(..) => bail!("expected branch, found commit `{}`", rev),
             BitRef::Symbolic(sym) => Ok(sym),
@@ -180,8 +180,8 @@ impl Display for Revspec {
 }
 
 impl Revspec {
-    pub fn parse(&self, repo: BitRepo) -> BitResult<&ParsedRevspec> {
-        self.parsed.get_or_try_init(|| RevspecParser::new(repo, &self.src).parse())
+    pub fn parse(&self, repo: &BitRepo) -> BitResult<&ParsedRevspec> {
+        self.parsed.get_or_try_init(|| RevspecParser::new(repo.clone(), &self.src).parse())
     }
 }
 

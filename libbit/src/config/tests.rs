@@ -31,7 +31,7 @@ fn test_remove_non_existent_remote() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_remove_remote() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         assert!(repo.ls_remotes().next().is_none());

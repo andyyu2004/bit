@@ -34,7 +34,7 @@ const CACHE_TREE_DIR_BAR: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache
 fn test_read_tree_cache_from_tree() -> BitResult<()> {
     BitRepo::with_sample_repo_no_sym(|repo| {
         let head_tree = repo.head_tree()?;
-        let tree_cache = BitTreeCache::read_tree(repo, head_tree)?;
+        let tree_cache = BitTreeCache::read_tree(&repo, head_tree)?;
         assert_eq!(tree_cache, *CACHE_TREE);
         Ok(())
     })
@@ -177,8 +177,8 @@ fn test_tree_cache_update() -> BitResult<()> {
         };
 
         let modified_tree = mk_modified_tree();
-        let mut tree_cache = BitTreeCache::read_tree(repo, initial_tree)?;
-        tree_cache.update(repo, modified_tree)?;
+        let mut tree_cache = BitTreeCache::read_tree(&repo, initial_tree)?;
+        tree_cache.update(&repo, modified_tree)?;
 
         assert_eq!(tree_cache, *EXPECTED_POST_UPDATE_TREE);
         Ok(())
@@ -200,9 +200,9 @@ fn test_tree_cache_update_with_invalidated_children() -> BitResult<()> {
 
         let modified_tree = mk_modified_tree();
 
-        let mut tree_cache = BitTreeCache::read_tree(repo, initial_tree)?;
+        let mut tree_cache = BitTreeCache::read_tree(&repo, initial_tree)?;
         tree_cache.invalidate_path(p!("unchanged/x"));
-        tree_cache.update(repo, modified_tree)?;
+        tree_cache.update(&repo, modified_tree)?;
         assert_eq!(tree_cache, *EXPECTED_POST_UPDATE_TREE);
         Ok(())
     })

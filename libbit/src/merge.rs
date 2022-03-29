@@ -43,22 +43,22 @@ impl Default for MergeOpts {
 }
 
 impl BitRepo {
-    pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<Option<Arc<Commit>>> {
+    pub fn merge_base(&self, a: Oid, b: Oid) -> BitResult<Option<Arc<Commit>>> {
         let commit_a = a.peel(self)?;
         let commit_b = b.peel(self)?;
         commit_a.find_merge_base(commit_b)
     }
 
-    pub fn merge_bases(self, a: Oid, b: Oid) -> BitResult<Vec<Arc<Commit>>> {
+    pub fn merge_bases(&self, a: Oid, b: Oid) -> BitResult<Vec<Arc<Commit>>> {
         a.peel(self)?.find_merge_bases(b.peel(self)?)
     }
 
-    pub fn merge(self, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<MergeResults> {
+    pub fn merge(&self, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<MergeResults> {
         MergeCtxt::new(self, their_head_ref, opts)?.merge()
     }
 
     pub fn merge_with_base(
-        self,
+        &self,
         their_head_ref: BitRef,
         base: Option<Arc<Commit>>,
         opts: MergeOpts,
@@ -137,7 +137,7 @@ impl MergeResults {
 pub struct MergeSummary {}
 
 impl MergeCtxt {
-    fn new(repo: BitRepo, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
+    fn new(repo: &BitRepo, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
         let our_head = repo.fully_resolve_head()?;
         let our_head_commit = our_head.peel(repo)?;
 
@@ -146,7 +146,7 @@ impl MergeCtxt {
         let their_head_commit = their_head.peel(repo)?;
 
         Ok(Self {
-            repo,
+            repo: repo.clone(),
             our_head,
             our_head_commit,
             their_head_ref,
@@ -411,7 +411,7 @@ impl MergeCtxt {
     fn write_their_conflicted(&mut self, theirs: &BitIndexEntry) -> BitResult<()> {
         let moved_path =
             UniquePath::new(self.repo, format!("{}~{}", theirs.path(), self.their_head_desc))?;
-        theirs.write_to_disk_at(self.repo, moved_path)
+        theirs.write_to_disk_at(&self.repo, moved_path)
     }
 
     fn mv_our_conflicted(&mut self, path: BitPath) -> BitResult<()> {
@@ -432,7 +432,7 @@ impl MergeCtxt {
             base_to_theirs,
         );
 
-        let repo = self.repo;
+        let repo = &self.repo;
         let mut index = repo.index_mut()?;
 
         let mut three_way_merge =
@@ -441,7 +441,7 @@ impl MergeCtxt {
                 let path = ours.path;
 
                 let base_bytes = match base {
-                    Some(b) => b.read_to_bytes(repo)?,
+                    Some(b) => b.read_to_bytes(&repo)?,
                     None => Cow::Owned(vec![]),
                 };
 

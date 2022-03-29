@@ -61,7 +61,7 @@ fn test_criss_cross_merge_base() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_trivial_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let tree = tree! {
@@ -90,7 +90,7 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
 //  \
 //   b  -  d
 // TODO test behaviour when a and b have conflicts, probably introduce a parent commit for them too
-// #[test_env_log::test]
+// #[test_log::test]
 fn test_nontrivial_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let tree_o = tree! {
@@ -165,7 +165,7 @@ fn test_simple_merge() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_merge_conflict_types() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         bit_branch!(repo: "alternative");
@@ -227,11 +227,7 @@ fn test_fast_forward_merge() -> BitResult<()> {
 }
 
 impl BitRepo {
-    fn three_way_merge(
-        self,
-        ours: impl Treeish,
-        theirs: impl Treeish,
-    ) -> BitResult<MergeResults> {
+    fn three_way_merge(self, ours: impl Treeish, theirs: impl Treeish) -> BitResult<MergeResults> {
         self.setup_three_way_merge(ours, theirs)?;
         bit_merge!(self: "theirs")
     }
@@ -244,11 +240,7 @@ impl BitRepo {
     ///       theirs
     /// Where `base` is the old HEAD
     /// Then merge theirs into HEAD
-    fn setup_three_way_merge(
-        self,
-        ours: impl Treeish,
-        theirs: impl Treeish,
-    ) -> BitResult<()> {
+    fn setup_three_way_merge(self, ours: impl Treeish, theirs: impl Treeish) -> BitResult<()> {
         // empty commit just to allow this to work starting from an empty repo
         bit_commit!(self: --allow-empty);
         bit_branch!(self: "base");
@@ -291,7 +283,7 @@ fn test_merge_base_to_ours_only_with_dir() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_merge_base_to_theirs_only_with_dir() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let ours = commit! {};
@@ -545,7 +537,7 @@ fn test_merge_modified_file_into_tree() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_merge_deleted_tree_into_modified_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo_with_dir(|repo| {
         let ours = commit! {
@@ -565,7 +557,7 @@ fn test_merge_deleted_tree_into_modified_tree() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_merge_modified_tree_into_deleted_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo_with_dir(|repo| {
         let ours = commit! {};
@@ -703,7 +695,7 @@ fn test_merge_unmodified_tree_into_nested_deleted_tree() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_merge_deleted_tree_into_unmodified_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo_with_dir(|repo| {
         let ours = commit! {
@@ -789,7 +781,7 @@ fn test_merge_created_blob_into_created_tree() -> BitResult<()> {
     })
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_merge_tree_to_blob_into_unmodified_tree() -> BitResult<()> {
     BitRepo::with_minimal_repo_with_dir(|repo| {
         let ours = commit! {

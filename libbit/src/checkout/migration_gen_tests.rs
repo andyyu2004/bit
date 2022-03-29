@@ -30,11 +30,11 @@ impl From<Migration> for TestMigration {
     }
 }
 
-#[test_env_log::test]
+#[test_log::test]
 fn test_migration_gen_on_sample_repo() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         rmdir!(repo: "dir");
-        let old_tree_oid = repo.fully_resolve_rev(&rev!("HEAD^"))?.peel(repo)?.tree_oid();
+        let old_tree_oid = repo.fully_resolve_rev(&rev!("HEAD^"))?.peel(&repo)?.tree_oid();
         let old_iter = repo.tree_iter(old_tree_oid);
         let new_iter = repo.head_tree_iter()?;
 

@@ -72,7 +72,7 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
     /// Start receiving the pack file in protocol v1.
     /// This will consume any remaining ACK/NAK.
     /// Assumes `side-band-64k` capability.
-    async fn recv_pack(&mut self, repo: BitRepo) -> BitResult<()> {
+    async fn recv_pack(&mut self, repo: &BitRepo) -> BitResult<()> {
         let mut writer = PackWriter::new(repo).await?;
         let mut packet = self.recv_packet().await?;
 

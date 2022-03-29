@@ -40,7 +40,7 @@ pub struct BitRepo {
 
 impl PartialEq for BitRepo {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.rcx, other.rcx)
+        Arc::ptr_eq(&self.rcx, &other.rcx)
     }
 }
 
@@ -73,14 +73,14 @@ pub struct RepoCtxt {
 }
 
 impl RepoCtxt {
-    fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> BitResult<Self> {
+    fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> BitResult<Arc<Self>> {
         let workdir = BitPath::intern(workdir);
         let bitdir = BitPath::intern(bitdir);
         let config_filepath = BitPath::intern(config_filepath);
         let config = BitConfig::init(config_filepath)?;
         let index_filepath = bitdir.join(BIT_INDEX_FILE_PATH);
 
-        let this = Self {
+        Ok(Arc::new(Self {
             config_filepath,
             workdir,
             bitdir,
@@ -93,9 +93,7 @@ impl RepoCtxt {
             refdb_cell: Default::default(),
             virtual_odb: Default::default(),
             virtual_write: Default::default(),
-        };
-
-        Ok(this)
+        }))
     }
 
     #[inline]
@@ -103,7 +101,7 @@ impl RepoCtxt {
         &self.config
     }
 
-    fn find_inner(path: &Path) -> BitResult<Self> {
+    fn find_inner(path: &Path) -> BitResult<Arc<Self>> {
         if path.join(".git").try_exists()? {
             return Self::load(path);
         }
@@ -120,7 +118,7 @@ impl RepoCtxt {
         }
     }
 
-    fn load_with_bitdir(path: impl AsRef<Path>, bitdir: impl AsRef<Path>) -> BitResult<Self> {
+    fn load_with_bitdir(path: impl AsRef<Path>, bitdir: impl AsRef<Path>) -> BitResult<Arc<Self>> {
         let worktree = path
             .as_ref()
             .canonicalize()
@@ -145,11 +143,11 @@ impl RepoCtxt {
         Ok(rcx)
     }
 
-    fn load(path: impl AsRef<Path>) -> BitResult<Self> {
+    fn load(path: impl AsRef<Path>) -> BitResult<Arc<Self>> {
         Self::load_with_bitdir(path, ".git")
     }
 
-    pub fn with_res<R>(&self, f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_res<R>(self: Arc<Self>, f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         self.with(f)
     }
 
@@ -183,7 +181,7 @@ impl RepoCtxt {
     where
         F: Future<Output = BitResult<R>>,
     {
-        self.with_async(async move |repo| match f(repo).await {
+        self.with_async(async move |repo| match f(repo.clone()).await {
             Ok(r) => Ok(r),
             Err(err) => {
                 if repo.index_cell.get().is_some() {
@@ -289,44 +287,48 @@ impl BitRepo {
     // this is necessary as a lifetime hint as otherwise usages of &self.arenas have lifetime
     // tied to self rather than 'rcx
     #[inline]
-    fn arenas(&self) -> Arc<Arenas> {
+    fn arenas(&self) -> &Arenas {
         &self.rcx.arenas
     }
 
     #[inline]
-    pub(crate) fn cache(&self) -> Arc<RwLock<BitObjCache>> {
+    pub(crate) fn cache(&self) -> &RwLock<BitObjCache> {
         &self.rcx.obj_cache
     }
 
     #[inline]
     pub(crate) fn alloc_commit(&self, commit: Commit) -> Arc<Commit> {
-        self.arenas().commit_arena.alloc(commit)
+        Arc::new(commit)
+        // self.arenas().commit_arena.alloc(commit)
     }
 
     #[inline]
     pub(crate) fn alloc_tree(&self, tree: Tree) -> Arc<Tree> {
-        self.arenas().tree_arena.alloc(tree)
+        Arc::new(tree)
+        // self.arenas().tree_arena.alloc(tree)
     }
 
     #[inline]
     pub(crate) fn alloc_blob(&self, blob: Blob) -> Arc<Blob> {
-        self.arenas().blob_arena.alloc(blob)
+        Arc::new(blob)
+        // self.arenas().blob_arena.alloc(blob)
     }
 
     #[inline]
     pub(crate) fn alloc_tag(&self, tag: Tag) -> Arc<Tag> {
-        self.arenas().tag_arena.alloc(tag)
+        Arc::new(tag)
+        // self.arenas().tag_arena.alloc(tag)
     }
 
     #[inline]
-    fn index_lock(self) -> BitResult<Arc<RwLock<BitIndex>>> {
+    fn index_lock(&self) -> BitResult<&RwLock<BitIndex>> {
         self.rcx
             .index_cell
-            .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(self)?)))
+            .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(self.clone())?)))
     }
 
     #[inline]
-    pub fn index(&self) -> BitResult<RwLockReadGuard<'_, &BitIndex>> {
+    pub fn index(&self) -> BitResult<RwLockReadGuard<'_, BitIndex>> {
         Ok(self
             .index_lock()?
             .try_read()
@@ -337,7 +339,7 @@ impl BitRepo {
     /// Be very cautious and hold the lock for the shortest period possible as it's fairly easy to run into deadlocks.
     /// Don't just declare index at the top of the function.
     #[inline]
-    pub fn index_mut(&self) -> BitResult<RwLockWriteGuard<'_, &mut BitIndex>> {
+    pub fn index_mut(&self) -> BitResult<RwLockWriteGuard<'_, BitIndex>> {
         Ok(self
             .index_lock()?
             .try_write()
@@ -539,12 +541,12 @@ impl BitRepo {
         self.objects_dir().join(BIT_PACK_OBJECTS_PATH)
     }
 
-    fn virtual_odb(self) -> Arc<VirtualOdb> {
-        self.rcx.virtual_odb.get_or_init(|| VirtualOdb::new(self))
+    fn virtual_odb(&self) -> &VirtualOdb {
+        self.rcx.virtual_odb.get_or_init(|| VirtualOdb::new(self.clone()))
     }
 
     /// writes `obj` into the object store returning its full hash
-    pub fn write_obj(self, obj: &dyn WritableObject) -> BitResult<Oid> {
+    pub fn write_obj(&self, obj: &dyn WritableObject) -> BitResult<Oid> {
         if self.virtual_write.load(Ordering::Acquire) {
             self.virtual_odb().write(obj)
         } else {
@@ -554,49 +556,49 @@ impl BitRepo {
         }
     }
 
-    pub fn refresh_odb(self) -> BitResult<()> {
+    pub fn refresh_odb(&self) -> BitResult<()> {
         self.odb()?.refresh()
     }
 
-    pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind> {
+    pub fn read_obj(&self, id: impl Into<BitId>) -> BitResult<BitObjKind> {
         let id = id.into();
         trace!("BitRepo::read_obj(id: {})", id);
         let oid = self.expand_id(id)?;
         if oid == Oid::EMPTY_TREE {
-            Ok(BitObjKind::Tree(Tree::empty(self)))
+            Ok(BitObjKind::Tree(Tree::empty(self.clone())))
         } else if self.virtual_write.load(Ordering::Acquire) {
             Ok(self.virtual_odb().read(oid))
         } else {
             self.obj_cache.write().get_or_insert_with(oid, || {
                 let raw = self.odb()?.read_raw(BitId::Full(oid))?;
-                BitObjKind::from_raw(self, raw)
+                BitObjKind::from_raw(self.clone(), raw)
             })
         }
     }
 
-    pub fn read_obj_tree(self, id: impl Into<BitId>) -> BitResult<Arc<Tree>> {
+    pub fn read_obj_tree(&self, id: impl Into<BitId>) -> BitResult<Arc<Tree>> {
         self.read_obj(id).map(|obj| obj.into_tree())
     }
 
-    pub fn read_obj_commit(self, id: impl Into<BitId>) -> BitResult<Arc<Commit>> {
+    pub fn read_obj_commit(&self, id: impl Into<BitId>) -> BitResult<Arc<Commit>> {
         self.read_obj(id).map(|obj| obj.into_commit())
     }
 
-    pub fn expand_id(self, id: impl Into<BitId>) -> BitResult<Oid> {
+    pub fn expand_id(&self, id: impl Into<BitId>) -> BitResult<Oid> {
         self.odb()?.expand_id(id.into())
     }
 
-    pub fn expand_prefix(self, prefix: PartialOid) -> BitResult<Oid> {
+    pub fn expand_prefix(&self, prefix: PartialOid) -> BitResult<Oid> {
         self.odb()?.expand_prefix(prefix)
     }
 
-    pub fn ensure_obj_exists(self, id: impl Into<BitId>) -> BitResult<()> {
+    pub fn ensure_obj_exists(&self, id: impl Into<BitId>) -> BitResult<()> {
         let id = id.into();
         ensure!(self.obj_exists(id)?, BitError::ObjectNotFound(id));
         Ok(())
     }
 
-    pub fn ensure_obj_is_commit(self, id: impl Into<BitId>) -> BitResult<()> {
+    pub fn ensure_obj_is_commit(&self, id: impl Into<BitId>) -> BitResult<()> {
         let id = id.into();
         let oid = self.expand_id(id)?;
         self.ensure_obj_exists(oid)?;
@@ -608,16 +610,16 @@ impl BitRepo {
     #[must_use = "this call has no side effects (you may want to use `ensure_obj_exists` instead)"]
     // note, the above annotation doesn't really do anything as "question marking" the return value counts as a use so...
     // but nevertheless, its non-useless docs as I've made the mistake already
-    pub fn obj_exists(self, id: impl Into<BitId>) -> BitResult<bool> {
+    pub fn obj_exists(&self, id: impl Into<BitId>) -> BitResult<bool> {
         self.odb()?.exists(id.into())
     }
 
-    pub fn read_obj_header(self, id: impl Into<BitId>) -> BitResult<BitObjHeader> {
+    pub fn read_obj_header(&self, id: impl Into<BitId>) -> BitResult<BitObjHeader> {
         self.odb()?.read_header(id.into())
     }
 
     /// Read the file at `path` on the worktree into a mutable blob object
-    pub(crate) fn read_blob_from_worktree(self, path: impl AsRef<Path>) -> BitResult<MutableBlob> {
+    pub(crate) fn read_blob_from_worktree(&self, path: impl AsRef<Path>) -> BitResult<MutableBlob> {
         let path = self.normalize_path(path.as_ref())?;
         let bytes = if path.symlink_metadata()?.file_type().is_symlink() {
             // we literally hash the contents of the symlink without following
@@ -629,7 +631,7 @@ impl BitRepo {
     }
 
     /// Get the blob at `path` on the worktree and return its hash
-    pub(crate) fn hash_blob_from_worktree(self, path: impl AsRef<Path>) -> BitResult<Oid> {
+    pub(crate) fn hash_blob_from_worktree(&self, path: impl AsRef<Path>) -> BitResult<Oid> {
         let path = path.as_ref();
         debug_assert!(!path.is_dir());
         self.read_blob_from_worktree(path).and_then(|blob| blob.hash())
@@ -637,14 +639,14 @@ impl BitRepo {
 
     /// convert a relative path to be absolute based off the repository root
     /// use [`Self::normalize_path`] if you expect the path to exist
-    pub(crate) fn to_absolute_path(self, path: impl AsRef<Path>) -> BitPath {
+    pub(crate) fn to_absolute_path(&self, path: impl AsRef<Path>) -> BitPath {
         self.workdir.join(path)
     }
 
     /// converts relative_paths to absolute paths
     /// checks absolute paths exist and have a base relative to the bit directory
     // can't figure out how to make this take an impl AsRef<Path> and make lifetimes work out
-    pub(crate) fn normalize_path(self, path: &Path) -> BitResult<Cow<'_, Path>> {
+    pub(crate) fn normalize_path<'p>(&self, path: &'p Path) -> BitResult<Cow<'p, Path>> {
         // `self.worktree` should be a canonical, absolute path
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
@@ -668,35 +670,35 @@ impl BitRepo {
     }
 
     /// converts an absolute path into a path relative to the workdir of the repository
-    pub fn to_relative_path(self, path: &Path) -> BitResult<&Path> {
+    pub fn to_relative_path<'p>(&self, path: &'p Path) -> BitResult<&'p Path> {
         // this seems to work just as well as the pathdiff crate
         debug_assert!(path.is_absolute());
         Ok(path.strip_prefix(&self.workdir)?)
     }
 
     #[cfg(test)]
-    pub(crate) fn relative_paths(self, paths: &[impl AsRef<Path>]) -> BitPath {
+    pub(crate) fn relative_paths(&self, paths: &[impl AsRef<Path>]) -> BitPath {
         paths.iter().fold(self.bitdir, |base, path| base.join(path))
     }
 
     #[inline]
-    pub(crate) fn mk_bitdir(self, path: impl AsRef<Path>) -> io::Result<()> {
+    pub(crate) fn mk_bitdir(&self, path: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(self.bitdir.join(path))
     }
 
     #[inline]
-    pub(crate) fn mkdir(self, path: BitPath) -> BitResult<()> {
+    pub(crate) fn mkdir(&self, path: BitPath) -> BitResult<()> {
         Ok(std::fs::create_dir(self.to_absolute_path(path))?)
     }
 
     #[inline]
-    pub(crate) fn rmdir_all(self, path: impl AsRef<Path>) -> BitResult<()> {
+    pub(crate) fn rmdir_all(&self, path: impl AsRef<Path>) -> BitResult<()> {
         let path = self.to_absolute_path(path.as_ref());
         std::fs::remove_dir_all(path).with_context(|| anyhow!("failed to rmdir_all `{}`", path))
     }
 
     #[inline]
-    pub(crate) fn touch(self, path: impl AsRef<Path>) -> BitResult<std::fs::File> {
+    pub(crate) fn touch(&self, path: impl AsRef<Path>) -> BitResult<std::fs::File> {
         let path = self.to_absolute_path(path.as_ref());
         debug_assert!(!path.try_exists()?);
         std::fs::create_dir_all(path.parent().unwrap())?;
@@ -709,18 +711,18 @@ impl BitRepo {
     }
 
     #[inline]
-    pub(crate) fn path_exists(self, path: impl AsRef<Path>) -> io::Result<bool> {
+    pub(crate) fn path_exists(&self, path: impl AsRef<Path>) -> io::Result<bool> {
         self.to_absolute_path(path).try_exists()
     }
 
     #[inline]
-    pub(crate) fn rm(self, path: BitPath) -> BitResult<()> {
+    pub(crate) fn rm(&self, path: BitPath) -> BitResult<()> {
         std::fs::remove_file(self.to_absolute_path(path))
             .with_context(|| anyhow!("failed to rm `{}`", path))
     }
 
     #[inline]
-    pub(crate) fn mv(self, from: BitPath, to: impl AsRef<Path>) -> BitResult<()> {
+    pub(crate) fn mv(&self, from: BitPath, to: impl AsRef<Path>) -> BitResult<()> {
         let to = to.as_ref();
         debug_assert!(!to.try_exists()?);
         std::fs::rename(self.to_absolute_path(from), self.to_absolute_path(to))
@@ -728,7 +730,7 @@ impl BitRepo {
     }
 
     #[inline]
-    pub(crate) fn mk_bitfile(self, path: impl AsRef<Path>) -> io::Result<File> {
+    pub(crate) fn mk_bitfile(&self, path: impl AsRef<Path>) -> io::Result<File> {
         File::create(self.bitdir.join(path))
     }
 }
@@ -752,7 +754,7 @@ impl Deref for BitRepo {
     type Target = RepoCtxt;
 
     fn deref(&self) -> &Self::Target {
-        self.rcx
+        &self.rcx
     }
 }
 

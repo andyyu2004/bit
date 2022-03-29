@@ -364,7 +364,7 @@ impl FallibleIterator for TreeIter {
                             return Ok(Some(entry.into()));
                         }
 
-                        let tree = entry.oid.treeish(self.repo)?;
+                        let tree = entry.oid.treeish(&self.repo)?;
                         trace!("TreeIter::next: read directory `{:?}` `{}`", entry.path, entry.oid);
 
                         self.previous_len = self.entry_stack.len();

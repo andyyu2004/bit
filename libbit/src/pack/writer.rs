@@ -18,7 +18,7 @@ pin_project! {
 }
 
 impl PackWriter {
-    pub async fn new(repo: BitRepo) -> BitResult<Self> {
+    pub async fn new(repo: &BitRepo) -> BitResult<Self> {
         let (file, path) = tempfile::NamedTempFile::new_in(repo.pack_objects_dir())?.keep()?;
         let file = BufWriter::new(File::from_std(file));
         Ok(Self { file, path })

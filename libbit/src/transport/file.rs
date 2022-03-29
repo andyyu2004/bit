@@ -10,6 +10,7 @@ use tokio::process::{ChildStdin, ChildStdout, Command};
 
 pin_project! {
     pub struct FileTransport {
+        repo: BitRepo,
         #[pin]
         stdin: ChildStdin,
         #[pin]
@@ -18,7 +19,7 @@ pin_project! {
 }
 
 impl FileTransport {
-    pub async fn new(repo: BitRepo, url: &GitUrl) -> BitResult<Self> {
+    pub async fn new(repo: &BitRepo, url: &GitUrl) -> BitResult<Self> {
         let path = path::normalize(&repo.to_absolute_path(&url.path));
         let mut child = Command::new("git-upload-pack")
             .arg(&path)
@@ -30,7 +31,7 @@ impl FileTransport {
         let stdin = child.stdin.take().unwrap();
         let stdout = BufReader::new(child.stdout.take().unwrap());
 
-        Ok(Self { stdin, stdout })
+        Ok(Self { repo: repo.clone(), stdin, stdout })
     }
 }
 

@@ -174,7 +174,7 @@ impl BitIndexEntry {
     pub const UNKNOWN_SIZE: u32 = u32::MAX;
 
     /// Fill stat data for the entry
-    pub fn fill(&mut self, repo: BitRepo) -> BitResult<()> {
+    pub fn fill(&mut self, repo: &BitRepo) -> BitResult<()> {
         if !self.is_filled() {
             // we want the stat information, but we also do not want to rehash the object when we already know it
             let mut entry = BitIndexEntry::from_relative_path(repo, self.path())?;
@@ -214,13 +214,13 @@ impl BitIndexEntry {
         })
     }
 
-    pub fn from_relative_path(repo: BitRepo, relative: BitPath) -> BitResult<Self> {
+    pub fn from_relative_path(repo: &BitRepo, relative: BitPath) -> BitResult<Self> {
         debug_assert!(relative.is_relative());
         let normalized = repo.normalize_path(&relative)?;
         Self::new(normalized, relative)
     }
 
-    pub fn from_absolute_path(repo: BitRepo, absolute: &Path) -> BitResult<Self> {
+    pub fn from_absolute_path(repo: &BitRepo, absolute: &Path) -> BitResult<Self> {
         let relative = BitPath::intern(repo.to_relative_path(&absolute)?);
         let normalized = repo.normalize_path(absolute)?;
         Self::new(normalized, relative)

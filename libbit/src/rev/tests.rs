@@ -8,7 +8,7 @@ fn test_parse_revspec_reflog() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let rev = rev!("@@{5}");
         assert_eq!(
-            rev.parse(repo)?,
+            rev.parse(&repo)?,
             &ParsedRevspec::Reflog(Box::new(ParsedRevspec::Ref(symbolic_ref!("HEAD"))), 5)
         );
         Ok(())
@@ -20,7 +20,7 @@ fn test_parse_revspec_parent() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let rev = rev!("HEAD^");
         assert_eq!(
-            rev.parse(repo)?,
+            rev.parse(&repo)?,
             &ParsedRevspec::Parent(Box::new(ParsedRevspec::Ref(symbolic_ref!("HEAD"))), 1)
         );
         Ok(())
@@ -30,8 +30,8 @@ fn test_parse_revspec_parent() -> BitResult<()> {
 #[test]
 fn test_parse_at_symbol_as_alias_to_head() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
-        assert_eq!(rev!("@").parse(repo)?, rev!("HEAD").parse(repo)?);
-        assert_eq!(rev!("@^").parse(repo)?, rev!("HEAD^").parse(repo)?);
+        assert_eq!(rev!("@").parse(&repo)?, rev!("HEAD").parse(&repo)?);
+        assert_eq!(rev!("@^").parse(&repo)?, rev!("HEAD^").parse(&repo)?);
         Ok(())
     })
 }
@@ -41,7 +41,7 @@ fn test_parse_revspec_with_symref_ancestor() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let rev = rev!("HEAD~5");
         assert_eq!(
-            rev.parse(repo)?,
+            rev.parse(&repo)?,
             &ParsedRevspec::Ancestor(Box::new(ParsedRevspec::Ref(symbolic_ref!("HEAD"))), 5)
         );
         Ok(())
@@ -53,7 +53,7 @@ fn test_parse_revspec_with_oid() -> BitResult<()> {
     BitRepo::with_sample_repo(|repo| {
         let empty_oid = Oid::EMPTY_BLOB.to_string();
         let rev = rev!(&empty_oid);
-        assert_eq!(rev.parse(repo)?, &ParsedRevspec::Ref(BitRef::Direct(Oid::EMPTY_BLOB)));
+        assert_eq!(rev.parse(&repo)?, &ParsedRevspec::Ref(BitRef::Direct(Oid::EMPTY_BLOB)));
         Ok(())
     })
 }

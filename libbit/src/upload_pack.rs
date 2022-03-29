@@ -119,13 +119,12 @@ where
     // immediately after the ref itself, if presented. A conforming server
     // MUST peel the ref if it's an annotated tag.
     async fn write_ref_discovery(&mut self) -> Result<()> {
-        let repo = self.repo;
-        let mut refs = repo.ls_refs()?.into_iter().collect::<Vec<_>>();
+        let mut refs = self.repo.ls_refs()?.into_iter().collect::<Vec<_>>();
         // The order isn't really significant but keeping it close to git
         // The ord impl for refs is tailored for other purposes (i.e. remotes before heads in bit log)
         refs.sort_by_key(|r| r.path());
         for (i, r) in refs.into_iter().enumerate() {
-            let oid = match repo.try_fully_resolve_ref(r)? {
+            let oid = match self.repo.try_fully_resolve_ref(r)? {
                 Some(oid) => oid,
                 None => continue,
             };

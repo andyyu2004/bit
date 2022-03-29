@@ -75,7 +75,7 @@ pub trait BitEntry {
     }
 
     /// Write the entry to the object store
-    fn write(&self, repo: BitRepo) -> BitResult<Oid> {
+    fn write(&self, repo: &BitRepo) -> BitResult<Oid> {
         let oid = self.oid();
         if oid.is_known() {
             return Ok(oid);
@@ -85,17 +85,17 @@ pub trait BitEntry {
     }
 
     /// Write the entry to disk at `path` (where `path` is relative to repo root)
-    fn write_to_disk_at(&self, repo: BitRepo, path: impl AsRef<Path>) -> BitResult<()> {
+    fn write_to_disk_at(&self, repo: &BitRepo, path: impl AsRef<Path>) -> BitResult<()> {
         let bytes = self.read_to_bytes(repo)?;
         let mut file = repo.touch(path)?;
         Ok(file.write_all(&bytes)?)
     }
 
-    fn write_to_disk(&self, repo: BitRepo) -> BitResult<()> {
+    fn write_to_disk(&self, repo: &BitRepo) -> BitResult<()> {
         self.write_to_disk_at(repo, self.path())
     }
 
-    fn read_to_bytes(&self, repo: BitRepo) -> BitResult<Cow<'_, [u8]>> {
+    fn read_to_bytes(&self, repo: &BitRepo) -> BitResult<Cow<'_, [u8]>> {
         let oid = self.oid();
         // if object is known we try to read it from the object store
         // however, it's possible the object does not live there as the hash may have just been calculated to allow for comparisons
@@ -307,7 +307,7 @@ impl FallibleIterator for WorktreeIter {
                 continue;
             }
 
-            return BitIndexEntry::from_absolute_path(self.inner.repo, &entry.path).map(Some);
+            return BitIndexEntry::from_absolute_path(&self.inner.repo, &entry.path).map(Some);
         }
     }
 }

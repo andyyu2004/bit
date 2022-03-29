@@ -46,7 +46,7 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
             .filter_map(|(sym, oid)| Some((remote.fetch.match_ref(sym)?, oid)))
             .collect::<HashMap<_, _>>();
 
-        let fetch_status = self.negotiate_packs(repo, &remote_mapping).await?;
+        let fetch_status = self.negotiate_packs(&remote_mapping).await?;
 
         // TODO check the refspec for forcedness before updating: create a function `try_update_remote_ref`
         for (&remote, &oid) in &remote_mapping {

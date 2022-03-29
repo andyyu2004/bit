@@ -19,33 +19,33 @@ use std::sync::Arc;
 /// This includes commits and oids (and also trivially tree's themselves),
 /// but probaby should not extend so far as to include refs/revisions
 pub trait Treeish: Sized {
-    fn treeish_oid(&self, repo: BitRepo) -> BitResult<Oid>;
+    fn treeish_oid(&self, repo: &BitRepo) -> BitResult<Oid>;
 
     // override this default implementation if a more efficient one is available
-    fn treeish(self, repo: BitRepo) -> BitResult<Arc<Tree>> {
+    fn treeish(self, repo: &BitRepo) -> BitResult<Arc<Tree>> {
         let tree_oid = self.treeish_oid(repo)?;
         repo.read_obj_tree(tree_oid)
     }
 }
 
 impl Treeish for Arc<Tree> {
-    fn treeish(self, _repo: BitRepo) -> BitResult<Self> {
+    fn treeish(self, _repo: &BitRepo) -> BitResult<Self> {
         Ok(self)
     }
 
-    fn treeish_oid(&self, _repo: BitRepo) -> BitResult<Oid> {
+    fn treeish_oid(&self, _repo: &BitRepo) -> BitResult<Oid> {
         Ok(self.oid())
     }
 }
 
 impl Treeish for Oid {
-    fn treeish_oid(&self, repo: BitRepo) -> BitResult<Oid> {
+    fn treeish_oid(&self, repo: &BitRepo) -> BitResult<Oid> {
         repo.read_obj(*self)?.treeish_oid(repo)
     }
 }
 
 impl Treeish for BitObjKind {
-    fn treeish(self, repo: BitRepo) -> BitResult<Arc<Tree>> {
+    fn treeish(self, repo: &BitRepo) -> BitResult<Arc<Tree>> {
         match self {
             BitObjKind::Commit(commit) => commit.peel(repo),
             BitObjKind::Tree(tree) => Ok(tree),
@@ -54,7 +54,7 @@ impl Treeish for BitObjKind {
         }
     }
 
-    fn treeish_oid(&self, _repo: BitRepo) -> BitResult<Oid> {
+    fn treeish_oid(&self, _repo: &BitRepo) -> BitResult<Oid> {
         match self {
             BitObjKind::Commit(commit) => Ok(commit.tree_oid()),
             BitObjKind::Tree(tree) => Ok(tree.oid()),
