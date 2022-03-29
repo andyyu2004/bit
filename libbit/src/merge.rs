@@ -20,6 +20,7 @@ use std::collections::BinaryHeap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::Write;
 use std::ops::Deref;
+use std::sync::Arc;
 
 pub type ConflictStyle = diffy::ConflictStyle;
 
@@ -41,14 +42,14 @@ impl Default for MergeOpts {
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
-    pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<Option<&'rcx Commit<'rcx>>> {
+impl BitRepo {
+    pub fn merge_base(self, a: Oid, b: Oid) -> BitResult<Option<Arc<Commit>>> {
         let commit_a = a.peel(self)?;
         let commit_b = b.peel(self)?;
         commit_a.find_merge_base(commit_b)
     }
 
-    pub fn merge_bases(self, a: Oid, b: Oid) -> BitResult<Vec<&'rcx Commit<'rcx>>> {
+    pub fn merge_bases(self, a: Oid, b: Oid) -> BitResult<Vec<Arc<Commit>>> {
         a.peel(self)?.find_merge_bases(b.peel(self)?)
     }
 
@@ -59,7 +60,7 @@ impl<'rcx> BitRepo<'rcx> {
     pub fn merge_with_base(
         self,
         their_head_ref: BitRef,
-        base: Option<&'rcx Commit<'rcx>>,
+        base: Option<Arc<Commit>>,
         opts: MergeOpts,
     ) -> BitResult<MergeResults> {
         MergeCtxt::new(self, their_head_ref, opts)?.merge_with_base(base)
@@ -85,23 +86,23 @@ impl Display for MergeConflicts {
 }
 
 #[derive(Debug)]
-struct MergeCtxt<'rcx> {
-    repo: BitRepo<'rcx>,
+struct MergeCtxt {
+    repo: BitRepo,
     // description of `their_head`
     their_head_desc: String,
     their_head_ref: BitRef,
-    their_head_commit: &'rcx Commit<'rcx>,
+    their_head_commit: Arc<Commit>,
     their_head: Oid,
     opts: MergeOpts,
     // The state of the index pre-merge
     initial_index_snapshot: BitIndexInner,
     uncommitted: Vec<BitPath>,
     our_head: Oid,
-    our_head_commit: &'rcx Commit<'rcx>,
+    our_head_commit: Arc<Commit>,
 }
 
-impl<'rcx> Deref for MergeCtxt<'rcx> {
-    type Target = BitRepo<'rcx>;
+impl Deref for MergeCtxt {
+    type Target = BitRepo;
 
     fn deref(&self) -> &Self::Target {
         &self.repo
@@ -135,8 +136,8 @@ impl MergeResults {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MergeSummary {}
 
-impl<'rcx> MergeCtxt<'rcx> {
-    fn new(repo: BitRepo<'rcx>, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
+impl MergeCtxt {
+    fn new(repo: BitRepo, their_head_ref: BitRef, opts: MergeOpts) -> BitResult<Self> {
         let our_head = repo.fully_resolve_head()?;
         let our_head_commit = our_head.peel(repo)?;
 
@@ -160,9 +161,9 @@ impl<'rcx> MergeCtxt<'rcx> {
 
     fn merge_base_recursive(
         &mut self,
-        our_head: &'rcx Commit<'rcx>,
-        their_head: &'rcx Commit<'rcx>,
-    ) -> BitResult<Option<&'rcx Commit<'rcx>>> {
+        our_head: Arc<Commit>,
+        their_head: Arc<Commit>,
+    ) -> BitResult<Option<Arc<Commit>>> {
         debug!("MergeCtxt::merge_base_recursive({}, {})", our_head.oid(), their_head.oid());
         let merge_bases = our_head.find_merge_bases(their_head)?;
         match &merge_bases[..] {
@@ -175,9 +176,9 @@ impl<'rcx> MergeCtxt<'rcx> {
 
     fn make_virtual_base(
         &mut self,
-        our_head: &'rcx Commit<'rcx>,
-        their_head: &'rcx Commit<'rcx>,
-    ) -> BitResult<&'rcx Commit<'rcx>> {
+        our_head: Arc<Commit>,
+        their_head: Arc<Commit>,
+    ) -> BitResult<Arc<Commit>> {
         debug!("MergeCtxt::make_virtual_base({}, {})", our_head.oid(), their_head.oid());
         let merge_base = self.merge_base_recursive(our_head, their_head)?;
         self.merge_commits(merge_base, our_head, their_head)?;
@@ -225,10 +226,7 @@ impl<'rcx> MergeCtxt<'rcx> {
         self.merge_with_base(merge_base)
     }
 
-    pub fn merge_with_base(
-        mut self,
-        merge_base: Option<&'rcx Commit<'rcx>>,
-    ) -> BitResult<MergeResults> {
+    pub fn merge_with_base(mut self, merge_base: Option<Arc<Commit>>) -> BitResult<MergeResults> {
         debug!("MergeCtxt::merge_with_base(merge_base: {:?})", merge_base.map(|b| b.oid()));
 
         self.pre_merge_checks()?;
@@ -281,9 +279,9 @@ impl<'rcx> MergeCtxt<'rcx> {
 
     fn merge_commits(
         &mut self,
-        merge_base: Option<&'rcx Commit<'rcx>>,
-        our_head_commit: &'rcx Commit<'rcx>,
-        their_head_commit: &'rcx Commit<'rcx>,
+        merge_base: Option<Arc<Commit>>,
+        our_head_commit: Arc<Commit>,
+        their_head_commit: Arc<Commit>,
     ) -> BitResult<()> {
         let merge_base_tree = merge_base.map(|c| c.tree_oid()).unwrap_or(Oid::UNKNOWN);
         self.merge_trees(merge_base_tree, our_head_commit.tree_oid(), their_head_commit.tree_oid())
@@ -675,35 +673,35 @@ bitflags! {
 }
 
 #[derive(Debug)]
-struct CommitNode<'rcx> {
-    commit: &'rcx Commit<'rcx>,
+struct CommitNode {
+    commit: Arc<Commit>,
     index: usize,
 }
 
-impl<'rcx> PartialOrd for CommitNode<'rcx> {
+impl PartialOrd for CommitNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for CommitNode<'_> {
+impl PartialEq for CommitNode {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other) == Ordering::Equal
     }
 }
 
-impl<'rcx> std::ops::Deref for CommitNode<'rcx> {
-    type Target = Commit<'rcx>;
+impl std::ops::Deref for CommitNode {
+    type Target = Commit;
 
     fn deref(&self) -> &Self::Target {
         &self.commit
     }
 }
 
-impl Eq for CommitNode<'_> {
+impl Eq for CommitNode {
 }
 
-impl Ord for CommitNode<'_> {
+impl Ord for CommitNode {
     // we want this cmp to suit a maxheap
     // so we want the most recent (largest timestamp) commit to be >= and the smallest index to be >=
     fn cmp(&self, other: &Self) -> Ordering {
@@ -716,32 +714,28 @@ impl Ord for CommitNode<'_> {
     }
 }
 
-pub struct MergeBaseCtxt<'rcx> {
-    repo: BitRepo<'rcx>,
-    candidates: Vec<&'rcx Commit<'rcx>>,
-    pqueue: BinaryHeap<CommitNode<'rcx>>,
+pub struct MergeBaseCtxt {
+    repo: BitRepo,
+    candidates: Vec<Arc<Commit>>,
+    pqueue: BinaryHeap<CommitNode>,
     node_flags: FxHashMap<Oid, NodeFlags>,
     index: usize,
 }
 
-impl<'rcx> MergeBaseCtxt<'rcx> {
+impl MergeBaseCtxt {
     pub fn still_interesting(&self) -> bool {
         // interesting if pqueue still contains any non-stale nodes
         // otherwise, everything will be stale from here on so we can stop
         self.pqueue.iter().any(|node| !self.node_flags[&node.oid()].contains(NodeFlags::STALE))
     }
 
-    fn mk_node(&mut self, commit: &'rcx Commit<'rcx>) -> CommitNode<'rcx> {
+    fn mk_node(&mut self, commit: Arc<Commit>) -> CommitNode {
         let index = self.index;
         self.index += 1;
         CommitNode { index, commit }
     }
 
-    fn merge_bases_all(
-        mut self,
-        a: &'rcx Commit<'rcx>,
-        b: &'rcx Commit<'rcx>,
-    ) -> BitResult<Vec<&'rcx Commit<'rcx>>> {
+    fn merge_bases_all(mut self, a: Arc<Commit>, b: Arc<Commit>) -> BitResult<Vec<Arc<Commit>>> {
         self.build_candidates(a, b)?;
         let node_flags = &self.node_flags;
         self.candidates.retain(|node| !node_flags[&node.oid()].contains(NodeFlags::STALE));
@@ -750,7 +744,7 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
         Ok(self.candidates)
     }
 
-    fn build_candidates(&mut self, a: &'rcx Commit<'rcx>, b: &'rcx Commit<'rcx>) -> BitResult<()> {
+    fn build_candidates(&mut self, a: Arc<Commit>, b: Arc<Commit>) -> BitResult<()> {
         let mut push_init = |commit, flags| {
             let node = self.mk_node(commit);
             self.node_flags.entry(node.oid()).or_default().insert(flags);
@@ -796,11 +790,8 @@ impl<'rcx> MergeBaseCtxt<'rcx> {
     }
 }
 
-impl<'rcx> Commit<'rcx> {
-    fn find_merge_bases(
-        &'rcx self,
-        other: &'rcx Commit<'rcx>,
-    ) -> BitResult<Vec<&'rcx Commit<'rcx>>> {
+impl Commit {
+    fn find_merge_bases(&self, other: Arc<Commit>) -> BitResult<Vec<Arc<Commit>>> {
         MergeBaseCtxt {
             repo: self.owner(),
             candidates: Default::default(),
@@ -813,10 +804,7 @@ impl<'rcx> Commit<'rcx> {
 
     /// Returns lowest common ancestor found.
     /// If there are multiple candidates then the first is returned
-    pub fn find_merge_base(
-        &'rcx self,
-        other: &'rcx Commit<'rcx>,
-    ) -> BitResult<Option<&'rcx Commit<'rcx>>> {
+    pub fn find_merge_base(&self, other: Arc<Commit>) -> BitResult<Option<Arc<Commit>>> {
         let merge_bases = self.find_merge_bases(other)?;
         if merge_bases.is_empty() { Ok(None) } else { Ok(Some(merge_bases[0])) }
     }

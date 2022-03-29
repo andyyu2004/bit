@@ -14,7 +14,7 @@ pub struct BitMergeBaseCliOpts {
 }
 
 impl Cmd for BitMergeBaseCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let a = repo.fully_resolve_rev(&self.a)?;
         let b = repo.fully_resolve_rev(&self.b)?;
 

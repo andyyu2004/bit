@@ -16,7 +16,7 @@ pub struct BitLogCliOpts {
 }
 
 impl Cmd for BitLogCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let revisions = self.revisions.iter().collect::<Vec<_>>();
         let revwalk = repo.revwalk(&revisions)?;
         let mut pager = Command::new(&repo.config().pager()).stdin(Stdio::piped()).spawn()?;

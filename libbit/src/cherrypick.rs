@@ -4,7 +4,7 @@ use crate::peel::Peel;
 use crate::refs::BitRef;
 use crate::repo::BitRepo;
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn cherrypick_many(self, refs: impl IntoIterator<Item = BitRef>) -> BitResult<()> {
         for r in refs {
             self.cherrypick(r)?;

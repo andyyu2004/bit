@@ -11,13 +11,13 @@ use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::path::Path;
 
-pub struct BitRefDb<'rcx> {
-    repo: BitRepo<'rcx>,
+pub struct BitRefDb {
+    repo: BitRepo,
     bitdir: BitPath,
 }
 
-impl<'rcx> BitRefDb<'rcx> {
-    pub fn new(repo: BitRepo<'rcx>) -> Self {
+impl BitRefDb {
+    pub fn new(repo: BitRepo) -> Self {
         Self { repo, bitdir: repo.bitdir }
     }
 
@@ -51,8 +51,8 @@ pub type Refs = BTreeSet<SymbolicRef>;
 
 // unfortunately, doesn't seem like its easy to support a resolve operation on refdb as it will require reading
 // objects for validation but both refdb and odb are owned by the repo so not sure if this is feasible
-pub trait BitRefDbBackend<'rcx> {
-    fn repo(&self) -> BitRepo<'rcx>;
+pub trait BitRefDbBackend {
+    fn repo(&self) -> BitRepo;
     /// Create a bit branch from a reference.
     /// This method must gracefully handle the case where `from` does not fully resolve.
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()>;
@@ -132,9 +132,9 @@ pub trait BitRefDbBackend<'rcx> {
     }
 }
 
-impl<'rcx> BitRefDbBackend<'rcx> for BitRefDb<'rcx> {
+impl BitRefDbBackend for BitRefDb {
     #[inline]
-    fn repo(&self) -> BitRepo<'rcx> {
+    fn repo(&self) -> BitRepo {
         self.repo
     }
 

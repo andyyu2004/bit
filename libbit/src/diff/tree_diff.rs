@@ -79,15 +79,15 @@ impl<'a> TreeDiffEntry<'a> {
     }
 }
 
-pub struct TreeDiffIter<'rcx, I, J> {
-    repo: BitRepo<'rcx>,
+pub struct TreeDiffIter<I, J> {
+    repo: BitRepo,
     old_iter: I,
     new_iter: J,
     opts: DiffOpts,
 }
 
-impl<'rcx, I: BitTreeIterator, J> TreeDiffIter<'rcx, I, J> {
-    pub fn new(repo: BitRepo<'rcx>, old_iter: I, new_iter: J, opts: DiffOpts) -> Self {
+impl<I: BitTreeIterator, J> TreeDiffIter<I, J> {
+    pub fn new(repo: BitRepo, old_iter: I, new_iter: J, opts: DiffOpts) -> Self {
         assert_ne!(
             old_iter.kind(),
             IterKind::Worktree,
@@ -107,17 +107,17 @@ impl<'a, I> TreeDiffIterator<'a> for I where
 {
 }
 
-impl<'rcx, I, J> TreeDiffIter<'rcx, I, J>
+impl<I, J> TreeDiffIter<I, J>
 where
-    I: BitTreeIterator + 'rcx,
-    J: BitTreeIterator + 'rcx,
+    I: BitTreeIterator,
+    J: BitTreeIterator,
 {
-    pub fn into_iter(self) -> impl TreeDiffIterator<'rcx> {
+    pub fn into_iter(&self) -> impl TreeDiffIterator<'_> {
         self
     }
 }
 
-impl<'rcx, I, J> FallibleLendingIterator for TreeDiffIter<'rcx, I, J>
+impl<I, J> FallibleLendingIterator for TreeDiffIter<I, J>
 where
     I: BitTreeIterator,
     J: BitTreeIterator,
@@ -227,7 +227,7 @@ where
     }
 }
 
-impl<I, J> TreeDiffIter<'_, I, J>
+impl<I, J> TreeDiffIter<I, J>
 where
     I: BitTreeIterator,
     J: BitTreeIterator,
@@ -257,7 +257,7 @@ pub trait TreeDiffBuilder: TreeDiffer + Sized {
     type Output;
     fn build_diff(
         mut self,
-        repo: BitRepo<'_>,
+        repo: BitRepo,
         old_iter: impl BitTreeIterator,
         new_iter: impl BitTreeIterator,
         opts: DiffOpts,
@@ -302,7 +302,7 @@ impl<'a, D: TreeDiffer + ?Sized> TreeDiffer for &'a mut D {
 pub trait TreeDiffer {
     fn run_diff(
         &mut self,
-        repo: BitRepo<'_>,
+        repo: BitRepo,
         old_iter: impl BitTreeIterator,
         new_iter: impl BitTreeIterator,
         opts: DiffOpts,

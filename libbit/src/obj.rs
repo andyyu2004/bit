@@ -24,6 +24,7 @@ use std::fs::Metadata;
 use std::io::{BufRead, BufReader, Cursor, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(PartialEq, Clone)]
 pub struct BitPackObjRaw {
@@ -94,7 +95,7 @@ impl Debug for BitPackObjRaw {
     }
 }
 
-impl Display for BitObjKind<'_> {
+impl Display for BitObjKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // we can't write the following as `write!(f, "{}", x)
         // as we would lose the flags on the formatter
@@ -198,16 +199,16 @@ pub struct BitObjHeader {
     pub size: u64,
 }
 
-#[derive(PartialEq, Debug, Clone, BitObject, Copy)]
-pub enum BitObjKind<'rcx> {
-    Blob(&'rcx Blob<'rcx>),
-    Commit(&'rcx Commit<'rcx>),
-    Tree(&'rcx Tree<'rcx>),
-    Tag(&'rcx Tag<'rcx>),
+#[derive(PartialEq, Debug, Clone, BitObject)]
+pub enum BitObjKind {
+    Blob(Arc<Blob>),
+    Commit(Arc<Commit>),
+    Tree(Arc<Tree>),
+    Tag(Arc<Tag>),
 }
 
-impl<'rcx> BitObjKind<'rcx> {
-    pub fn into_tree(self) -> &'rcx Tree<'rcx> {
+impl BitObjKind {
+    pub fn into_tree(self) -> Arc<Tree> {
         match self {
             Self::Tree(tree) => tree,
             // panicking instead of erroring as this should be called only with certainty
@@ -221,7 +222,7 @@ impl<'rcx> BitObjKind<'rcx> {
     }
 }
 
-impl<'rcx> BitObjKind<'rcx> {
+impl BitObjKind {
     pub fn obj_type(&self) -> BitObjType {
         match self {
             BitObjKind::Blob(_) => BitObjType::Blob,
@@ -231,21 +232,21 @@ impl<'rcx> BitObjKind<'rcx> {
         }
     }
 
-    pub fn try_into_commit(self) -> BitResult<&'rcx Commit<'rcx>> {
+    pub fn try_into_commit(self) -> BitResult<Arc<Commit>> {
         match self {
             Self::Commit(commit) => Ok(commit),
             _ => Err(anyhow!("expected commit found `{}`", self.obj_type())),
         }
     }
 
-    pub fn into_commit(self) -> &'rcx Commit<'rcx> {
+    pub fn into_commit(self) -> Arc<Commit> {
         match self {
             Self::Commit(commit) => commit,
             _ => panic!("expected commit"),
         }
     }
 
-    pub fn into_blob(self) -> &'rcx Blob<'rcx> {
+    pub fn into_blob(self) -> Arc<Blob> {
         match self {
             BitObjKind::Blob(blob) => blob,
             _ => panic!("expected blob"),
@@ -260,11 +261,7 @@ impl<'rcx> BitObjKind<'rcx> {
         matches!(self, Self::Tree(..) | Self::Commit(..))
     }
 
-    pub fn new(
-        owner: BitRepo<'rcx>,
-        cached: BitObjCached,
-        reader: impl BufRead,
-    ) -> BitResult<Self> {
+    pub fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self> {
         match cached.obj_type {
             BitObjType::Commit => Commit::new(owner, cached, reader)
                 .map(|commit| owner.alloc_commit(commit))
@@ -278,16 +275,16 @@ impl<'rcx> BitObjKind<'rcx> {
         }
     }
 
-    pub fn from_slice(owner: BitRepo<'rcx>, cached: BitObjCached, slice: &[u8]) -> BitResult<Self> {
+    pub fn from_slice(owner: BitRepo, cached: BitObjCached, slice: &[u8]) -> BitResult<Self> {
         Self::new(owner, cached, BufReader::new(slice))
     }
 
-    pub fn from_raw(owner: BitRepo<'rcx>, raw: BitRawObj) -> BitResult<Self> {
+    pub fn from_raw(owner: BitRepo, raw: BitRawObj) -> BitResult<Self> {
         Self::new(owner, raw.cached, raw.stream)
     }
 }
 
-impl Serialize for BitObjKind<'_> {
+impl Serialize for BitObjKind {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         match self {
             BitObjKind::Blob(blob) => blob.serialize(writer),
@@ -328,8 +325,8 @@ pub trait WritableObject: Serialize + Send + Sync {
 // example is `bit cat-object tree <hash>` which just tries to print raw bytes
 // often they will just be the same
 // implmentors of BitObj must never be mutated otherwise their `Oid` will be wrong
-pub trait BitObject<'rcx> {
-    fn owner(&self) -> BitRepo<'rcx>;
+pub trait BitObject {
+    fn owner(&self) -> BitRepo;
     fn obj_cached(&self) -> &BitObjCached;
 
     #[inline]
@@ -343,10 +340,10 @@ pub trait BitObject<'rcx> {
     }
 }
 
-pub trait ImmutableBitObject<'rcx> {
+pub trait ImmutableBitObject {
     type Mutable: DeserializeSized;
 
-    fn new(owner: BitRepo<'rcx>, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self>
+    fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
@@ -357,7 +354,7 @@ pub trait ImmutableBitObject<'rcx> {
         ))
     }
 
-    fn from_mutable(owner: BitRepo<'rcx>, cached: BitObjCached, inner: Self::Mutable) -> Self;
+    fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]

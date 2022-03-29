@@ -24,6 +24,7 @@ use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use typed_arena::Arena as TypedArena;
 
 pub const BIT_PACK_OBJECTS_PATH: &str = "pack";
@@ -32,46 +33,46 @@ pub const BIT_HEAD_FILE_PATH: &str = "HEAD";
 pub const BIT_CONFIG_FILE_PATH: &str = "config";
 pub const BIT_OBJECTS_DIR_PATH: &str = "objects";
 
-#[derive(Copy, Clone)]
-pub struct BitRepo<'rcx> {
-    rcx: &'rcx RepoCtxt<'rcx>,
+#[derive(Clone)]
+pub struct BitRepo {
+    rcx: Arc<RepoCtxt>,
 }
 
-impl PartialEq for BitRepo<'_> {
+impl PartialEq for BitRepo {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.rcx, other.rcx)
     }
 }
 
 #[derive(Default)]
-pub struct Arenas<'rcx> {
-    commit_arena: TypedArena<Commit<'rcx>>,
-    tree_arena: TypedArena<Tree<'rcx>>,
-    blob_arena: TypedArena<Blob<'rcx>>,
-    tag_arena: TypedArena<Tag<'rcx>>,
+pub struct Arenas {
+    commit_arena: TypedArena<Commit>,
+    tree_arena: TypedArena<Tree>,
+    blob_arena: TypedArena<Blob>,
+    tag_arena: TypedArena<Tag>,
 }
 
 /// The context backing `BitRepo`
 /// Most of the fields are using threadsafe wrappers due to experimentation with
 /// multithreading but the results were not great so they are not in use currently.
-pub struct RepoCtxt<'rcx> {
+pub struct RepoCtxt {
     // ok to make this public as there is only ever
     // shared (immutable) access to this struct
     pub workdir: BitPath,
     pub bitdir: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
-    arenas: OneThread<Arenas<'rcx>>,
+    arenas: OneThread<Arenas>,
     config: BitConfig,
-    obj_cache: RwLock<BitObjCache<'rcx>>,
+    obj_cache: RwLock<BitObjCache>,
     odb_cell: SyncOnceCell<BitObjDb>,
-    refdb_cell: SyncOnceCell<BitRefDb<'rcx>>,
-    index_cell: SyncOnceCell<RwLock<BitIndex<'rcx>>>,
-    virtual_odb: SyncOnceCell<VirtualOdb<'rcx>>,
+    refdb_cell: SyncOnceCell<BitRefDb>,
+    index_cell: SyncOnceCell<RwLock<BitIndex>>,
+    virtual_odb: SyncOnceCell<VirtualOdb>,
     virtual_write: AtomicBool,
 }
 
-impl<'rcx> RepoCtxt<'rcx> {
+impl RepoCtxt {
     fn new(workdir: PathBuf, bitdir: PathBuf, config_filepath: PathBuf) -> BitResult<Self> {
         let workdir = BitPath::intern(workdir);
         let bitdir = BitPath::intern(bitdir);
@@ -148,15 +149,15 @@ impl<'rcx> RepoCtxt<'rcx> {
         Self::load_with_bitdir(path, ".git")
     }
 
-    pub fn with_res<R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_res<R>(&self, f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         self.with(f)
     }
 
-    pub fn with<R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> R) -> R {
+    pub fn with<R>(&self, f: impl FnOnce(BitRepo) -> R) -> R {
         f(BitRepo { rcx: self })
     }
 
-    pub async fn with_async<F, R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> F) -> R
+    pub async fn with_async<F, R>(&self, f: impl FnOnce(BitRepo) -> F) -> R
     where
         F: Future<Output = R>,
     {
@@ -166,7 +167,7 @@ impl<'rcx> RepoCtxt<'rcx> {
     /// Enter the repository context for a "transaction".
     /// If any fatal error occurs during the closure, then writes to the index are rolled back.
     /// This should generally be used as the entry point to accessing the repository
-    pub fn enter<R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> BitResult<R>) -> BitResult<R> {
+    pub fn enter<R>(&self, f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         tls::enter_repo(self, |repo| match f(repo) {
             Ok(r) => Ok(r),
             Err(err) => {
@@ -178,7 +179,7 @@ impl<'rcx> RepoCtxt<'rcx> {
         })
     }
 
-    pub async fn enter_async<F, R>(&'rcx self, f: impl FnOnce(BitRepo<'rcx>) -> F) -> BitResult<R>
+    pub async fn enter_async<F, R>(&self, f: impl FnOnce(BitRepo) -> F) -> BitResult<R>
     where
         F: Future<Output = BitResult<R>>,
     {
@@ -211,7 +212,7 @@ pub enum RepoState {
     Merging,
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn repo_state(self) -> RepoState {
         if self.bitdir.join(BitPath::MERGE_HEAD).exists() {
             RepoState::Merging
@@ -221,7 +222,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    pub fn config(self) -> &'rcx BitConfig {
+    pub fn config(self) -> Arc<BitConfig> {
         self.rcx.config()
     }
 
@@ -261,7 +262,7 @@ impl<'rcx> BitRepo<'rcx> {
     /// initialize a repository and use it in the closure
     pub fn init_load<R>(
         path: impl AsRef<Path>,
-        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
+        f: impl FnOnce(BitRepo) -> BitResult<R>,
     ) -> BitResult<R> {
         let path = path.as_ref();
         Self::init(&path)?;
@@ -271,7 +272,7 @@ impl<'rcx> BitRepo<'rcx> {
     /// recursively searches parents starting from the current directory for a git repo
     pub fn find<R>(
         path: impl AsRef<Path>,
-        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
+        f: impl FnOnce(BitRepo) -> BitResult<R>,
     ) -> BitResult<R> {
         let path = path.as_ref();
         let canonical_path = path.canonicalize().with_context(|| {
@@ -281,51 +282,51 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     #[inline]
-    pub fn refdb(&self) -> BitResult<&BitRefDb<'rcx>> {
+    pub fn refdb(&self) -> BitResult<&BitRefDb> {
         self.refdb_cell.get_or_try_init(|| Ok(BitRefDb::new(*self)))
     }
 
     // this is necessary as a lifetime hint as otherwise usages of &self.arenas have lifetime
     // tied to self rather than 'rcx
     #[inline]
-    fn arenas(self) -> &'rcx Arenas<'rcx> {
+    fn arenas(self) -> Arc<Arenas> {
         &self.rcx.arenas
     }
 
     #[inline]
-    pub(crate) fn cache(self) -> &'rcx RwLock<BitObjCache<'rcx>> {
+    pub(crate) fn cache(self) -> Arc<RwLock<BitObjCache>> {
         &self.rcx.obj_cache
     }
 
     #[inline]
-    pub(crate) fn alloc_commit(self, commit: Commit<'rcx>) -> &'rcx Commit<'rcx> {
+    pub(crate) fn alloc_commit(self, commit: Commit) -> Arc<Commit> {
         self.arenas().commit_arena.alloc(commit)
     }
 
     #[inline]
-    pub(crate) fn alloc_tree(self, tree: Tree<'rcx>) -> &'rcx Tree<'rcx> {
+    pub(crate) fn alloc_tree(self, tree: Tree) -> Arc<Tree> {
         self.arenas().tree_arena.alloc(tree)
     }
 
     #[inline]
-    pub(crate) fn alloc_blob(self, blob: Blob<'rcx>) -> &'rcx Blob<'rcx> {
+    pub(crate) fn alloc_blob(self, blob: Blob) -> Arc<Blob> {
         self.arenas().blob_arena.alloc(blob)
     }
 
     #[inline]
-    pub(crate) fn alloc_tag(self, tag: Tag<'rcx>) -> &'rcx Tag<'rcx> {
+    pub(crate) fn alloc_tag(self, tag: Tag) -> Arc<Tag> {
         self.arenas().tag_arena.alloc(tag)
     }
 
     #[inline]
-    fn index_lock(self) -> BitResult<&'rcx RwLock<BitIndex<'rcx>>> {
+    fn index_lock(self) -> BitResult<Arc<RwLock<BitIndex>>> {
         self.rcx
             .index_cell
             .get_or_try_init::<_, BitGenericError>(|| Ok(RwLock::new(BitIndex::new(self)?)))
     }
 
     #[inline]
-    pub fn index(self) -> BitResult<RwLockReadGuard<'rcx, BitIndex<'rcx>>> {
+    pub fn index(&self) -> BitResult<RwLockReadGuard<'_, &BitIndex>> {
         Ok(self
             .index_lock()?
             .try_read()
@@ -336,7 +337,7 @@ impl<'rcx> BitRepo<'rcx> {
     /// Be very cautious and hold the lock for the shortest period possible as it's fairly easy to run into deadlocks.
     /// Don't just declare index at the top of the function.
     #[inline]
-    pub fn index_mut(self) -> BitResult<RwLockWriteGuard<'rcx, BitIndex<'rcx>>> {
+    pub fn index_mut(&self) -> BitResult<RwLockWriteGuard<'_, &mut BitIndex>> {
         Ok(self
             .index_lock()?
             .try_write()
@@ -538,7 +539,7 @@ impl<'rcx> BitRepo<'rcx> {
         self.objects_dir().join(BIT_PACK_OBJECTS_PATH)
     }
 
-    fn virtual_odb(self) -> &'rcx VirtualOdb<'rcx> {
+    fn virtual_odb(self) -> Arc<VirtualOdb> {
         self.rcx.virtual_odb.get_or_init(|| VirtualOdb::new(self))
     }
 
@@ -557,7 +558,7 @@ impl<'rcx> BitRepo<'rcx> {
         self.odb()?.refresh()
     }
 
-    pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind<'rcx>> {
+    pub fn read_obj(self, id: impl Into<BitId>) -> BitResult<BitObjKind> {
         let id = id.into();
         trace!("BitRepo::read_obj(id: {})", id);
         let oid = self.expand_id(id)?;
@@ -573,11 +574,11 @@ impl<'rcx> BitRepo<'rcx> {
         }
     }
 
-    pub fn read_obj_tree(self, id: impl Into<BitId>) -> BitResult<&'rcx Tree<'rcx>> {
+    pub fn read_obj_tree(self, id: impl Into<BitId>) -> BitResult<Arc<Tree>> {
         self.read_obj(id).map(|obj| obj.into_tree())
     }
 
-    pub fn read_obj_commit(self, id: impl Into<BitId>) -> BitResult<&'rcx Commit<'rcx>> {
+    pub fn read_obj_commit(self, id: impl Into<BitId>) -> BitResult<Arc<Commit>> {
         self.read_obj(id).map(|obj| obj.into_commit())
     }
 
@@ -738,7 +739,7 @@ pub enum InitSummary {
     Reinit,
 }
 
-impl Debug for BitRepo<'_> {
+impl Debug for BitRepo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BitRepo")
             .field("worktree", &self.workdir)
@@ -747,8 +748,8 @@ impl Debug for BitRepo<'_> {
     }
 }
 
-impl<'rcx> Deref for BitRepo<'rcx> {
-    type Target = RepoCtxt<'rcx>;
+impl Deref for BitRepo {
+    type Target = RepoCtxt;
 
     fn deref(&self) -> &Self::Target {
         self.rcx

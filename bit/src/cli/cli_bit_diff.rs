@@ -19,7 +19,7 @@ pub struct BitDiffCliOpts {
 }
 
 impl Cmd for BitDiffCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         // let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
         let pathspec = Pathspec::MATCH_ALL;
         let diff = match &self.revs[..] {

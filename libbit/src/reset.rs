@@ -17,7 +17,7 @@ impl Default for ResetKind {
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn reset_revision(self, revision: &Revspec, kind: ResetKind) -> BitResult<()> {
         let target = self.resolve_rev(revision)?;
         self.reset(target, kind)

@@ -10,8 +10,8 @@ use tokio::io::{self, AsyncBufRead, AsyncRead, AsyncWrite, BufReader, ReadBuf};
 use tokio::process::{ChildStderr, ChildStdin, ChildStdout};
 
 pin_project! {
-    pub struct SshTransport<'rcx, 's> {
-        repo: BitRepo<'rcx>,
+    pub struct SshTransport<'s> {
+        repo: BitRepo,
         child: RemoteChild<'s>,
         stdin: ChildStdin,
         #[pin]
@@ -20,12 +20,12 @@ pin_project! {
     }
 }
 
-impl<'rcx, 's> SshTransport<'rcx, 's> {
+impl<'s> SshTransport<'s> {
     pub async fn new(
-        repo: BitRepo<'rcx>,
+        repo: BitRepo,
         session: &'s Session,
         url: &GitUrl,
-    ) -> BitResult<SshTransport<'rcx, 's>> {
+    ) -> BitResult<SshTransport<'s>> {
         let mut child = session
             .command("git-upload-pack")
             .arg(&url.path)
@@ -41,10 +41,10 @@ impl<'rcx, 's> SshTransport<'rcx, 's> {
 }
 
 #[async_trait]
-impl ProtocolTransport for SshTransport<'_, '_> {
+impl ProtocolTransport for SshTransport<'_> {
 }
 
-impl AsyncBufRead for SshTransport<'_, '_> {
+impl AsyncBufRead for SshTransport<'_> {
     fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<&[u8]>> {
         self.project().stdout.poll_fill_buf(cx)
     }
@@ -54,7 +54,7 @@ impl AsyncBufRead for SshTransport<'_, '_> {
     }
 }
 
-impl AsyncRead for SshTransport<'_, '_> {
+impl AsyncRead for SshTransport<'_> {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -64,7 +64,7 @@ impl AsyncRead for SshTransport<'_, '_> {
     }
 }
 
-impl AsyncWrite for SshTransport<'_, '_> {
+impl AsyncWrite for SshTransport<'_> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,

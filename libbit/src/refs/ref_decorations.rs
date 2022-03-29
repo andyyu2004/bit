@@ -73,7 +73,7 @@ impl Display for RefDecoration {
     }
 }
 
-impl BitRepo<'_> {
+impl BitRepo {
     /// Given a ordered set of references, returns a map from a commit oid to a ordered set of it's decorations
     pub fn ref_decorations(self, refs: &Refs) -> BitResult<HashMap<Oid, BTreeSet<RefDecoration>>> {
         let mut decorations = HashMap::<Oid, BTreeSet<RefDecoration>>::new();

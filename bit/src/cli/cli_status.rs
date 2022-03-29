@@ -10,7 +10,7 @@ pub struct BitStatusCliOpts {
 }
 
 impl Cmd for BitStatusCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let pathspec = self.pathspec.unwrap_or(Pathspec::MATCH_ALL);
         let status = repo.status(pathspec)?;
         Ok(println!("{}", status))

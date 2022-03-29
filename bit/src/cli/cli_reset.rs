@@ -19,7 +19,7 @@ pub struct BitResetCliOpts {
 }
 
 impl Cmd for BitResetCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         // assert exactly zero or one of them are true
         assert!((self.soft as u8 + self.mixed as u8 + self.hard as u8) < 2);
         let kind = if self.soft {

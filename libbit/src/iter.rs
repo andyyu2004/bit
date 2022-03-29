@@ -75,7 +75,7 @@ pub trait BitEntry {
     }
 
     /// Write the entry to the object store
-    fn write(&self, repo: BitRepo<'_>) -> BitResult<Oid> {
+    fn write(&self, repo: BitRepo) -> BitResult<Oid> {
         let oid = self.oid();
         if oid.is_known() {
             return Ok(oid);
@@ -85,17 +85,17 @@ pub trait BitEntry {
     }
 
     /// Write the entry to disk at `path` (where `path` is relative to repo root)
-    fn write_to_disk_at(&self, repo: BitRepo<'_>, path: impl AsRef<Path>) -> BitResult<()> {
+    fn write_to_disk_at(&self, repo: BitRepo, path: impl AsRef<Path>) -> BitResult<()> {
         let bytes = self.read_to_bytes(repo)?;
         let mut file = repo.touch(path)?;
         Ok(file.write_all(&bytes)?)
     }
 
-    fn write_to_disk(&self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn write_to_disk(&self, repo: BitRepo) -> BitResult<()> {
         self.write_to_disk_at(repo, self.path())
     }
 
-    fn read_to_bytes<'rcx>(&self, repo: BitRepo<'rcx>) -> BitResult<Cow<'rcx, [u8]>> {
+    fn read_to_bytes(&self, repo: BitRepo) -> BitResult<Cow<'_, [u8]>> {
         let oid = self.oid();
         // if object is known we try to read it from the object store
         // however, it's possible the object does not live there as the hash may have just been calculated to allow for comparisons
@@ -114,17 +114,17 @@ pub trait BitEntry {
 
 /// wrapper around `TreeIter` that skips the tree entries
 #[derive(Debug)]
-pub struct TreeEntryIter<'rcx> {
-    tree_iter: TreeIter<'rcx>,
+pub struct TreeEntryIter {
+    tree_iter: TreeIter,
 }
 
-impl<'rcx> TreeEntryIter<'rcx> {
-    pub fn new(repo: BitRepo<'rcx>, oid: Oid) -> Self {
+impl TreeEntryIter {
+    pub fn new(repo: BitRepo, oid: Oid) -> Self {
         Self { tree_iter: TreeIter::new(repo, oid) }
     }
 }
 
-impl<'rcx> FallibleIterator for TreeEntryIter<'rcx> {
+impl FallibleIterator for TreeEntryIter {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
@@ -165,8 +165,8 @@ impl FallibleIterator for DirIter {
 
 /// Iterator that yields filesystem entries accounting for gitignore and tracked files
 // Intended to be used as a building block for higher level worktree iterators
-struct WorktreeRawIter<'rcx> {
-    repo: BitRepo<'rcx>,
+struct WorktreeRawIter {
+    repo: BitRepo,
     // this is significantly faster than using bitpath as key for some reason
     tracked: FxHashSet<&'static OsStr>,
     // TODO ignoring all nonroot ignores for now
@@ -175,8 +175,8 @@ struct WorktreeRawIter<'rcx> {
     jwalk: jwalk::DirEntryIter<((), ())>,
 }
 
-impl<'rcx> WorktreeRawIter<'rcx> {
-    pub fn new(index: &BitIndex<'rcx>) -> BitResult<Self> {
+impl WorktreeRawIter {
+    pub fn new(index: &BitIndex) -> BitResult<Self> {
         let repo = index.repo;
         // ignoring any gitignore errors for now
         let ignore = vec![Gitignore::new(repo.workdir.join(".gitignore").as_path()).0];
@@ -261,7 +261,7 @@ pub struct DirEntry {
     path: PathBuf,
 }
 
-impl FallibleIterator for WorktreeRawIter<'_> {
+impl FallibleIterator for WorktreeRawIter {
     type Error = BitGenericError;
     type Item = DirEntry;
 
@@ -281,17 +281,17 @@ impl FallibleIterator for WorktreeRawIter<'_> {
     }
 }
 
-pub struct WorktreeIter<'rcx> {
-    inner: WorktreeRawIter<'rcx>,
+pub struct WorktreeIter {
+    inner: WorktreeRawIter,
 }
 
-impl<'rcx> WorktreeIter<'rcx> {
-    pub fn new(index: &BitIndex<'rcx>) -> BitResult<Self> {
+impl WorktreeIter {
+    pub fn new(index: &BitIndex) -> BitResult<Self> {
         Ok(Self { inner: WorktreeRawIter::new(index)? })
     }
 }
 
-impl FallibleIterator for WorktreeIter<'_> {
+impl FallibleIterator for WorktreeIter {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
@@ -316,25 +316,25 @@ pub trait BitEntryIterator = BitIterator<BitIndexEntry>;
 
 pub trait BitIterator<T> = FallibleIterator<Item = T, Error = BitGenericError>;
 
-impl<'rcx> BitIndex<'rcx> {
-    pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator + 'rcx> {
+impl BitIndex {
+    pub fn worktree_iter(&self) -> BitResult<impl BitEntryIterator> {
         trace!("worktree_iter()");
         WorktreeIter::new(self)
     }
 
-    pub fn worktree_tree_iter(&self) -> BitResult<impl BitTreeIterator + 'rcx> {
+    pub fn worktree_tree_iter(&self) -> BitResult<impl BitTreeIterator> {
         trace!("worktree_tree_iter()");
         WorktreeTreeIter::new(self)
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
-    pub fn tree_entry_iter(self, oid: Oid) -> BitResult<impl BitEntryIterator + 'rcx> {
+impl BitRepo {
+    pub fn tree_entry_iter(self, oid: Oid) -> BitResult<impl BitEntryIterator> {
         trace!("tree_entry_iter(oid: {})", oid);
         Ok(TreeEntryIter::new(self, oid))
     }
 
-    pub fn head_iter(self) -> BitResult<impl BitEntryIterator + 'rcx> {
+    pub fn head_iter(self) -> BitResult<impl BitEntryIterator> {
         trace!("head_iter()");
         let oid = self.head_tree()?;
         self.tree_entry_iter(oid)

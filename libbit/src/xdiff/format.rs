@@ -12,16 +12,16 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 
-pub struct DiffFormatter<'rcx, W> {
-    repo: BitRepo<'rcx>,
+pub struct DiffFormatter<W> {
+    repo: BitRepo,
     writer: W,
 }
 
 pub trait DiffFormatExt: Sized {
-    fn format_diffstat_into(self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()>;
-    fn format_diff_into(self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()>;
+    fn format_diffstat_into(self, repo: BitRepo, writer: impl Write) -> BitResult<()>;
+    fn format_diff_into(self, repo: BitRepo, writer: impl Write) -> BitResult<()>;
 
-    fn print_diffstat(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn print_diffstat(self, repo: BitRepo) -> BitResult<()> {
         self.format_diffstat_into(repo, std::io::stdout())
     }
 }
@@ -40,26 +40,26 @@ impl WorkspaceStatus {
 }
 
 impl<D: Diff> DiffFormatExt for D {
-    fn format_diffstat_into(self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()> {
+    fn format_diffstat_into(self, repo: BitRepo, writer: impl Write) -> BitResult<()> {
         DiffStatFormatter::format_diffstat_into(repo, writer, self)
     }
 
-    fn format_diff_into(self, repo: BitRepo<'_>, writer: impl Write) -> BitResult<()> {
+    fn format_diff_into(self, repo: BitRepo, writer: impl Write) -> BitResult<()> {
         DiffFormatter::format_diff_into(repo, writer, self)
     }
 }
 
-impl<'rcx, W: Write> DiffFormatter<'rcx, W> {
-    pub fn new(repo: BitRepo<'rcx>, writer: W) -> Self {
+impl<W: Write> DiffFormatter<W> {
+    pub fn new(repo: BitRepo, writer: W) -> Self {
         Self { repo, writer }
     }
 
-    pub fn format_diff_into(repo: BitRepo<'rcx>, writer: W, status: impl Diff) -> BitResult<()> {
+    pub fn format_diff_into(repo: BitRepo, writer: W, status: impl Diff) -> BitResult<()> {
         status.apply_with(&mut Self::new(repo, writer))
     }
 }
 
-impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
+impl<W: Write> Differ for DiffFormatter<W> {
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         let new_txt = new.read_to_bytes(self.repo)?;
         let mut patch = xdiff::xdiff(&[], &new_txt);
@@ -119,8 +119,8 @@ impl<'rcx, W: Write> Differ for DiffFormatter<'rcx, W> {
     }
 }
 
-pub struct DiffStatFormatter<'rcx, W> {
-    repo: BitRepo<'rcx>,
+pub struct DiffStatFormatter<W> {
+    repo: BitRepo,
     writer: W,
     diffstat_lines: BTreeSet<DiffStatLine>,
     max_path_len: usize,
@@ -129,8 +129,8 @@ pub struct DiffStatFormatter<'rcx, W> {
     total_deletions: usize,
 }
 
-impl<'rcx, W: Write> DiffStatFormatter<'rcx, W> {
-    pub fn new(repo: BitRepo<'rcx>, writer: W) -> Self {
+impl<W: Write> DiffStatFormatter<W> {
+    pub fn new(repo: BitRepo, writer: W) -> Self {
         Self {
             repo,
             writer,
@@ -144,11 +144,7 @@ impl<'rcx, W: Write> DiffStatFormatter<'rcx, W> {
 
     // this api is a bit weird, why not just generate a diffstat struct from the workspace status
     // could just do a `diffstat` method on workspace status and then the user can write as one wishes
-    pub fn format_diffstat_into(
-        repo: BitRepo<'rcx>,
-        writer: W,
-        status: impl Diff,
-    ) -> BitResult<()> {
+    pub fn format_diffstat_into(repo: BitRepo, writer: W, status: impl Diff) -> BitResult<()> {
         let mut this = Self::new(repo, writer);
         status.apply_with(&mut this)?;
 
@@ -250,7 +246,7 @@ impl DiffStatLine {
 
 // TODO handle binary files better
 // e.g. libbit/tests/repos/indextest/.bit/index | Bin 633 -> 652 bytes
-impl<'rcx, W: Write> Differ for DiffStatFormatter<'rcx, W> {
+impl<W: Write> Differ for DiffStatFormatter<W> {
     fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
         let new_txt = new.read_to_bytes(self.repo)?;
         let patch = xdiff::xdiff(&[], &new_txt);

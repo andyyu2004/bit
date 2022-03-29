@@ -77,7 +77,7 @@ impl NodeData {
     }
 }
 
-impl<'rcx> DagNode<DagBuilder> for NodeData {
+impl DagNode<DagBuilder> for NodeData {
     fn adjacent(&self) -> Vec<Node> {
         self.parents.clone()
     }
@@ -102,7 +102,7 @@ impl Dag for DagBuilder {
     }
 }
 
-impl<'rcx> DagBuilder {
+impl DagBuilder {
     pub fn node_data(&self, node: Node) -> &NodeData {
         &self.nodes[node]
     }

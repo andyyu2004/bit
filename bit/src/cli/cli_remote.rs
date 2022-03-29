@@ -36,7 +36,7 @@ pub struct BitRemoteRemoveOpts {
 }
 
 impl Cmd for BitRemoteCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         match self.subcmd {
             Some(subcmd) => match subcmd {
                 BitRemoteSubcommand::Add(opts) => repo.add_remote(&opts.name, &opts.url),
@@ -49,7 +49,7 @@ impl Cmd for BitRemoteCliOpts {
 }
 
 impl Cmd for BitRemoteShowOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         match self.name {
             Some(_) => todo!(),
             None => repo.ls_remotes().for_each(|remote| println!("{}", remote.name)),

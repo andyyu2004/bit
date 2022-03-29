@@ -22,17 +22,17 @@ pub enum DiffEntry {
     Created(BitIndexEntry),
 }
 
-pub struct IndexWorktreeDiffIter<'a, 'rcx, I, J>
+pub struct IndexWorktreeDiffIter<'a, I, J>
 where
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
-    index: &'a mut BitIndex<'rcx>,
+    index: &'a mut BitIndex,
     old_iter: Peekable<Fuse<I>>,
     new_iter: Peekable<Fuse<J>>,
 }
 
-impl<'a, 'rcx, I, J> FallibleIterator for IndexWorktreeDiffIter<'a, 'rcx, I, J>
+impl<'a, I, J> FallibleIterator for IndexWorktreeDiffIter<'a, I, J>
 where
     I: BitEntryIterator,
     J: BitEntryIterator,
@@ -99,14 +99,14 @@ pub trait Differ {
     fn on_deleted(&mut self, old: BitIndexEntry) -> BitResult<()>;
 }
 
-pub struct IndexWorktreeDiffDriver<'d, 'rcx, D, I, J>
+pub struct IndexWorktreeDiffDriver<'d, D, I, J>
 where
     D: Differ,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
     differ: &'d mut D,
-    index: &'d mut BitIndex<'rcx>,
+    index: &'d mut BitIndex,
     old_iter: Peekable<Fuse<I>>,
     new_iter: Peekable<Fuse<J>>,
 }
@@ -118,13 +118,13 @@ enum Changed {
     Maybe,
 }
 
-impl<'d, 'rcx, D, I, J> IndexWorktreeDiffDriver<'d, 'rcx, D, I, J>
+impl<'d, D, I, J> IndexWorktreeDiffDriver<'d, D, I, J>
 where
     D: Differ,
     I: BitEntryIterator,
     J: BitEntryIterator,
 {
-    fn new(differ: &'d mut D, index: &'d mut BitIndex<'rcx>, old_iter: I, new_iter: J) -> Self {
+    fn new(differ: &'d mut D, index: &'d mut BitIndex, old_iter: I, new_iter: J) -> Self {
         Self {
             differ,
             index,
@@ -148,10 +148,10 @@ where
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn diff_treeish_index(
         self,
-        treeish: impl Treeish<'rcx>,
+        treeish: impl Treeish,
         pathspec: Pathspec,
     ) -> BitResult<WorkspaceStatus> {
         self.diff_tree_index(treeish.treeish_oid(self)?, pathspec)
@@ -212,16 +212,11 @@ impl<'rcx> BitRepo<'rcx> {
         self,
         a: I,
         b: J,
-    ) -> TreeDiffIter<'rcx, I, J> {
+    ) -> TreeDiffIter<I, J> {
         self.tree_diff_iter_with_opts(a, b, Default::default())
     }
 
-    pub fn tree_diff_iter_with_opts<I, J>(
-        self,
-        a: I,
-        b: J,
-        opts: DiffOpts,
-    ) -> TreeDiffIter<'rcx, I, J>
+    pub fn tree_diff_iter_with_opts<I, J>(self, a: I, b: J, opts: DiffOpts) -> TreeDiffIter<I, J>
     where
         I: BitTreeIterator,
         J: BitTreeIterator,
@@ -263,7 +258,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
-impl<'rcx> BitIndex<'rcx> {
+impl BitIndex {
     pub fn diff_worktree(&mut self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
         IndexWorktreeDiffer::new(pathspec).build_diff(self)
     }
@@ -413,7 +408,7 @@ impl IndexWorktreeDiffer {
         Self { pathspec, status: Default::default(), _untracked_dirs: Default::default() }
     }
 
-    fn build_diff(mut self, index: &mut BitIndex<'_>) -> BitResult<WorkspaceStatus> {
+    fn build_diff(mut self, index: &mut BitIndex) -> BitResult<WorkspaceStatus> {
         let index_iter = self.pathspec.match_index(index)?;
         let worktree_iter = self.pathspec.match_worktree(index)?;
         IndexWorktreeDiffDriver::new(&mut self, index, index_iter, worktree_iter).run_diff()?;
@@ -439,7 +434,7 @@ impl Differ for IndexWorktreeDiffer {
     }
 }
 
-impl<'rcx> BitIndex<'rcx> {
+impl BitIndex {
     pub fn is_worktree_entry_modified(
         &mut self,
         worktree_entry: &mut BitIndexEntry,

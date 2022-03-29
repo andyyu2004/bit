@@ -13,7 +13,7 @@ pub struct BitCommitCliOpts {
 }
 
 impl Cmd for BitCommitCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let mut opts = CommitOpts::default();
         opts.message = self.message;
         opts.allow_empty = self.allow_empty;

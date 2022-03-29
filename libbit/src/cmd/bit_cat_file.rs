@@ -18,7 +18,7 @@ pub enum BitCatFileOperation {
     PrettyPrint,
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn bit_cat_file(&self, opts: BitCatFileOpts) -> BitResult<()> {
         trace!("bit_cat_file {:?}", opts);
         let oid = self.fully_resolve_rev_to_any(&opts.rev)?;

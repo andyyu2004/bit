@@ -14,6 +14,7 @@ use std::ffi::OsStr;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub use ref_decorations::*;
 pub use refdb::*;
@@ -246,7 +247,7 @@ impl BitRef {
     pub const HEAD: Self = Self::Symbolic(SymbolicRef::HEAD);
     pub const MASTER: Self = Self::Symbolic(SymbolicRef::MASTER);
 
-    pub fn resolve_to_tree(self, repo: BitRepo<'_>) -> BitResult<&Tree<'_>> {
+    pub fn resolve_to_tree(self, repo: BitRepo) -> BitResult<Arc<Tree>> {
         let oid = repo.fully_resolve_ref(self)?;
         match repo.read_obj(oid)? {
             BitObjKind::Blob(..) => bail!("blob type is not treeish"),

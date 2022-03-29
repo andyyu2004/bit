@@ -1,7 +1,7 @@
 use super::*;
 use std::cmp::Ordering;
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn walk_tree_iterators<'a, const N: usize>(
         self,
         iterators: [Box<dyn BitTreeIterator + 'a>; N],

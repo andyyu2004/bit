@@ -15,7 +15,7 @@ pub struct CacheInfo {
     pub path: String,
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn bit_update_index(&self, _opts: BitUpdateIndexOpts) -> BitResult<()> {
         Ok(())
     }

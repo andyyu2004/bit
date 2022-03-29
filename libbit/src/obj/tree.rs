@@ -13,38 +13,39 @@ use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
 use std::iter::FromIterator;
+use std::sync::Arc;
 
 /// Represents entities that have a straightforward way of being converted/dereferenced into a tree
 /// This includes commits and oids (and also trivially tree's themselves),
 /// but probaby should not extend so far as to include refs/revisions
-pub trait Treeish<'rcx>: Sized {
-    fn treeish_oid(&self, repo: BitRepo<'rcx>) -> BitResult<Oid>;
+pub trait Treeish: Sized {
+    fn treeish_oid(&self, repo: BitRepo) -> BitResult<Oid>;
 
     // override this default implementation if a more efficient one is available
-    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<&'rcx Tree<'rcx>> {
+    fn treeish(self, repo: BitRepo) -> BitResult<Arc<Tree>> {
         let tree_oid = self.treeish_oid(repo)?;
         repo.read_obj_tree(tree_oid)
     }
 }
 
-impl<'rcx> Treeish<'rcx> for &'rcx Tree<'rcx> {
-    fn treeish(self, _repo: BitRepo<'rcx>) -> BitResult<Self> {
+impl Treeish for Arc<Tree> {
+    fn treeish(self, _repo: BitRepo) -> BitResult<Self> {
         Ok(self)
     }
 
-    fn treeish_oid(&self, _repo: BitRepo<'rcx>) -> BitResult<Oid> {
+    fn treeish_oid(&self, _repo: BitRepo) -> BitResult<Oid> {
         Ok(self.oid())
     }
 }
 
-impl<'rcx> Treeish<'rcx> for Oid {
-    fn treeish_oid(&self, repo: BitRepo<'rcx>) -> BitResult<Oid> {
+impl Treeish for Oid {
+    fn treeish_oid(&self, repo: BitRepo) -> BitResult<Oid> {
         repo.read_obj(*self)?.treeish_oid(repo)
     }
 }
 
-impl<'rcx> Treeish<'rcx> for BitObjKind<'rcx> {
-    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<&'rcx Tree<'rcx>> {
+impl Treeish for BitObjKind {
+    fn treeish(self, repo: BitRepo) -> BitResult<Arc<Tree>> {
         match self {
             BitObjKind::Commit(commit) => commit.peel(repo),
             BitObjKind::Tree(tree) => Ok(tree),
@@ -53,7 +54,7 @@ impl<'rcx> Treeish<'rcx> for BitObjKind<'rcx> {
         }
     }
 
-    fn treeish_oid(&self, _repo: BitRepo<'rcx>) -> BitResult<Oid> {
+    fn treeish_oid(&self, _repo: BitRepo) -> BitResult<Oid> {
         match self {
             BitObjKind::Commit(commit) => Ok(commit.tree_oid()),
             BitObjKind::Tree(tree) => Ok(tree.oid()),
@@ -63,7 +64,7 @@ impl<'rcx> Treeish<'rcx> for BitObjKind<'rcx> {
     }
 }
 
-impl Display for Tree<'_> {
+impl Display for Tree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             for entry in &self.entries {
@@ -97,8 +98,8 @@ impl Display for TreeEntry {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Tree<'rcx> {
-    owner: BitRepo<'rcx>,
+pub struct Tree {
+    owner: BitRepo,
     cached: BitObjCached,
     // This is an exception to the other objects where immutable is not just a wrapper over mutable
     // we prefer a vec here as btreeset takes O(nlogn) to build which is unnecessarily slow
@@ -107,7 +108,7 @@ pub struct Tree<'rcx> {
     pub(crate) entries: Vec<TreeEntry>,
 }
 
-impl Serialize for Tree<'_> {
+impl Serialize for Tree {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         for entry in &self.entries {
             entry.serialize(writer)?;
@@ -116,34 +117,34 @@ impl Serialize for Tree<'_> {
     }
 }
 
-impl<'rcx> BitObject<'rcx> for Tree<'rcx> {
+impl BitObject for Tree {
     fn obj_cached(&self) -> &BitObjCached {
         &self.cached
     }
 
-    fn owner(&self) -> BitRepo<'rcx> {
+    fn owner(&self) -> BitRepo {
         self.owner
     }
 }
 
-impl<'rcx> ImmutableBitObject<'rcx> for Tree<'rcx> {
+impl ImmutableBitObject for Tree {
     type Mutable = MutableTree;
 
-    fn new(owner: BitRepo<'rcx>, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self>
+    fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self>
     where
         Self: Sized,
     {
         Ok(Self { owner, cached, entries: Self::read_entries(reader, cached.size)? })
     }
 
-    fn from_mutable(_owner: BitRepo<'rcx>, _cached: BitObjCached, _inner: Self::Mutable) -> Self {
+    fn from_mutable(_owner: BitRepo, _cached: BitObjCached, _inner: Self::Mutable) -> Self {
         unreachable!(
             "method unnecessary for this new design (as it's only used for a reasonable default impl for `ImmutableBitObject::new`), so this trait probably needs a rethink"
         )
     }
 }
-impl<'rcx> Tree<'rcx> {
-    pub fn empty(repo: BitRepo<'rcx>) -> &'rcx Self {
+impl Tree {
+    pub fn empty(repo: BitRepo) -> Arc<Self> {
         let tree = Self {
             owner: repo,
             cached: BitObjCached::new(Oid::EMPTY_TREE, BitObjType::Tree, 0),

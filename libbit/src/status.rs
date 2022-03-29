@@ -36,13 +36,13 @@ impl BitStatus {
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn status(self, pathspec: Pathspec) -> BitResult<BitStatus> {
         self.index_mut()?.status(pathspec)
     }
 }
 
-impl<'rcx> BitIndex<'rcx> {
+impl BitIndex {
     pub fn status(&mut self, pathspec: Pathspec) -> BitResult<BitStatus> {
         let head = self.repo.read_head()?;
         let staged = self.diff_head(pathspec)?;

@@ -18,7 +18,7 @@ pub struct BitMergeCliOpts {
 }
 
 impl Cmd for BitMergeCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let mut opts = MergeOpts::default();
         opts.no_commit = self.no_commit;
         opts.no_edit = self.no_edit;

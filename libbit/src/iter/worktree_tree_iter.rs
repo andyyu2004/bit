@@ -1,17 +1,17 @@
 use super::*;
 
-pub struct WorktreeTreeIter<'rcx> {
-    inner: WorktreeRawIter<'rcx>,
+pub struct WorktreeTreeIter {
+    inner: WorktreeRawIter,
     peeked: Option<BitIndexEntry>,
 }
 
-impl<'rcx> WorktreeTreeIter<'rcx> {
-    pub fn new(index: &BitIndex<'rcx>) -> BitResult<Self> {
+impl WorktreeTreeIter {
+    pub fn new(index: &BitIndex) -> BitResult<Self> {
         Ok(Self { inner: WorktreeRawIter::new(index)?, peeked: None })
     }
 }
 
-impl<'rcx> FallibleIterator for WorktreeTreeIter<'rcx> {
+impl FallibleIterator for WorktreeTreeIter {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 
@@ -40,7 +40,7 @@ impl<'rcx> FallibleIterator for WorktreeTreeIter<'rcx> {
     }
 }
 
-impl<'rcx> BitTreeIterator for WorktreeTreeIter<'rcx> {
+impl BitTreeIterator for WorktreeTreeIter {
     fn kind(&self) -> IterKind {
         IterKind::Worktree
     }

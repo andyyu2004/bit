@@ -28,7 +28,7 @@ pub struct BitConfigCliOpts {
 }
 
 impl BitConfigCliOpts {
-    pub fn execute(&self, repo: BitRepo<'_>) -> BitResult<()> {
+    pub fn execute(&self, repo: BitRepo) -> BitResult<()> {
         // if its not global we assume its local even if self.local is not explicitly set
         let (section, key) = self.name.split_once(".").unwrap();
         repo.with_raw_local_config(|config| {

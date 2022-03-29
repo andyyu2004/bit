@@ -9,14 +9,14 @@ pub struct BitFetchCliOpts {
 }
 
 impl Cmd for BitFetchCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         self.exec_async(repo)
     }
 }
 
 impl BitFetchCliOpts {
     #[tokio::main]
-    async fn exec_async(self, repo: BitRepo<'_>) -> BitResult<()> {
+    async fn exec_async(self, repo: BitRepo) -> BitResult<()> {
         match self.remote {
             Some(remote) => {
                 repo.fetch(&remote).await?;

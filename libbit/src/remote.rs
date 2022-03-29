@@ -133,7 +133,7 @@ impl FetchSummary {
     pub const EMPTY_REMOTE: Self = Self { head_symref: None, status: FetchStatus::EmptyRemote };
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn clone_blocking(into: impl AsRef<Path>, url: impl AsRef<str>) -> BitResult<()> {
         let into = into.as_ref();
         let exists = into.exists();
@@ -231,7 +231,7 @@ impl<'rcx> BitRepo<'rcx> {
         }
     }
 
-    pub fn ls_remotes(self) -> impl Iterator<Item = Remote> + 'rcx {
+    pub fn ls_remotes(self) -> impl Iterator<Item = Remote> {
         self.remote_config()
             .into_iter()
             .map(|(name, config)| Remote::from_config(name, config.clone()))

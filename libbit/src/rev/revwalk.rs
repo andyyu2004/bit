@@ -10,10 +10,11 @@ use smallvec::{smallvec, SmallVec};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::ops::Deref;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
-struct CommitNode<'rcx> {
-    commit: &'rcx Commit<'rcx>,
+struct CommitNode {
+    commit: Arc<Commit>,
     // *NOTE* We are reasoning under the assumption that committer timestamps are *non-decreasing*
     // In the absolute worst case all timestamps will be equal but a child can never be committed before parent
     // which is obviously true but maybe wrong systems times can cause issues. In bit, the committin has a check against this,
@@ -67,14 +68,14 @@ bitflags! {
     }
 }
 
-impl<'rcx> PartialOrd for CommitNode<'rcx> {
+impl PartialOrd for CommitNode {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'rcx> Deref for CommitNode<'rcx> {
-    type Target = Commit<'rcx>;
+impl Deref for CommitNode {
+    type Target = Commit;
 
     fn deref(&self) -> &Self::Target {
         &self.commit
@@ -83,10 +84,10 @@ impl<'rcx> Deref for CommitNode<'rcx> {
 
 // probably not an entirely sound thing to do
 // but necessary for the ord impl below
-impl Eq for CommitNode<'_> {
+impl Eq for CommitNode {
 }
 
-impl<'rcx> Ord for CommitNode<'rcx> {
+impl Ord for CommitNode {
     // we want this cmp to suit a maxheap
     // so we want the most recent (largest timestamp) commit to be >= and the smallest index to be >=
     fn cmp(&self, other: &Self) -> Ordering {
@@ -98,35 +99,35 @@ impl<'rcx> Ord for CommitNode<'rcx> {
     }
 }
 
-impl<'rcx> Commit<'rcx> {
-    pub fn revwalk(&'rcx self) -> BitResult<RevWalk<'rcx>> {
+impl Commit {
+    pub fn revwalk(&self) -> BitResult<RevWalk> {
         RevWalk::walk_commit(self)
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
-    pub fn revwalk(self, revspecs: &[&Revspec]) -> BitResult<RevWalk<'rcx>> {
+impl BitRepo {
+    pub fn revwalk(self, revspecs: &[&Revspec]) -> BitResult<RevWalk> {
         RevWalk::walk_revspecs(self, revspecs)
     }
 
-    pub fn revwalk_builder(self) -> RevWalkBuilder<'rcx> {
+    pub fn revwalk_builder(self) -> RevWalkBuilder {
         RevWalkBuilder::new(self)
     }
 }
 
 #[derive(Debug)]
-pub struct RevWalkBuilder<'rcx> {
-    repo: BitRepo<'rcx>,
-    roots: SmallVec<[&'rcx Commit<'rcx>; 2]>,
-    exclude: SmallVec<[&'rcx Commit<'rcx>; 2]>,
+pub struct RevWalkBuilder {
+    repo: BitRepo,
+    roots: SmallVec<[Arc<Commit>; 2]>,
+    exclude: SmallVec<[Arc<Commit>; 2]>,
 }
 
-impl<'rcx> RevWalkBuilder<'rcx> {
-    pub fn new(repo: BitRepo<'rcx>) -> Self {
+impl RevWalkBuilder {
+    pub fn new(repo: BitRepo) -> Self {
         Self { repo, roots: Default::default(), exclude: Default::default() }
     }
 
-    pub fn excluding(mut self, exclude: SmallVec<[&'rcx Commit<'rcx>; 2]>) -> Self {
+    pub fn excluding(mut self, exclude: SmallVec<[Arc<Commit>; 2]>) -> Self {
         self.exclude = exclude;
         self
     }
@@ -153,7 +154,7 @@ impl<'rcx> RevWalkBuilder<'rcx> {
         Ok(self)
     }
 
-    pub fn roots_iter<T: Peel<'rcx, Peeled = &'rcx Commit<'rcx>>>(
+    pub fn roots_iter<T: Peel<Peeled = Arc<Commit>>>(
         mut self,
         roots: impl IntoIterator<Item = T>,
     ) -> BitResult<Self> {
@@ -164,12 +165,12 @@ impl<'rcx> RevWalkBuilder<'rcx> {
         Ok(self)
     }
 
-    pub fn roots(mut self, roots: SmallVec<[&'rcx Commit<'rcx>; 2]>) -> Self {
+    pub fn roots(mut self, roots: SmallVec<[Arc<Commit>; 2]>) -> Self {
         self.roots = roots;
         self
     }
 
-    pub fn build(self) -> RevWalk<'rcx> {
+    pub fn build(self) -> RevWalk {
         let mut this = RevWalk {
             repo: self.repo,
             flags: Default::default(),
@@ -186,17 +187,17 @@ impl<'rcx> RevWalkBuilder<'rcx> {
 }
 
 #[derive(Debug, Clone)]
-pub struct RevWalk<'rcx> {
-    repo: BitRepo<'rcx>,
+pub struct RevWalk {
+    repo: BitRepo,
     // map of commit oid to their flags
     // I suppose this field name should be doubly plural
     flags: FxHashMap<Oid, CommitNodeFlags>,
-    pqueue: BinaryHeap<CommitNode<'rcx>>,
+    pqueue: BinaryHeap<CommitNode>,
     index: usize,
 }
 
-impl<'rcx> RevWalk<'rcx> {
-    pub fn new(roots: SmallVec<[&'rcx Commit<'rcx>; 2]>) -> Self {
+impl RevWalk {
+    pub fn new(roots: SmallVec<[Arc<Commit>; 2]>) -> Self {
         debug_assert!(!roots.is_empty());
         let mut this = Self {
             repo: roots[0].owner(),
@@ -215,15 +216,11 @@ impl<'rcx> RevWalk<'rcx> {
         index
     }
 
-    fn mk_node(&mut self, commit: &'rcx Commit<'rcx>) -> CommitNode<'rcx> {
+    fn mk_node(&mut self, commit: Arc<Commit>) -> CommitNode {
         CommitNode { commit, index: self.next_index() }
     }
 
-    fn enqueue_commit_with_flags(
-        &mut self,
-        commit: &'rcx Commit<'rcx>,
-        init_flags: CommitNodeFlags,
-    ) {
+    fn enqueue_commit_with_flags(&mut self, commit: Arc<Commit>, init_flags: CommitNodeFlags) {
         let flags = self.flags.entry(commit.oid()).or_default();
         if flags.intersects(CommitNodeFlags::ENQUEUED | CommitNodeFlags::YIELDED) {
             return;
@@ -233,17 +230,17 @@ impl<'rcx> RevWalk<'rcx> {
         self.pqueue.push(node)
     }
 
-    pub fn enqueue_commit(&mut self, commit: &'rcx Commit<'rcx>) {
+    pub fn enqueue_commit(&mut self, commit: Arc<Commit>) {
         self.enqueue_commit_with_flags(commit, CommitNodeFlags::default())
     }
 
-    fn mark_parents_uninteresting(&mut self, node: &CommitNode<'rcx>) {
+    fn mark_parents_uninteresting(&mut self, node: &CommitNode) {
         for &parent in &node.parents {
             self.flags.entry(parent).or_default().insert(CommitNodeFlags::UNINTERESTING)
         }
     }
 
-    pub fn walk_revspecs(repo: BitRepo<'rcx>, revspecs: &[&Revspec]) -> BitResult<Self> {
+    pub fn walk_revspecs(repo: BitRepo, revspecs: &[&Revspec]) -> BitResult<Self> {
         let roots = revspecs
             .iter()
             .map(|&rev| repo.fully_resolve_rev(rev)?.peel(repo))
@@ -251,16 +248,16 @@ impl<'rcx> RevWalk<'rcx> {
         Ok(Self::new(roots))
     }
 
-    pub fn walk_revspec(repo: BitRepo<'rcx>, rev: &Revspec) -> BitResult<Self> {
+    pub fn walk_revspec(repo: BitRepo, rev: &Revspec) -> BitResult<Self> {
         let root = repo.fully_resolve_rev(rev)?.peel(repo)?;
         Ok(Self::new(smallvec![root]))
     }
 
-    pub fn walk_commit(root: &'rcx Commit<'rcx>) -> BitResult<Self> {
+    pub fn walk_commit(root: Arc<Commit>) -> BitResult<Self> {
         Self::walk_commits(std::iter::once(root))
     }
 
-    pub fn walk_commits(roots: impl IntoIterator<Item = &'rcx Commit<'rcx>>) -> BitResult<Self> {
+    pub fn walk_commits(roots: impl IntoIterator<Item = Arc<Commit>>) -> BitResult<Self> {
         let roots = roots.into_iter().collect::<SmallVec<_>>();
         ensure!(!roots.is_empty());
         Ok(Self::new(roots))
@@ -275,9 +272,9 @@ impl<'rcx> RevWalk<'rcx> {
 
 /// yields all commits reachable from the roots in reverse chronological order
 /// parents commits are guaranteed to be yielded only after *all* their children have been yielded
-impl<'rcx> FallibleIterator for RevWalk<'rcx> {
+impl FallibleIterator for RevWalk {
     type Error = BitGenericError;
-    type Item = &'rcx Commit<'rcx>;
+    type Item = Arc<Commit>;
 
     fn next(&mut self) -> BitResult<Option<Self::Item>> {
         while self.still_interesting() {

@@ -8,8 +8,8 @@ use std::io::prelude::*;
 use std::ops::Deref;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct Blob<'rcx> {
-    owner: BitRepo<'rcx>,
+pub struct Blob {
+    owner: BitRepo,
     cached: BitObjCached,
     inner: MutableBlob,
 }
@@ -19,7 +19,7 @@ pub struct MutableBlob {
     bytes: Vec<u8>,
 }
 
-impl Deref for Blob<'_> {
+impl Deref for Blob {
     type Target = MutableBlob;
 
     fn deref(&self) -> &Self::Target {
@@ -39,7 +39,7 @@ impl WritableObject for MutableBlob {
     }
 }
 
-impl Blob<'_> {
+impl Blob {
     pub fn into_inner(self) -> MutableBlob {
         self.inner
     }
@@ -49,7 +49,7 @@ impl Blob<'_> {
     }
 }
 
-impl Display for Blob<'_> {
+impl Display for Blob {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match std::str::from_utf8(&self.bytes) {
             Ok(utf8) => write!(f, "{}", utf8.trim_end()),
@@ -98,20 +98,20 @@ impl DeserializeSized for MutableBlob {
     }
 }
 
-impl<'rcx> BitObject<'rcx> for Blob<'rcx> {
+impl BitObject for Blob {
     fn obj_cached(&self) -> &BitObjCached {
         &self.cached
     }
 
-    fn owner(&self) -> BitRepo<'rcx> {
+    fn owner(&self) -> BitRepo {
         self.owner
     }
 }
 
-impl<'rcx> ImmutableBitObject<'rcx> for Blob<'rcx> {
+impl ImmutableBitObject for Blob {
     type Mutable = MutableBlob;
 
-    fn from_mutable(owner: BitRepo<'rcx>, cached: BitObjCached, inner: Self::Mutable) -> Self {
+    fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self {
         Self { owner, cached, inner }
     }
 }

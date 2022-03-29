@@ -73,7 +73,7 @@ impl BitTreeCache {
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn index_add(
         &self,
         pathspec: impl TryInto<Pathspec, Error = BitGenericError>,
@@ -82,13 +82,13 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     // creates an empty repository in a temporary directory and initializes it
-    pub fn with_empty_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_empty_repo<R>(f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         let basedir = tempfile::tempdir()?;
         BitRepo::init_load(basedir.path(), f)
     }
 }
 
-impl<'rcx> BitIndex<'rcx> {
+impl BitIndex {
     #[cfg(test)]
     pub fn add_str(&mut self, s: &str) -> BitResult<()> {
         let pathspec = s.parse::<Pathspec>()?;

@@ -1,13 +1,13 @@
 use super::*;
 use crate::cmd::BitHashObjectOpts;
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     /// be careful when deleting `rm foo` as the symlink points at it
     /// WARNING: be very careful when changing this sample repo,
     /// it's probably better to create another repo based on this one
     /// as many tests depend on this
     /// WARNING: for some reason the symlink seems to change hashes every run so do not use this if you are testing hashes
-    pub fn with_sample_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_sample_repo<R>(f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {
             touch!(repo: "foo");
             touch!(repo: "bar");
@@ -25,7 +25,7 @@ impl<'rcx> BitRepo<'rcx> {
         })
     }
 
-    pub fn with_minimal_repo<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_minimal_repo<R>(f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {
             touch!(repo: "foo" < "default foo contents");
             bit_commit_all!(repo);
@@ -33,9 +33,7 @@ impl<'rcx> BitRepo<'rcx> {
         })
     }
 
-    pub fn with_minimal_repo_with_dir<R>(
-        f: impl FnOnce(BitRepo<'_>) -> BitResult<R>,
-    ) -> BitResult<R> {
+    pub fn with_minimal_repo_with_dir<R>(f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {
             mkdir!(repo: "dir");
             touch!(repo: "dir/bar" < "default bar contents");
@@ -45,7 +43,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 
     // same repo as above but without the symlink issue
-    pub fn with_sample_repo_no_sym<R>(f: impl FnOnce(BitRepo<'_>) -> BitResult<R>) -> BitResult<R> {
+    pub fn with_sample_repo_no_sym<R>(f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         Self::with_empty_repo(|repo| {
             touch!(repo: "foo");
             touch!(repo: "bar");
@@ -65,7 +63,7 @@ impl<'rcx> BitRepo<'rcx> {
     // sample repository with a series of commits
     // can't precompute commit hashes as the time is always changing
     pub fn with_sample_repo_commits<R>(
-        f: impl FnOnce(BitRepo<'_>, Vec<Oid>) -> BitResult<R>,
+        f: impl FnOnce(BitRepo, Vec<Oid>) -> BitResult<R>,
     ) -> BitResult<R> {
         let strs = ["a", "b", "c", "d", "e"];
         let mut commit_oids = Vec::with_capacity(strs.len());

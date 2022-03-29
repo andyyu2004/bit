@@ -6,8 +6,8 @@ use std::io::prelude::*;
 use std::ops::Deref;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct Tag<'rcx> {
-    owner: BitRepo<'rcx>,
+pub struct Tag {
+    owner: BitRepo,
     cached: BitObjCached,
     inner: MutableTag,
 }
@@ -30,7 +30,7 @@ impl Deserialize for MutableTag {
     }
 }
 
-impl<'rcx> Deref for Tag<'rcx> {
+impl Deref for Tag {
     type Target = MutableTag;
 
     fn deref(&self) -> &Self::Target {
@@ -38,20 +38,20 @@ impl<'rcx> Deref for Tag<'rcx> {
     }
 }
 
-impl<'rcx> BitObject<'rcx> for Tag<'rcx> {
+impl BitObject for Tag {
     fn obj_cached(&self) -> &BitObjCached {
         todo!()
     }
 
-    fn owner(&self) -> BitRepo<'rcx> {
+    fn owner(&self) -> BitRepo {
         self.owner
     }
 }
 
-impl<'rcx> ImmutableBitObject<'rcx> for Tag<'rcx> {
+impl ImmutableBitObject for Tag {
     type Mutable = MutableTag;
 
-    fn from_mutable(owner: BitRepo<'rcx>, cached: BitObjCached, inner: Self::Mutable) -> Self {
+    fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self {
         Self { owner, cached, inner }
     }
 }

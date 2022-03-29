@@ -18,7 +18,7 @@ pub const MULTI_ACK_BATCH_SIZE: usize = 32;
 
 #[async_trait]
 pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
-    async fn fetch(&mut self, repo: BitRepo<'_>, remote: &Remote) -> BitResult<FetchSummary> {
+    async fn fetch(&mut self, repo: BitRepo, remote: &Remote) -> BitResult<FetchSummary> {
         if self.fill_buf().await?.is_empty() {
             bail!("could not read from remote repository")
         }
@@ -61,7 +61,7 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
 
     async fn negotiate_packs(
         &mut self,
-        repo: BitRepo<'_>,
+        repo: BitRepo,
         remote_mapping: &HashMap<SymbolicRef, Oid>,
     ) -> BitResult<FetchStatus> {
         let mut wanted = vec![];

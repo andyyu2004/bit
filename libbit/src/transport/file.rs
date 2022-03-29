@@ -18,7 +18,7 @@ pin_project! {
 }
 
 impl FileTransport {
-    pub async fn new(repo: BitRepo<'_>, url: &GitUrl) -> BitResult<Self> {
+    pub async fn new(repo: BitRepo, url: &GitUrl) -> BitResult<Self> {
         let path = path::normalize(&repo.to_absolute_path(&url.path));
         let mut child = Command::new("git-upload-pack")
             .arg(&path)

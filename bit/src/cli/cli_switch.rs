@@ -16,7 +16,7 @@ pub struct BitSwitchCliOpts {
 }
 
 impl Cmd for BitSwitchCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let target = if let Some(branch_name) = self.create {
             let new_branch = repo.bit_create_branch(&branch_name, &self.revision)?;
             println!("switched to a new branch `{}`", new_branch.short());

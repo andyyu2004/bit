@@ -14,7 +14,7 @@ pub struct BitCheckoutCliOpts {
 }
 
 impl Cmd for BitCheckoutCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let mut opts = CheckoutOpts::default();
         if self.force {
             opts.strategy = CheckoutStrategy::Force;

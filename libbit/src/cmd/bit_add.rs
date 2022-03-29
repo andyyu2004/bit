@@ -3,7 +3,7 @@ use crate::pathspec::Pathspec;
 use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn bit_add_dryrun(self, pathspecs: &[Pathspec]) -> BitResult<()> {
         let index = self.index()?;
         for pathspec in pathspecs {

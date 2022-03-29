@@ -44,14 +44,14 @@ bitflags! {
 }
 
 #[derive(Debug)]
-pub struct BitIndex<'rcx> {
-    pub repo: BitRepo<'rcx>,
+pub struct BitIndex {
+    pub repo: BitRepo,
     // index file may not yet exist
     mtime: Option<Timespec>,
     inner: Filelock<BitIndexInner>,
 }
 
-impl<'rcx> Deref for BitIndex<'rcx> {
+impl Deref for BitIndex {
     type Target = BitIndexInner;
 
     fn deref(&self) -> &Self::Target {
@@ -59,7 +59,7 @@ impl<'rcx> Deref for BitIndex<'rcx> {
     }
 }
 
-impl<'rcx> DerefMut for BitIndex<'rcx> {
+impl DerefMut for BitIndex {
     /// refer to note in [crate::lockfile::Filelock] `deref_mut`
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
@@ -70,12 +70,12 @@ trait BitIndexExt {
     fn signature(&self) -> [u8; 4];
 }
 
-impl<'rcx> BitIndex<'rcx> {
+impl BitIndex {
     pub fn rollback(&self) {
         self.inner.rollback()
     }
 
-    pub fn new(repo: BitRepo<'rcx>) -> BitResult<Self> {
+    pub fn new(repo: BitRepo) -> BitResult<Self> {
         let index_path = repo.index_path();
         let mtime = std::fs::metadata(index_path).as_ref().map(Timespec::mtime).ok();
         let inner = Filelock::lock(index_path)?;
@@ -92,7 +92,7 @@ impl<'rcx> BitIndex<'rcx> {
     }
 
     /// Read a tree object into the index. The current contents of the index will be replaced.
-    pub fn read_tree(&mut self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
+    pub fn read_tree(&mut self, treeish: impl Treeish) -> BitResult<()> {
         let repo = self.repo;
         let tree = treeish.treeish_oid(repo)?;
         // TODO use the iterator diff API
@@ -183,11 +183,11 @@ impl<'rcx> BitIndex<'rcx> {
     }
 
     fn apply_diff(&mut self, diff: &WorkspaceStatus) -> BitResult<()> {
-        struct IndexApplier<'a, 'rcx> {
-            index: &'a mut BitIndex<'rcx>,
+        struct IndexApplier<'a> {
+            index: &'a mut BitIndex,
         }
 
-        impl<'a, 'rcx> Differ for IndexApplier<'a, 'rcx> {
+        impl<'a> Differ for IndexApplier<'a> {
             fn on_created(&mut self, new: BitIndexEntry) -> BitResult<()> {
                 self.index.add_entry(new)
             }

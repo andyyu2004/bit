@@ -13,22 +13,23 @@ use std::io::{prelude::*, BufReader};
 use std::ops::Deref;
 use std::process::Command;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct Commit<'rcx> {
-    owner: BitRepo<'rcx>,
+pub struct Commit {
+    owner: BitRepo,
     cached: BitObjCached,
     inner: MutableCommit,
 }
 
-impl<'rcx> Commit<'rcx> {
+impl Commit {
     /// Get a reference to the commit's tree.
     pub fn tree_oid(&self) -> Oid {
         self.tree
     }
 }
 
-impl Deref for Commit<'_> {
+impl Deref for Commit {
     type Target = MutableCommit;
 
     fn deref(&self) -> &Self::Target {
@@ -93,12 +94,12 @@ impl Display for CommitMessage {
     }
 }
 
-impl<'rcx> Treeish<'rcx> for &'rcx Commit<'rcx> {
-    fn treeish(self, repo: BitRepo<'rcx>) -> BitResult<&'rcx Tree<'rcx>> {
+impl Treeish for Arc<Commit> {
+    fn treeish(self, repo: BitRepo) -> BitResult<Arc<Tree>> {
         self.tree.treeish(repo)
     }
 
-    fn treeish_oid(&self, _repo: BitRepo<'rcx>) -> BitResult<Oid> {
+    fn treeish_oid(&self, _repo: BitRepo) -> BitResult<Oid> {
         Ok(self.tree_oid())
     }
 }
@@ -136,7 +137,7 @@ impl MutableCommit {
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     fn mk_commit(
         self,
         tree: Oid,
@@ -177,7 +178,7 @@ impl<'rcx> BitRepo<'rcx> {
         tree: Oid,
         parents: CommitParents,
         message: CommitMessage,
-    ) -> BitResult<&'rcx Commit<'rcx>> {
+    ) -> BitResult<Arc<Commit>> {
         self.with_virtual_write(|| {
             let oid = self.write_commit(tree, parents, message)?;
             self.read_obj_commit(oid)
@@ -212,7 +213,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
-impl Display for Commit<'_> {
+impl Display for Commit {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut buf = vec![];
         self.serialize(&mut buf).unwrap();
@@ -353,28 +354,28 @@ impl CommitBuilder {
     }
 }
 
-impl<'rcx> BitObject<'rcx> for Commit<'rcx> {
+impl BitObject for Commit {
     fn obj_cached(&self) -> &BitObjCached {
         &self.cached
     }
 
-    fn owner(&self) -> BitRepo<'rcx> {
+    fn owner(&self) -> BitRepo {
         self.owner
     }
 }
 
-impl<'rcx> ImmutableBitObject<'rcx> for Commit<'rcx> {
+impl ImmutableBitObject for Commit {
     type Mutable = MutableCommit;
 
-    fn from_mutable(owner: BitRepo<'rcx>, cached: BitObjCached, inner: Self::Mutable) -> Self {
+    fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self {
         Self { owner, cached, inner }
     }
 }
 
 // trait needs some changes for commit to have a reasonable implementation
-impl<'rcx> Dag for Commit<'rcx> {
+impl Dag for Commit {
     type Node = Oid;
-    type NodeData = &'rcx Self;
+    type NodeData = Arc<Self>;
     type Nodes = SmallVec<[Oid; 2]>;
 
     fn node_data(&self, oid: Oid) -> BitResult<Self::NodeData> {
@@ -386,8 +387,8 @@ impl<'rcx> Dag for Commit<'rcx> {
     }
 }
 
-impl<'rcx> DagNode<Commit<'rcx>> for &'rcx Commit<'rcx> {
-    fn adjacent(&self) -> <Commit<'rcx> as Dag>::Nodes {
+impl DagNode<Commit> for Arc<Commit> {
+    fn adjacent(&self) -> <Commit as Dag>::Nodes {
         self.parents.clone()
     }
 }

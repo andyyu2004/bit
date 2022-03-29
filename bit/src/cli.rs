@@ -67,7 +67,7 @@ use self::cli_remote::BitRemoteCliOpts;
 // to much is in libbit I think
 // see comment above
 pub trait Cmd {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()>;
+    fn exec(self, repo: BitRepo) -> BitResult<()>;
 }
 
 pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitResult<()> {

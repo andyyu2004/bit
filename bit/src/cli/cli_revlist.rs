@@ -13,7 +13,7 @@ pub struct BitRevlistCliOpts {
 }
 
 impl Cmd for BitRevlistCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let revisions = self.revisions.iter().collect::<Vec<_>>();
         let revwalk = repo.revwalk(&revisions)?;
         revwalk.for_each(|commit| {

@@ -94,7 +94,7 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
 
     /// creates a tree object from a tree_iterator
     /// the tree_iterator must be "fresh" and completely unconsumed
-    fn build_tree(&mut self, repo: BitRepo<'_>, tree_cache: Option<&BitTreeCache>) -> BitResult<Oid>
+    fn build_tree(&mut self, repo: BitRepo, tree_cache: Option<&BitTreeCache>) -> BitResult<Oid>
     where
         Self: Sized,
     {
@@ -137,7 +137,7 @@ impl<'a, I: BitTreeIterator> BitTreeIterator for &'a mut I {
 }
 
 fn build_tree_internal(
-    repo: BitRepo<'_>,
+    repo: BitRepo,
     iter: &mut impl BitTreeIterator,
     tree_cache: Option<&BitTreeCache>,
     base_path: BitPath,
@@ -257,8 +257,8 @@ where
     }
 }
 
-impl<'rcx> BitRepo<'rcx> {
-    pub fn head_tree_iter(self) -> BitResult<impl BitTreeIterator + 'rcx> {
+impl BitRepo {
+    pub fn head_tree_iter(self) -> BitResult<impl BitTreeIterator> {
         let oid = self.head_tree()?;
         Ok(self.tree_iter(oid))
     }
@@ -266,7 +266,7 @@ impl<'rcx> BitRepo<'rcx> {
     /// Return's tree iterator for a tree (or treeish object) with oid = `oid`
     /// It is valid to pass `Oid::UNKNOWN` which will represent an empty iterator which only yields the root
     // We can't use an `impl Treeish` here as the above case will not work
-    pub fn tree_iter(self, treeish_oid: Oid) -> TreeIter<'rcx> {
+    pub fn tree_iter(self, treeish_oid: Oid) -> TreeIter {
         TreeIter::new(self, treeish_oid)
     }
 
@@ -301,8 +301,8 @@ impl<'rcx> BitRepo<'rcx> {
 }
 
 #[derive(Debug)]
-pub struct TreeIter<'rcx> {
-    repo: BitRepo<'rcx>,
+pub struct TreeIter {
+    repo: BitRepo,
     /// The current stack of entries.
     /// Each entry should be modified to have the full path (relative to the repo root)
     /// not just relative to its parent.
@@ -312,8 +312,8 @@ pub struct TreeIter<'rcx> {
     previous_len: usize,
 }
 
-impl<'rcx> TreeIter<'rcx> {
-    pub fn new(repo: BitRepo<'rcx>, oid: Oid) -> Self {
+impl TreeIter {
+    pub fn new(repo: BitRepo, oid: Oid) -> Self {
         debug_assert!(oid.is_unknown() || repo.read_obj(oid).unwrap().is_treeish());
         let oid = if oid.is_known() { oid } else { Oid::EMPTY_TREE };
         let entry_stack = vec![TreeEntry { oid, path: BitPath::EMPTY, mode: FileMode::TREE }];
@@ -321,7 +321,7 @@ impl<'rcx> TreeIter<'rcx> {
     }
 }
 
-impl<'rcx> BitTreeIterator for TreeIter<'rcx> {
+impl BitTreeIterator for TreeIter {
     fn kind(&self) -> IterKind {
         IterKind::Tree
     }
@@ -348,7 +348,7 @@ impl<'rcx> BitTreeIterator for TreeIter<'rcx> {
     }
 }
 
-impl<'rcx> FallibleIterator for TreeIter<'rcx> {
+impl FallibleIterator for TreeIter {
     type Error = BitGenericError;
     type Item = BitIndexEntry;
 

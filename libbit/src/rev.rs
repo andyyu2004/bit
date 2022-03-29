@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
 use std::lazy::OnceCell;
 use std::str::FromStr;
+use std::sync::Arc;
 
 // <rev> ::=
 //   | <ref>
@@ -41,7 +42,7 @@ pub enum ParsedRevspec {
 
 pub enum RevisionRange {}
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     // A hack to make this work for `bit cat-file` without weakening the checks for refs to be pointer to commits in `refdb`
     pub fn fully_resolve_rev_to_any(self, rev: &Revspec) -> BitResult<Oid> {
         if let &ParsedRevspec::Ref(BitRef::Direct(oid)) = rev.parse(self)? {
@@ -68,7 +69,7 @@ impl<'rcx> BitRepo<'rcx> {
         self.resolve_rev_internal(rev.parse(self)?)
     }
 
-    pub fn resolve_rev_to_commit(self, rev: &Revspec) -> BitResult<&'rcx Commit<'rcx>> {
+    pub fn resolve_rev_to_commit(self, rev: &Revspec) -> BitResult<Arc<Commit>> {
         self.fully_resolve_rev(rev)?.peel(self)
     }
 
@@ -179,7 +180,7 @@ impl Display for Revspec {
 }
 
 impl Revspec {
-    pub fn parse(&self, repo: BitRepo<'_>) -> BitResult<&ParsedRevspec> {
+    pub fn parse(&self, repo: BitRepo) -> BitResult<&ParsedRevspec> {
         self.parsed.get_or_try_init(|| RevspecParser::new(repo, &self.src).parse())
     }
 }
@@ -198,13 +199,13 @@ lazy_static! {
     };
 }
 
-struct RevspecParser<'a, 'rcx> {
-    repo: BitRepo<'rcx>,
+struct RevspecParser<'a> {
+    repo: BitRepo,
     src: &'a str,
 }
 
-impl<'a, 'rcx> RevspecParser<'a, 'rcx> {
-    pub fn new(repo: BitRepo<'rcx>, src: &'a str) -> Self {
+impl<'a> RevspecParser<'a> {
+    pub fn new(repo: BitRepo, src: &'a str) -> Self {
         Self { repo, src }
     }
 

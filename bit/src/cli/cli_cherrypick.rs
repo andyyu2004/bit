@@ -10,7 +10,7 @@ pub struct BitCherryPickCliOpts {
 }
 
 impl Cmd for BitCherryPickCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         let refs = self
             .revisions
             .iter()

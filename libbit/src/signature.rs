@@ -15,7 +15,7 @@ Run
 to set your account's default identity.
 Omit --global to set the identity only in this repository."#;
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     pub fn user_signature(&self) -> BitResult<BitSignature> {
         let name = self.config().name();
         let email = self.config().email();

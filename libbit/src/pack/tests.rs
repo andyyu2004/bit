@@ -11,15 +11,15 @@ use std::str::FromStr;
 // got this number by inspecting last entry of the fanout table
 const PACK_LEN: u64 = 11076;
 
-impl<'rcx> BitObjKind<'rcx> {
-    pub fn from_raw_pack_obj(repo: BitRepo<'rcx>, oid: Oid, raw: BitPackObjRaw) -> BitResult<Self> {
+impl BitObjKind {
+    pub fn from_raw_pack_obj(repo: BitRepo, oid: Oid, raw: BitPackObjRaw) -> BitResult<Self> {
         let cached = BitObjCached::new(oid, raw.obj_type, raw.bytes.len() as u64);
         Self::from_slice(repo, cached, &raw.bytes)
     }
 }
 
 impl Pack {
-    pub fn read_obj<'rcx>(&mut self, repo: BitRepo<'rcx>, oid: Oid) -> BitResult<BitObjKind<'rcx>> {
+    pub fn read_obj(&mut self, repo: BitRepo, oid: Oid) -> BitResult<BitObjKind> {
         trace!("read_obj(oid: {}) ", oid);
         let raw = self.read_obj_raw(oid)?;
         BitObjKind::from_raw_pack_obj(repo, oid, raw)

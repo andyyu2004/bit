@@ -11,17 +11,17 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 impl DagBuilder {
-    pub fn apply_to_repo(&self, repo: BitRepo<'_>) -> BitResult<FxHashMap<Node, Oid>> {
+    pub fn apply_to_repo(&self, repo: BitRepo) -> BitResult<FxHashMap<Node, Oid>> {
         CommitGraphBuilder::new(repo).apply(self)
     }
 }
 
-pub struct CommitGraphBuilder<'rcx> {
-    repo: BitRepo<'rcx>,
+pub struct CommitGraphBuilder {
+    repo: BitRepo,
 }
 
-impl<'rcx> CommitGraphBuilder<'rcx> {
-    pub fn new(repo: BitRepo<'rcx>) -> Self {
+impl CommitGraphBuilder {
+    pub fn new(repo: BitRepo) -> Self {
         Self { repo }
     }
 
@@ -108,7 +108,7 @@ impl<'a> From<&'a str> for BitRef {
     }
 }
 
-impl BitRepo<'_> {
+impl BitRepo {
     // get a view of the entire recursive tree structure
     pub fn debug_tree(self, oid: Oid) -> BitResult<DebugTree> {
         self.debug_tree_internal(oid, BitPath::EMPTY)

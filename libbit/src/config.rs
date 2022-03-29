@@ -205,7 +205,7 @@ pub struct RawConfig<'c> {
     path: BitPath,
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     /// Use this API for setting config values, otherwise use `.config()`
     pub fn with_raw_local_config<R>(
         self,

@@ -27,8 +27,8 @@ pub fn derive_bit_object(item: proc_macro::TokenStream) -> proc_macro::TokenStre
             });
 
             quote! {
-                impl #impl_generics libbit::obj::BitObject<'rcx> for #name #ty_generics #where_clause {
-                    fn owner(&self) -> BitRepo<'rcx> {
+                impl #impl_generics libbit::obj::BitObject for #name #ty_generics #where_clause {
+                    fn owner(&self) -> BitRepo {
                         match self {
                             #(#owner_arms)*
                         }

@@ -226,11 +226,11 @@ fn test_fast_forward_merge() -> BitResult<()> {
     })
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     fn three_way_merge(
         self,
-        ours: impl Treeish<'rcx>,
-        theirs: impl Treeish<'rcx>,
+        ours: impl Treeish,
+        theirs: impl Treeish,
     ) -> BitResult<MergeResults> {
         self.setup_three_way_merge(ours, theirs)?;
         bit_merge!(self: "theirs")
@@ -246,8 +246,8 @@ impl<'rcx> BitRepo<'rcx> {
     /// Then merge theirs into HEAD
     fn setup_three_way_merge(
         self,
-        ours: impl Treeish<'rcx>,
-        theirs: impl Treeish<'rcx>,
+        ours: impl Treeish,
+        theirs: impl Treeish,
     ) -> BitResult<()> {
         // empty commit just to allow this to work starting from an empty repo
         bit_commit!(self: --allow-empty);
@@ -268,8 +268,8 @@ impl<'rcx> BitRepo<'rcx> {
     fn three_way_merge_with_base(
         self,
         base: Oid,
-        ours: impl Treeish<'rcx>,
-        theirs: impl Treeish<'rcx>,
+        ours: impl Treeish,
+        theirs: impl Treeish,
     ) -> BitResult<MergeResults> {
         bit_reset!(self: --hard &rev!(base));
         self.three_way_merge(ours, theirs)

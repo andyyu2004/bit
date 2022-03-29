@@ -5,25 +5,25 @@ use rustc_hash::FxHashMap;
 use std::io::Cursor;
 
 #[derive(Default)]
-pub struct BitObjCache<'rcx> {
+pub struct BitObjCache {
     // consider using LRU but is very unclear what size to use as most implementations require a fixed
-    objects: FxHashMap<Oid, BitObjKind<'rcx>>,
+    objects: FxHashMap<Oid, BitObjKind>,
 }
 
-impl<'rcx> BitObjCache<'rcx> {
-    pub(crate) fn get(&self, oid: Oid) -> BitObjKind<'rcx> {
+impl BitObjCache {
+    pub(crate) fn get(&self, oid: Oid) -> BitObjKind {
         self.objects[&oid]
     }
 
-    pub(crate) fn insert(&mut self, oid: Oid, obj: BitObjKind<'rcx>) {
+    pub(crate) fn insert(&mut self, oid: Oid, obj: BitObjKind) {
         self.objects.insert(oid, obj);
     }
 
     pub(crate) fn get_or_insert_with(
         &mut self,
         oid: Oid,
-        f: impl FnOnce() -> BitResult<BitObjKind<'rcx>>,
-    ) -> BitResult<BitObjKind<'rcx>> {
+        f: impl FnOnce() -> BitResult<BitObjKind>,
+    ) -> BitResult<BitObjKind> {
         if let Some(&obj) = self.objects.get(&oid) {
             Ok(obj)
         } else {
@@ -35,12 +35,12 @@ impl<'rcx> BitObjCache<'rcx> {
 }
 
 /// A pseudo-odb backed directly by the object cache
-pub(crate) struct VirtualOdb<'rcx> {
-    repo: BitRepo<'rcx>,
+pub(crate) struct VirtualOdb {
+    repo: BitRepo,
 }
 
-impl<'rcx> VirtualOdb<'rcx> {
-    pub fn new(repo: BitRepo<'rcx>) -> Self {
+impl VirtualOdb {
+    pub fn new(repo: BitRepo) -> Self {
         Self { repo }
     }
 
@@ -55,7 +55,7 @@ impl<'rcx> VirtualOdb<'rcx> {
         Ok(oid)
     }
 
-    pub fn read(&self, oid: Oid) -> BitObjKind<'rcx> {
+    pub fn read(&self, oid: Oid) -> BitObjKind {
         self.repo.cache().read().get(oid)
     }
 }

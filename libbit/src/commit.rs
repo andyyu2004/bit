@@ -8,6 +8,7 @@ use crate::repo::BitRepo;
 use crate::xdiff::DiffFormatExt;
 use enumflags2::bitflags;
 use std::fmt::{self, Display, Formatter};
+use std::sync::Arc;
 
 #[bitflags]
 #[repr(u8)]
@@ -22,9 +23,9 @@ pub struct CommitOpts {
     pub allow_empty: bool,
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     // TODO return a BitCommitReport which includes the oid, and kind (CommitKind) etc
-    pub fn commit(self, opts: CommitOpts) -> BitResult<CommitSummary<'rcx>> {
+    pub fn commit(self, opts: CommitOpts) -> BitResult<CommitSummary> {
         let head = self.read_head()?;
         let sym = match head {
             BitRef::Direct(..) => SymbolicRef::HEAD,
@@ -70,17 +71,17 @@ impl<'rcx> BitRepo<'rcx> {
 }
 
 #[derive(Debug)]
-pub struct CommitSummary<'rcx> {
-    pub repo: BitRepo<'rcx>,
+pub struct CommitSummary {
+    pub repo: BitRepo,
     /// the symbolic reference that was moved by this commit
     pub sym: SymbolicRef,
     /// the newly created commit object
-    pub commit: &'rcx Commit<'rcx>,
+    pub commit: Arc<Commit>,
     /// the difference between HEAD^ and HEAD
     pub status: WorkspaceStatus,
 }
 
-impl Display for CommitSummary<'_> {
+impl Display for CommitSummary {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.sym == SymbolicRef::HEAD {
             writeln!(f, "[detached HEAD {}]", self.commit.oid().short())?;

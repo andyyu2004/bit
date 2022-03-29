@@ -24,7 +24,7 @@ pub struct BitReflogShowOpts {
 }
 
 impl Cmd for BitReflogCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         if let Some(subcmd) = self.subcmd {
             match subcmd {
                 BitReflogSubcommand::Show(opts) => opts.exec(repo),
@@ -37,7 +37,7 @@ impl Cmd for BitReflogCliOpts {
 }
 
 impl Cmd for BitReflogShowOpts {
-    fn exec(self, _repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, _repo: BitRepo) -> BitResult<()> {
         todo!()
     }
 }

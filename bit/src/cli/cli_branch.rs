@@ -12,7 +12,7 @@ pub struct BitBranchCliOpts {
 }
 
 impl Cmd for BitBranchCliOpts {
-    fn exec(self, repo: BitRepo<'_>) -> BitResult<()> {
+    fn exec(self, repo: BitRepo) -> BitResult<()> {
         match repo.try_fully_resolve_rev(&self.revision)? {
             Some(..) => repo.bit_create_branch(&self.name, &self.revision),
             // we can't actually create a new branch on an `empty branch`

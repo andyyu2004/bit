@@ -57,7 +57,7 @@ pub struct CheckoutSummary {
     pub new_head: BitRef,
 }
 
-impl<'rcx> BitRepo<'rcx> {
+impl BitRepo {
     /// checkout the branch/commit specified by the revision
     /// - updates the worktree to match the tree represented by the tree of the commit
     /// - moves HEAD to point at the branch/commit
@@ -90,11 +90,11 @@ impl<'rcx> BitRepo<'rcx> {
         Ok(CheckoutSummary { new_head })
     }
 
-    pub fn checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
+    pub fn checkout_tree(self, treeish: impl Treeish) -> BitResult<()> {
         self.checkout_tree_with_opts(treeish, CheckoutOpts::default())
     }
 
-    pub fn force_checkout_tree(self, treeish: impl Treeish<'rcx>) -> BitResult<()> {
+    pub fn force_checkout_tree(self, treeish: impl Treeish) -> BitResult<()> {
         self.checkout_tree_with_opts(treeish, CheckoutOpts::forced())
     }
 
@@ -103,7 +103,7 @@ impl<'rcx> BitRepo<'rcx> {
     // - Don't update HEAD before calling this as this does a diff relative to the current HEAD (for now)
     pub fn checkout_tree_with_opts(
         self,
-        treeish: impl Treeish<'rcx>,
+        treeish: impl Treeish,
         opts: CheckoutOpts,
     ) -> BitResult<()> {
         let target_tree = treeish.treeish_oid(self)?;
@@ -224,7 +224,7 @@ impl<'rcx> BitRepo<'rcx> {
     }
 }
 
-impl<'rcx> BitIndex<'rcx> {
+impl BitIndex {
 }
 
 #[derive(Default, Debug)]
@@ -241,7 +241,7 @@ pub struct Migration {
 
 impl Migration {
     pub fn generate(
-        repo: BitRepo<'_>,
+        repo: BitRepo,
         baseline: impl BitTreeIterator,
         target: impl BitTreeIterator,
         worktree: impl BitTreeIterator,
@@ -267,8 +267,8 @@ impl CheckoutConflicts {
     }
 }
 
-pub struct CheckoutCtxt<'rcx> {
-    repo: BitRepo<'rcx>,
+pub struct CheckoutCtxt {
+    repo: BitRepo,
     migration: Migration,
     opts: CheckoutOpts,
     conflicts: CheckoutConflicts,
@@ -287,8 +287,8 @@ macro_rules! cond {
     };
 }
 
-impl<'rcx> CheckoutCtxt<'rcx> {
-    pub fn new(repo: BitRepo<'rcx>, opts: CheckoutOpts) -> Self {
+impl CheckoutCtxt {
+    pub fn new(repo: BitRepo, opts: CheckoutOpts) -> Self {
         Self { repo, opts, migration: Default::default(), conflicts: Default::default() }
     }
 

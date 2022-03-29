@@ -7,8 +7,8 @@ use std::str::FromStr;
 use tokio::io;
 
 // https://github.com/git/git/blob/master/Documentation/technical/protocol-common.txt
-pub struct UploadPack<'rcx, R, W> {
-    repo: BitRepo<'rcx>,
+pub struct UploadPack<R, W> {
+    repo: BitRepo,
     reader: R,
     writer: W,
 }
@@ -36,12 +36,12 @@ const CAPABILITIES: &[&str] = &[
     // "agent=bit",
 ];
 
-impl<'rcx, R, W> UploadPack<'rcx, R, W>
+impl<R, W> UploadPack<R, W>
 where
     R: BitProtocolRead,
     W: BitProtocolWrite,
 {
-    pub fn new(repo: BitRepo<'rcx>, reader: R, writer: W) -> Self {
+    pub fn new(repo: BitRepo, reader: R, writer: W) -> Self {
         Self { repo, reader, writer }
     }
 
