@@ -21,8 +21,8 @@ use std::io::{self, Write};
 use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::OnceLock;
+use std::sync::{Arc, Weak};
 
 pub const BIT_PACK_OBJECTS_PATH: &str = "pack";
 pub const BIT_INDEX_FILE_PATH: &str = "index";
@@ -38,6 +38,25 @@ pub struct BitRepo {
 impl PartialEq for BitRepo {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.rcx, &other.rcx)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct BitRepoWeakRef {
+    rcx: Weak<RepoCtxt>,
+}
+
+impl BitRepoWeakRef {
+    pub(crate) fn upgrade(&self) -> BitRepo {
+        BitRepo {
+            rcx: self.rcx.upgrade().expect("cannot upgrade repo weak ref: repo has been exited"),
+        }
+    }
+}
+
+impl PartialEq for BitRepoWeakRef {
+    fn eq(&self, other: &Self) -> bool {
+        Weak::ptr_eq(&self.rcx, &other.rcx)
     }
 }
 
@@ -203,6 +222,10 @@ impl BitRepo {
         } else {
             RepoState::None
         }
+    }
+
+    pub(crate) fn downgrade(&self) -> BitRepoWeakRef {
+        BitRepoWeakRef { rcx: Arc::downgrade(&self.rcx) }
     }
 
     #[inline]
@@ -497,11 +520,11 @@ impl BitRepo {
         trace!("BitRepo::read_obj(id: {})", id);
         let oid = self.expand_id(id)?;
         if oid == Oid::EMPTY_TREE {
-            Ok(BitObjKind::Tree(Tree::empty(self.clone())))
+            Ok(BitObjKind::Tree(Tree::empty(self.downgrade())))
         } else {
             self.obj_cache.write().get_or_insert_with(oid, || {
                 let raw = self.odb()?.read_raw(BitId::Full(oid))?;
-                BitObjKind::from_raw(self.clone(), raw)
+                BitObjKind::from_raw(self.downgrade(), raw)
             })
         }
     }
@@ -677,6 +700,12 @@ impl Debug for BitRepo {
             .field("worktree", &self.workdir)
             .field("bitdir", &self.bitdir)
             .finish_non_exhaustive()
+    }
+}
+
+impl Debug for BitRepoWeakRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BitRepoWeakRef").finish_non_exhaustive()
     }
 }
 

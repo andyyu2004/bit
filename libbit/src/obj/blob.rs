@@ -1,7 +1,7 @@
 use super::{BitObjCached, BitObjType, BitObject, ImmutableBitObject, WritableObject};
 use crate::error::BitResult;
 use crate::io::ReadExt;
-use crate::repo::BitRepo;
+use crate::repo::{BitRepo, BitRepoWeakRef};
 use crate::serialize::{DeserializeSized, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::io::prelude::*;
@@ -9,7 +9,7 @@ use std::ops::Deref;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Blob {
-    owner: BitRepo,
+    owner: BitRepoWeakRef,
     cached: BitObjCached,
     inner: MutableBlob,
 }
@@ -104,14 +104,14 @@ impl BitObject for Blob {
     }
 
     fn owner(&self) -> BitRepo {
-        self.owner.clone()
+        self.owner.upgrade().clone()
     }
 }
 
 impl ImmutableBitObject for Blob {
     type Mutable = MutableBlob;
 
-    fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self {
+    fn from_mutable(owner: BitRepoWeakRef, cached: BitObjCached, inner: Self::Mutable) -> Self {
         Self { owner, cached, inner }
     }
 }

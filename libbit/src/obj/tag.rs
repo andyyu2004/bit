@@ -1,13 +1,13 @@
 use super::{BitObjCached, BitObject, ImmutableBitObject};
 use crate::error::BitResult;
-use crate::repo::BitRepo;
+use crate::repo::{BitRepo, BitRepoWeakRef};
 use crate::serialize::{Deserialize, Serialize};
 use std::io::prelude::*;
 use std::ops::Deref;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Tag {
-    owner: BitRepo,
+    owner: BitRepoWeakRef,
     cached: BitObjCached,
     inner: MutableTag,
 }
@@ -44,14 +44,14 @@ impl BitObject for Tag {
     }
 
     fn owner(&self) -> BitRepo {
-        self.owner.clone()
+        self.owner.upgrade().clone()
     }
 }
 
 impl ImmutableBitObject for Tag {
     type Mutable = MutableTag;
 
-    fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self {
+    fn from_mutable(owner: BitRepoWeakRef, cached: BitObjCached, inner: Self::Mutable) -> Self {
         Self { owner, cached, inner }
     }
 }

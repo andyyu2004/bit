@@ -6,7 +6,7 @@ use crate::iter::BitEntry;
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::path::BitPath;
 use crate::peel::Peel;
-use crate::repo::BitRepo;
+use crate::repo::{BitRepo, BitRepoWeakRef};
 use crate::serialize::{Deserialize, DeserializeSized, Serialize};
 use crate::tls;
 use std::collections::BTreeSet;
@@ -99,7 +99,7 @@ impl Display for TreeEntry {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Tree {
-    owner: BitRepo,
+    owner: BitRepoWeakRef,
     cached: BitObjCached,
     // This is an exception to the other objects where immutable is not just a wrapper over mutable
     // we prefer a vec here as btreeset takes O(nlogn) to build which is unnecessarily slow
@@ -123,30 +123,35 @@ impl BitObject for Tree {
     }
 
     fn owner(&self) -> BitRepo {
-        self.owner.clone()
+        self.owner.upgrade().clone()
     }
 }
 
 impl ImmutableBitObject for Tree {
     type Mutable = MutableTree;
 
-    fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Arc<Self>>
+    fn new(
+        owner: BitRepoWeakRef,
+        cached: BitObjCached,
+        reader: impl BufRead,
+    ) -> BitResult<Arc<Self>>
     where
         Self: Sized,
     {
         Ok(Arc::new(Self { owner, cached, entries: Self::read_entries(reader, cached.size)? }))
     }
 
-    fn from_mutable(_owner: BitRepo, _cached: BitObjCached, _inner: Self::Mutable) -> Self {
+    fn from_mutable(_owner: BitRepoWeakRef, _cached: BitObjCached, _inner: Self::Mutable) -> Self {
         unreachable!(
             "method unnecessary for this new design (as it's only used for a reasonable default impl for `ImmutableBitObject::new`), so this trait probably needs a rethink"
         )
     }
 }
+
 impl Tree {
-    pub fn empty(repo: BitRepo) -> Arc<Self> {
+    pub(crate) fn empty(owner: BitRepoWeakRef) -> Arc<Self> {
         Arc::new(Self {
-            owner: repo,
+            owner,
             cached: BitObjCached::new(Oid::EMPTY_TREE, BitObjType::Tree, 0),
             entries: vec![],
         })

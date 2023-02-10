@@ -16,7 +16,7 @@ pub use tree::*;
 use crate::error::{BitGenericError, BitResult};
 use crate::hash::{self, SHA1Hash};
 use crate::io::BufReadExt;
-use crate::repo::BitRepo;
+use crate::repo::{BitRepo, BitRepoWeakRef};
 use crate::serialize::{DeserializeSized, Serialize};
 use num_enum::TryFromPrimitive;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -261,7 +261,11 @@ impl BitObjKind {
         matches!(self, Self::Tree(..) | Self::Commit(..))
     }
 
-    pub fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self> {
+    pub(crate) fn new(
+        owner: BitRepoWeakRef,
+        cached: BitObjCached,
+        reader: impl BufRead,
+    ) -> BitResult<Self> {
         match cached.obj_type {
             BitObjType::Commit => Commit::new(owner, cached, reader).map(Self::Commit),
             BitObjType::Tree => Tree::new(owner, cached, reader).map(Self::Tree),
@@ -270,11 +274,15 @@ impl BitObjKind {
         }
     }
 
-    pub fn from_slice(owner: BitRepo, cached: BitObjCached, slice: &[u8]) -> BitResult<Self> {
+    pub(crate) fn from_slice(
+        owner: BitRepoWeakRef,
+        cached: BitObjCached,
+        slice: &[u8],
+    ) -> BitResult<Self> {
         Self::new(owner, cached, BufReader::new(slice))
     }
 
-    pub fn from_raw(owner: BitRepo, raw: BitRawObj) -> BitResult<Self> {
+    pub(crate) fn from_raw(owner: BitRepoWeakRef, raw: BitRawObj) -> BitResult<Self> {
         Self::new(owner, raw.cached, raw.stream)
     }
 }
@@ -335,10 +343,14 @@ pub trait BitObject {
     }
 }
 
-pub trait ImmutableBitObject {
+pub(crate) trait ImmutableBitObject {
     type Mutable: DeserializeSized;
 
-    fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Arc<Self>>
+    fn new(
+        owner: BitRepoWeakRef,
+        cached: BitObjCached,
+        reader: impl BufRead,
+    ) -> BitResult<Arc<Self>>
     where
         Self: Sized,
     {
@@ -349,7 +361,7 @@ pub trait ImmutableBitObject {
         )))
     }
 
-    fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self;
+    fn from_mutable(owner: BitRepoWeakRef, cached: BitObjCached, inner: Self::Mutable) -> Self;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]

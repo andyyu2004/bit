@@ -3,7 +3,7 @@ use crate::error::{BitGenericError, BitResult};
 use crate::graph::{Dag, DagNode};
 use crate::obj::{BitObjType, BitObject, Oid};
 use crate::peel::Peel;
-use crate::repo::BitRepo;
+use crate::repo::{BitRepo, BitRepoWeakRef};
 use crate::serialize::{DeserializeSized, Serialize};
 use crate::signature::BitSignature;
 use smallvec::SmallVec;
@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Commit {
-    owner: BitRepo,
+    owner: BitRepoWeakRef,
     cached: BitObjCached,
     inner: MutableCommit,
 }
@@ -348,14 +348,14 @@ impl BitObject for Commit {
     }
 
     fn owner(&self) -> BitRepo {
-        self.owner.clone()
+        self.owner.upgrade().clone()
     }
 }
 
 impl ImmutableBitObject for Commit {
     type Mutable = MutableCommit;
 
-    fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self {
+    fn from_mutable(owner: BitRepoWeakRef, cached: BitObjCached, inner: Self::Mutable) -> Self {
         Self { owner, cached, inner }
     }
 }
@@ -367,7 +367,7 @@ impl Dag for Commit {
     type Nodes = SmallVec<[Oid; 2]>;
 
     fn node_data(&self, oid: Oid) -> BitResult<Self::NodeData> {
-        oid.peel(&self.owner)
+        oid.peel(&self.owner())
     }
 
     fn nodes(&self) -> BitResult<Self::Nodes> {

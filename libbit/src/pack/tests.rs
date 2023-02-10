@@ -1,7 +1,7 @@
 use super::*;
 use crate::pack::indexer::PackIndexer;
 use crate::path::BitPath;
-use crate::repo::BitRepo;
+use crate::repo::{BitRepo, BitRepoWeakRef};
 use crate::signature::{BitEpochTime, BitSignature, BitTime, BitTimeZoneOffset};
 use lazy_static::lazy_static;
 use quickcheck::Arbitrary;
@@ -12,14 +12,18 @@ use std::str::FromStr;
 const PACK_LEN: u64 = 11076;
 
 impl BitObjKind {
-    pub fn from_raw_pack_obj(repo: BitRepo, oid: Oid, raw: BitPackObjRaw) -> BitResult<Self> {
+    pub(crate) fn from_raw_pack_obj(
+        repo: BitRepoWeakRef,
+        oid: Oid,
+        raw: BitPackObjRaw,
+    ) -> BitResult<Self> {
         let cached = BitObjCached::new(oid, raw.obj_type, raw.bytes.len() as u64);
         Self::from_slice(repo, cached, &raw.bytes)
     }
 }
 
 impl Pack {
-    pub fn read_obj(&mut self, repo: BitRepo, oid: Oid) -> BitResult<BitObjKind> {
+    pub(crate) fn read_obj(&mut self, repo: BitRepoWeakRef, oid: Oid) -> BitResult<BitObjKind> {
         trace!("read_obj(oid: {}) ", oid);
         let raw = self.read_obj_raw(oid)?;
         BitObjKind::from_raw_pack_obj(repo, oid, raw)
@@ -115,7 +119,7 @@ fn test_read_type_and_size_from_offset_in_pack() -> BitResult<()> {
 fn test_read_pack_undeltified_oid() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let mut pack = pack()?;
-        let obj = pack.read_obj(repo, *HEAD_OID)?;
+        let obj = pack.read_obj(repo.downgrade(), *HEAD_OID)?;
         let commit = MutableCommit {
             tree: "2a09245f13365a5d812a9d463595d815062b7d42".into(),
             author: BitSignature {
@@ -148,7 +152,7 @@ fn test_read_pack_undeltified_oid() -> BitResult<()> {
 fn test_read_pack_deltified_oid() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let mut pack = pack()?;
-        let obj = pack.read_obj(repo, *TREE_OID)?;
+        let obj = pack.read_obj(repo.downgrade(), *TREE_OID)?;
         let tree = MutableTree::new(
             vec![
                 TreeEntry {
@@ -225,7 +229,7 @@ fn test_read_pack_deltified_oid() -> BitResult<()> {
 fn test_read_pack_deltified_oid2() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let mut pack = pack()?;
-        let obj = pack.read_obj(repo, *SRC_TREE_OID)?;
+        let obj = pack.read_obj(repo.downgrade(), *SRC_TREE_OID)?;
         let tree = MutableTree::new(
             vec![
                 TreeEntry {
