@@ -84,7 +84,8 @@ impl BitRepo {
     // creates an empty repository in a temporary directory and initializes it
     pub fn with_empty_repo<R>(f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
         let basedir = tempfile::tempdir()?;
-        BitRepo::init_load(basedir.path(), f)
+        let res = BitRepo::init_load(basedir.path(), f)?;
+        Ok(res)
     }
 }
 

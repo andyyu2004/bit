@@ -1,11 +1,11 @@
 use crate::error::BitResult;
 use crate::repo::BitRepo;
 use crate::repo::RepoCtxt;
-use std::cell::Cell;
+use std::cell::RefCell;
 use std::sync::Arc;
 
 thread_local! {
-    static REPO_CTXT: Cell<usize> = Cell::new(0);
+    pub(crate) static REPO_CTXT: RefCell<Option<Arc<RepoCtxt>>> = Default::default();
 }
 
 pub(crate) fn enter_repo<R>(
@@ -13,21 +13,17 @@ pub(crate) fn enter_repo<R>(
     f: impl FnOnce(BitRepo) -> BitResult<R>,
 ) -> BitResult<R> {
     REPO_CTXT.with(|ptr| {
-        ptr.set(Arc::into_raw(rcx) as *const _ as usize);
+        *ptr.borrow_mut() = Some(rcx);
         let r = with_repo(f);
-        ptr.set(0);
+        let rcx = ptr.borrow_mut().take().unwrap();
+        assert_eq!(Arc::strong_count(&rcx), 1, "repo context leaked");
         r
     })
 }
 
 pub(crate) fn with_repo<R>(f: impl FnOnce(BitRepo) -> R) -> R {
-    let ctxt_ptr = REPO_CTXT.with(|ctxt| {
-        debug_assert!(ctxt.get() != 0, "calling tls outside of repo context");
-        ctxt.get() as *const RepoCtxt
+    let rcx = REPO_CTXT.with(|ctxt| {
+        Arc::clone(ctxt.borrow().as_ref().expect("calling tls outside of repo context"))
     });
-    let ctxt = unsafe {
-        Arc::increment_strong_count(ctxt_ptr);
-        Arc::from_raw(ctxt_ptr)
-    };
-    ctxt.with(f)
+    rcx.with(f)
 }

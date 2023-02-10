@@ -149,13 +149,16 @@ impl RepoCtxt {
     /// If any fatal error occurs during the closure, then writes to the index are rolled back.
     /// This should generally be used as the entry point to accessing the repository
     pub fn enter<R>(self: Arc<Self>, f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
-        tls::enter_repo(self, |repo| match f(repo.clone()) {
-            Ok(r) => Ok(r),
-            Err(err) => {
-                if repo.index_cell.get().is_some() {
-                    repo.index_lock()?.write().rollback();
+        tls::enter_repo(self, |repo| {
+            let res = f(repo.clone());
+            match res {
+                Ok(r) => Ok(r),
+                Err(err) => {
+                    if repo.index_cell.get().is_some() {
+                        repo.index_mut()?.rollback()
+                    }
+                    Err(err)
                 }
-                Err(err)
             }
         })
     }
