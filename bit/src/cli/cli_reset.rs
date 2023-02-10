@@ -10,11 +10,11 @@ use libbit::rev::Revspec;
 pub struct BitResetCliOpts {
     #[arg(default_value = "HEAD")]
     target: Revspec,
-    #[arg(long = "--soft", conflicts_with("mixed"))]
+    #[arg(long = "soft", conflicts_with("mixed"))]
     soft: bool,
-    #[arg(long = "--mixed", conflicts_with("hard"))]
+    #[arg(long = "mixed", conflicts_with("hard"))]
     mixed: bool,
-    #[arg(long = "--hard", conflicts_with("soft"))]
+    #[arg(long = "hard", conflicts_with("soft"))]
     hard: bool,
 }
 
