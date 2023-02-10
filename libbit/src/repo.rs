@@ -263,8 +263,8 @@ impl BitRepo {
         f: impl FnOnce(BitRepo) -> BitResult<R>,
     ) -> BitResult<R> {
         let path = path.as_ref();
-        Self::init(&path)?;
-        RepoCtxt::load(&path)?.enter(f)
+        Self::init(path)?;
+        RepoCtxt::load(path)?.enter(f)
     }
 
     /// recursively searches parents starting from the current directory for a git repo
@@ -627,7 +627,7 @@ impl BitRepo {
         // and path should be relative to it, so we can just join them
         debug_assert!(self.workdir.is_absolute());
         if path.is_relative() {
-            let normalized = path::normalize(&self.to_absolute_path(&path));
+            let normalized = path::normalize(&self.to_absolute_path(path));
             debug_assert!(
                 normalized.symlink_metadata().is_ok(),
                 "normalized path `{}` does not exist",
@@ -636,7 +636,7 @@ impl BitRepo {
             Ok(Cow::Owned(normalized))
         } else {
             debug_assert!(
-                path.starts_with(&self.workdir),
+                path.starts_with(self.workdir),
                 "absolute path `{}` is not under current bit directory `{}`",
                 path.display(),
                 self.workdir
@@ -649,7 +649,7 @@ impl BitRepo {
     pub fn to_relative_path<'p>(&self, path: &'p Path) -> BitResult<&'p Path> {
         // this seems to work just as well as the pathdiff crate
         debug_assert!(path.is_absolute());
-        Ok(path.strip_prefix(&self.workdir)?)
+        Ok(path.strip_prefix(self.workdir)?)
     }
 
     #[cfg(test)]

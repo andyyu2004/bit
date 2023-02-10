@@ -143,22 +143,22 @@ impl BitRepo {
 impl Display for ParsedRevspec {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ParsedRevspec::Ref(r) => write!(f, "{}", r),
-            ParsedRevspec::Partial(prefix) => write!(f, "{}", prefix),
+            ParsedRevspec::Ref(r) => write!(f, "{r}"),
+            ParsedRevspec::Partial(prefix) => write!(f, "{prefix}"),
             ParsedRevspec::Parent(rev, n) =>
                 if *n == 1 {
-                    write!(f, "{}^", rev)
+                    write!(f, "{rev}^")
                 } else {
-                    write!(f, "{}^{}", rev, n)
+                    write!(f, "{rev}^{n}")
                 },
             ParsedRevspec::Ancestor(rev, n) =>
                 if *n == 1 {
-                    write!(f, "{}^", rev)
+                    write!(f, "{rev}^")
                 } else {
-                    write!(f, "{}~{}", rev, n)
+                    write!(f, "{rev}~{n}")
                 },
-            ParsedRevspec::Reflog(rev, n) => write!(f, "{}@{{{}}}", rev, n),
-            ParsedRevspec::Range(from, to) => write!(f, "{}..{}", from, to),
+            ParsedRevspec::Reflog(rev, n) => write!(f, "{rev}@{{{n}}}"),
+            ParsedRevspec::Range(from, to) => write!(f, "{from}..{to}"),
         }
     }
 }
@@ -211,7 +211,7 @@ impl<'a> RevspecParser<'a> {
 
     // moves src to the index of separator and returns the str before the separator
     fn next(&mut self) -> BitResult<&str> {
-        let i = self.src.find(|c| REV_SEPS.contains(&c)).unwrap_or_else(|| self.src.len());
+        let i = self.src.find(|c| REV_SEPS.contains(&c)).unwrap_or(self.src.len());
         let s = &self.src[..i];
         self.src = &self.src[i..];
         Ok(s)

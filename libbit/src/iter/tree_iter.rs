@@ -100,7 +100,7 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
     {
         // skip root entry
         let root = self.next()?.unwrap();
-        let oid = build_tree_internal(&repo, self, tree_cache, BitPath::EMPTY)?;
+        let oid = build_tree_internal(repo, self, tree_cache, BitPath::EMPTY)?;
         debug_assert!(root.oid.is_unknown() || root.oid == oid);
         Ok(oid)
     }

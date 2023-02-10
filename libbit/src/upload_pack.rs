@@ -62,7 +62,7 @@ where
     where
         T: FromStr<Err = BitGenericError>,
     {
-        let s = std::str::from_utf8(&packet)?;
+        let s = std::str::from_utf8(packet)?;
         let (c, oid) = s.split_once(' ').ok_or_else(|| anyhow!("bad `{}` line", cmd))?;
         ensure_eq!(c, cmd);
         oid.parse()

@@ -422,7 +422,8 @@ impl TreeDiffer for TreeStatusDiffer {
     }
 
     fn created_blob(&mut self, new: BitIndexEntry) -> BitResult<()> {
-        Ok(self.status.new.push(new))
+        self.status.new.push(new);
+        Ok(())
     }
 
     fn deleted_tree(&mut self, entries: TreeEntriesConsumer<'_>) -> BitResult<()> {
@@ -431,11 +432,13 @@ impl TreeDiffer for TreeStatusDiffer {
     }
 
     fn deleted_blob(&mut self, old: BitIndexEntry) -> BitResult<()> {
-        Ok(self.status.deleted.push(old))
+        self.status.deleted.push(old);
+        Ok(())
     }
 
     fn modified_blob(&mut self, old: BitIndexEntry, new: BitIndexEntry) -> BitResult<()> {
-        Ok(self.status.modified.push((old, new)))
+        self.status.modified.push((old, new));
+        Ok(())
     }
 
     fn tree_to_blob(&mut self, old: TreeEntriesConsumer<'_>, new: BitIndexEntry) -> BitResult<()> {

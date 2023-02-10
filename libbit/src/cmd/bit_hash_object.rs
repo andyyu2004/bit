@@ -15,13 +15,13 @@ pub struct BitHashObjectOpts {
 impl BitRepo {
     pub fn bit_hash_object(&self, opts: BitHashObjectOpts) -> BitResult<()> {
         let hash = self.hash_object(opts)?;
-        println!("{}", hash);
+        println!("{hash}");
         Ok(())
     }
 
     pub fn hash_object(&self, opts: BitHashObjectOpts) -> BitResult<Oid> {
         let path = opts.path.canonicalize()?;
-        let reader = BufReader::new(File::open(&path)?);
+        let reader = BufReader::new(File::open(path)?);
         let obj = match opts.objtype {
             BitObjType::Tree => todo!(),
             BitObjType::Tag => todo!(),

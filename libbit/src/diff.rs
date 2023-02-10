@@ -136,7 +136,7 @@ where
     pub fn run_diff(mut self) -> BitResult<()> {
         let differ = &mut self.differ;
         IndexWorktreeDiffIter {
-            index: &mut self.index,
+            index: self.index,
             old_iter: self.old_iter,
             new_iter: self.new_iter,
         }

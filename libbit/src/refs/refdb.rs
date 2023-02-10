@@ -156,7 +156,7 @@ impl BitRefDbBackend for BitRefDb {
     fn read(&self, sym: SymbolicRef) -> BitResult<BitRef> {
         let expanded = self.expand_symref(sym)?;
         Lockfile::with_readonly(self.join(expanded.path), LockfileFlags::SET_READONLY, |lockfile| {
-            let file = lockfile.file().unwrap_or_else(|| panic!("ref `{}` does not exist", sym));
+            let file = lockfile.file().unwrap_or_else(|| panic!("ref `{sym}` does not exist"));
             let r = BitRef::deserialize_unbuffered(file)?;
             self.validate(r)
         })
@@ -207,7 +207,7 @@ impl BitRefDbBackend for BitRefDb {
             }
             let path = entry.path();
             let sym = SymbolicRef::intern_valid(path.strip_prefix(self.bitdir)?)?;
-            assert!(refs.insert(sym), "inserted duplicate ref `{}`", sym);
+            assert!(refs.insert(sym), "inserted duplicate ref `{sym}`");
         }
         Ok(refs)
     }
@@ -249,18 +249,18 @@ pub enum RefUpdateCause {
 impl Display for RefUpdateCause {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RefUpdateCause::NewBranch { from } => write!(f, "branch: Created from {}", from),
+            RefUpdateCause::NewBranch { from } => write!(f, "branch: Created from {from}"),
             RefUpdateCause::Commit { subject, kind } => match *kind {
-                RefUpdateCommitKind::Normal => write!(f, "commit: {}", subject),
-                RefUpdateCommitKind::Amend => write!(f, "commit (amend): {}", subject),
-                RefUpdateCommitKind::Initial => write!(f, "commit (initial): {}", subject),
+                RefUpdateCommitKind::Normal => write!(f, "commit: {subject}"),
+                RefUpdateCommitKind::Amend => write!(f, "commit (amend): {subject}"),
+                RefUpdateCommitKind::Initial => write!(f, "commit (initial): {subject}"),
             },
             RefUpdateCause::Checkout { from, to } =>
-                write!(f, "checkout: moving from `{}` to `{}`", from, to),
-            RefUpdateCause::Reset { target } => write!(f, "reset: moving to `{}`", target),
+                write!(f, "checkout: moving from `{from}` to `{to}`"),
+            RefUpdateCause::Reset { target } => write!(f, "reset: moving to `{target}`"),
             RefUpdateCause::Merge { theirs, strategy } => match strategy {
-                MergeStrategy::FastForward => write!(f, "merge `{}`: fast-forward", theirs),
-                MergeStrategy::Recursive => write!(f, "merge `{}`: recursive", theirs),
+                MergeStrategy::FastForward => write!(f, "merge `{theirs}`: fast-forward"),
+                MergeStrategy::Recursive => write!(f, "merge `{theirs}`: recursive"),
             },
             RefUpdateCause::Fetch { to: _ } => write!(f, "fetch"),
         }

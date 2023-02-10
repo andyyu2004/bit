@@ -99,5 +99,5 @@ thread_local! {
 }
 
 pub(crate) fn with_path_interner<R>(f: impl FnOnce(&mut Interner) -> R) -> R {
-    INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
+    INTERNER.with(|interner| f(&mut interner.borrow_mut()))
 }

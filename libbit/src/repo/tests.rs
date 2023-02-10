@@ -91,8 +91,8 @@ fn repo_init_creates_correct_initial_local_config() -> BitResult<()> {
     BitRepo::init_load(&basedir, |repo| {
         let config = repo.config();
         assert_eq!(config.repositoryformatversion().unwrap(), 0);
-        assert_eq!(config.bare().unwrap(), false);
-        assert_eq!(config.filemode(), true);
+        assert!(!config.bare().unwrap());
+        assert!(config.filemode());
         Ok(())
     })
 }

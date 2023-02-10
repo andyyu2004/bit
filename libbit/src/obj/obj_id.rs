@@ -55,8 +55,8 @@ impl From<Oid> for BitId {
 impl Display for BitId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            BitId::Full(oid) => write!(f, "{}", oid),
-            BitId::Partial(partial) => write!(f, "{}", partial),
+            BitId::Full(oid) => write!(f, "{oid}"),
+            BitId::Partial(partial) => write!(f, "{partial}"),
         }
     }
 }
@@ -95,7 +95,7 @@ pub struct PartialOid {
 impl PartialOid {
     // converts `PartialOid` into `Oid` by extending the missing bits with 0x00
     pub fn into_oid(self) -> BitResult<Oid> {
-        Ok(hex::decode(&self.bytes)?.as_slice().read_oid()?)
+        Ok(hex::decode(self.bytes)?.as_slice().read_oid()?)
     }
 
     pub fn split(&self) -> (&str, &str) {

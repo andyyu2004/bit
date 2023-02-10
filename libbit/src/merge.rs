@@ -427,7 +427,7 @@ impl MergeCtxt {
     }
 
     fn mv_our_conflicted(&mut self, path: BitPath) -> BitResult<()> {
-        let moved_path = UniquePath::new(self.repo.clone(), format!("{}~HEAD", path))?;
+        let moved_path = UniquePath::new(self.repo.clone(), format!("{path}~HEAD"))?;
         self.repo.mv(path, moved_path)
     }
 
@@ -448,7 +448,7 @@ impl MergeCtxt {
             () => {{ self.repo.index_mut()? }};
         }
 
-        let mut three_way_merge =
+        let three_way_merge =
             |base: Option<BitIndexEntry>, ours: BitIndexEntry, theirs: BitIndexEntry| {
                 debug_assert_eq!(ours.path, theirs.path);
                 let path = ours.path;

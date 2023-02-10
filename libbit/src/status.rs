@@ -95,7 +95,7 @@ where
 impl BitStatus {
     fn fmt_state(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.head {
-            BitRef::Direct(oid) => writeln!(f, "HEAD detached at `{}`", oid)?,
+            BitRef::Direct(oid) => writeln!(f, "HEAD detached at `{oid}`")?,
             BitRef::Symbolic(branch) => writeln!(f, "On branch `{}`", branch.short())?,
         };
         writeln!(f)?;

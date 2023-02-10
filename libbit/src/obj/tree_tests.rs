@@ -13,7 +13,7 @@ impl Arbitrary for FileMode {
 impl Arbitrary for TreeEntry {
     fn arbitrary(g: &mut Gen) -> Self {
         Self {
-            path: BitPath::intern(&generate_sane_string_with_newlines(1..300)),
+            path: BitPath::intern(generate_sane_string_with_newlines(1..300)),
             mode: Arbitrary::arbitrary(g),
             oid: Arbitrary::arbitrary(g),
         }

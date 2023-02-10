@@ -11,7 +11,7 @@ impl BitRepo {
         message: Option<String>,
     ) -> BitResult<()> {
         let oid = self.commit_tree(tree, parents, message)?;
-        println!("{}", oid);
+        println!("{oid}");
         Ok(())
     }
 

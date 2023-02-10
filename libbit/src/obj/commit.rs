@@ -194,11 +194,11 @@ impl BitRepo {
 # Please; enter the commit message for your changes. Lines starting
 # with '#' will be ignored, and an empty message aborts the commit."#;
         let editmsg_filepath = self.bitdir.join("COMMIT_EDITMSG");
-        let mut editmsg_file = File::create(&editmsg_filepath)?;
-        write!(editmsg_file, "{}", template)?;
-        Command::new(editor).arg(&editmsg_filepath).status()?;
+        let mut editmsg_file = File::create(editmsg_filepath)?;
+        write!(editmsg_file, "{template}")?;
+        Command::new(editor).arg(editmsg_filepath).status()?;
         let mut msg = String::new();
-        for line in BufReader::new(File::open(&editmsg_filepath)?).lines() {
+        for line in BufReader::new(File::open(editmsg_filepath)?).lines() {
             let line = line?;
             if line.starts_with('#') {
                 continue;
@@ -238,17 +238,17 @@ impl Serialize for MutableCommit {
 
         w!(format!("tree {:}", self.tree))?;
         for parent in &self.parents {
-            w!(format!("parent {}", parent))?;
+            w!(format!("parent {parent}"))?;
         }
         w!(format!("author {}", self.author))?;
         w!(format!("committer {}", self.committer))?;
 
         if let Some(gpgsig) = &self.gpgsig {
-            w!(format!("gpgsig {}", gpgsig))?;
+            w!(format!("gpgsig {gpgsig}"))?;
         }
 
         if let Some(mergetag) = &self.mergetag {
-            w!(format!("mergetab {}", mergetag))?;
+            w!(format!("mergetab {mergetag}"))?;
         }
 
         writeln!(writer)?;
@@ -274,7 +274,7 @@ impl DeserializeSized for MutableCommit {
             }
 
             let (field, value) =
-                line.split_once(' ').unwrap_or_else(|| panic!("Failed to parse line `{}`", line));
+                line.split_once(' ').unwrap_or_else(|| panic!("Failed to parse line `{line}`"));
             let mut value = value.to_owned();
 
             // if the line starts with space it is a continuation of the previous key

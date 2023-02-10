@@ -86,7 +86,7 @@ pub trait ProtocolTransport: BitProtocolRead + BitProtocolWrite {
                     [Capability::MultiAckDetailed, Capability::OfsDelta, Capability::SideBand64k]
                         .map(|cap| cap.to_string())
                         .join(" ");
-                self.write_packet(format!("want {} {}\n", oid, capabilities).as_bytes()).await?;
+                self.write_packet(format!("want {oid} {capabilities}\n").as_bytes()).await?;
             } else {
                 self.want(oid).await?;
             }

@@ -198,11 +198,11 @@ fn test_index_add_dot_on_empty() -> BitResult<()> {
 fn index_file_directory_collision() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let a = repo.workdir.join("a");
-        File::create(&a)?;
+        File::create(a)?;
         let mut index = repo.index_mut()?;
         index.add_str("a")?;
-        std::fs::remove_file(&a)?;
-        std::fs::create_dir(&a)?;
+        std::fs::remove_file(a)?;
+        std::fs::create_dir(a)?;
         File::create(a.join("somefile"))?;
         index.add_str("a")?;
 

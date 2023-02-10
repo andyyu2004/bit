@@ -85,7 +85,7 @@ impl FromStr for BitTimeZoneOffset {
         let sign = match &s[0..1] {
             "+" => 1,
             "-" => -1,
-            _ => panic!("invalid timezone format {}", s),
+            _ => panic!("invalid timezone format {s}"),
         };
         let hours: i32 = s[1..3].parse().unwrap();
         let minutes: i32 = s[3..5].parse().unwrap();
@@ -141,7 +141,7 @@ impl Display for BitTimeZoneOffset {
         let offset = self.0.abs();
         let hours = offset / 60;
         let minutes = offset % 60;
-        write!(f, "{}{:02}{:02}", sign, hours, minutes)?;
+        write!(f, "{sign}{hours:02}{minutes:02}")?;
         Ok(())
     }
 }

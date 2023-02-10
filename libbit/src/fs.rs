@@ -18,7 +18,7 @@ impl RenameIndex {
 impl Display for RenameIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(idx) = self.0 {
-            write!(f, "_{}", idx)?;
+            write!(f, "_{idx}")?;
         }
         Ok(())
     }

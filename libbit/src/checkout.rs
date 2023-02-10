@@ -659,9 +659,12 @@ impl CheckoutCtxt {
         tree.iter().for_each(|entry: BitIndexEntry| {
             match entry.mode() {
                 FileMode::REG | FileMode::EXEC | FileMode::LINK => self.create(entry),
-                FileMode::TREE => Ok(if entry.path() != BitPath::EMPTY {
-                    self.mkdir(entry)?
-                }),
+                FileMode::TREE => {
+                    if entry.path() != BitPath::EMPTY {
+                        self.mkdir(entry)?
+                    };
+                    Ok(())
+                },
                 FileMode::GITLINK => todo!(),
             }?;
             Ok(())

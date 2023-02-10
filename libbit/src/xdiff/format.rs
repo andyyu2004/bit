@@ -67,7 +67,7 @@ impl<W: Write> Differ for DiffFormatter<W> {
         let a: BitPath = BitPath::A.join(new.path);
         let b: BitPath = BitPath::B.join(new.path);
         let writer = &mut self.writer;
-        writeln!(writer, "diff --git {} {}", a, b)?;
+        writeln!(writer, "diff --git {a} {b}")?;
         writeln!(writer, "new file mode {}", new.mode)?;
         writeln!(writer, "index {:#}..{:#}", Oid::UNKNOWN, new.oid)?;
 
@@ -86,7 +86,7 @@ impl<W: Write> Differ for DiffFormatter<W> {
         let b: BitPath = BitPath::B.join(new.path);
 
         let writer = &mut self.writer;
-        writeln!(writer, "diff --git {} {}", a, b)?;
+        writeln!(writer, "diff --git {a} {b}")?;
 
         let new_oid = if new.oid.is_known() {
             new.oid
@@ -109,7 +109,7 @@ impl<W: Write> Differ for DiffFormatter<W> {
         let a: BitPath = BitPath::A.join(old.path);
         let b: BitPath = BitPath::B.join(old.path);
         let writer = &mut self.writer;
-        writeln!(writer, "diff --git {} {}", a, b)?;
+        writeln!(writer, "diff --git {a} {b}")?;
         writeln!(writer, "deleted file mode {}", old.mode)?;
         writeln!(writer, "index {:#}..{:#}", old.oid, Oid::UNKNOWN)?;
         patch.set_original(Cow::Borrowed(a.as_bytes()));
@@ -155,7 +155,7 @@ impl<W: Write> DiffStatFormatter<W> {
             total_deletions: this.total_deletions,
             total_insertions: this.total_insertions,
         };
-        write!(this.writer, "{}", lines)?;
+        write!(this.writer, "{lines}")?;
         Ok(())
     }
 

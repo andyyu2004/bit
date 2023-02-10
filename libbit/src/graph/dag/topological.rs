@@ -47,7 +47,7 @@ impl<'a, G: Dag> FallibleIterator for TopologicalSort<'a, G> {
             let indegree = self.indegrees.get_mut(&parent).unwrap();
             *indegree -= 1;
             if *indegree == 0 {
-                self.queue.push_back(parent.clone())
+                self.queue.push_back(parent)
             }
         }
         Ok(Some(node))

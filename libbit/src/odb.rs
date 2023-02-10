@@ -232,7 +232,7 @@ impl BitObjDbBackend for BitLooseObjDb {
                     Ok(None)
                 } else {
                     debug_assert_eq!(filename.len(), 38);
-                    let oid = format!("{}{}", dir, filename);
+                    let oid = format!("{dir}{filename}");
                     debug_assert_eq!(oid.len(), 40);
                     Oid::from_str(&oid).map(Some)
                 }

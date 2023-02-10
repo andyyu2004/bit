@@ -24,7 +24,7 @@ pub(crate) trait ReadExt: Read {
     #[inline]
     fn read_u8(&mut self) -> io::Result<u8> {
         let mut i = 0u8;
-        self.read_exact(&mut std::slice::from_mut(&mut i))?;
+        self.read_exact(std::slice::from_mut(&mut i))?;
         Ok(i)
     }
 

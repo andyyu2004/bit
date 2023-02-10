@@ -152,9 +152,9 @@ macro_rules! write_hint {
 impl Display for BitError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            BitError::ObjectNotFound(id) => write!(f, "bit object with hash `{}` not found", id),
+            BitError::ObjectNotFound(id) => write!(f, "bit object with hash `{id}` not found"),
             BitError::AmbiguousPrefix(prefix, candidates) => {
-                writeln!(f, "prefix oid `{}` is ambiguous", prefix)?;
+                writeln!(f, "prefix oid `{prefix}` is ambiguous")?;
                 write_hint!(f, "the candidates are:")?;
                 for candidate in candidates {
                     write_hint!(f, "  {}", candidate.yellow())?;
@@ -162,16 +162,16 @@ impl Display for BitError {
                 Ok(())
             }
             BitError::NonExistentSymRef(sym) =>
-                write!(f, "failed to resolve symbolic reference `{}`", sym),
-            BitError::MergeConflict(merge_conflict) => write!(f, "{}", merge_conflict),
+                write!(f, "failed to resolve symbolic reference `{sym}`"),
+            BitError::MergeConflict(merge_conflict) => write!(f, "{merge_conflict}"),
             BitError::PackBackendWrite | BitError::ObjectNotFoundInPackIndex(..) =>
                 bug!("not a user facing error"),
             BitError::CheckoutConflict(conflicts) => {
                 // TODO
-                writeln!(f, "some checkout conflicts: {:?}", conflicts)
+                writeln!(f, "some checkout conflicts: {conflicts:?}")
             }
             BitError::ExpectedCommit(oid, obj_type) =>
-                writeln!(f, "`{}` is a {}, expected commit", oid, obj_type),
+                writeln!(f, "`{oid}` is a {obj_type}, expected commit"),
         }
     }
 }

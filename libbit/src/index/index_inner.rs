@@ -83,7 +83,7 @@ impl Display for ConflictType {
             ConflictType::AddedByUs => "added by us",
             ConflictType::AddedByThem => "added by them",
         };
-        write!(f, "{}", msg)
+        write!(f, "{msg}")
     }
 }
 

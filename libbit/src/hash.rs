@@ -148,14 +148,14 @@ where
 
 impl Debug for SHA1Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
 impl Display for SHA1Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let hex = self.0.to_hex::<String>();
-        if f.alternate() { write!(f, "{}", &hex[..7]) } else { write!(f, "{}", hex) }
+        if f.alternate() { write!(f, "{}", &hex[..7]) } else { write!(f, "{hex}") }
     }
 }
 

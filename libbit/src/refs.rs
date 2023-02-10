@@ -62,8 +62,8 @@ impl From<SymbolicRef> for BitRef {
 impl Display for BitRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            BitRef::Direct(hash) => write!(f, "{}", hash),
-            BitRef::Symbolic(path) => write!(f, "{}", path),
+            BitRef::Direct(hash) => write!(f, "{hash}"),
+            BitRef::Symbolic(path) => write!(f, "{path}"),
         }
     }
 }
@@ -71,8 +71,8 @@ impl Display for BitRef {
 impl Serialize for BitRef {
     fn serialize(&self, writer: &mut dyn Write) -> BitResult<()> {
         match self {
-            BitRef::Direct(hash) => write!(writer, "{}", hash)?,
-            BitRef::Symbolic(path) => write!(writer, "ref: {}", path)?,
+            BitRef::Direct(hash) => write!(writer, "{hash}")?,
+            BitRef::Symbolic(path) => write!(writer, "ref: {path}")?,
         };
         Ok(())
     }
@@ -191,7 +191,7 @@ impl SymbolicRef {
     }
 
     pub fn new_branch(name: &str) -> Self {
-        Self::intern_valid(&format!("refs/heads/{}", name))
+        Self::intern_valid(format!("refs/heads/{name}"))
             .expect("we just set the prefix, must be valid")
     }
 

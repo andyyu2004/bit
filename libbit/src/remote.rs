@@ -34,7 +34,7 @@ impl PartialEq for Refspec {
 impl Refspec {
     pub fn default_fetch_for_remote(remote_name: &str) -> Self {
         let src = BitPath::intern("refs/heads/");
-        let dst = BitPath::intern(format!("refs/remotes/{}/", remote_name));
+        let dst = BitPath::intern(format!("refs/remotes/{remote_name}/"));
         Self { src, dst, forced: true, glob: true }
     }
 
@@ -141,16 +141,16 @@ impl BitRepo {
             ensure!(into.is_dir(), "file exists at clone path");
             ensure!(into.read_dir()?.next().is_none(), "cannot clone into non-empty directory");
         } else {
-            std::fs::create_dir(&into)?;
+            std::fs::create_dir(into)?;
         }
 
-        Self::init_load(&into, |repo| {
+        Self::init_load(into, |repo| {
             repo.add_remote(DEFAULT_REMOTE, url)?;
             repo.clone_origin_blocking()
         })
         .or_else(|err| {
             if !exists {
-                std::fs::remove_dir_all(&into)?;
+                std::fs::remove_dir_all(into)?;
             }
             Err(err)
         })
@@ -234,7 +234,7 @@ impl BitRepo {
     pub fn ls_remotes(&self) -> impl Iterator<Item = Remote> {
         self.remote_config()
             .into_iter()
-            .map(|(name, config)| Remote::from_config(name, config.clone()))
+            .map(|(name, config)| Remote::from_config(name, config))
     }
 }
 

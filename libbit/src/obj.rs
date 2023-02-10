@@ -125,13 +125,13 @@ pub enum FileMode {
 impl Display for FileMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let n = self.as_u32();
-        if f.alternate() { write!(f, "{:o}", n) } else { write!(f, "{:06o}", n) }
+        if f.alternate() { write!(f, "{n:o}") } else { write!(f, "{n:06o}") }
     }
 }
 
 impl Debug for FileMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
@@ -161,7 +161,7 @@ impl FileMode {
     }
 
     pub fn new(u: u32) -> Self {
-        Self::try_from(u).unwrap_or_else(|_| panic!("invalid filemode `{:06o}`", u))
+        Self::try_from(u).unwrap_or_else(|_| panic!("invalid filemode `{u:06o}`"))
     }
 
     pub fn from_metadata(metadata: &Metadata) -> Self {
@@ -368,7 +368,7 @@ impl Display for BitObjType {
             BitObjType::Tag => "tag",
             BitObjType::Blob => "blob",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

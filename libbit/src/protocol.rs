@@ -91,8 +91,8 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
 
             let (sideband, data) = packet[..].split_first().unwrap();
             match *sideband {
-                SIDEBAND_DATA => writer.write_all(&data).await?,
-                SIDEBAND_PROGRESS => eprint!("{}", std::str::from_utf8(&data)?),
+                SIDEBAND_DATA => writer.write_all(data).await?,
+                SIDEBAND_PROGRESS => eprint!("{}", std::str::from_utf8(data)?),
                 SIDEBAND_ERROR => todo!(),
                 _ => bail!("invalid sideband byte `{:x}`", sideband),
             }
@@ -107,7 +107,7 @@ pub trait BitProtocolRead: AsyncBufRead + Unpin + Send {
             writer.path.with_file_name(format!("pack-{}.{}", pack_index.pack_hash, PACK_EXT)),
         )?;
         std::fs::rename(
-            &writer.path.with_extension(PACK_IDX_EXT),
+            writer.path.with_extension(PACK_IDX_EXT),
             writer.path.with_file_name(format!("pack-{}.{}", pack_index.pack_hash, PACK_IDX_EXT)),
         )?;
 
@@ -138,7 +138,7 @@ pub trait BitProtocolWrite: AsyncWrite + Unpin + Send {
         assert!(bytes.len() < u16::MAX as usize);
         let length = format!("{:04x}", 4 + bytes.len());
         debug_assert_eq!(length.len(), 4);
-        self.write_all(&length.as_bytes()).await?;
+        self.write_all(length.as_bytes()).await?;
         self.write_all(bytes).await?;
         Ok(())
     }
@@ -150,7 +150,7 @@ pub trait BitProtocolWrite: AsyncWrite + Unpin + Send {
     }
 
     async fn want(&mut self, oid: Oid) -> io::Result<()> {
-        self.write_packet(format!("want {}\n", oid).as_bytes()).await
+        self.write_packet(format!("want {oid}\n").as_bytes()).await
     }
 
     async fn done(&mut self) -> io::Result<()> {
@@ -158,7 +158,7 @@ pub trait BitProtocolWrite: AsyncWrite + Unpin + Send {
     }
 
     async fn have(&mut self, oid: Oid) -> io::Result<()> {
-        self.write_packet(format!("have {}\n", oid).as_bytes()).await
+        self.write_packet(format!("have {oid}\n").as_bytes()).await
     }
 }
 

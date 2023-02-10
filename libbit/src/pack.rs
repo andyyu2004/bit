@@ -39,7 +39,7 @@ const MAX_OFFSET: u64 = 0x7fffffff;
 
 impl BitPackObjRaw {
     fn expand_with_delta_bytes(&self, delta_bytes: &[u8]) -> BitResult<Self> {
-        let delta = Delta::deserialize_from_slice(&delta_bytes)?;
+        let delta = Delta::deserialize_from_slice(delta_bytes)?;
         self.expand_with_delta(&delta)
     }
 
@@ -61,9 +61,9 @@ pub enum BitPackObjRawDeltified {
 impl Debug for BitPackObjRawDeltified {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Raw(raw) => write!(f, "BitObjRawKind::Raw({:?})", raw),
-            Self::Ofs(offset, _) => write!(f, "BitObjRawKind::Ofs({}, ..)", offset),
-            Self::Ref(oid, _) => write!(f, "BitObjRawKind::Ref({}, ..)", oid),
+            Self::Raw(raw) => write!(f, "BitObjRawKind::Raw({raw:?})"),
+            Self::Ofs(offset, _) => write!(f, "BitObjRawKind::Ofs({offset}, ..)"),
+            Self::Ref(oid, _) => write!(f, "BitObjRawKind::Ref({oid}, ..)"),
         }
     }
 }
@@ -298,7 +298,7 @@ impl<R: BufReadSeek> PackIndexReader<R> {
 
         if offset > MAX_OFFSET {
             let ext_index = offset & MAX_OFFSET;
-            offset = self.read_from(Layer::Ext, ext_index as u64)?;
+            offset = self.read_from(Layer::Ext, ext_index)?;
         }
 
         Ok((crc, offset))
@@ -415,7 +415,7 @@ impl Serialize for PackIndex {
         let mut writer = BufWriter::new(HashWriter::new_sha1(writer));
         writer.write_u32(PACK_IDX_MAGIC)?;
         writer.write_u32(2)?;
-        writer.write_iter(&self.fanout)?;
+        writer.write_iter(self.fanout)?;
         writer.write_iter(&self.oids)?;
         writer.write_iter(&self.crcs)?;
         writer.write_iter(&self.offsets)?;

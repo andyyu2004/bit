@@ -232,7 +232,7 @@ impl BitConfigValue for &'static str {
 
 impl BitConfigValue for GitUrl {
     fn parse(bytes: &[u8]) -> BitResult<Self> {
-        Ok(GitUrl::parse(std::str::from_utf8(bytes)?)?)
+        GitUrl::parse(std::str::from_utf8(bytes)?)
     }
 }
 

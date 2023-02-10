@@ -57,7 +57,7 @@ fn serialize_then_parse_bit_signature(sig: BitSignature) {
 #[test]
 fn serialize_timezone_offset() {
     let offset = BitTimeZoneOffset(780);
-    assert_eq!(format!("{}", offset), "+1300");
+    assert_eq!(format!("{offset}"), "+1300");
     let offset = BitTimeZoneOffset(-200);
-    assert_eq!(format!("{}", offset), "-0320");
+    assert_eq!(format!("{offset}"), "-0320");
 }

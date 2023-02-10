@@ -68,11 +68,11 @@ impl Display for Tree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if f.alternate() {
             for entry in &self.entries {
-                write!(f, "{:#}", entry)?;
+                write!(f, "{entry:#}")?;
             }
         } else {
             for entry in &self.entries {
-                writeln!(f, "{}", entry)?;
+                writeln!(f, "{entry}")?;
             }
         }
         Ok(())

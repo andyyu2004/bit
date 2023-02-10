@@ -85,7 +85,7 @@ impl Display for DebugTreeEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         indent!(f, self.path().components().count());
         match self {
-            DebugTreeEntry::Tree(tree) => write!(f, "{}", tree),
+            DebugTreeEntry::Tree(tree) => write!(f, "{tree}"),
             DebugTreeEntry::File(entry) =>
                 writeln!(f, "{} ({})", entry.path.file_name(), entry.oid),
         }
@@ -96,7 +96,7 @@ impl Display for DebugTree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "{}/ ({})", self.path.file_name(), self.oid)?;
         for entry in &self.entries {
-            write!(f, "{}", entry)?;
+            write!(f, "{entry}")?;
         }
         Ok(())
     }

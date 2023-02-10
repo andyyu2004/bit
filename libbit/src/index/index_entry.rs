@@ -221,7 +221,7 @@ impl BitIndexEntry {
     }
 
     pub fn from_absolute_path(repo: &BitRepo, absolute: &Path) -> BitResult<Self> {
-        let relative = BitPath::intern(repo.to_relative_path(&absolute)?);
+        let relative = BitPath::intern(repo.to_relative_path(absolute)?);
         let normalized = repo.normalize_path(absolute)?;
         Self::new(normalized, relative)
     }
@@ -245,7 +245,7 @@ impl BitIndexEntry {
     pub(super) fn padding_len_for_filepath(filepath_len: usize, is_extended: bool) -> usize {
         let entry_size = ENTRY_SIZE_WITHOUT_FILEPATH
             + filepath_len
-            + is_extended.then_some(std::mem::size_of::<BitIndexEntryExtendedFlags>()).unwrap_or(0);
+            + if is_extended { std::mem::size_of::<BitIndexEntryExtendedFlags>() } else { 0 };
         // +8 instead of +7 as we should always have at least one byte
         // of padding as we consider the nullbyte of the filepath as padding
         let next_multiple_of_8 = ((entry_size + 8) / 8) * 8;
