@@ -113,7 +113,7 @@ where
     J: BitTreeIterator,
 {
     type Error = BitGenericError;
-    type Item<'a> = TreeDiffEntry<'a> where Self: 'a;
+    type Item<'a> = TreeDiffEntry<'a> where I: 'a, J: 'a;
 
     fn next(&mut self) -> Result<Option<Self::Item<'_>>, Self::Error> {
         loop {
@@ -297,21 +297,23 @@ pub trait TreeDiffer {
         new_iter: impl BitTreeIterator,
         opts: DiffOpts,
     ) -> BitResult<()> {
-        todo!()
-        // TreeDiffIter::new(repo, old_iter, new_iter, opts).into_iter().for_each(|diff_entry| {
-        //     match diff_entry {
-        //         TreeDiffEntry::DeletedBlob(old) => self.deleted_blob(old),
-        //         TreeDiffEntry::CreatedBlob(new) => self.created_blob(new),
-        //         TreeDiffEntry::ModifiedBlob(old, new) => self.modified_blob(old, new),
-        //         TreeDiffEntry::DeletedTree(old_entries) => self.deleted_tree(old_entries),
-        //         TreeDiffEntry::CreatedTree(new_entries) => self.created_tree(new_entries),
-        //         TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
-        //         TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
-        //         TreeDiffEntry::MaybeModifiedTree(..) => Ok(()),
-        //         TreeDiffEntry::UnmodifiedBlob(..) | TreeDiffEntry::UnmodifiedTree(..) =>
-        //             panic!("included unmodified files when calculating a diff?"),
-        //     }
-        // })
+        let mut iter = TreeDiffIter::new(repo, old_iter, new_iter, opts);
+        while let Some(diff_entry) = iter.next()? {
+            match diff_entry {
+                TreeDiffEntry::DeletedBlob(old) => self.deleted_blob(old),
+                TreeDiffEntry::CreatedBlob(new) => self.created_blob(new),
+                TreeDiffEntry::ModifiedBlob(old, new) => self.modified_blob(old, new),
+                TreeDiffEntry::DeletedTree(old_entries) => self.deleted_tree(old_entries),
+                TreeDiffEntry::CreatedTree(new_entries) => self.created_tree(new_entries),
+                TreeDiffEntry::BlobToTree(blob, tree) => self.blob_to_tree(blob, tree),
+                TreeDiffEntry::TreeToBlob(tree, blob) => self.tree_to_blob(tree, blob),
+                TreeDiffEntry::MaybeModifiedTree(..) => Ok(()),
+                TreeDiffEntry::UnmodifiedBlob(..) | TreeDiffEntry::UnmodifiedTree(..) =>
+                    panic!("included unmodified files when calculating a diff?"),
+            }?;
+        }
+
+        Ok(())
     }
 
     fn created_tree(&mut self, new_entries: TreeEntriesConsumer<'_>) -> BitResult<()>;

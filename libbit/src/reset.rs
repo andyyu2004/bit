@@ -4,17 +4,12 @@ use crate::refs::BitRef;
 use crate::repo::{BitRepo, RepoState};
 use crate::rev::Revspec;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Default)]
 pub enum ResetKind {
     Soft,
+    #[default]
     Mixed,
     Hard,
-}
-
-impl Default for ResetKind {
-    fn default() -> Self {
-        ResetKind::Mixed
-    }
 }
 
 impl BitRepo {
