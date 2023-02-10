@@ -173,18 +173,6 @@ impl BitRepo {
         self.write_obj(&commit)
     }
 
-    pub fn virtual_write_commit(
-        &mut self,
-        tree: Oid,
-        parents: CommitParents,
-        message: CommitMessage,
-    ) -> BitResult<Arc<Commit>> {
-        self.with_virtual_write(|index| {
-            let oid = index.write_commit(tree, parents, message)?;
-            index.read_obj_commit(oid)
-        })
-    }
-
     pub fn read_commit_msg(&self) -> BitResult<CommitMessage> {
         let editor = match std::env::var("EDITOR") {
             Ok(editor) => editor,

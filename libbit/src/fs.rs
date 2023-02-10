@@ -27,7 +27,7 @@ impl Display for RenameIndex {
 pub struct UniquePath;
 
 impl UniquePath {
-    pub fn new(repo: BitRepo, base_path: impl AsRef<Path>) -> BitResult<PathBuf> {
+    pub fn make(repo: BitRepo, base_path: impl AsRef<Path>) -> BitResult<PathBuf> {
         let base_path = base_path.as_ref();
         let mut i = RenameIndex::default();
         loop {

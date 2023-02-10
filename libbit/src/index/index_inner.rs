@@ -217,6 +217,11 @@ impl BitIndexInner {
         self.entries.len()
     }
 
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn has_conflicts(&self) -> bool {
         self.entries.keys().any(|(_, stage)| stage.is_unmerged())
     }

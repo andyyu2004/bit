@@ -10,7 +10,7 @@ pub use worktree_tree_iter::WorktreeTreeIter;
 
 use crate::error::{BitErrorExt, BitGenericError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
-use crate::obj::{FileMode, ImmutableBitObject, Oid, TreeEntry, Treeish};
+use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::Peekable;

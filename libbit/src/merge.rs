@@ -11,8 +11,6 @@ use crate::refs::BitRef;
 use crate::repo::BitRepo;
 use crate::rev::Revspec;
 use crate::xdiff;
-#[allow(unused_imports)]
-use fallible_iterator::FallibleIterator;
 use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -162,7 +160,7 @@ impl MergeCtxt {
         match &merge_bases[..] {
             [] => Ok(None),
             [merge_base] => Ok(Some(merge_base.clone())),
-            [a, b] => Some(self.make_virtual_base(a, b)).transpose(),
+            [a, b] => self.make_virtual_base(a, b)?.peel(self).map(Some),
             _ => todo!("more than 2 merge bases"),
         }
     }
@@ -171,17 +169,17 @@ impl MergeCtxt {
         &mut self,
         our_head: &Arc<Commit>,
         their_head: &Arc<Commit>,
-    ) -> BitResult<Arc<Commit>> {
+    ) -> BitResult<Oid> {
         debug!("MergeCtxt::make_virtual_base({}, {})", our_head.oid(), their_head.oid());
         let merge_base = self.merge_base_recursive(our_head, their_head)?;
         self.merge_commits(merge_base, our_head, their_head)?;
 
         let mut index = self.repo.index_mut()?;
         debug_assert!(!index.has_conflicts());
-        let merged_tree = index.virtual_write_tree()?;
+        let merged_tree = index.write_tree()?;
         drop(index);
 
-        let merge_commit = self.repo.virtual_write_commit(
+        let merge_commit = self.repo.write_commit(
             merged_tree,
             smallvec![our_head.oid(), their_head.oid()],
             CommitMessage::new_subject("generated virtual merge commit")?,
@@ -190,7 +188,7 @@ impl MergeCtxt {
         #[cfg(test)]
         trace!(
             "MergeCtxt::make_virtual_base(..) :: merged_commit_tree = {:?}",
-            self.repo.debug_tree(merge_commit.tree_oid())
+            self.repo.debug_tree(merge_commit)
         );
         Ok(merge_commit)
     }
@@ -419,7 +417,7 @@ impl MergeCtxt {
     }
 
     fn write_their_conflicted(&self, theirs: &BitIndexEntry) -> BitResult<()> {
-        let moved_path = UniquePath::new(
+        let moved_path = UniquePath::make(
             self.repo.clone(),
             format!("{}~{}", theirs.path(), self.their_head_desc),
         )?;
@@ -427,7 +425,7 @@ impl MergeCtxt {
     }
 
     fn mv_our_conflicted(&mut self, path: BitPath) -> BitResult<()> {
-        let moved_path = UniquePath::new(self.repo.clone(), format!("{path}~HEAD"))?;
+        let moved_path = UniquePath::make(self.repo.clone(), format!("{path}~HEAD"))?;
         self.repo.mv(path, moved_path)
     }
 

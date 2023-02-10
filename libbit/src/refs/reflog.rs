@@ -53,8 +53,16 @@ impl BitReflog {
         self.entries.push(BitReflogEntry { old_oid, new_oid, committer, message: msg })
     }
 
+    #[must_use]
+    #[inline]
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

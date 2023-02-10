@@ -1,4 +1,4 @@
-use crate::cache::{BitObjCache, VirtualOdb};
+use crate::cache::BitObjCache;
 use crate::config::{BitConfig, RemoteConfig};
 use crate::error::{BitError, BitErrorExt, BitGenericError, BitResult};
 use crate::index::BitIndex;
@@ -11,7 +11,6 @@ use crate::refs::{BitRef, BitRefDb, BitRefDbBackend, RefUpdateCause, Refs, Symbo
 use crate::signature::BitSignature;
 use crate::tls;
 use anyhow::Context;
-use bit_ds::sync::OneThread;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -22,10 +21,8 @@ use std::io::{self, Write};
 use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use typed_arena::Arena as TypedArena;
 
 pub const BIT_PACK_OBJECTS_PATH: &str = "pack";
 pub const BIT_INDEX_FILE_PATH: &str = "index";
@@ -44,14 +41,6 @@ impl PartialEq for BitRepo {
     }
 }
 
-#[derive(Default)]
-pub struct Arenas {
-    commit_arena: TypedArena<Commit>,
-    tree_arena: TypedArena<Tree>,
-    blob_arena: TypedArena<Blob>,
-    tag_arena: TypedArena<Tag>,
-}
-
 /// The context backing `BitRepo`
 /// Most of the fields are using threadsafe wrappers due to experimentation with
 /// multithreading but the results were not great so they are not in use currently.
@@ -62,14 +51,11 @@ pub struct RepoCtxt {
     pub bitdir: BitPath,
     config_filepath: BitPath,
     index_filepath: BitPath,
-    arenas: OneThread<Arenas>,
     config: BitConfig,
     obj_cache: RwLock<BitObjCache>,
     odb_cell: OnceLock<BitObjDb>,
     refdb_cell: OnceLock<BitRefDb>,
     index_cell: OnceLock<RwLock<BitIndex>>,
-    virtual_odb: OnceLock<VirtualOdb>,
-    virtual_write: AtomicBool,
 }
 
 impl RepoCtxt {
@@ -86,13 +72,10 @@ impl RepoCtxt {
             bitdir,
             index_filepath,
             config,
-            arenas: OneThread::new(Default::default()),
             odb_cell: Default::default(),
             index_cell: Default::default(),
             obj_cache: Default::default(),
             refdb_cell: Default::default(),
-            virtual_odb: Default::default(),
-            virtual_write: Default::default(),
         }))
     }
 
@@ -282,13 +265,6 @@ impl BitRepo {
     #[inline]
     pub fn refdb(&self) -> BitResult<&BitRefDb> {
         self.refdb_cell.get_or_try_init(|| Ok(BitRefDb::new(self.clone())))
-    }
-
-    // this is necessary as a lifetime hint as otherwise usages of &self.arenas have lifetime
-    // tied to self rather than 'rcx
-    #[inline]
-    fn arenas(&self) -> &Arenas {
-        &self.rcx.arenas
     }
 
     #[inline]
@@ -491,16 +467,6 @@ impl BitRepo {
         self.update_head(to, RefUpdateCause::Checkout { from: self.read_head()?, to })
     }
 
-    /// Enter a section where writes don't persist to disk but only to the cache.
-    /// Useful for ephemeral writes (such as virtual merge bases).
-    /// Be careful as all writes and reads within the closure will be issued to the virtual odb
-    pub(crate) fn with_virtual_write<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.virtual_write.store(true, Ordering::Release);
-        let ret = f(self);
-        self.virtual_write.store(false, Ordering::Release);
-        ret
-    }
-
     // this method must be private to avoid people writing directly the odb directly bypassing the `virtual_write` checks
     #[inline]
     fn odb(&self) -> BitResult<&BitObjDb> {
@@ -517,19 +483,11 @@ impl BitRepo {
         self.objects_dir().join(BIT_PACK_OBJECTS_PATH)
     }
 
-    fn virtual_odb(&self) -> &VirtualOdb {
-        self.rcx.virtual_odb.get_or_init(|| VirtualOdb::new(self.clone()))
-    }
-
     /// writes `obj` into the object store returning its full hash
     pub fn write_obj(&self, obj: &dyn WritableObject) -> BitResult<Oid> {
-        if self.virtual_write.load(Ordering::Acquire) {
-            self.virtual_odb().write(obj)
-        } else {
-            // TODO cache this object as a write is often followed by an immediate read
-            // is there even an easy way to cache this write without just deserializing it from scratch essentially?
-            self.odb()?.write(obj)
-        }
+        // TODO cache this object as a write is often followed by an immediate read
+        // is there even an easy way to cache this write without just deserializing it from scratch essentially?
+        self.odb()?.write(obj)
     }
 
     pub fn refresh_odb(&self) -> BitResult<()> {
@@ -542,8 +500,6 @@ impl BitRepo {
         let oid = self.expand_id(id)?;
         if oid == Oid::EMPTY_TREE {
             Ok(BitObjKind::Tree(Tree::empty(self.clone())))
-        } else if self.virtual_write.load(Ordering::Acquire) {
-            Ok(self.virtual_odb().read(oid))
         } else {
             self.obj_cache.write().get_or_insert_with(oid, || {
                 let raw = self.odb()?.read_raw(BitId::Full(oid))?;
