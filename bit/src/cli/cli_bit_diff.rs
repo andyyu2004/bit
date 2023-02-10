@@ -67,7 +67,7 @@ mod tests {
     #[test]
     fn test_cli_parse_bit_diff_staged() {
         let opts = BitDiffCliOpts::parse_from(["--", "--staged", "foo"]);
-        assert!(!opts.staged);
+        assert!(opts.staged);
         assert_eq!(opts.revs.len(), 1);
 
         let opts = BitDiffCliOpts::parse_from(["--", "--staged"]);
