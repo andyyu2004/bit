@@ -171,9 +171,9 @@ pub struct BitHashObjectCliOpts {
     pub path: PathBuf,
 }
 
-impl Into<BitHashObjectOpts> for BitHashObjectCliOpts {
-    fn into(self) -> BitHashObjectOpts {
-        let Self { do_write, objtype, path } = self;
+impl From<BitHashObjectCliOpts> for BitHashObjectOpts {
+    fn from(val: BitHashObjectCliOpts) -> Self {
+        let BitHashObjectCliOpts { do_write, objtype, path } = val;
         BitHashObjectOpts { do_write, objtype, path }
     }
 }
@@ -201,9 +201,9 @@ pub struct BitCatFileCliOpts {
     pub revision: Revspec,
 }
 
-impl Into<BitCatFileOpts> for BitCatFileCliOpts {
-    fn into(self) -> BitCatFileOpts {
-        let Self { pp, exit, ty, size, objtype, revision: rev } = self;
+impl From<BitCatFileCliOpts> for BitCatFileOpts {
+    fn from(val: BitCatFileCliOpts) -> Self {
+        let BitCatFileCliOpts { pp, exit, ty, size, objtype, revision: rev } = val;
         let op = if pp {
             BitCatFileOperation::PrettyPrint
         } else if size {

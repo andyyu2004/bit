@@ -54,7 +54,7 @@ impl Refspec {
             let suffix = source.path().as_str().strip_prefix(self.src.as_str())?;
             Some(BitPath::intern(format!("{}{}", self.dst, suffix)))
         } else {
-            if source.path() == self.src { Some(self.dst) } else { None }
+            (source.path() == self.src).then_some(self.dst)
         }?;
         Some(SymbolicRef::new(path))
     }

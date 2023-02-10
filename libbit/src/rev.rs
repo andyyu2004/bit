@@ -8,9 +8,9 @@ use crate::peel::Peel;
 use crate::refs::{BitRef, BitRefDbBackend, SymbolicRef};
 use crate::repo::BitRepo;
 use lazy_static::lazy_static;
+use std::cell::OnceCell;
 use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
-use std::lazy::OnceCell;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -219,7 +219,7 @@ impl<'a> RevspecParser<'a> {
 
     /// either a partialoid or a ref
     fn parse_base(&mut self) -> BitResult<ParsedRevspec> {
-        let repo = self.repo;
+        let repo = self.repo.clone();
         // some hacky special case for parsing the alias @ for HEAD
         // it's a bit annoying as @ is both a separator and a valid base
         let s = if &self.src[0..1] == "@" {

@@ -1,7 +1,4 @@
-#![feature(backtrace)]
 #![feature(iter_intersperse)]
-
-use std::backtrace::BacktraceStatus;
 
 mod cli;
 mod util;
@@ -20,11 +17,9 @@ extern crate anyhow;
 pub fn main() -> ! {
     env_logger::builder().parse_env("BIT_LOG").init();
     if let Err(err) = cli::run(std::env::args_os()) {
-        eprintln!("{}", err);
+        eprintln!("{err}");
         let backtrace = err.backtrace();
-        if backtrace.status() == BacktraceStatus::Captured {
-            println!("{}", backtrace);
-        }
+        println!("{backtrace}");
         std::process::exit(1)
     } else {
         std::process::exit(0)

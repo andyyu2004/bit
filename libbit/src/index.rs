@@ -83,10 +83,10 @@ impl BitIndex {
     }
 
     pub(crate) fn update_cache_tree(&mut self, tree: Oid) -> BitResult<()> {
-        let repo = &self.repo;
+        let repo = self.repo.clone();
         match self.tree_cache.as_mut() {
-            Some(tree_cache) => tree_cache.update(repo, tree)?,
-            None => self.tree_cache = Some(BitTreeCache::read_tree(repo, tree)?),
+            Some(tree_cache) => tree_cache.update(&repo, tree)?,
+            None => self.tree_cache = Some(BitTreeCache::read_tree(&repo, tree)?),
         }
         Ok(())
     }
@@ -112,14 +112,14 @@ impl BitIndex {
             bail!("cannot write-tree an an index that is not fully merged");
         }
 
-        let tree_oid = self.index_tree_iter().build_tree(self.repo, self.tree_cache())?;
+        let tree_oid = self.index_tree_iter().build_tree(&self.repo, self.tree_cache())?;
         // refresh the tree_cache using the tree we just built
         self.update_cache_tree(tree_oid)?;
         Ok(tree_oid)
     }
 
     pub(crate) fn virtual_write_tree(&mut self) -> BitResult<Oid> {
-        self.repo.with_virtual_write(|| self.write_tree())
+        self.repo.with_virtual_write(|index| index.write_tree())
     }
 
     pub fn is_racy_entry(&self, worktree_entry: &BitIndexEntry) -> bool {

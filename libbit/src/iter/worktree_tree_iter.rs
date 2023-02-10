@@ -25,7 +25,7 @@ impl FallibleIterator for WorktreeTreeIter {
             None => return Ok(None),
         };
 
-        let repo = self.inner.repo;
+        let repo = self.inner.repo.clone();
         let index_entry = if entry.file_type.is_dir() {
             TreeEntry {
                 oid: Oid::UNKNOWN,

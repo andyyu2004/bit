@@ -174,14 +174,14 @@ impl BitRepo {
     }
 
     pub fn virtual_write_commit(
-        &self,
+        &mut self,
         tree: Oid,
         parents: CommitParents,
         message: CommitMessage,
     ) -> BitResult<Arc<Commit>> {
-        self.with_virtual_write(|| {
-            let oid = self.write_commit(tree, parents, message)?;
-            self.read_obj_commit(oid)
+        self.with_virtual_write(|index| {
+            let oid = index.write_commit(tree, parents, message)?;
+            index.read_obj_commit(oid)
         })
     }
 
@@ -360,7 +360,7 @@ impl BitObject for Commit {
     }
 
     fn owner(&self) -> BitRepo {
-        self.owner
+        self.owner.clone()
     }
 }
 

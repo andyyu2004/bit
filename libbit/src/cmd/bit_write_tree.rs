@@ -5,7 +5,7 @@ use crate::repo::BitRepo;
 impl BitRepo {
     pub fn bit_write_tree(&self) -> BitResult<()> {
         let hash = self.write_tree()?;
-        println!("{}", hash);
+        println!("{hash}");
         Ok(())
     }
 

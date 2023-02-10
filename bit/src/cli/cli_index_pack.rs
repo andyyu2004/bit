@@ -19,7 +19,7 @@ impl BitIndexPackCliOpts {
     pub fn exec(self) -> BitResult<()> {
         let Self { path, index_file, verbose } = self;
         let opts = IndexPackOpts { index_file_path: index_file, verbose };
-        PackIndexer::write_pack_index(&path, opts)?;
+        PackIndexer::write_pack_index(path, opts)?;
         Ok(())
     }
 }

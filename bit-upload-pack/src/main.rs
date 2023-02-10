@@ -12,7 +12,7 @@ struct Opts {
 
 fn main() -> BitResult<()> {
     let opts = Opts::parse();
-    BitRepo::find(&opts.path, |repo| {
+    BitRepo::find(opts.path, |repo| {
         UploadPack::new(repo, BufReader::new(tokio::io::stdin()), tokio::io::stdout()).run()
     })
 }

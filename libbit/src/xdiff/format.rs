@@ -144,8 +144,8 @@ impl<W: Write> DiffStatFormatter<W> {
 
     // this api is a bit weird, why not just generate a diffstat struct from the workspace status
     // could just do a `diffstat` method on workspace status and then the user can write as one wishes
-    pub fn format_diffstat_into(repo: BitRepo, writer: W, status: impl Diff) -> BitResult<()> {
-        let mut this = Self::new(repo, writer);
+    pub fn format_diffstat_into(repo: &BitRepo, writer: W, status: impl Diff) -> BitResult<()> {
+        let mut this = Self::new(repo.clone(), writer);
         status.apply_with(&mut this)?;
 
         let lines = DiffStat {

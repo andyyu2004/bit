@@ -41,13 +41,13 @@ mod tests {
     use super::*;
     #[test]
     fn parse_switch_opts() {
-        let opts = BitSwitchCliOpts::try_parse_from(&["HEAD"]).unwrap();
+        let opts = BitSwitchCliOpts::try_parse_from(["HEAD"]).unwrap();
         assert_eq!(opts, BitSwitchCliOpts { create: None, revision: "HEAD".parse().unwrap() })
     }
 
     #[test]
     fn parse_switch_opts_create_branch_from_head() {
-        let opts = BitSwitchCliOpts::try_parse_from(&["--", "-c", "some-branch"]).unwrap();
+        let opts = BitSwitchCliOpts::try_parse_from(["--", "-c", "some-branch"]).unwrap();
         assert_eq!(
             opts,
             BitSwitchCliOpts {
@@ -59,7 +59,7 @@ mod tests {
 
     #[test]
     fn parse_switch_opts_create_branch_from_revision() {
-        let opts = BitSwitchCliOpts::try_parse_from(&["--", "-c", "some-branch", "@^4"]).unwrap();
+        let opts = BitSwitchCliOpts::try_parse_from(["--", "-c", "some-branch", "@^4"]).unwrap();
         assert_eq!(
             opts,
             BitSwitchCliOpts {

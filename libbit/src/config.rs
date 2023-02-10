@@ -208,7 +208,7 @@ pub struct RawConfig<'c> {
 impl BitRepo {
     /// Use this API for setting config values, otherwise use `.config()`
     pub fn with_raw_local_config<R>(
-        self,
+        &self,
         f: impl FnOnce(&mut RawConfig<'_>) -> BitResult<R>,
     ) -> BitResult<R> {
         debug_assert!(self.config_path().try_exists()?);

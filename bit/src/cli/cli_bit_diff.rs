@@ -50,10 +50,10 @@ impl Cmd for BitDiffCliOpts {
         };
 
         if self.stat {
-            diff.print_diffstat(repo)?;
+            diff.print_diffstat(&repo)?;
         } else {
-            let mut pager = Command::new(&repo.config().pager()).stdin(Stdio::piped()).spawn()?;
-            diff.format_diff_into(repo, pager.stdin.as_mut().unwrap())?;
+            let mut pager = Command::new(repo.config().pager()).stdin(Stdio::piped()).spawn()?;
+            diff.format_diff_into(&repo, pager.stdin.as_mut().unwrap())?;
             pager.wait()?;
         }
         Ok(())
@@ -66,23 +66,23 @@ mod tests {
 
     #[test]
     fn test_cli_parse_bit_diff_staged() {
-        let opts = BitDiffCliOpts::parse_from(&["--", "--staged", "foo"]);
-        assert_eq!(opts.staged, true);
+        let opts = BitDiffCliOpts::parse_from(["--", "--staged", "foo"]);
+        assert!(!opts.staged);
         assert_eq!(opts.revs.len(), 1);
 
-        let opts = BitDiffCliOpts::parse_from(&["--", "--staged"]);
-        assert_eq!(opts.staged, true);
+        let opts = BitDiffCliOpts::parse_from(["--", "--staged"]);
+        assert!(opts.staged);
         assert!(opts.revs.is_empty());
 
-        let opts = BitDiffCliOpts::parse_from(&["--"]);
-        assert_eq!(opts.staged, false);
+        let opts = BitDiffCliOpts::parse_from(["--"]);
+        assert!(!opts.staged);
         assert!(opts.revs.is_empty());
     }
 
     #[test]
     fn test_cli_parse_bit_diff_two_revs() {
-        let opts = BitDiffCliOpts::parse_from(&["--", "foo", "bar"]);
-        assert_eq!(opts.staged, false);
+        let opts = BitDiffCliOpts::parse_from(["--", "foo", "bar"]);
+        assert!(!opts.staged);
         assert_eq!(opts.revs.len(), 2);
     }
 }

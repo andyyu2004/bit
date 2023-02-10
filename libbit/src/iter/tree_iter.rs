@@ -94,13 +94,13 @@ pub trait BitTreeIterator: BitIterator<BitIndexEntry> {
 
     /// creates a tree object from a tree_iterator
     /// the tree_iterator must be "fresh" and completely unconsumed
-    fn build_tree(&mut self, repo: BitRepo, tree_cache: Option<&BitTreeCache>) -> BitResult<Oid>
+    fn build_tree(&mut self, repo: &BitRepo, tree_cache: Option<&BitTreeCache>) -> BitResult<Oid>
     where
         Self: Sized,
     {
         // skip root entry
         let root = self.next()?.unwrap();
-        let oid = build_tree_internal(repo, self, tree_cache, BitPath::EMPTY)?;
+        let oid = build_tree_internal(&repo, self, tree_cache, BitPath::EMPTY)?;
         debug_assert!(root.oid.is_unknown() || root.oid == oid);
         Ok(oid)
     }
@@ -137,7 +137,7 @@ impl<'a, I: BitTreeIterator> BitTreeIterator for &'a mut I {
 }
 
 fn build_tree_internal(
-    repo: BitRepo,
+    repo: &BitRepo,
     iter: &mut impl BitTreeIterator,
     tree_cache: Option<&BitTreeCache>,
     base_path: BitPath,

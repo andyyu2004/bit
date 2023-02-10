@@ -3,14 +3,14 @@ use std::cmp::Ordering;
 
 impl BitRepo {
     pub fn walk_tree_iterators<'a, const N: usize>(
-        self,
+        &self,
         iterators: [Box<dyn BitTreeIterator + 'a>; N],
     ) -> impl BitIterator<[Option<BitIndexEntry>; N]> + 'a {
         WalkTreeIterators::new(iterators)
     }
 
     pub fn walk_iterators<'a, const N: usize>(
-        self,
+        &self,
         iterators: [Box<dyn BitEntryIterator + 'a>; N],
     ) -> impl BitIterator<[Option<BitIndexEntry>; N]> + 'a {
         WalkIterators::new(iterators)

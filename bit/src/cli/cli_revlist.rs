@@ -29,12 +29,12 @@ mod tests {
 
     #[test]
     fn test_parse_revlist_requires_at_least_one_revision() {
-        assert!(BitRevlistCliOpts::try_parse_from(&["--"]).is_err());
+        assert!(BitRevlistCliOpts::try_parse_from(["--"]).is_err());
     }
 
     #[test]
     fn test_parse_revlist_cli() {
-        let opts = BitRevlistCliOpts::try_parse_from(&["--", "HEAD", "master", "branch"]).unwrap();
+        let opts = BitRevlistCliOpts::try_parse_from(["--", "HEAD", "master", "branch"]).unwrap();
         assert_eq!(opts.revisions.len(), 3);
     }
 }

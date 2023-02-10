@@ -1,6 +1,6 @@
 use crate::diff::*;
 use crate::error::{BitError, BitResult};
-use crate::index::{BitIndex, BitIndexEntry, MergeStage};
+use crate::index::{BitIndexEntry, MergeStage};
 use crate::iter::{BitEntry, BitEntryIterator, BitTreeIterator};
 use crate::obj::{FileMode, TreeEntry, Treeish};
 use crate::path::BitPath;
@@ -23,7 +23,7 @@ pub struct CheckoutOpts {
 
 impl CheckoutOpts {
     pub fn forced() -> Self {
-        Self { strategy: CheckoutStrategy::Force, ..Default::default() }
+        Self { strategy: CheckoutStrategy::Force }
     }
 
     fn is_forced(&self) -> bool {
@@ -155,17 +155,17 @@ impl BitRepo {
     fn apply_migration(&self, migration: &Migration) -> BitResult<()> {
         let mut index = self.index_mut()?;
         migration.rmrfs.iter().try_for_each(|rmrf| {
-            let path = self.to_absolute_path(&rmrf.path);
+            let path = self.to_absolute_path(rmrf.path);
             if path.is_dir() {
-                std::fs::remove_dir_all(&path)?;
+                std::fs::remove_dir_all(path)?;
             }
             index.remove_directory(rmrf.path)
         })?;
 
         for rm in &migration.rms {
-            let path = self.to_absolute_path(&rm.path);
+            let path = self.to_absolute_path(rm.path);
             if path.is_file() {
-                std::fs::remove_file(&path)
+                std::fs::remove_file(path)
                     .with_context(|| anyhow!("failed to remove file in `apply_migration`"))?;
 
                 let parent = path.parent().expect("a file must have a parent");
@@ -179,19 +179,19 @@ impl BitRepo {
         }
 
         for mkdir in &migration.mkdirs {
-            let path = self.to_absolute_path(&mkdir.path);
+            let path = self.to_absolute_path(mkdir.path);
             debug_assert!(!path.is_file());
             // TODO think there's a bug somewhere that requires this to be `create_dir_all`
             // Go to any sufficiently large repo and just do something like `bit checkout @~500~
             // and there's likely to be a directory that failed to be created
             // due to the parent directories not existing
-            std::fs::create_dir_all(&path).with_context(|| {
+            std::fs::create_dir_all(path).with_context(|| {
                 anyhow!("failed to create directory `{}`, in `apply_migration`", mkdir.path)
             })?;
         }
 
         for create in &migration.creates {
-            let path = self.to_absolute_path(&create.path);
+            let path = self.to_absolute_path(create.path);
             let bytes = create.read_to_bytes(self)?;
             // this is necessary due to `rm` above deleting empty directories that may be repopulated
             // there is probably a better way
@@ -207,7 +207,7 @@ impl BitRepo {
                     .create_new(true)
                     .read(false)
                     .write(true)
-                    .open(&path)
+                    .open(path)
                     .with_context(|| {
                         anyhow!("failed to create file `{}` in `apply_migration`", path)
                     })?;

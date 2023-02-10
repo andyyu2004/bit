@@ -25,7 +25,7 @@ pub struct CommitOpts {
 
 impl BitRepo {
     // TODO return a BitCommitReport which includes the oid, and kind (CommitKind) etc
-    pub fn commit(self, opts: CommitOpts) -> BitResult<CommitSummary> {
+    pub fn commit(&self, opts: CommitOpts) -> BitResult<CommitSummary> {
         let head = self.read_head()?;
         let sym = match head {
             BitRef::Direct(..) => SymbolicRef::HEAD,
@@ -45,7 +45,7 @@ impl BitRepo {
         }
 
         let commit_oid = self.commit_tree(tree, parent.into_iter().collect(), opts.message)?;
-        let commit = commit_oid.peel(&self)?;
+        let commit = commit_oid.peel(self)?;
 
         // TODO print status of commit
         // include initial commit if it is one
@@ -63,7 +63,7 @@ impl BitRepo {
 
         Ok(CommitSummary {
             status: self.diff_tree_to_tree(parent.unwrap_or(Oid::UNKNOWN), commit.tree)?,
-            repo: self,
+            repo: self.clone(),
             sym,
             commit,
         })

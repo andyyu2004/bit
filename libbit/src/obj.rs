@@ -217,7 +217,7 @@ impl BitObjKind {
     }
 
     /// Returns `true` if the bit_obj_kind is [`Commit`].
-    pub fn is_commit(self) -> bool {
+    pub fn is_commit(&self) -> bool {
         matches!(self, Self::Commit(..))
     }
 }
@@ -263,15 +263,10 @@ impl BitObjKind {
 
     pub fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self> {
         match cached.obj_type {
-            BitObjType::Commit => Commit::new(owner, cached, reader)
-                .map(|commit| owner.alloc_commit(commit))
-                .map(Self::Commit),
-            BitObjType::Tree =>
-                Tree::new(owner, cached, reader).map(|tree| owner.alloc_tree(tree)).map(Self::Tree),
-            BitObjType::Blob =>
-                Blob::new(owner, cached, reader).map(|blob| owner.alloc_blob(blob)).map(Self::Blob),
-            BitObjType::Tag =>
-                Tag::new(owner, cached, reader).map(|tag| owner.alloc_tag(tag)).map(Self::Tag),
+            BitObjType::Commit => Commit::new(owner, cached, reader).map(Self::Commit),
+            BitObjType::Tree => Tree::new(owner, cached, reader).map(Self::Tree),
+            BitObjType::Blob => Blob::new(owner, cached, reader).map(Self::Blob),
+            BitObjType::Tag => Tag::new(owner, cached, reader).map(Self::Tag),
         }
     }
 
@@ -343,15 +338,15 @@ pub trait BitObject {
 pub trait ImmutableBitObject {
     type Mutable: DeserializeSized;
 
-    fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self>
+    fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Arc<Self>>
     where
         Self: Sized,
     {
-        Ok(Self::from_mutable(
+        Ok(Arc::new(Self::from_mutable(
             owner,
             cached,
             Self::Mutable::deserialize_sized(reader, cached.size)?,
-        ))
+        )))
     }
 
     fn from_mutable(owner: BitRepo, cached: BitObjCached, inner: Self::Mutable) -> Self;

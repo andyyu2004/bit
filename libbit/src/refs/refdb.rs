@@ -18,7 +18,7 @@ pub struct BitRefDb {
 
 impl BitRefDb {
     pub fn new(repo: BitRepo) -> Self {
-        Self { repo, bitdir: repo.bitdir }
+        Self { bitdir: repo.bitdir, repo }
     }
 
     pub fn join(&self, path: impl AsRef<Path>) -> BitPath {
@@ -135,7 +135,7 @@ pub trait BitRefDbBackend {
 impl BitRefDbBackend for BitRefDb {
     #[inline]
     fn repo(&self) -> BitRepo {
-        self.repo
+        self.repo.clone()
     }
 
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {

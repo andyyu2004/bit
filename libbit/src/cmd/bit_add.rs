@@ -4,11 +4,11 @@ use crate::repo::BitRepo;
 use fallible_iterator::FallibleIterator;
 
 impl BitRepo {
-    pub fn bit_add_dryrun(self, pathspecs: &[Pathspec]) -> BitResult<()> {
+    pub fn bit_add_dryrun(&self, pathspecs: &[Pathspec]) -> BitResult<()> {
         let index = self.index()?;
         for pathspec in pathspecs {
             pathspec
-                .match_worktree(&*index)?
+                .match_worktree(&index)?
                 .for_each(|entry| Ok(println!("add `{}`", entry.path)))?;
         }
         Ok(())

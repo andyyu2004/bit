@@ -29,7 +29,7 @@ fn test_best_common_ancestors() -> BitResult<()> {
             (d, b),
         ]);
 
-        let commit_oids = dag.apply_to_repo(repo)?;
+        let commit_oids = dag.apply_to_repo(repo.clone())?;
 
         let a = commit_oids[&h];
         let b = commit_oids[&j];
@@ -50,7 +50,7 @@ fn test_criss_cross_merge_base() -> BitResult<()> {
         let [a, b, c, d] = dag.mk_nodes();
         dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
 
-        let commits = CommitGraphBuilder::new(repo).apply(&dag)?;
+        let commits = CommitGraphBuilder::new(repo.clone()).apply(&dag)?;
 
         let merge_bases = repo.merge_bases(commits[&c], commits[&d])?;
         assert_eq!(merge_bases.len(), 2);
@@ -72,7 +72,7 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
         let [a, b, c, d] = dag.mk_nodes_with_trees([tree, tree, tree, tree]);
         dag.add_parents([(c, a), (c, b), (d, a), (d, b)]);
 
-        let commits = dag.apply_to_repo(repo)?;
+        let commits = dag.apply_to_repo(repo.clone())?;
 
         bit_reset!(repo: --hard rev!(commits[&c]));
         assert_eq!(cat!(repo: "foo"), "foo contents");
@@ -90,7 +90,7 @@ fn test_trivial_criss_cross_merge() -> BitResult<()> {
 //  \
 //   b  -  d
 // TODO test behaviour when a and b have conflicts, probably introduce a parent commit for them too
-// #[test_log::test]
+#[test_log::test]
 fn test_nontrivial_criss_cross_merge() -> BitResult<()> {
     BitRepo::with_empty_repo(|repo| {
         let tree_o = tree! {
@@ -121,7 +121,7 @@ fn test_nontrivial_criss_cross_merge() -> BitResult<()> {
         let [o, a, b, c, d] = dag.mk_nodes_with_trees([tree_o, tree_a, tree_b, tree_c, tree_d]);
         dag.add_parents([(a, o), (b, o), (c, a), (c, b), (d, a), (d, b)]);
 
-        let commits = dag.apply_to_repo(repo)?;
+        let commits = dag.apply_to_repo(repo.clone())?;
 
         bit_reset!(repo: --hard rev!(commits[&c]));
         bit_branch!(repo: "d" @ rev!(commits[&d]));
@@ -227,7 +227,7 @@ fn test_fast_forward_merge() -> BitResult<()> {
 }
 
 impl BitRepo {
-    fn three_way_merge(self, ours: impl Treeish, theirs: impl Treeish) -> BitResult<MergeResults> {
+    fn three_way_merge(&self, ours: impl Treeish, theirs: impl Treeish) -> BitResult<MergeResults> {
         self.setup_three_way_merge(ours, theirs)?;
         bit_merge!(self: "theirs")
     }
@@ -240,7 +240,7 @@ impl BitRepo {
     ///       theirs
     /// Where `base` is the old HEAD
     /// Then merge theirs into HEAD
-    fn setup_three_way_merge(self, ours: impl Treeish, theirs: impl Treeish) -> BitResult<()> {
+    fn setup_three_way_merge(&self, ours: impl Treeish, theirs: impl Treeish) -> BitResult<()> {
         // empty commit just to allow this to work starting from an empty repo
         bit_commit!(self: --allow-empty);
         bit_branch!(self: "base");
@@ -258,7 +258,7 @@ impl BitRepo {
 
     /// Same as `three_way_merge` except the base is reset to the provided base commit
     fn three_way_merge_with_base(
-        self,
+        &self,
         base: Oid,
         ours: impl Treeish,
         theirs: impl Treeish,

@@ -123,18 +123,18 @@ impl BitObject for Tree {
     }
 
     fn owner(&self) -> BitRepo {
-        self.owner
+        self.owner.clone()
     }
 }
 
 impl ImmutableBitObject for Tree {
     type Mutable = MutableTree;
 
-    fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Self>
+    fn new(owner: BitRepo, cached: BitObjCached, reader: impl BufRead) -> BitResult<Arc<Self>>
     where
         Self: Sized,
     {
-        Ok(Self { owner, cached, entries: Self::read_entries(reader, cached.size)? })
+        Ok(Arc::new(Self { owner, cached, entries: Self::read_entries(reader, cached.size)? }))
     }
 
     fn from_mutable(_owner: BitRepo, _cached: BitObjCached, _inner: Self::Mutable) -> Self {
@@ -145,12 +145,11 @@ impl ImmutableBitObject for Tree {
 }
 impl Tree {
     pub fn empty(repo: BitRepo) -> Arc<Self> {
-        let tree = Self {
+        Arc::new(Self {
             owner: repo,
             cached: BitObjCached::new(Oid::EMPTY_TREE, BitObjType::Tree, 0),
             entries: vec![],
-        };
-        repo.alloc_tree(tree)
+        })
     }
 
     fn read_entries(r: impl BufRead, size: u64) -> BitResult<Vec<TreeEntry>>

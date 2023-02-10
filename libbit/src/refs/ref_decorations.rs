@@ -75,7 +75,7 @@ impl Display for RefDecoration {
 
 impl BitRepo {
     /// Given a ordered set of references, returns a map from a commit oid to a ordered set of it's decorations
-    pub fn ref_decorations(self, refs: &Refs) -> BitResult<HashMap<Oid, BTreeSet<RefDecoration>>> {
+    pub fn ref_decorations(&self, refs: &Refs) -> BitResult<HashMap<Oid, BTreeSet<RefDecoration>>> {
         let mut decorations = HashMap::<Oid, BTreeSet<RefDecoration>>::new();
         let mut handled = HashSet::new();
         for sym in refs {
@@ -96,7 +96,7 @@ impl BitRepo {
         Ok(decorations)
     }
 
-    fn calculate_decoration(self, sym: SymbolicRef) -> BitResult<(Oid, RefDecoration)> {
+    fn calculate_decoration(&self, sym: SymbolicRef) -> BitResult<(Oid, RefDecoration)> {
         match self.partially_resolve_ref(sym)? {
             BitRef::Direct(oid) => Ok((oid, RefDecoration::Branch(sym))),
             BitRef::Symbolic(inner_sym) => match self.resolve_ref(inner_sym)? {

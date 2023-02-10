@@ -6,7 +6,7 @@ use libbit::error::BitGenericError;
 pub struct BitUpdateIndexCliOpts {
     #[clap(long = "add")]
     add: bool,
-    #[clap(long = "cacheinfo", use_delimiter = true, number_of_values = 3)]
+    #[clap(long = "cacheinfo", use_value_delimiter = true, number_of_values = 3)]
     cacheinfo: Vec<String>,
 }
 

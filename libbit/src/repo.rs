@@ -19,12 +19,12 @@ use std::fmt::{Debug, Formatter};
 use std::fs::{self, File};
 use std::future::Future;
 use std::io::{self, Write};
-use std::lazy::SyncOnceCell;
 use std::ops::Deref;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use typed_arena::Arena as TypedArena;
 
 pub const BIT_PACK_OBJECTS_PATH: &str = "pack";
@@ -65,10 +65,10 @@ pub struct RepoCtxt {
     arenas: OneThread<Arenas>,
     config: BitConfig,
     obj_cache: RwLock<BitObjCache>,
-    odb_cell: SyncOnceCell<BitObjDb>,
-    refdb_cell: SyncOnceCell<BitRefDb>,
-    index_cell: SyncOnceCell<RwLock<BitIndex>>,
-    virtual_odb: SyncOnceCell<VirtualOdb>,
+    odb_cell: OnceLock<BitObjDb>,
+    refdb_cell: OnceLock<BitRefDb>,
+    index_cell: OnceLock<RwLock<BitIndex>>,
+    virtual_odb: OnceLock<VirtualOdb>,
     virtual_write: AtomicBool,
 }
 
@@ -166,7 +166,7 @@ impl RepoCtxt {
     /// If any fatal error occurs during the closure, then writes to the index are rolled back.
     /// This should generally be used as the entry point to accessing the repository
     pub fn enter<R>(self: Arc<Self>, f: impl FnOnce(BitRepo) -> BitResult<R>) -> BitResult<R> {
-        tls::enter_repo(self, |repo| match f(repo) {
+        tls::enter_repo(self, |repo| match f(repo.clone()) {
             Ok(r) => Ok(r),
             Err(err) => {
                 if repo.index_cell.get().is_some() {
@@ -281,7 +281,7 @@ impl BitRepo {
 
     #[inline]
     pub fn refdb(&self) -> BitResult<&BitRefDb> {
-        self.refdb_cell.get_or_try_init(|| Ok(BitRefDb::new(*self)))
+        self.refdb_cell.get_or_try_init(|| Ok(BitRefDb::new(self.clone())))
     }
 
     // this is necessary as a lifetime hint as otherwise usages of &self.arenas have lifetime
@@ -294,30 +294,6 @@ impl BitRepo {
     #[inline]
     pub(crate) fn cache(&self) -> &RwLock<BitObjCache> {
         &self.rcx.obj_cache
-    }
-
-    #[inline]
-    pub(crate) fn alloc_commit(&self, commit: Commit) -> Arc<Commit> {
-        Arc::new(commit)
-        // self.arenas().commit_arena.alloc(commit)
-    }
-
-    #[inline]
-    pub(crate) fn alloc_tree(&self, tree: Tree) -> Arc<Tree> {
-        Arc::new(tree)
-        // self.arenas().tree_arena.alloc(tree)
-    }
-
-    #[inline]
-    pub(crate) fn alloc_blob(&self, blob: Blob) -> Arc<Blob> {
-        Arc::new(blob)
-        // self.arenas().blob_arena.alloc(blob)
-    }
-
-    #[inline]
-    pub(crate) fn alloc_tag(&self, tag: Tag) -> Arc<Tag> {
-        Arc::new(tag)
-        // self.arenas().tag_arena.alloc(tag)
     }
 
     #[inline]
@@ -518,9 +494,9 @@ impl BitRepo {
     /// Enter a section where writes don't persist to disk but only to the cache.
     /// Useful for ephemeral writes (such as virtual merge bases).
     /// Be careful as all writes and reads within the closure will be issued to the virtual odb
-    pub(crate) fn with_virtual_write<R>(&self, f: impl FnOnce() -> R) -> R {
+    pub(crate) fn with_virtual_write<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         self.virtual_write.store(true, Ordering::Release);
-        let ret = f();
+        let ret = f(self);
         self.virtual_write.store(false, Ordering::Release);
         ret
     }

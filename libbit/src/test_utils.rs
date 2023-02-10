@@ -110,11 +110,11 @@ impl<'a> From<&'a str> for BitRef {
 
 impl BitRepo {
     // get a view of the entire recursive tree structure
-    pub fn debug_tree(self, oid: Oid) -> BitResult<DebugTree> {
+    pub fn debug_tree(&self, oid: Oid) -> BitResult<DebugTree> {
         self.debug_tree_internal(oid, BitPath::EMPTY)
     }
 
-    fn debug_tree_internal(self, oid: Oid, path: BitPath) -> BitResult<DebugTree> {
+    fn debug_tree_internal(&self, oid: Oid, path: BitPath) -> BitResult<DebugTree> {
         let tree = self.read_obj_tree(oid)?;
         let mut entries = Vec::with_capacity(tree.entries.len());
         for &entry in &tree.entries {

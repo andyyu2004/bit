@@ -7,9 +7,9 @@ pub struct BitLsFilesCliOpts {
     stage: bool,
 }
 
-impl Into<BitLsFilesOpts> for BitLsFilesCliOpts {
-    fn into(self) -> BitLsFilesOpts {
-        let Self { stage } = self;
+impl From<BitLsFilesCliOpts> for BitLsFilesOpts {
+    fn from(val: BitLsFilesCliOpts) -> Self {
+        let BitLsFilesCliOpts { stage } = val;
         BitLsFilesOpts { stage }
     }
 }

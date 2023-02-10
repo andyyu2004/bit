@@ -14,11 +14,9 @@ pub struct BitCommitCliOpts {
 
 impl Cmd for BitCommitCliOpts {
     fn exec(self, repo: BitRepo) -> BitResult<()> {
-        let mut opts = CommitOpts::default();
-        opts.message = self.message;
-        opts.allow_empty = self.allow_empty;
+        let opts = CommitOpts { message: self.message, allow_empty: self.allow_empty };
         let summary = repo.commit(opts)?;
-        print!("{}", summary);
+        print!("{summary}");
         Ok(())
     }
 }

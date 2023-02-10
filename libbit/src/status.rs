@@ -37,7 +37,7 @@ impl BitStatus {
 }
 
 impl BitRepo {
-    pub fn status(self, pathspec: Pathspec) -> BitResult<BitStatus> {
+    pub fn status(&self, pathspec: Pathspec) -> BitResult<BitStatus> {
         self.index_mut()?.status(pathspec)
     }
 }

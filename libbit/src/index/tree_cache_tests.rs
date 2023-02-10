@@ -4,10 +4,10 @@ use crate::obj::Oid;
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use indexmap::indexmap;
-use std::lazy::SyncLazy;
+use std::sync::LazyLock;
 
 // this breaks if we change const to static
-const CACHE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
+const CACHE_TREE: LazyLock<BitTreeCache> = LazyLock::new(|| BitTreeCache {
     path: BitPath::EMPTY,
     entry_count: 5,
     children: indexmap! {
@@ -23,7 +23,7 @@ const CACHE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
     tree_oid: "f3560f770ad0986e851d302b1d400588d5792f67".into(),
 });
 
-const CACHE_TREE_DIR_BAR: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
+const CACHE_TREE_DIR_BAR: LazyLock<BitTreeCache> = LazyLock::new(|| BitTreeCache {
     path: "bar".into(),
     entry_count: 1,
     children: indexmap! {},
@@ -96,7 +96,7 @@ fn test_tree_cache_find_valid_child() {
     assert!(cache.find_valid_child("zs".into()).is_some());
 }
 
-const EXPECTED_POST_UPDATE_TREE: SyncLazy<BitTreeCache> = SyncLazy::new(|| BitTreeCache {
+const EXPECTED_POST_UPDATE_TREE: LazyLock<BitTreeCache> = LazyLock::new(|| BitTreeCache {
     path: BitPath::EMPTY,
     tree_oid: "88512acb9a9a07ae8d7eb0128c28384840db6148".into(),
     entry_count: 3,

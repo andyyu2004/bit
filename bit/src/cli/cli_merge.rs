@@ -19,10 +19,8 @@ pub struct BitMergeCliOpts {
 
 impl Cmd for BitMergeCliOpts {
     fn exec(self, repo: BitRepo) -> BitResult<()> {
-        let mut opts = MergeOpts::default();
-        opts.no_commit = self.no_commit;
-        opts.no_edit = self.no_edit;
-        opts.no_ff = self.no_ff;
+        let opts =
+            MergeOpts { no_commit: self.no_commit, no_edit: self.no_edit, no_ff: self.no_ff };
 
         match repo.merge_rev(&self.revision, opts)? {
             MergeResults::Null => println!("already up to date"),
@@ -35,7 +33,7 @@ impl Cmd for BitMergeCliOpts {
                 println!("Updating {}..{}", from.short(), to.short());
                 println!("Fast-forward");
                 let diff = repo.diff_tree_to_tree(from, to)?;
-                diff.print_diffstat(repo)?;
+                diff.print_diffstat(&repo)?;
                 diff.print_change_summary()?;
             }
             MergeResults::Merge(_summary) => println!("todo merge message"),

@@ -44,7 +44,7 @@ impl BitObject for Tag {
     }
 
     fn owner(&self) -> BitRepo {
-        self.owner
+        self.owner.clone()
     }
 }
 

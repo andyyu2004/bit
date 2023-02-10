@@ -104,7 +104,7 @@ impl BitObject for Blob {
     }
 
     fn owner(&self) -> BitRepo {
-        self.owner
+        self.owner.clone()
     }
 }
 

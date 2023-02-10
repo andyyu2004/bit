@@ -10,14 +10,13 @@ pub use worktree_tree_iter::WorktreeTreeIter;
 
 use crate::error::{BitErrorExt, BitGenericError, BitResult};
 use crate::index::{BitIndex, BitIndexEntry, IndexEntryIterator};
-use crate::obj::{FileMode, MutableBlob, Oid, TreeEntry, Treeish};
+use crate::obj::{FileMode, ImmutableBitObject, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::repo::BitRepo;
 use fallible_iterator::Peekable;
 use ignore::gitignore::Gitignore;
 use ignore::{Walk, WalkBuilder};
 use rustc_hash::FxHashSet;
-use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs::FileType;
@@ -95,7 +94,7 @@ pub trait BitEntry {
         self.write_to_disk_at(repo, self.path())
     }
 
-    fn read_to_bytes(&self, repo: &BitRepo) -> BitResult<Cow<'_, [u8]>> {
+    fn read_to_bytes(&self, repo: &BitRepo) -> BitResult<Vec<u8>> {
         let oid = self.oid();
         // if object is known we try to read it from the object store
         // however, it's possible the object does not live there as the hash may have just been calculated to allow for comparisons
@@ -103,12 +102,12 @@ pub trait BitEntry {
         // if the oid is not known, then it's definitely on disk (as otherwise it would have a known `oid`)
         if oid.is_known() {
             match repo.read_obj(oid) {
-                Ok(obj) => return Ok(Cow::Borrowed(obj.into_blob().bytes())),
+                Ok(obj) => return Ok(obj.into_blob().to_vec()),
                 Err(err) => err.try_into_obj_not_found_err()?,
             };
         }
 
-        repo.read_blob_from_worktree(self.path()).map(MutableBlob::into_bytes).map(Cow::Owned)
+        Ok(repo.read_blob_from_worktree(self.path())?.to_vec())
     }
 }
 
@@ -177,41 +176,37 @@ struct WorktreeRawIter {
 
 impl WorktreeRawIter {
     pub fn new(index: &BitIndex) -> BitResult<Self> {
-        let repo = index.repo;
+        let repo = index.repo.clone();
         // ignoring any gitignore errors for now
         let ignore = vec![Gitignore::new(repo.workdir.join(".gitignore").as_path()).0];
         //? we collect it into a hashmap for faster lookup?
         // not sure if this is actually better than just looking up in the index's entries
         let tracked = index.entries().keys().map(|(path, _)| path.as_os_str()).collect();
-
-        Ok(Self {
-            repo,
-            ignore,
-            tracked,
-            jwalk: jwalk::WalkDir::new(repo.workdir)
-                .skip_hidden(false)
-                .process_read_dir(|_, _, _, children| {
-                    // ignore `.git` directories
-                    children.retain(|entry| {
-                        entry
-                            .as_ref()
-                            .map(|entry| BitPath::DOT_GIT != entry.file_name())
-                            .unwrap_or(true)
-                    });
-                    children.sort_by(|a, b| match (a, b) {
-                        (Ok(a), Ok(b)) => BitPath::path_cmp_explicit(
-                            a.path(),
-                            a.file_type.is_dir(),
-                            b.path(),
-                            b.file_type.is_dir(),
-                        ),
-                        (Ok(_), Err(_)) => Ordering::Less,
-                        (Err(_), Ok(_)) => Ordering::Greater,
-                        (Err(_), Err(_)) => Ordering::Equal,
-                    })
+        let jwalk = jwalk::WalkDir::new(repo.workdir)
+            .skip_hidden(false)
+            .process_read_dir(|_, _, _, children| {
+                // ignore `.git` directories
+                children.retain(|entry| {
+                    entry
+                        .as_ref()
+                        .map(|entry| BitPath::DOT_GIT != entry.file_name())
+                        .unwrap_or(true)
+                });
+                children.sort_by(|a, b| match (a, b) {
+                    (Ok(a), Ok(b)) => BitPath::path_cmp_explicit(
+                        a.path(),
+                        a.file_type.is_dir(),
+                        b.path(),
+                        b.file_type.is_dir(),
+                    ),
+                    (Ok(_), Err(_)) => Ordering::Less,
+                    (Err(_), Ok(_)) => Ordering::Greater,
+                    (Err(_), Err(_)) => Ordering::Equal,
                 })
-                .into_iter(),
-        })
+            })
+            .into_iter();
+
+        Ok(Self { repo, ignore, tracked, jwalk })
     }
 
     // we need to explicitly ignore our root `.bit/.git` directories

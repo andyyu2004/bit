@@ -7,7 +7,7 @@ macro_rules! diff_unstaged {
         use $crate::xdiff::DiffFormatExt;
         let diff = $repo.diff_index_worktree(Pathspec::MATCH_ALL)?;
         let mut output = vec![];
-        diff.format_diff_into($repo, &mut output)?;
+        diff.format_diff_into(&$repo, &mut output)?;
         String::from_utf8(output).unwrap()
     }};
 }
@@ -34,7 +34,7 @@ macro_rules! diff_staged {
         use $crate::xdiff::DiffFormatExt;
         let diff = $repo.diff_head_index(Pathspec::MATCH_ALL)?;
         let mut output = vec![];
-        diff.format_diff_into($repo, &mut output)?;
+        diff.format_diff_into(&$repo, &mut output)?;
         String::from_utf8(output).unwrap()
     }};
 }
