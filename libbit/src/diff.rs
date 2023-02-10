@@ -247,14 +247,17 @@ impl BitRepo {
         a: impl BitTreeIterator,
         b: impl BitTreeIterator,
     ) -> BitResult<bool> {
-        todo!()
-        // let mut diff_iter = self.tree_diff_iter(a, b);
-        // diff_iter.into_iter().any(|entry| match entry {
-        //     TreeDiffEntry::MaybeModifiedTree(_)
-        //     | TreeDiffEntry::UnmodifiedBlob(_)
-        //     | TreeDiffEntry::UnmodifiedTree(_) => Ok(false),
-        //     _ => Ok(true),
-        // })
+        let mut diff_iter = self.tree_diff_iter(a, b);
+        while let Some(entry) = diff_iter.next()? {
+            match entry {
+                TreeDiffEntry::MaybeModifiedTree(_)
+                | TreeDiffEntry::UnmodifiedBlob(_)
+                | TreeDiffEntry::UnmodifiedTree(_) => continue,
+                _ => return Ok(true),
+            }
+        }
+
+        Ok(false)
     }
 }
 

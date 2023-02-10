@@ -11,6 +11,7 @@ use crate::rev::Revspec;
 use anyhow::Context;
 #[allow(unused_imports)]
 use fallible_iterator::{FallibleIterator, FallibleLendingIterator};
+use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::fs::Permissions;
 use std::io::Write;
@@ -37,18 +38,13 @@ impl CheckoutOpts {
 
 // Each strategy level implies the level above
 // i.e. Force => Safe
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum CheckoutStrategy {
     None,
+    #[default]
     Safe,
     // Forced checkout will result in the index and working tree exactly matching the target tree
     Force,
-}
-
-impl Default for CheckoutStrategy {
-    fn default() -> Self {
-        CheckoutStrategy::Safe
-    }
 }
 
 #[derive(Debug)]
@@ -316,39 +312,40 @@ impl CheckoutCtxt {
         target: impl BitTreeIterator,
         worktree: &mut impl BitTreeIterator,
     ) -> BitResult<()> {
-        todo!()
-        // let diff_iter =
-        //     self.repo.tree_diff_iter_with_opts(baseline, target, DiffOpts::INCLUDE_UNMODIFIED);
+        let mut diff_iter =
+            self.repo.tree_diff_iter_with_opts(baseline, target, DiffOpts::INCLUDE_UNMODIFIED);
 
-        // diff_iter.into_iter().for_each(|diff_entry| {
-        //     loop {
-        //         let worktree_entry = worktree.peek()?;
-        //         debug!(
-        //             "CheckoutCtxt::generate({:#?}, {:#?})",
-        //             diff_entry,
-        //             worktree_entry.map(|entry| TreeEntry::from(entry))
-        //         );
-        //         // matchup the worktree iterator with the diff iterator by comparing order of entries
-        //         match worktree_entry {
-        //             Some(worktree_entry) => {
-        //                 // to avoid the unfortunate `ModifiedTree` case we can probably do
-        //                 // something like `if diff_entry.path().starts_with(worktree_entry.path()) { skip this worktree_entry as it's a tree entry that has been modified }`
-        //                 // to keep them in sync
-        //                 match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
-        //                     // worktree behind diffs, process worktree_entry alone
-        //                     Ordering::Less => self.worktree_only(worktree, worktree_entry)?,
-        //                     // worktree even with diffs, process diff_entry and worktree_entry together
-        //                     Ordering::Equal =>
-        //                         break self.with_worktree(worktree, diff_entry, worktree_entry),
-        //                     // worktree ahead of diffs, process only diff_entry
-        //                     Ordering::Greater => break self.no_worktree(diff_entry),
-        //                 }
-        //             }
-        //             // again, worktree ahead of diffs
-        //             None => break self.no_worktree(diff_entry),
-        //         }
-        //     }
-        // })
+        while let Some(diff_entry) = diff_iter.next()? {
+            loop {
+                let worktree_entry = worktree.peek()?;
+                debug!(
+                    "CheckoutCtxt::generate({:#?}, {:#?})",
+                    diff_entry,
+                    worktree_entry.map(TreeEntry::from)
+                );
+                // matchup the worktree iterator with the diff iterator by comparing order of entries
+                match worktree_entry {
+                    Some(worktree_entry) => {
+                        // to avoid the unfortunate `ModifiedTree` case we can probably do
+                        // something like `if diff_entry.path().starts_with(worktree_entry.path()) { skip this worktree_entry as it's a tree entry that has been modified }`
+                        // to keep them in sync
+                        match worktree_entry.diff_cmp(&diff_entry.index_entry()) {
+                            // worktree behind diffs, process worktree_entry alone
+                            Ordering::Less => self.worktree_only(worktree, worktree_entry)?,
+                            // worktree even with diffs, process diff_entry and worktree_entry together
+                            Ordering::Equal =>
+                                break self.with_worktree(worktree, diff_entry, worktree_entry)?,
+                            // worktree ahead of diffs, process only diff_entry
+                            Ordering::Greater => break self.no_worktree(diff_entry)?,
+                        }
+                    }
+                    // again, worktree ahead of diffs
+                    None => break self.no_worktree(diff_entry)?,
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn worktree_only(
@@ -604,25 +601,29 @@ impl CheckoutCtxt {
         worktree: &mut impl BitTreeIterator,
         tree: TreeEntriesConsumer<'_>,
     ) -> BitResult<()> {
-        todo!()
         // The cases are all "backwards" as we always want `worktree` to be the second argument to tree_diffs
-        // self.repo
-        //     .tree_diff_iter_with_opts(tree.iter(), worktree, DiffOpts::INCLUDE_UNMODIFIED)
-        //     .for_each(|diff_entry: TreeDiffEntry<'_>| match diff_entry {
-        //         TreeDiffEntry::DeletedBlob(blob) => self.create(blob),
-        //         TreeDiffEntry::CreatedBlob(blob) => self.delete(blob),
-        //         TreeDiffEntry::ModifiedBlob(entry, wt) => {
-        //             self.delete(wt)?;
-        //             self.create(entry)
-        //         }
-        //         TreeDiffEntry::UnmodifiedBlob(..) => Ok(()),
-        //         TreeDiffEntry::MaybeModifiedTree(..) => Ok(()),
-        //         TreeDiffEntry::UnmodifiedTree(..) => unreachable!(),
-        //         TreeDiffEntry::DeletedTree(tree) => self.create_tree(tree),
-        //         TreeDiffEntry::CreatedTree(tree) => self.delete_tree(tree),
-        //         TreeDiffEntry::BlobToTree(blob, tree) => self.tree_to_blob(tree, blob),
-        //         TreeDiffEntry::TreeToBlob(tree, blob) => self.blob_to_tree(blob, tree),
-        //     })
+        let mut iter =
+            self.repo.tree_diff_iter_with_opts(tree.iter(), worktree, DiffOpts::INCLUDE_UNMODIFIED);
+
+        while let Some(diff_entry) = iter.next()? {
+            match diff_entry {
+                TreeDiffEntry::DeletedBlob(blob) => self.create(blob),
+                TreeDiffEntry::CreatedBlob(blob) => self.delete(blob),
+                TreeDiffEntry::ModifiedBlob(entry, wt) => {
+                    self.delete(wt)?;
+                    self.create(entry)
+                }
+                TreeDiffEntry::UnmodifiedBlob(..) => Ok(()),
+                TreeDiffEntry::MaybeModifiedTree(..) => Ok(()),
+                TreeDiffEntry::UnmodifiedTree(..) => unreachable!(),
+                TreeDiffEntry::DeletedTree(tree) => self.create_tree(tree),
+                TreeDiffEntry::CreatedTree(tree) => self.delete_tree(tree),
+                TreeDiffEntry::BlobToTree(blob, tree) => self.tree_to_blob(tree, blob),
+                TreeDiffEntry::TreeToBlob(tree, blob) => self.blob_to_tree(blob, tree),
+            }?
+        }
+
+        Ok(())
     }
 
     fn update(&mut self, entry: impl Into<TreeEntry>) -> BitResult<()> {
