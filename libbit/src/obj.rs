@@ -21,7 +21,7 @@ use crate::serialize::{DeserializeSized, Serialize};
 use num_enum::TryFromPrimitive;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::Metadata;
-use std::io::{BufRead, BufReader, Cursor, Write};
+use std::io::{BufRead, Cursor, Write};
 use std::os::unix::prelude::PermissionsExt;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -274,12 +274,13 @@ impl BitObjKind {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn from_slice(
         owner: BitRepoWeakRef,
         cached: BitObjCached,
         slice: &[u8],
     ) -> BitResult<Self> {
-        Self::new(owner, cached, BufReader::new(slice))
+        Self::new(owner, cached, std::io::BufReader::new(slice))
     }
 
     pub(crate) fn from_raw(owner: BitRepoWeakRef, raw: BitRawObj) -> BitResult<Self> {

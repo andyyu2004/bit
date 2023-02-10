@@ -4,7 +4,7 @@ use crate::lockfile::{Filelock, Lockfile, LockfileFlags};
 use crate::merge::MergeStrategy;
 use crate::obj::Oid;
 use crate::path::BitPath;
-use crate::repo::BitRepo;
+use crate::repo::{BitRepo, BitRepoWeakRef};
 use crate::serialize::{Deserialize, Serialize};
 use crate::signature::BitSignature;
 use std::collections::BTreeSet;
@@ -12,13 +12,13 @@ use std::fmt::{self, Display, Formatter};
 use std::path::Path;
 
 pub struct BitRefDb {
-    repo: BitRepo,
+    repo: BitRepoWeakRef,
     bitdir: BitPath,
 }
 
 impl BitRefDb {
     pub fn new(repo: BitRepo) -> Self {
-        Self { bitdir: repo.bitdir, repo }
+        Self { bitdir: repo.bitdir, repo: repo.downgrade() }
     }
 
     pub fn join(&self, path: impl AsRef<Path>) -> BitPath {
@@ -135,7 +135,7 @@ pub trait BitRefDbBackend {
 impl BitRefDbBackend for BitRefDb {
     #[inline]
     fn repo(&self) -> BitRepo {
-        self.repo.clone()
+        self.repo.upgrade().clone()
     }
 
     fn create_branch(&self, sym: SymbolicRef, from: BitRef) -> BitResult<()> {
@@ -143,7 +143,7 @@ impl BitRefDbBackend for BitRefDb {
             bail!("a reference `{}` already exists", sym);
         }
 
-        match self.repo.try_fully_resolve_ref(from)? {
+        match self.repo().try_fully_resolve_ref(from)? {
             Some(oid) => self.update(sym, BitRef::Direct(oid), RefUpdateCause::NewBranch { from }),
             // The following handles the case where `HEAD` points to an empty branch
             // i.e. on an empty repository and `HEAD -> heads/refs/master`.
@@ -163,15 +163,16 @@ impl BitRefDbBackend for BitRefDb {
     }
 
     fn update(&self, sym: SymbolicRef, to: BitRef, cause: RefUpdateCause) -> BitResult<()> {
+        let repo = self.repo();
         self.set_ref(sym, to)?;
-        let new_oid = self.repo.fully_resolve_ref(to)?;
-        let committer = self.repo.user_signature()?;
+        let new_oid = repo.fully_resolve_ref(to)?;
+        let committer = repo.user_signature()?;
 
         let cause_str = cause.to_string();
 
         // TODO not sure this is completely correct behaviour, but it at least works for commits
         // if HEAD points to the ref being updated, then we also record the same update in HEAD's log
-        if let BitRef::Symbolic(head) = self.repo.read_head()? {
+        if let BitRef::Symbolic(head) = repo.read_head()? {
             if head == sym {
                 self.log(SymbolicRef::HEAD, new_oid, committer.clone(), cause_str.clone())?;
             }

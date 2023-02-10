@@ -44,12 +44,13 @@ impl BitRepo {
 
 impl BitIndex {
     pub fn status(&mut self, pathspec: Pathspec) -> BitResult<BitStatus> {
-        let head = self.repo.read_head()?;
+        let repo = self.repo();
+        let head = repo.read_head()?;
         let staged = self.diff_head(pathspec)?;
         let unstaged = self.diff_worktree(pathspec)?;
         let conflicted = self.conflicts();
 
-        let is_initial = self.repo.try_fully_resolve_ref(head)?.is_none();
+        let is_initial = repo.try_fully_resolve_ref(head)?.is_none();
 
         let mut flags = BitStatusFlags::default();
         flags.set(BitStatusFlags::INITIAL, is_initial);

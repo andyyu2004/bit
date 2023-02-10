@@ -267,7 +267,7 @@ impl BitIndex {
     }
 
     pub fn diff_tree(&self, treeish_oid: Oid, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        let tree_iter = self.repo.tree_iter(treeish_oid);
+        let tree_iter = self.repo().tree_iter(treeish_oid);
         self.diff_iterator(tree_iter, pathspec)
     }
 
@@ -278,11 +278,11 @@ impl BitIndex {
     ) -> BitResult<WorkspaceStatus> {
         let tree_iter = pathspec.match_tree_iter(tree_iter);
         let index_iter = pathspec.match_tree_iter(self.index_tree_iter());
-        self.repo.diff_iterators(tree_iter, index_iter)
+        self.repo().diff_iterators(tree_iter, index_iter)
     }
 
     pub fn diff_head(&self, pathspec: Pathspec) -> BitResult<WorkspaceStatus> {
-        self.diff_tree(self.repo.head_tree()?, pathspec)
+        self.diff_tree(self.repo().head_tree()?, pathspec)
     }
 }
 
@@ -477,7 +477,8 @@ impl BitIndex {
             Changed::Maybe => {
                 // file may have changed, but we are not certain, so check the hash
                 if worktree_entry.oid.is_unknown() {
-                    worktree_entry.oid = self.repo.hash_blob_from_worktree(worktree_entry.path)?;
+                    worktree_entry.oid =
+                        self.repo().hash_blob_from_worktree(worktree_entry.path)?;
                 }
 
                 let changed = index_entry.oid != worktree_entry.oid;

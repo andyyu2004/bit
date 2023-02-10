@@ -17,7 +17,7 @@ use crate::lockfile::Filelock;
 use crate::obj::{FileMode, Oid, TreeEntry, Treeish};
 use crate::path::BitPath;
 use crate::pathspec::Pathspec;
-use crate::repo::BitRepo;
+use crate::repo::{BitRepo, BitRepoWeakRef};
 use crate::serialize::{Deserialize, Serialize};
 use crate::time::Timespec;
 use bitflags::bitflags;
@@ -45,7 +45,7 @@ bitflags! {
 
 #[derive(Debug)]
 pub struct BitIndex {
-    pub repo: BitRepo,
+    repo: BitRepoWeakRef,
     // index file may not yet exist
     mtime: Option<Timespec>,
     inner: Filelock<BitIndexInner>,
@@ -79,11 +79,15 @@ impl BitIndex {
         let index_path = repo.index_path();
         let mtime = std::fs::metadata(index_path).as_ref().map(Timespec::mtime).ok();
         let inner = Filelock::lock(index_path)?;
-        Ok(Self { repo, inner, mtime })
+        Ok(Self { repo: repo.downgrade(), inner, mtime })
+    }
+
+    pub fn repo(&self) -> BitRepo {
+        self.repo.upgrade()
     }
 
     pub(crate) fn update_cache_tree(&mut self, tree: Oid) -> BitResult<()> {
-        let repo = self.repo.clone();
+        let repo = self.repo();
         match self.tree_cache.as_mut() {
             Some(tree_cache) => tree_cache.update(&repo, tree)?,
             None => self.tree_cache = Some(BitTreeCache::read_tree(&repo, tree)?),
@@ -93,7 +97,7 @@ impl BitIndex {
 
     /// Read a tree object into the index. The current contents of the index will be replaced.
     pub fn read_tree(&mut self, treeish: impl Treeish) -> BitResult<()> {
-        let tree = treeish.treeish_oid(&self.repo)?;
+        let tree = treeish.treeish_oid(&self.repo())?;
         // TODO use the iterator diff API
         let diff = self.diff_tree(tree, Pathspec::MATCH_ALL)?;
         self.apply_diff(&diff)?;
@@ -112,7 +116,7 @@ impl BitIndex {
             bail!("cannot write-tree an an index that is not fully merged");
         }
 
-        let tree_oid = self.index_tree_iter().build_tree(&self.repo, self.tree_cache())?;
+        let tree_oid = self.index_tree_iter().build_tree(&self.repo(), self.tree_cache())?;
         // refresh the tree_cache using the tree we just built
         self.update_cache_tree(tree_oid)?;
         Ok(tree_oid)
@@ -125,19 +129,19 @@ impl BitIndex {
 
     fn add_entry_common(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
         self.remove_collisions(entry.path)?;
-        entry.oid = entry.write(&self.repo)?;
+        entry.oid = entry.write(&self.repo())?;
         debug_assert!(entry.oid.is_known());
         self.insert_entry(entry);
         Ok(())
     }
 
     pub fn add_entry_from_path(&mut self, path: &Path) -> BitResult<()> {
-        self.add_entry(BitIndexEntry::from_absolute_path(&self.repo, path)?)
+        self.add_entry(BitIndexEntry::from_absolute_path(&self.repo(), path)?)
     }
 
     /// Add fully populated index entry to the index. If entry with the same path already exists, it will be replaced
     pub fn add_entry(&mut self, mut entry: BitIndexEntry) -> BitResult<()> {
-        entry.fill(&self.repo)?;
+        entry.fill(&self.repo())?;
         self.remove_conflicted(entry.path);
         self.add_entry_common(entry)
     }
@@ -156,13 +160,13 @@ impl BitIndex {
     }
 
     pub(crate) fn update_blob(&mut self, entry: BitIndexEntry) -> BitResult<()> {
-        self.repo.rm(entry.path())?;
+        self.repo().rm(entry.path())?;
         self.write_and_add_blob(entry)
     }
 
     pub(crate) fn write_and_add_blob(&mut self, entry: BitIndexEntry) -> BitResult<()> {
         debug_assert!(entry.oid.is_known());
-        entry.write_to_disk(&self.repo)?;
+        entry.write_to_disk(&self.repo())?;
         self.add_entry(entry)
     }
 

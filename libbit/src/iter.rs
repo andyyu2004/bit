@@ -176,7 +176,7 @@ struct WorktreeRawIter {
 
 impl WorktreeRawIter {
     pub fn new(index: &BitIndex) -> BitResult<Self> {
-        let repo = index.repo.clone();
+        let repo = index.repo();
         // ignoring any gitignore errors for now
         let ignore = vec![Gitignore::new(repo.workdir.join(".gitignore").as_path()).0];
         //? we collect it into a hashmap for faster lookup?
