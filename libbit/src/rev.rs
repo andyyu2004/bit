@@ -8,11 +8,10 @@ use crate::peel::Peel;
 use crate::refs::{BitRef, BitRefDbBackend, SymbolicRef};
 use crate::repo::BitRepo;
 use lazy_static::lazy_static;
-use std::cell::OnceCell;
 use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 // <rev> ::=
 //   | <ref>
@@ -167,10 +166,10 @@ impl Display for ParsedRevspec {
 // problem is revspec requires repo to be properly evaluated (as it requires some context to be parsed properly)
 // but we want FromStr to be implemented so clap can use it
 // this wrapper can lazily evaluated to get a parsed revspec (via `parse`)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Revspec {
     src: String,
-    parsed: OnceCell<ParsedRevspec>,
+    parsed: OnceLock<ParsedRevspec>,
 }
 
 impl Display for Revspec {

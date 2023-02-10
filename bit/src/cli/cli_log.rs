@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 
 #[derive(Parser, Debug)]
 pub struct BitLogCliOpts {
-    #[clap(default_value = "HEAD")]
+    #[arg(default_value = "HEAD")]
     revisions: Vec<Revspec>,
 }
 

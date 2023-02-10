@@ -9,11 +9,11 @@ use libbit::xdiff::DiffFormatExt;
 #[derive(Parser, Debug)]
 pub struct BitMergeCliOpts {
     revision: Revspec,
-    #[clap(long = "no-commit")]
+    #[arg(long = "no-commit")]
     no_commit: bool,
-    #[clap(long = "no-edit")]
+    #[arg(long = "no-edit")]
     no_edit: bool,
-    #[clap(long = "no-ff")]
+    #[arg(long = "no-ff")]
     no_ff: bool,
 }
 

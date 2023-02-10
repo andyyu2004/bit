@@ -4,9 +4,9 @@ use libbit::error::BitGenericError;
 
 #[derive(Parser, Debug)]
 pub struct BitUpdateIndexCliOpts {
-    #[clap(long = "add")]
+    #[arg(long = "add")]
     add: bool,
-    #[clap(long = "cacheinfo", use_value_delimiter = true, number_of_values = 3)]
+    #[arg(long = "cacheinfo", use_value_delimiter = true, number_of_values = 3)]
     cacheinfo: Vec<String>,
 }
 

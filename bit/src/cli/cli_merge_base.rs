@@ -9,7 +9,7 @@ use libbit::rev::Revspec;
 pub struct BitMergeBaseCliOpts {
     a: Revspec,
     b: Revspec,
-    #[clap(short = 'a', long = "all")]
+    #[arg(short = 'a', long = "all")]
     all: bool,
 }
 

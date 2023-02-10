@@ -9,11 +9,11 @@ use std::process::{Command, Stdio};
 
 #[derive(Parser, Debug, PartialEq)]
 pub struct BitDiffCliOpts {
-    #[clap(long = "stat")]
+    #[arg(long = "stat")]
     stat: bool,
-    #[clap(long = "staged")]
+    #[arg(long = "staged")]
     staged: bool,
-    #[clap(max_values = 2)]
+    #[arg(num_args=..=2)]
     revs: Vec<Revspec>,
     // pathspec: Option<Pathspec>,
 }

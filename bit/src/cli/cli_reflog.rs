@@ -8,7 +8,7 @@ use libbit::repo::BitRepo;
 #[derive(Parser, Debug)]
 pub struct BitReflogCliOpts {
     reference: Option<BitRef>,
-    #[clap(subcommand)]
+    #[command(subcommand)]
     subcmd: Option<BitReflogSubcommand>,
 }
 
@@ -19,7 +19,7 @@ pub enum BitReflogSubcommand {
 
 #[derive(Parser, Debug)]
 pub struct BitReflogShowOpts {
-    #[clap(default_value = "HEAD")]
+    #[arg(default_value = "HEAD")]
     reference: BitRef,
 }
 

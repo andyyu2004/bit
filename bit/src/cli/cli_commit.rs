@@ -6,9 +6,9 @@ use libbit::repo::BitRepo;
 
 #[derive(Parser, Debug)]
 pub struct BitCommitCliOpts {
-    #[clap(short = 'm', long = "message")]
+    #[arg(short = 'm', long = "message")]
     pub message: Option<String>,
-    #[clap(long = "allow-empty")]
+    #[arg(long = "allow-empty")]
     pub allow_empty: bool,
 }
 

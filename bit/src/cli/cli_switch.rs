@@ -7,11 +7,11 @@ use libbit::rev::Revspec;
 
 #[derive(Parser, Debug, PartialEq)]
 pub struct BitSwitchCliOpts {
-    #[clap(short = 'c', long = "create")]
+    #[arg(short = 'c', long = "create")]
     create: Option<String>,
     /// The revision to checkout
     /// If -c is passed, then this revision becomes the starting point for the new branch
-    #[clap(required_unless_present("create"), default_value = "HEAD")]
+    #[arg(required_unless_present = "create", default_value = "HEAD")]
     revision: Revspec,
 }
 
@@ -41,7 +41,7 @@ mod tests {
     use super::*;
     #[test]
     fn parse_switch_opts() {
-        let opts = BitSwitchCliOpts::try_parse_from(["HEAD"]).unwrap();
+        let opts = BitSwitchCliOpts::try_parse_from(["--", "HEAD"]).unwrap();
         assert_eq!(opts, BitSwitchCliOpts { create: None, revision: "HEAD".parse().unwrap() })
     }
 

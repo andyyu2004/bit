@@ -8,7 +8,7 @@ use libbit::repo::BitRepo;
 #[derive(Parser, Debug)]
 pub struct BitRemoteCliOpts {
     reference: Option<BitRef>,
-    #[clap(subcommand)]
+    #[command(subcommand)]
     subcmd: Option<BitRemoteSubcommand>,
 }
 

@@ -1,5 +1,5 @@
-use clap::lazy_static::lazy_static;
 use clap::Parser;
+use lazy_static::lazy_static;
 use libbit::error::BitResult;
 use libbit::repo::BitRepo;
 use regex::Regex;
@@ -18,11 +18,11 @@ fn validate_name(name: &str) -> Result<String, String> {
 
 #[derive(Parser, Debug)]
 pub struct BitConfigCliOpts {
-    #[clap(long = "global", conflicts_with = "local")]
+    #[arg(long = "global", conflicts_with = "local")]
     global: bool,
-    #[clap(long = "local")]
+    #[arg(long = "local")]
     local: bool,
-    #[clap(validator(validate_name))]
+    #[arg(value_parser = validate_name)]
     name: String,
     value: Option<String>,
 }

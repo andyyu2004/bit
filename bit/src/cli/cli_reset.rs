@@ -8,13 +8,13 @@ use libbit::rev::Revspec;
 // soft,mixed,hard all conflict with each other which I've declared in a circular manner for less noise
 #[derive(Parser, Debug)]
 pub struct BitResetCliOpts {
-    #[clap(default_value = "HEAD")]
+    #[arg(default_value = "HEAD")]
     target: Revspec,
-    #[clap(long = "--soft", conflicts_with("mixed"))]
+    #[arg(long = "--soft", conflicts_with("mixed"))]
     soft: bool,
-    #[clap(long = "--mixed", conflicts_with("hard"))]
+    #[arg(long = "--mixed", conflicts_with("hard"))]
     mixed: bool,
-    #[clap(long = "--hard", conflicts_with("soft"))]
+    #[arg(long = "--hard", conflicts_with("soft"))]
     hard: bool,
 }
 

@@ -7,9 +7,9 @@ use libbit::rev::Revspec;
 
 #[derive(Parser, Debug)]
 pub struct BitCheckoutCliOpts {
-    #[clap(default_value = "HEAD")]
+    #[arg(default_value = "HEAD")]
     revision: Revspec,
-    #[clap(short = 'f', long = "--force")]
+    #[arg(short = 'f', long = "--force")]
     force: bool,
 }
 

@@ -3,7 +3,7 @@ use libbit::cmd::BitLsFilesOpts;
 
 #[derive(Parser, Debug)]
 pub struct BitLsFilesCliOpts {
-    #[clap(short = 's', long = "stage")]
+    #[arg(short = 's', long = "stage")]
     stage: bool,
 }
 

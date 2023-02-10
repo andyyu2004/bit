@@ -29,7 +29,7 @@ mod cli_update_index;
 // - probably will make it such that libbit doesn't even expose full commands
 //   and be something more like libgit2
 
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use cli_add::BitAddCliOpts;
 use cli_bit_diff::BitDiffCliOpts;
 use cli_branch::*;
@@ -125,9 +125,9 @@ pub fn run<T: Into<OsString> + Clone>(args: impl IntoIterator<Item = T>) -> BitR
 #[derive(Parser, Debug)]
 #[clap(author = "Andy Yu <andyyu2004@gmail.com>")]
 pub struct BitCliOpts {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub subcmd: BitSubCmd,
-    #[clap(short = 'C', default_value = ".")]
+    #[arg(short = 'C', default_value = ".")]
     pub base_path: PathBuf,
 }
 
@@ -164,9 +164,9 @@ pub enum BitSubCmd {
 // bit hash-object [-w] [-t TYPE] PATH
 #[derive(Parser, Debug)]
 pub struct BitHashObjectCliOpts {
-    #[clap(short = 'w')]
+    #[arg(short = 'w')]
     pub do_write: bool,
-    #[clap(default_value = "blob", short = 't', long = "type")]
+    #[arg(default_value = "blob", short = 't', long = "type")]
     pub objtype: BitObjType,
     pub path: PathBuf,
 }
@@ -180,24 +180,24 @@ impl From<BitHashObjectCliOpts> for BitHashObjectOpts {
 
 // bit cat-file (-t | -s | -p | -e | <type>) <object>
 #[derive(Parser, Debug)]
-#[clap(setting = AppSettings::AllowMissingPositional)]
+#[command(allow_missing_positional = true)]
 pub struct BitCatFileCliOpts {
     /// pretty print object
-    #[clap(short = 'p', conflicts_with_all(&["size", "ty", "objtype", "exit"]))]
+    #[arg(short = 'p', conflicts_with_all(&["size", "ty", "objtype", "exit"]))]
     pub pp: bool,
     // exit with zero status if <object> exists and is valid. If <object> is of an invalid format
     // then exit with non-zero status and emit an error on stderr
-    #[clap(short = 'e', conflicts_with_all(&["size", "ty", "objtype"]))]
+    #[arg(short = 'e', conflicts_with_all(&["size", "ty", "objtype"]))]
     pub exit: bool,
     /// show object type
-    #[clap(short = 't', conflicts_with_all(&["size", "objtype"]))]
+    #[arg(short = 't', conflicts_with_all(&["size", "objtype"]))]
     pub ty: bool,
     /// show object size
-    #[clap(short = 's', conflicts_with("objtype"))]
+    #[arg(short = 's', conflicts_with("objtype"))]
     pub size: bool,
-    #[clap(required_unless_present_any(&["pp", "ty", "size", "exit"]))]
+    #[arg(required_unless_present_any(&["pp", "ty", "size", "exit"]))]
     pub objtype: Option<BitObjType>,
-    #[clap(required = true)]
+    #[arg(required = true)]
     pub revision: Revspec,
 }
 

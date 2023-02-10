@@ -7,7 +7,7 @@ use libbit::rev::Revspec;
 #[derive(Parser, Debug)]
 pub struct BitBranchCliOpts {
     name: String,
-    #[clap(default_value = "HEAD")]
+    #[arg(default_value = "HEAD")]
     revision: Revspec,
 }
 

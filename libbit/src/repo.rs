@@ -268,11 +268,6 @@ impl BitRepo {
     }
 
     #[inline]
-    pub(crate) fn cache(&self) -> &RwLock<BitObjCache> {
-        &self.rcx.obj_cache
-    }
-
-    #[inline]
     fn index_lock(&self) -> BitResult<&RwLock<BitIndex>> {
         self.rcx
             .index_cell

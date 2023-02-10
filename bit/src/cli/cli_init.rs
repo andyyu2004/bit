@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
 pub struct BitInitCliOpts {
-    #[clap(default_value = ".")]
+    #[arg(default_value = ".")]
     pub path: PathBuf,
 }
 

@@ -8,7 +8,7 @@ use libbit::rev::Revspec;
 
 #[derive(Parser, Debug)]
 pub struct BitRevlistCliOpts {
-    #[clap(required = true)]
+    #[arg(required = true)]
     revisions: Vec<Revspec>,
 }
 
