@@ -2,7 +2,6 @@
 #![feature(async_closure)]
 #![feature(associated_type_bounds)]
 #![feature(iter_intersperse)]
-#![feature(btree_drain_filter)]
 #![feature(hash_raw_entry)]
 #![feature(thread_local)]
 #![feature(pattern)]
@@ -13,11 +12,12 @@
 #![feature(associated_type_defaults)]
 #![feature(type_alias_impl_trait)]
 #![feature(decl_macro)]
-#![feature(once_cell)]
+#![feature(once_cell_try)]
 #![feature(trait_alias)]
 #![feature(type_name_of_val)]
 #![feature(is_sorted)]
 #![feature(array_methods)]
+#![feature(lazy_cell)]
 
 extern crate self as libbit;
 

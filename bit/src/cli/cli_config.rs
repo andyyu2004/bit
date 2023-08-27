@@ -5,7 +5,7 @@ use libbit::repo::BitRepo;
 use regex::Regex;
 
 lazy_static! {
-    static ref REGEX: Regex = Regex::new(r#"^[A-Za-z]+\.[A-Za-z]+$"#).unwrap();
+    static ref REGEX: Regex = Regex::new("^[A-Za-z]+\\.[A-Za-z]+$").unwrap();
 }
 
 fn validate_name(name: &str) -> Result<String, String> {

@@ -168,7 +168,6 @@ impl BitRepo {
         let refspec = remote.fetch;
         // TODO probably need to be a bit smarter than just defaulting to master
         let local = head_symref.unwrap_or(SymbolicRef::MASTER);
-        dbg!(local);
         let remote = refspec.match_ref(local).expect(
             "todo this case where the branch remotes HEAD points to is not part of our refspec",
         );
@@ -232,9 +231,7 @@ impl BitRepo {
     }
 
     pub fn ls_remotes(&self) -> impl Iterator<Item = Remote> {
-        self.remote_config()
-            .into_iter()
-            .map(|(name, config)| Remote::from_config(name, config))
+        self.remote_config().into_iter().map(|(name, config)| Remote::from_config(name, config))
     }
 }
 

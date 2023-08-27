@@ -152,7 +152,7 @@ impl BitIndex {
         stage: MergeStage,
     ) -> BitResult<()> {
         assert!(entry.oid.is_known());
-        self.remove_entry((entry.path, MergeStage::None));
+        self.remove_entry((entry.path, MergeStage::NONE));
 
         entry.set_stage(stage);
         self.add_entry_common(entry)?;
@@ -220,7 +220,7 @@ impl BitIndex {
     }
 }
 
-type IndexStdIterator = impl Iterator<Item = BitIndexEntry> + Clone + std::fmt::Debug;
+pub type IndexStdIterator = impl Iterator<Item = BitIndexEntry> + Clone + std::fmt::Debug;
 pub type IndexEntryIterator = impl BitEntryIterator;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -252,22 +252,22 @@ pub struct BitIndexExtension {
 #[repr(u8)]
 pub enum MergeStage {
     /// not merging
-    None   = 0,
-    Base   = 1,
-    Ours   = 2,
-    Theirs = 3,
+    NONE   = 0,
+    BASE   = 1,
+    OURS   = 2,
+    THEIRS = 3,
 }
 
 #[cfg(test)]
 impl quickcheck::Arbitrary for MergeStage {
     fn arbitrary(_g: &mut quickcheck::Gen) -> Self {
-        Self::None
+        Self::NONE
     }
 }
 
 impl Default for MergeStage {
     fn default() -> Self {
-        Self::None
+        Self::NONE
     }
 }
 

@@ -1,7 +1,5 @@
 #![feature(iter_intersperse)]
 
-use std::backtrace::BacktraceStatus;
-
 mod cli;
 mod util;
 
@@ -21,9 +19,7 @@ pub fn main() -> ! {
     if let Err(err) = cli::run(std::env::args_os()) {
         eprintln!("{err}");
         let backtrace = err.backtrace();
-        if backtrace.status() != BacktraceStatus::Disabled {
-            println!("{backtrace}");
-        }
+        println!("{backtrace}");
         std::process::exit(1)
     } else {
         std::process::exit(0)

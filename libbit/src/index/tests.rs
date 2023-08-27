@@ -453,7 +453,7 @@ fn test_bit_index_entry_flags() {
     let flags = BitIndexEntryFlags::new(0xb9fa);
     assert!(flags.assume_valid());
     assert!(!flags.extended());
-    assert_eq!(flags.stage(), MergeStage::Theirs);
+    assert_eq!(flags.stage(), MergeStage::THEIRS);
     assert_eq!(flags.path_len(), 0x9fa);
 }
 
@@ -467,20 +467,20 @@ fn test_bit_index_entry_set_stage() {
 
     let mut flags = BitIndexEntryFlags::with_path_len(200);
 
-    flags.set_stage(MergeStage::Ours);
-    assert_eq!(flags.stage(), MergeStage::Ours);
+    flags.set_stage(MergeStage::OURS);
+    assert_eq!(flags.stage(), MergeStage::OURS);
     assert_everything_else_is_unchanged(flags);
 
-    flags.set_stage(MergeStage::Base);
-    assert_eq!(flags.stage(), MergeStage::Base);
+    flags.set_stage(MergeStage::BASE);
+    assert_eq!(flags.stage(), MergeStage::BASE);
     assert_everything_else_is_unchanged(flags);
 
-    flags.set_stage(MergeStage::Theirs);
-    assert_eq!(flags.stage(), MergeStage::Theirs);
+    flags.set_stage(MergeStage::THEIRS);
+    assert_eq!(flags.stage(), MergeStage::THEIRS);
     assert_everything_else_is_unchanged(flags);
 
-    flags.set_stage(MergeStage::None);
-    assert_eq!(flags.stage(), MergeStage::None);
+    flags.set_stage(MergeStage::NONE);
+    assert_eq!(flags.stage(), MergeStage::NONE);
     assert_everything_else_is_unchanged(flags);
 }
 
@@ -526,8 +526,8 @@ fn index_add_conflicts() -> BitResult<()> {
             TreeEntry { mode: FileMode::REG, oid: Oid::EMPTY_BLOB, path: BitPath::A }.into();
         let mut index = repo.index_mut()?;
         touch!(repo: "a");
-        index.add_conflicted_entry(entry, MergeStage::Ours)?;
-        index.add_conflicted_entry(entry, MergeStage::Theirs)?;
+        index.add_conflicted_entry(entry, MergeStage::OURS)?;
+        index.add_conflicted_entry(entry, MergeStage::THEIRS)?;
         let conflicts = index.conflicts();
         assert_eq!(conflicts.len(), 1);
         assert_eq!(

@@ -56,12 +56,12 @@ pub enum ConflictType {
 impl ConflictType {
     fn new(stages: ArrayVec<MergeStage, 3>) -> Self {
         match &stages[..] {
-            [MergeStage::Base, MergeStage::Ours, MergeStage::Theirs] => Self::BothModified,
-            [MergeStage::Ours, MergeStage::Theirs] => Self::BothAdded,
-            [MergeStage::Base, MergeStage::Ours] => Self::ModifyDelete,
-            [MergeStage::Base, MergeStage::Theirs] => Self::DeleteModify,
-            [MergeStage::Ours] => Self::AddedByUs,
-            [MergeStage::Theirs] => Self::AddedByThem,
+            [MergeStage::BASE, MergeStage::OURS, MergeStage::THEIRS] => Self::BothModified,
+            [MergeStage::OURS, MergeStage::THEIRS] => Self::BothAdded,
+            [MergeStage::BASE, MergeStage::OURS] => Self::ModifyDelete,
+            [MergeStage::BASE, MergeStage::THEIRS] => Self::DeleteModify,
+            [MergeStage::OURS] => Self::AddedByUs,
+            [MergeStage::THEIRS] => Self::AddedByThem,
             _ => unreachable!("probably missing some cases `{:?}`", stages),
         }
     }
@@ -129,9 +129,9 @@ impl BitIndexInner {
     }
 
     pub(super) fn remove_conflicted(&mut self, path: BitPath) {
-        self.remove_entry((path, MergeStage::Base));
-        self.remove_entry((path, MergeStage::Ours));
-        self.remove_entry((path, MergeStage::Theirs));
+        self.remove_entry((path, MergeStage::BASE));
+        self.remove_entry((path, MergeStage::OURS));
+        self.remove_entry((path, MergeStage::THEIRS));
     }
 
     pub fn conflicts(&self) -> Conflicts {
@@ -163,7 +163,7 @@ impl BitIndexInner {
     fn remove_file_dir_collisions(&mut self, path: BitPath) -> BitResult<()> {
         //? only removing entries with no merge stage (may need changes)
         for component in path.cumulative_components() {
-            self.remove_entry((component, MergeStage::None));
+            self.remove_entry((component, MergeStage::NONE));
         }
         Ok(())
     }
@@ -175,9 +175,9 @@ impl BitIndexInner {
         let subentries = self
             .entries
             // We need the do the trailing slash hack to create the correct range
-            .range((entry_path.join(""), MergeStage::None)..)
+            .range((entry_path.join(""), MergeStage::NONE)..)
             .take_while(|(&(path, _), _)| path.starts_with(entry_path))
-            .filter(|((_, stage), _)| *stage == MergeStage::None)
+            .filter(|((_, stage), _)| *stage == MergeStage::NONE)
             .map(|(key, _)| *key)
             .collect::<Vec<_>>();
 
@@ -195,8 +195,8 @@ impl BitIndexInner {
         let has_collision = self
             .entries
             .range(
-                (path, MergeStage::None)
-                    ..(path.approximate_lexicographical_successor(), MergeStage::None),
+                (path, MergeStage::NONE)
+                    ..(path.approximate_lexicographical_successor(), MergeStage::NONE),
             )
             .skip(1)
             .any(|((p, _), _)| p.starts_with(path));

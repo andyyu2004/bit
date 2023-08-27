@@ -28,7 +28,7 @@ lazy_static! {
     // - contains any of the following `*` `:` `?` `[` `\` `^` `~` <space> <tab>
     // - ends with `/` or `.lock`
     // - contains `@{`
-    static ref INVALID_REF_REGEX: Regex = Regex::new(r#"^\.|/\.|\.\.|\*|:|\?|\[|\\|\^|~| |\t|/$|\.lock$|@\{"#).unwrap();
+    static ref INVALID_REF_REGEX: Regex = Regex::new("^\\.|/\\.|\\.\\.|\\*|:|\\?|\\[|\\\\|\\^|~| |\\t|/$|\\.lock$|@\\{").unwrap();
 }
 
 pub fn is_valid_name(s: &str) -> bool {

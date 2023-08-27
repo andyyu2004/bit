@@ -483,10 +483,10 @@ impl MergeCtxt {
                         // write the conflicted file to disk
                         file.write_all(&conflicted)?;
                         if let Some(b) = base {
-                            index_mut!().add_conflicted_entry(b, MergeStage::Base)?;
+                            index_mut!().add_conflicted_entry(b, MergeStage::BASE)?;
                         }
-                        index_mut!().add_conflicted_entry(ours, MergeStage::Ours)?;
-                        index_mut!().add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                        index_mut!().add_conflicted_entry(ours, MergeStage::OURS)?;
+                        index_mut!().add_conflicted_entry(theirs, MergeStage::THEIRS)?;
 
                         Ok(())
                     }
@@ -499,13 +499,13 @@ impl MergeCtxt {
             // CONFLICT (modify/delete): dir/bar deleted in theirs and modified in HEAD. Version HEAD of dir/bar left in tree.
             // Automatic merge failed; fix conflicts and then commit the result.
             (MergeDiffEntry::DeletedBlob(_), MergeDiffEntry::ModifiedBlob(theirs)) => {
-                index_mut!().add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
-                index_mut!().add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                index_mut!().add_conflicted_entry(base.unwrap(), MergeStage::BASE)?;
+                index_mut!().add_conflicted_entry(theirs, MergeStage::THEIRS)?;
                 theirs.write_to_disk(&self.repo)?;
             }
             (MergeDiffEntry::ModifiedBlob(ours), MergeDiffEntry::DeletedBlob(_)) => {
-                index_mut!().add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
-                index_mut!().add_conflicted_entry(ours, MergeStage::Ours)?;
+                index_mut!().add_conflicted_entry(base.unwrap(), MergeStage::BASE)?;
+                index_mut!().add_conflicted_entry(ours, MergeStage::OURS)?;
             }
             (MergeDiffEntry::DeletedBlob(ours), MergeDiffEntry::UnmodifiedBlob(_)) =>
                 index_mut!().remove_entry(ours.key()),
@@ -521,22 +521,22 @@ impl MergeCtxt {
                 // Adding foo/bar
                 // CONFLICT (modify/delete): foo deleted in theirs and modified in HEAD. Version HEAD of foo left in tree at foo~HEAD.
                 // Automatic merge failed; fix conflicts and then commit the result.
-                index_mut!().add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
-                index_mut!().add_conflicted_entry(ours, MergeStage::Ours)?;
+                index_mut!().add_conflicted_entry(base.unwrap(), MergeStage::BASE)?;
+                index_mut!().add_conflicted_entry(ours, MergeStage::OURS)?;
                 self.mv_our_conflicted(ours.path())?;
                 self.repo.mkdir(tree.path())?
             }
             (MergeDiffEntry::BlobToTree(..), MergeDiffEntry::ModifiedBlob(theirs)) => {
-                index_mut!().add_conflicted_entry(base.unwrap(), MergeStage::Base)?;
-                index_mut!().add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                index_mut!().add_conflicted_entry(base.unwrap(), MergeStage::BASE)?;
+                index_mut!().add_conflicted_entry(theirs, MergeStage::THEIRS)?;
                 self.write_their_conflicted(&theirs)?;
             }
             (MergeDiffEntry::ModifiedTree(_), MergeDiffEntry::TreeToBlob(theirs)) => {
-                index_mut!().add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                index_mut!().add_conflicted_entry(theirs, MergeStage::THEIRS)?;
                 self.write_their_conflicted(&theirs)?;
             }
             (MergeDiffEntry::TreeToBlob(ours), MergeDiffEntry::ModifiedTree(_)) => {
-                index_mut!().add_conflicted_entry(ours, MergeStage::Ours)?;
+                index_mut!().add_conflicted_entry(ours, MergeStage::OURS)?;
                 self.mv_our_conflicted(ours.path())?;
             }
             (MergeDiffEntry::UnmodifiedTree(tree), MergeDiffEntry::DeletedTree(_)) => {
@@ -552,11 +552,11 @@ impl MergeCtxt {
                 self.repo.mkdir(path)?;
             }
             (MergeDiffEntry::CreatedBlob(ours), MergeDiffEntry::CreatedTree(_)) => {
-                index_mut!().add_conflicted_entry(ours, MergeStage::Ours)?;
+                index_mut!().add_conflicted_entry(ours, MergeStage::OURS)?;
                 self.mv_our_conflicted(ours.path())?;
             }
             (MergeDiffEntry::CreatedTree(_), MergeDiffEntry::CreatedBlob(theirs)) => {
-                index_mut!().add_conflicted_entry(theirs, MergeStage::Theirs)?;
+                index_mut!().add_conflicted_entry(theirs, MergeStage::THEIRS)?;
                 self.write_their_conflicted(&theirs)?;
             }
             (MergeDiffEntry::DeletedTree(entry), MergeDiffEntry::DeletedTree(_)) =>

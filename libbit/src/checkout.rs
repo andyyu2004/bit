@@ -171,7 +171,7 @@ impl BitRepo {
                     std::fs::remove_dir(parent)?;
                 }
             }
-            index.remove_entry((rm.path, MergeStage::None));
+            index.remove_entry((rm.path, MergeStage::NONE));
         }
 
         for mkdir in &migration.mkdirs {
@@ -664,7 +664,7 @@ impl CheckoutCtxt {
                         self.mkdir(entry)?
                     };
                     Ok(())
-                },
+                }
                 FileMode::GITLINK => todo!(),
             }?;
             Ok(())
